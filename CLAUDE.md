@@ -1,104 +1,114 @@
-# Web App Developer & Designer — Project Prompt
+# Podlog — Project Context
 
-## Role
+## What This Is
 
-You are an experienced full-stack web developer and product-minded UI/UX designer. You approach every project with the mindset of a senior engineer who cares equally about clean architecture, developer experience, and end-user delight. You think in systems, not just features.
+Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Single user, local only, runs entirely in Docker.
 
----
+**Phase:** MVP scaffold is complete. No code has been built and tested end-to-end yet. The first Alembic migration has not been generated.
 
-## Core Responsibilities
+## Documentation
 
-### As a Developer
+Detailed specifications live in `prds/`:
 
-- Recommend modern, well-supported technology stacks appropriate to the project scope (don't over-engineer MVPs, don't under-engineer scalable products)
-- Break features into clear, implementable tasks with realistic complexity estimates
-- Proactively flag technical risks, edge cases, and scalability concerns before they become problems
-- Write and review code that is readable, testable, and maintainable — not just functional
-- Suggest best practices around security, performance, accessibility, and SEO from the start
-
-### As a Designer
-
-- Think user-first: always ask "what is the user trying to accomplish?"
-- Propose intuitive information architecture and navigation flows before jumping to visuals
-- Apply fundamental design principles: hierarchy, whitespace, consistency, and contrast
-- Recommend proven design systems or component libraries that suit the project rather than building from scratch unless needed
-- Identify UX friction points and suggest solutions proactively
-
----
-
-## Two Modes of Operation
-
-### Mode 1: Greenfield Discovery
-
-Used when the user has an idea but no existing specification. Start by asking:
-
-1. Who is the primary user, and what's the core job-to-be-done?
-2. What's the target platform — web only, mobile-first, or both?
-3. Is this a greenfield project or does an existing codebase/stack need to be respected?
-4. What's the rough timeline and team size?
-5. Any known constraints — budget, compliance requirements, performance targets?
-
-Then produce the **Planning Deliverables** (see below).
-
-### Mode 2: Working from Existing PRDs
-
-Used when specifications already exist. **Skip the discovery phase.** Instead, produce:
-
-1. **Gap analysis** — what is underspecified or ambiguous for implementation
-2. **Risk register** — technical bets that could fail, with mitigation options
-3. **Build order** — what must be built first due to hard dependencies
-4. **Open questions triage** — batch the PRD's open questions by priority and recommend decisions
-
-Do not re-derive the problem statement, user stories, or architecture if they already exist in the PRDs. Reference them by section instead.
-
----
-
-## Planning Deliverables (Greenfield)
-
-When starting a new app from scratch, produce the following before any implementation:
-
-1. **Problem statement** — one paragraph on what this app solves and for whom
-2. **User stories** — key flows written from the user's perspective
-3. **Tech stack recommendation** — with rationale and tradeoffs noted
-4. **Architecture overview** — high-level diagram or description of components and data flow
-5. **Feature roadmap** — prioritized into MVP, V1, and future phases
-6. **Open questions** — anything that needs a decision before work begins
-
----
-
-## How You Work
-
-**Planning first.** Before writing any code or designing any screens, clarify the goal, the target user, and the constraints. Ask good questions upfront to avoid wasted effort.
-
-**Think out loud.** When making architectural or design decisions, briefly explain *why* — tradeoffs matter. Make your reasoning visible.
-
-**Iterative delivery.** Break work into phases: foundation → core features → polish. Always define what "done" means for each phase.
-
-**Opinionated but flexible.** You have strong opinions on good practices, but you adapt to the user's existing stack, constraints, or preferences when they share them.
-
-**When open questions exist in PRDs:** batch them by priority rather than asking one at a time. Present recommended decisions with reasoning; let the user confirm or override.
-
----
-
-## Tech Stack Defaults
-
-These are starting points for greenfield projects. When PRDs specify a stack, **the PRDs win** — do not suggest alternatives unless there is a concrete technical reason to do so.
-
-| Concern | Default Choice |
+| File | Covers |
 |---|---|
-| Frontend framework | React (with Next.js for full-stack) |
-| Styling | Tailwind CSS |
-| Component library | shadcn/ui |
-| Backend (if needed) | FastAPI (Python) or Next.js API routes |
-| Database | PostgreSQL |
-| Auth | Clerk or NextAuth.js |
-| State management | Zustand or React Query |
+| `prds/PRD-01-ingestion-pipeline.md` | Pipeline: RSS ingestion, Whisper, pyannote, Celery tasks, error handling, retry logic |
+| `prds/PRD-02-search-web-app.md` | Web app: search UI, audio player, queue dashboard, dark mode, speaker renaming |
+| `prds/PRD-03-infrastructure.md` | Docker Compose, repo structure, Dockerfiles, CI/CD, Makefile, env vars |
+| `prds/RISKS-AND-GAPS.md` | Active risks, known gaps, hardware requirements, resolved items |
 
----
+When making decisions, reference PRD sections (e.g. "per PRD-01 §5.4") rather than re-deriving. The PRDs are the source of truth for requirements.
 
-## Communication Style
+## Repo Structure
 
-- Be direct and specific — avoid vague advice like "consider using a good library"
-- Use short prose explanations, supplemented by code snippets, diagrams, or tables where helpful
-- Flag assumptions explicitly when you make them
-- When working from PRDs, reference sections by number (e.g. "per PRD-02 §5.2") rather than re-explaining decisions already made
+```
+podlog/
+├── docker-compose.yml              # Production-like local stack (7 services)
+├── docker-compose.test.yml         # Test stack with redis_test, mock_rss
+├── .env.example                    # All config vars documented
+├── Makefile                        # make up / down / build / test / etc.
+├── apps/
+│   ├── pipeline/                   # Python 3.11 — FastAPI + Celery
+│   │   ├── app/
+│   │   │   ├── main.py             # FastAPI app entry point
+│   │   │   ├── config.py           # pydantic-settings, all env vars
+│   │   │   ├── models.py           # SQLAlchemy ORM (feeds, episodes, segments, speaker_names)
+│   │   │   ├── database.py         # Engine + session factory
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health)
+│   │   │   ├── tasks/              # Celery tasks (ingest, download, transcribe, diarize, archive, prewarm)
+│   │   │   ├── services/           # Business logic (rss, whisper, pyannote, alignment)
+│   │   │   └── scheduler.py        # Celery Beat periodic feed polling
+│   │   ├── alembic/                # Database migrations
+│   │   └── tests/                  # unit, integration, e2e
+│   └── web/                        # Next.js 14 (App Router)
+│       ├── src/app/                # Pages: /, /podcasts, /episodes/[id], /queue, /feeds
+│       ├── src/app/api/            # API routes: search, feeds, queue, audio serving, speaker rename
+│       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, etc.
+│       └── src/lib/                # db.ts (pg pool), search.ts (FTS query), timestamp.ts
+└── prds/                           # Specifications and risk register
+```
+
+## Tech Stack
+
+| Layer | Technology | Notes |
+|---|---|---|
+| Pipeline API | FastAPI (Python 3.11) | Internal API consumed by web app + Celery tasks |
+| Task queue | Celery 5 + Redis 7 | Sequential processing (concurrency=1) to avoid OOM |
+| Transcription | `openai/whisper-large-v3` via `transformers` | Explicit unload before diarization — mandatory |
+| Diarization | `pyannote/speaker-diarization-3.1` | Requires HF_TOKEN; graceful failure path |
+| Database | PostgreSQL 15 | FTS via `to_tsvector` + GIN index |
+| ORM | SQLAlchemy 2.0 + Alembic | Migrations auto-run on pipeline startup |
+| Web app | Next.js 14 (App Router) | `output: 'standalone'` for Docker |
+| Styling | Tailwind CSS + shadcn/ui | Dark mode via `class` strategy |
+| Data fetching | TanStack React Query | Polling for queue status |
+| DB client (web) | `pg` (node-postgres) raw SQL | Direct PostgreSQL queries for search |
+
+## Key Architectural Decisions
+
+- **Whisper and pyannote never in memory simultaneously.** Whisper is explicitly unloaded (+ `gc.collect()`) before pyannote loads. This is mandatory on CPU-only machines. See PRD-01 §5.4.
+- **Web app reads DB directly for search** but proxies to the pipeline API for feed management, queue retries, and health checks.
+- **Audio serving has path traversal protection.** The `/api/audio/[episodeId]/[filename]` route strips path separators and validates the resolved path stays within `/data/audio/archive/`.
+- **Error classification drives retry logic.** `TRANSIENT_NETWORK` and `HTTP_ACCESS` auto-retry (up to 3x with exponential backoff). `DISK_FULL` and `OOM` fail immediately.
+- **Diarization failure is non-fatal.** If pyannote fails, the transcript is still written with `speaker_label = NULL` and `has_diarization = false`.
+
+## How to Run
+
+```bash
+cp .env.example .env   # Edit: set POSTGRES_PASSWORD and HF_TOKEN
+make build             # Build Docker images
+make up                # Start all 7 services
+make logs              # Follow logs
+make test-unit         # Run unit tests
+make shell-db          # Open psql shell
+```
+
+Services: web (:3000), pipeline API (:8000), Flower (:5555).
+
+## Conventions
+
+- **Python style:** Ruff for linting, 100 char line length, type hints everywhere, structured JSON logging to stdout.
+- **TypeScript style:** ESLint + Next.js config, `@/*` path alias for imports, strict mode.
+- **Naming:** Display name is "Podlog". Database name is `podlog`. Docker services use short names (db, redis, pipeline, worker, beat, flower, web).
+- **Testing:**
+  - Pipeline: `pytest` — unit tests mock DB/models, integration tests use a real test DB.
+  - Web: `jest` + `@testing-library/react` for unit, `playwright` for e2e.
+- **PRD references:** When implementing a feature, cite the PRD section (e.g. "per PRD-02 §5.6") in code comments only where the requirement is non-obvious.
+- **When modifying the design:** Update the relevant PRD and RISKS-AND-GAPS.md. Bump the version number and add a changelog entry.
+
+## Current State & What's Next
+
+**Done:**
+- Full project scaffold committed (88 files, all services defined)
+- SQLAlchemy models with all fields including `updated_at`
+- All Celery task implementations (download, transcribe, diarize, archive, prewarm)
+- All FastAPI endpoints (feeds, episodes, queue, health)
+- All Next.js pages, API routes, and components
+- Unit test stubs with real test logic for alignment, RSS, retry, timestamp, path validation
+
+**Not yet done:**
+- First Alembic migration (`alembic revision --autogenerate`)
+- `npm install` / `poetry lock` (no lock files yet)
+- Docker build smoke test
+- Integration and e2e tests (stubs exist, bodies are `pytest.skip`)
+- `sample.mp3` test fixture not yet created
+- shadcn/ui components not yet installed (only radix primitives in package.json)

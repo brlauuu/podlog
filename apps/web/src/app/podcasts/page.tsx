@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import pool from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 interface Feed {
   id: string;
   title: string | null;

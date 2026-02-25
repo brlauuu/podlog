@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import pool from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 interface Episode {
   id: string;
   title: string | null;

@@ -1,17 +1,19 @@
 # PRD-02: Search Web Application
 
-**Project:** PodSearch — Self-hosted Podcast Transcription & Search  
+**Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-02 — Search Web Application  
-**Version:** 1.1  
-**Status:** Draft  
-**Author:** Claude (generated from user specification)  
-**Changelog:** v1.1 — Dark mode added (OQ-04 resolved), persistent audio player added (OQ-03 resolved), search result grouping deferred to V1 (OQ-01 resolved), pagination count query specified (gap resolved), path traversal mitigation for audio serving added (gap resolved), diarization failure surfaced in all three UI locations, queue dashboard updated with retry state and error classification display, model warm-up banner added.
+**Version:** 1.2
+**Status:** Draft
+**Author:** Claude (generated from user specification)
+**Changelog:**
+- v1.2 — Renamed project from PodSearch to Podlog. localStorage key changed to `podlog-theme`. Added `/feeds` page separate from `/podcasts` for feed management. Added `QueryProvider` wrapper in root layout for React Query. Web API routes proxy to pipeline API for feed management, queue retries, and health checks. Database name changed to `podlog`.
+- v1.1 — Dark mode added (OQ-04 resolved), persistent audio player added (OQ-03 resolved), search result grouping deferred to V1 (OQ-01 resolved), pagination count query specified (gap resolved), path traversal mitigation for audio serving added (gap resolved), diarization failure surfaced in all three UI locations, queue dashboard updated with retry state and error classification display, model warm-up banner added.
 
 ---
 
 ## 1. Problem Statement
 
-Once podcast transcripts are stored in the database (PRD-01), users need a simple, fast interface to search across them. The core job-to-be-done is: *"I want to find the moment in a podcast where they discussed X, and go straight to that point in the audio."* The web app is the user-facing half of PodSearch — it is independent of the ingestion pipeline and reads from the same database.
+Once podcast transcripts are stored in the database (PRD-01), users need a simple, fast interface to search across them. The core job-to-be-done is: *"I want to find the moment in a podcast where they discussed X, and go straight to that point in the audio."* The web app is the user-facing half of Podlog — it is independent of the ingestion pipeline and reads from the same database.
 
 ---
 
@@ -39,7 +41,7 @@ Once podcast transcripts are stored in the database (PRD-01), users need a simpl
 
 ## 3. Users & Context
 
-**Primary user:** A single person running PodSearch locally. They are technical but want a clean UI for daily use, not a developer console. The app should feel like a personal tool — fast, dense with information, no unnecessary chrome.
+**Primary user:** A single person running Podlog locally. They are technical but want a clean UI for daily use, not a developer console. The app should feel like a personal tool — fast, dense with information, no unnecessary chrome.
 
 **Usage pattern:** Open the app, type a search query, scan results, click a timestamp link to open the episode at the right moment.
 
@@ -156,7 +158,7 @@ A global audio player bar is rendered in the root layout, fixed to the bottom of
 ### 5.8 Dark Mode
 
 - Dark mode is implemented using Tailwind's `dark:` variant with the `class` strategy (toggled by adding/removing `dark` class on `<html>`).
-- The user's preference is stored in `localStorage` under the key `podsearch-theme`.
+- The user's preference is stored in `localStorage` under the key `podlog-theme`.
 - On first load, the app checks `localStorage` first; if absent, it respects the OS-level `prefers-color-scheme` media query.
 - A toggle button (sun/moon icon) in the top navigation bar switches modes.
 - shadcn/ui components support dark mode natively via CSS variables — no additional configuration required beyond enabling the `class` strategy in `tailwind.config.ts`.
@@ -164,7 +166,7 @@ A global audio player bar is rendered in the root layout, fixed to the bottom of
 ### 5.9 Navigation
 
 Top navigation bar (fixed):
-- **PodSearch** logo/wordmark (links to `/`)
+- **Podlog** logo/wordmark (links to `/`)
 - **Search** (homepage)
 - **Podcasts**
 - **Queue** (with a badge showing active + pending count)
@@ -247,7 +249,7 @@ Top navigation bar (fixed):
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  PodSearch      Podcasts    Queue [2]    Settings   🌙   │
+│  Podlog      Podcasts    Queue [2]    Settings   🌙   │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
 │         ┌─────────────────────────────────────┐        │
@@ -524,7 +526,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://postgres:password@db:5432/podsearch
+      DATABASE_URL: postgresql://postgres:password@db:5432/podlog
       PIPELINE_API_URL: http://pipeline:8000
     depends_on:
       db:

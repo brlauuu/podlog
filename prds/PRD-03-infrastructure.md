@@ -1,11 +1,13 @@
 # PRD-03: Project Infrastructure, Repository Structure & Docker Setup
 
-**Project:** PodSearch — Self-hosted Podcast Transcription & Search  
+**Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-03 — Infrastructure & DevOps  
-**Version:** 1.1  
-**Status:** Draft  
-**Author:** Claude (generated from user specification)  
-**Changelog:** v1.1 — Pipeline service healthcheck added; `web` dependency changed from `service_started` to `service_healthy` to close migration race condition; `docker-compose.yml` updated to reflect new `error_class`, `retry_count`, `diarization_error` schema fields; model pre-warm documented in worker startup.
+**Version:** 1.2
+**Status:** Draft
+**Author:** Claude (generated from user specification)
+**Changelog:**
+- v1.2 — Renamed project from PodSearch to Podlog. Database name changed to `podlog`. Added `redis_test` service to `docker-compose.test.yml`. Changed `beat` dependency from `- worker` to `pipeline: service_healthy`. Added `CELERY_CONCURRENCY` env var interpolation in worker command. Added `DISK_HEADROOM_BYTES` to `.env.example`. Repository root directory renamed from `podsearch/` to `podlog/`.
+- v1.1 — Pipeline service healthcheck added; `web` dependency changed from `service_started` to `service_healthy` to close migration race condition; `docker-compose.yml` updated to reflect new `error_class`, `retry_count`, `diarization_error` schema fields; model pre-warm documented in worker startup.
 
 ---
 
@@ -18,7 +20,7 @@ This document covers everything that spans PRD-01 and PRD-02: the monorepo layou
 ## 2. Repository Structure
 
 ```
-podsearch/
+podlog/
 ├── docker-compose.yml
 ├── docker-compose.test.yml
 ├── docker-compose.override.yml     # gitignored
@@ -123,7 +125,7 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: podsearch
+      POSTGRES_DB: podlog
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -149,7 +151,7 @@ services:
              uvicorn app.main:app --host 0.0.0.0 --port 8000"
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podsearch
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
@@ -175,10 +177,10 @@ services:
     # Pre-warm runs before the worker starts accepting jobs
     command: >
       sh -c "python -m app.tasks.prewarm &&
-             celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1"
+             celery -A app.tasks.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podsearch
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
       REDIS_URL: redis://redis:6379/0
     volumes:
       - audio_data:/data/audio
@@ -197,10 +199,11 @@ services:
     command: celery -A app.tasks.celery_app beat --loglevel=info
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podsearch
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
       REDIS_URL: redis://redis:6379/0
     depends_on:
-      - worker
+      pipeline:
+        condition: service_healthy
 
   flower:
     build: ./apps/pipeline
@@ -218,7 +221,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podsearch
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
       PIPELINE_API_URL: http://pipeline:8000
     volumes:
       - audio_data:/data/audio:ro
@@ -268,11 +271,24 @@ services:
   db_test:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: podsearch_test
+      POSTGRES_DB: podlog_test
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: test
     tmpfs:
       - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis_test:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   mock_rss:
     image: nginx:alpine
@@ -283,21 +299,27 @@ services:
     build: ./apps/pipeline
     command: pytest tests/ -v --cov=app --cov-report=term-missing
     environment:
-      DATABASE_URL: postgresql://postgres:test@db_test:5432/podsearch_test
+      DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
       REDIS_URL: redis://redis_test:6379/0
       MOCK_RSS_URL: http://mock_rss/feed.xml
-      HF_TOKEN: ${HF_TOKEN}
+      HF_TOKEN: ${HF_TOKEN:-}
     depends_on:
-      - db_test
-      - mock_rss
+      db_test:
+        condition: service_healthy
+      redis_test:
+        condition: service_healthy
+      mock_rss:
+        condition: service_started
 
   web_test:
     build: ./apps/web
     command: npx playwright test
     environment:
-      DATABASE_URL: postgresql://postgres:test@db_test:5432/podsearch_test
+      DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
+      PIPELINE_API_URL: http://pipeline_test:8000
     depends_on:
-      - db_test
+      db_test:
+        condition: service_healthy
 ```
 
 ---
@@ -322,6 +344,9 @@ CELERY_CONCURRENCY=1
 # ── Retry configuration ───────────────────────────────────
 RETRY_MAX=3                        # Max retries for transient failures
 RETRY_BACKOFF_BASE=30              # Base backoff in seconds (30s → 2m → 10m)
+
+# ── Disk space guard (GAP-06) ─────────────────────────────
+DISK_HEADROOM_BYTES=2147483648     # 2 GB minimum free space before download starts
 
 # ── Optional overrides ────────────────────────────────────
 # DATABASE_URL=
@@ -361,7 +386,7 @@ test-e2e:       ## Run E2E tests
 	docker compose -f docker-compose.test.yml run --rm web_test
 
 shell-db:       ## Open psql shell
-	docker compose exec db psql -U postgres podsearch
+	docker compose exec db psql -U postgres podlog
 
 shell-pipeline: ## Open shell in pipeline container
 	docker compose exec pipeline bash
@@ -493,8 +518,8 @@ Integration and E2E tests are not run in CI (slow, require HF_TOKEN with pyannot
 
 ```bash
 # 1. Clone
-git clone https://github.com/yourusername/podsearch.git
-cd podsearch
+git clone https://github.com/yourusername/podlog.git
+cd podlog
 
 # 2. Configure
 cp .env.example .env

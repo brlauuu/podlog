@@ -1,8 +1,8 @@
-# PodSearch — Risks, Gaps & Hardware Requirements
+# Podlog — Risks, Gaps & Hardware Requirements
 
-**Project:** PodSearch — Self-hosted Podcast Transcription & Search  
+**Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** RISKS-AND-GAPS  
-**Version:** 1.0 (Snapshot: project start)  
+**Version:** 1.2  
 **Status:** Living document — update as risks are resolved or new ones are identified  
 **How to use:** When a risk is mitigated or a gap is closed, move it to the Resolved section at the bottom with a note on how it was addressed. Add new entries as they are discovered during development.
 
@@ -23,7 +23,7 @@ This file was created as both a snapshot audit and a living reference. During de
 
 ### Minimum Recommended Hardware
 
-PodSearch is designed to run on a single consumer machine without a GPU. The following are the minimum recommended specs for a usable experience.
+Podlog is designed to run on a single consumer machine without a GPU. The following are the minimum recommended specs for a usable experience.
 
 | Component | Minimum | Recommended |
 |---|---|---|
@@ -212,12 +212,9 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
-### GAP-02: No RSS Feed Validation on Add
+### ~~GAP-02: No RSS Feed Validation on Add~~ → Resolved in v1.2
 
-**Component:** PRD-01 — `POST /api/feeds`, PRD-02 — Feed Management UI  
-**Description:** The PRDs specify that the "Add Feed" UI shows an error for "invalid RSS feed," but neither PRD specifies what validation the backend performs. A URL that resolves to a 200 HTML page (not an RSS feed) would be accepted and silently fail to parse.  
-**Proposed fix:** On `POST /api/feeds`, the pipeline should: (1) fetch the URL, (2) attempt to parse it as RSS/Atom, (3) return HTTP 422 with a descriptive error if parsing fails. The web UI renders the error message inline in the modal.  
-**Target phase:** MVP
+*Moved to Part 4: Resolved Items.*
 
 ---
 
@@ -248,12 +245,9 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
-### GAP-06: No Disk Space Pre-Check Before Download
+### ~~GAP-06: No Disk Space Pre-Check Before Download~~ → Resolved in v1.2
 
-**Component:** PRD-01 — `download.py`  
-**Description:** The pipeline downloads audio files (potentially 500 MB+ for long episodes) without first checking available disk space. A download can partially complete before hitting the disk-full condition, wasting time and leaving a partial file.  
-**Proposed fix:** Before starting a download, check `shutil.disk_usage()` against a configurable minimum threshold (default: 2 GB headroom). If below threshold, mark the job `FAILED` with `error_class=DISK_FULL` immediately without attempting the download.  
-**Target phase:** MVP
+*Moved to Part 4: Resolved Items.*
 
 ---
 
@@ -266,3 +260,9 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 | GAP-N/A | Migration race condition (web starts before schema exists) | Pipeline healthcheck + `web` depends on `service_healthy` | v1.1 |
 | GAP-N/A | Whisper+pyannote simultaneous memory load | Explicit unload + GC between transcription and diarization stages | v1.1 |
 | GAP-N/A | Pagination count missing | Companion `COUNT(*)` query added to search API route | v1.1 |
+| GAP-02 | No RSS feed validation on add | `validate_and_parse_feed()` in `rss.py` fetches + parses before persisting; 422 on failure | v1.2 |
+| GAP-06 | No disk space pre-check before download | `shutil.disk_usage()` check against `DISK_HEADROOM_BYTES` (default 2 GB) before download | v1.2 |
+| GAP-N/A | `redis_test` service missing from test compose | Added `redis_test` service with healthcheck to `docker-compose.test.yml` | v1.2 |
+| GAP-N/A | `updated_at` missing from episodes table | Added `updated_at` to episodes model (prerequisite for GAP-01 zombie detection) | v1.2 |
+| GAP-N/A | `beat` container startup ordering | Changed `beat` dependency from `- worker` to `pipeline: service_healthy` | v1.2 |
+| GAP-N/A | Next.js standalone output missing | Added `output: 'standalone'` to `next.config.ts` (required for Docker build) | v1.2 |

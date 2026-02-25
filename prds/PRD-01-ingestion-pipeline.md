@@ -1,11 +1,13 @@
 # PRD-01: Podcast Ingestion Pipeline
 
-**Project:** PodSearch — Self-hosted Podcast Transcription & Search  
+**Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.1  
-**Status:** Draft  
-**Author:** Claude (generated from user specification)  
-**Changelog:** v1.1 — Added auto-retry logic (OQ-02 resolved), disk-full handling (OQ-03 resolved), diarization failure persistence (OQ-04 resolved), model pre-warm step, memory sequencing requirement for Whisper+pyannote, pipeline container healthcheck, path traversal mitigation for audio serving.
+**Version:** 1.2
+**Status:** Draft
+**Author:** Claude (generated from user specification)
+**Changelog:**
+- v1.2 — Renamed project from PodSearch to Podlog. Added `updated_at` field to episodes table (prerequisite for GAP-01 zombie job detection). Added `DISK_HEADROOM_BYTES` environment variable for disk space pre-check (GAP-06). Database name changed from `podsearch` to `podlog`.
+- v1.1 — Added auto-retry logic (OQ-02 resolved), disk-full handling (OQ-03 resolved), diarization failure persistence (OQ-04 resolved), model pre-warm step, memory sequencing requirement for Whisper+pyannote, pipeline container healthcheck, path traversal mitigation for audio serving.
 
 ---
 
@@ -127,7 +129,7 @@ If diarization failed, speaker labels are omitted:
 ```
 The flat file is always written on successful transcription, regardless of diarization outcome. A header comment notes the diarization status:
 ```
-# PodSearch Transcript
+# Podlog Transcript
 # Episode: <title>
 # Diarization: FAILED (<reason>)
 ```
@@ -238,6 +240,7 @@ CREATE TABLE episodes (
     diarization_error   TEXT,          -- populated if diarization failed; null if succeeded or not yet attempted
     celery_task_id      TEXT,
     created_at          TIMESTAMPTZ DEFAULT now(),
+    updated_at          TIMESTAMPTZ DEFAULT now(),  -- updated on every status change; used for zombie job detection (GAP-01)
     processed_at        TIMESTAMPTZ,
     UNIQUE(feed_id, guid)
 );
@@ -269,6 +272,7 @@ CREATE TABLE speaker_names (
 ```
 
 **New fields vs v1.0:** `error_class`, `retry_count`, `retry_max`, `diarization_error` added to `episodes`.
+**New fields vs v1.1:** `updated_at` added to `episodes` (auto-set on every status change; enables zombie job detection per GAP-01).
 
 ---
 
@@ -430,7 +434,7 @@ GET    /api/health                   Health check — includes worker warm-up st
 
 ```env
 # Required
-DATABASE_URL=postgresql://postgres:password@db:5432/podsearch
+DATABASE_URL=postgresql://postgres:password@db:5432/podlog
 REDIS_URL=redis://redis:6379/0
 HF_TOKEN=hf_xxxxxxxxxxxx
 
@@ -443,4 +447,5 @@ FEED_POLL_INTERVAL_HOURS=24
 CELERY_CONCURRENCY=1
 RETRY_MAX=3                        # Max auto-retries for transient failures (default: 3)
 RETRY_BACKOFF_BASE=30              # Base backoff seconds; actual = base * 2^(attempt-1)
+DISK_HEADROOM_BYTES=2147483648     # 2 GB minimum free space before download starts (GAP-06)
 ```

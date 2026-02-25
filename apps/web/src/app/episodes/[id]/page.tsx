@@ -4,6 +4,8 @@ import { AlertTriangle } from "lucide-react";
 import pool from "@/lib/db";
 import SpeakerLabel from "@/components/SpeakerLabel";
 
+export const dynamic = "force-dynamic";
+
 interface Segment {
   id: number;
   start_time: number;

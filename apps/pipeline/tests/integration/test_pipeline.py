@@ -2,10 +2,18 @@
 Integration tests — PRD-01 §12
 
 Requires a running test PostgreSQL database (see docker-compose.test.yml).
-Uses a real 10-second audio fixture for end-to-end pipeline testing.
+Set TEST_DATABASE_URL env var before running.
+
+Uses a real 10-second audio fixture and mocked ML services.
 """
-import pytest
+import shutil
+import uuid
 from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+import pytest
+
+from app.models import Episode, Segment
 
 FIXTURE_AUDIO = Path(__file__).parent.parent / "fixtures" / "sample.mp3"
 
@@ -14,16 +22,241 @@ FIXTURE_AUDIO = Path(__file__).parent.parent / "fixtures" / "sample.mp3"
     not FIXTURE_AUDIO.exists(),
     reason="Audio fixture not present — run: make test-integration",
 )
-class TestFullPipeline:
-    def test_transcribe_produces_segments(self):
-        """Full pipeline: audio → transcription → segments in DB."""
-        # TODO: implement with test DB session
-        pytest.skip("Integration test stub — implement with test DB session")
+class TestTranscription:
+    """Tests for the transcribe task with mocked Whisper."""
 
-    def test_diarization_failure_preserves_segments(self):
-        """If pyannote fails, segments are still written with speaker_label=NULL."""
-        pytest.skip("Integration test stub — mock pyannote to raise")
+    MOCK_SEGMENTS = [
+        {"start": 0.0, "end": 3.5, "text": "Hello this is a test."},
+        {"start": 3.5, "end": 7.0, "text": "We are testing the pipeline."},
+        {"start": 7.0, "end": 10.0, "text": "This is the final segment."},
+    ]
 
-    def test_disk_full_during_archive(self):
-        """DISK_FULL error class set, raw file not deleted."""
-        pytest.skip("Integration test stub — mock ffmpeg archival to raise OSError 28")
+    def test_transcribe_writes_segments_to_db(self, db_session, sample_episode, tmp_path):
+        """Full transcription: audio → mock Whisper → segments in DB."""
+        # Set up the episode with a real audio file
+        audio_dest = tmp_path / f"{sample_episode.id}.mp3"
+        shutil.copy(FIXTURE_AUDIO, audio_dest)
+        sample_episode.audio_local_path = str(audio_dest)
+        sample_episode.status = "transcribing"
+        db_session.flush()
+
+        # Mock Whisper to return known segments, mock ffmpeg conversion, mock diarize chain
+        with patch("app.tasks.transcribe._convert_to_wav") as mock_convert, \
+             patch("app.services.whisper.transcribe", return_value=(self.MOCK_SEGMENTS, "en")), \
+             patch("app.tasks.transcribe._unload_whisper"), \
+             patch("app.tasks.transcribe.SessionLocal", return_value=db_session), \
+             patch("app.tasks.diarize.diarize_episode") as mock_diarize:
+
+            mock_diarize.delay = MagicMock()
+
+            from app.tasks.transcribe import transcribe_episode
+            transcribe_episode(sample_episode.id)
+
+        segments = (
+            db_session.query(Segment)
+            .filter(Segment.episode_id == sample_episode.id)
+            .order_by(Segment.start_time)
+            .all()
+        )
+        assert len(segments) == 3
+        assert segments[0].text == "Hello this is a test."
+        assert segments[1].start_time == 3.5
+        assert segments[2].end_time == 10.0
+        assert all(s.speaker_label is None for s in segments)
+
+        # Check episode was updated
+        db_session.refresh(sample_episode)
+        assert sample_episode.language == "en"
+
+    def test_oom_marks_episode_failed(self, db_session, sample_episode, tmp_path):
+        """MemoryError during transcription → episode.status='failed', error_class='OOM'."""
+        audio_dest = tmp_path / f"{sample_episode.id}.mp3"
+        shutil.copy(FIXTURE_AUDIO, audio_dest)
+        sample_episode.audio_local_path = str(audio_dest)
+        sample_episode.status = "transcribing"
+        db_session.flush()
+
+        with patch("app.tasks.transcribe._convert_to_wav"), \
+             patch("app.services.whisper.transcribe", side_effect=MemoryError("CUDA OOM")), \
+             patch("app.tasks.transcribe._unload_whisper"), \
+             patch("app.tasks.transcribe.SessionLocal", return_value=db_session):
+
+            from app.tasks.transcribe import transcribe_episode
+            transcribe_episode(sample_episode.id)
+
+        db_session.refresh(sample_episode)
+        assert sample_episode.status == "failed"
+        assert sample_episode.error_class == "OOM"
+
+
+class TestDiarization:
+    """Tests for the diarize task with mocked pyannote."""
+
+    def test_successful_diarization_assigns_speakers(self, db_session, sample_episode, tmp_path):
+        """Diarization assigns speaker labels to existing segments."""
+        audio_dest = tmp_path / f"{sample_episode.id}.mp3"
+        shutil.copy(FIXTURE_AUDIO, audio_dest)
+        sample_episode.audio_local_path = str(audio_dest)
+        sample_episode.status = "diarizing"
+        db_session.flush()
+
+        # Pre-populate segments (as transcription would have done)
+        for i, (start, end, text) in enumerate([
+            (0.0, 5.0, "First speaker says hello."),
+            (5.0, 10.0, "Second speaker responds."),
+        ]):
+            db_session.add(Segment(
+                episode_id=sample_episode.id,
+                start_time=start,
+                end_time=end,
+                text=text,
+                speaker_label=None,
+            ))
+        db_session.flush()
+
+        mock_diar_segments = [
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 5.0},
+            {"speaker": "SPEAKER_01", "start": 5.0, "end": 10.0},
+        ]
+
+        with patch("app.services.pyannote.diarize", return_value=mock_diar_segments), \
+             patch("app.tasks.diarize.SessionLocal", return_value=db_session), \
+             patch("app.tasks.archive.archive_episode") as mock_archive:
+
+            mock_archive.delay = MagicMock()
+
+            from app.tasks.diarize import diarize_episode
+            diarize_episode(sample_episode.id)
+
+        db_session.refresh(sample_episode)
+        assert sample_episode.has_diarization is True
+        assert sample_episode.diarization_error is None
+
+        segments = (
+            db_session.query(Segment)
+            .filter(Segment.episode_id == sample_episode.id)
+            .order_by(Segment.start_time)
+            .all()
+        )
+        assert segments[0].speaker_label == "SPEAKER_00"
+        assert segments[1].speaker_label == "SPEAKER_01"
+
+    def test_diarization_failure_preserves_segments(self, db_session, sample_episode, tmp_path):
+        """If pyannote fails, segments are still present with speaker_label=NULL."""
+        audio_dest = tmp_path / f"{sample_episode.id}.mp3"
+        shutil.copy(FIXTURE_AUDIO, audio_dest)
+        sample_episode.audio_local_path = str(audio_dest)
+        sample_episode.status = "diarizing"
+        db_session.flush()
+
+        # Pre-populate segments
+        db_session.add(Segment(
+            episode_id=sample_episode.id,
+            start_time=0.0,
+            end_time=10.0,
+            text="This segment should survive diarization failure.",
+            speaker_label=None,
+        ))
+        db_session.flush()
+
+        with patch("app.services.pyannote.diarize", side_effect=RuntimeError("Model load failed")), \
+             patch("app.tasks.diarize.SessionLocal", return_value=db_session), \
+             patch("app.tasks.archive.archive_episode") as mock_archive:
+
+            mock_archive.delay = MagicMock()
+
+            from app.tasks.diarize import diarize_episode
+            diarize_episode(sample_episode.id)
+
+        db_session.refresh(sample_episode)
+        assert sample_episode.has_diarization is False
+        assert "Model load failed" in sample_episode.diarization_error
+
+        # Segments are preserved with NULL speaker
+        segments = (
+            db_session.query(Segment)
+            .filter(Segment.episode_id == sample_episode.id)
+            .all()
+        )
+        assert len(segments) == 1
+        assert segments[0].speaker_label is None
+        assert segments[0].text == "This segment should survive diarization failure."
+
+
+class TestArchive:
+    """Tests for the archive task with mocked ffmpeg."""
+
+    def test_archive_writes_transcript_file(self, db_session, sample_episode, tmp_path):
+        """Archive produces a .txt transcript and marks episode done."""
+        audio_dest = tmp_path / f"{sample_episode.id}.mp3"
+        shutil.copy(FIXTURE_AUDIO, audio_dest)
+        sample_episode.audio_local_path = str(audio_dest)
+        sample_episode.status = "archiving"
+        sample_episode.has_diarization = True
+        db_session.flush()
+
+        # Add segments with speaker labels
+        db_session.add(Segment(
+            episode_id=sample_episode.id,
+            start_time=0.0,
+            end_time=5.0,
+            text="Hello from speaker zero.",
+            speaker_label="SPEAKER_00",
+        ))
+        db_session.add(Segment(
+            episode_id=sample_episode.id,
+            start_time=5.0,
+            end_time=10.0,
+            text="And speaker one responds.",
+            speaker_label="SPEAKER_01",
+        ))
+        db_session.flush()
+
+        transcript_dir = tmp_path / "transcripts"
+        archive_dir = tmp_path / "archive"
+
+        with patch("app.tasks.archive.settings") as mock_settings, \
+             patch("app.tasks.archive.SessionLocal", return_value=db_session), \
+             patch("app.tasks.archive._compress_audio", return_value=archive_dir / f"{sample_episode.id}.mp3"):
+
+            mock_settings.archive_audio = True
+            mock_settings.transcript_dir = str(transcript_dir)
+
+            from app.tasks.archive import archive_episode
+            archive_episode(sample_episode.id)
+
+        db_session.refresh(sample_episode)
+        assert sample_episode.status == "done"
+        assert sample_episode.processed_at is not None
+        assert sample_episode.transcript_path is not None
+
+        # Verify transcript content
+        transcript = Path(sample_episode.transcript_path).read_text()
+        assert "Hello from speaker zero." in transcript
+        assert "SPEAKER_00" in transcript
+        assert "SPEAKER_01" in transcript
+
+    def test_disk_full_during_archive_preserves_raw(self, db_session, sample_episode, tmp_path):
+        """DISK_FULL during ffmpeg compression: episode fails, raw file preserved."""
+        audio_dest = tmp_path / f"{sample_episode.id}.mp3"
+        shutil.copy(FIXTURE_AUDIO, audio_dest)
+        sample_episode.audio_local_path = str(audio_dest)
+        sample_episode.status = "archiving"
+        db_session.flush()
+
+        disk_full_error = OSError(28, "No space left on device")
+
+        with patch("app.tasks.archive.settings") as mock_settings, \
+             patch("app.tasks.archive.SessionLocal", return_value=db_session), \
+             patch("app.tasks.archive._compress_audio", side_effect=disk_full_error):
+
+            mock_settings.archive_audio = True
+
+            from app.tasks.archive import archive_episode
+            archive_episode(sample_episode.id)
+
+        db_session.refresh(sample_episode)
+        assert sample_episode.status == "failed"
+        assert sample_episode.error_class == "DISK_FULL"
+        # Raw file is preserved (not deleted)
+        assert audio_dest.exists()
