@@ -1,0 +1,34 @@
+# Environment
+.env
+docker-compose.override.yml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+apps/web/.next/
+apps/web/node_modules/
+
+# Docker volumes (local bind mounts during dev)
+data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

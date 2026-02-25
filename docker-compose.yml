@@ -1,0 +1,120 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: podlog
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  pipeline:
+    build: ./apps/pipeline
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - audio_data:/data/audio
+      - transcript_data:/data/transcripts
+      - model_cache:/root/.cache/huggingface
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Returns 200 only after migrations complete and app is ready
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  worker:
+    build: ./apps/pipeline
+    # Pre-warm downloads model weights before accepting any jobs
+    command: >
+      sh -c "python -m app.tasks.prewarm &&
+             celery -A app.tasks.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - audio_data:/data/audio
+      - transcript_data:/data/transcripts
+      - model_cache:/root/.cache/huggingface
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pipeline:
+        condition: service_healthy  # Ensures migrations are done before worker writes to DB
+
+  beat:
+    build: ./apps/pipeline
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      pipeline:
+        condition: service_healthy
+
+  flower:
+    build: ./apps/pipeline
+    command: celery -A app.tasks.celery_app flower --port=5555
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+
+  web:
+    build: ./apps/web
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
+      PIPELINE_API_URL: http://pipeline:8000
+    volumes:
+      - audio_data:/data/audio:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      pipeline:
+        condition: service_healthy  # Waits for migrations — prevents schema-not-found errors
+
+volumes:
+  postgres_data:
+  redis_data:
+  audio_data:
+  transcript_data:
+  model_cache:

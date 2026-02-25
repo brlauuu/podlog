@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  db_test:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: podlog_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis_test:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mock_rss:
+    image: nginx:alpine
+    volumes:
+      - ./apps/pipeline/tests/fixtures:/usr/share/nginx/html:ro
+
+  test:
+    build: ./apps/pipeline
+    command: pytest tests/ -v --cov=app --cov-report=term-missing
+    environment:
+      DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
+      REDIS_URL: redis://redis_test:6379/0
+      MOCK_RSS_URL: http://mock_rss/feed.xml
+      HF_TOKEN: ${HF_TOKEN:-}
+    depends_on:
+      db_test:
+        condition: service_healthy
+      redis_test:
+        condition: service_healthy
+      mock_rss:
+        condition: service_started
+
+  web_test:
+    build: ./apps/web
+    command: npx playwright test
+    environment:
+      DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
+      PIPELINE_API_URL: http://pipeline_test:8000
+    depends_on:
+      db_test:
+        condition: service_healthy

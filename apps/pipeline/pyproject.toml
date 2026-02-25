@@ -1,0 +1,60 @@
+[tool.poetry]
+name = "podlog-pipeline"
+version = "0.1.0"
+description = "Podlog ingestion pipeline — RSS fetch, Whisper transcription, pyannote diarization"
+authors = []
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+# Web / API
+fastapi = "^0.111.0"
+uvicorn = {extras = ["standard"], version = "^0.29.0"}
+httpx = "^0.27.0"
+
+# Config
+pydantic-settings = "^2.2.0"
+
+# Database
+sqlalchemy = "^2.0.0"
+alembic = "^1.13.0"
+psycopg2-binary = "^2.9.9"
+
+# Task queue
+celery = {extras = ["redis"], version = "^5.3.0"}
+redis = "^5.0.0"
+flower = "^2.0.0"
+
+# RSS parsing
+feedparser = "^6.0.11"
+
+# Audio processing
+ffmpeg-python = "^0.2.0"
+
+# ML — Whisper
+transformers = "^4.40.0"
+torch = "^2.2.0"
+accelerate = "^0.29.0"
+
+# ML — pyannote diarization
+pyannote-audio = "^3.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-cov = "^5.0.0"
+pytest-asyncio = "^0.23.0"
+ruff = "^0.4.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
