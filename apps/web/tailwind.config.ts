@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { fontFamily } from "tailwindcss/defaultTheme";
 
 const config: Config = {
   // Dark mode via class strategy — toggled by adding/removing `dark` on <html>
@@ -10,6 +11,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["Inter", ...fontFamily.sans],
+      },
       // shadcn/ui CSS variable tokens
       colors: {
         border: "hsl(var(--border))",
