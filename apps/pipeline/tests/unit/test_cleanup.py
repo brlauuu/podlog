@@ -28,7 +28,7 @@ class TestCleanupZombieJobs:
         ep = _make_episode("transcribing", hours_old=3)
         db = _make_db([ep])
 
-        with patch("app.tasks.cleanup.SessionLocal", return_value=db):
+        with patch("app.database.SessionLocal", return_value=db):
             result = cleanup_zombie_jobs()
 
         assert result["marked_failed"] == 1
@@ -40,7 +40,7 @@ class TestCleanupZombieJobs:
     def test_no_stalled_episodes_returns_zero(self):
         db = _make_db([])
 
-        with patch("app.tasks.cleanup.SessionLocal", return_value=db):
+        with patch("app.database.SessionLocal", return_value=db):
             result = cleanup_zombie_jobs()
 
         assert result["marked_failed"] == 0
@@ -54,7 +54,7 @@ class TestCleanupZombieJobs:
         ]
         db = _make_db(episodes)
 
-        with patch("app.tasks.cleanup.SessionLocal", return_value=db):
+        with patch("app.database.SessionLocal", return_value=db):
             result = cleanup_zombie_jobs()
 
         assert result["marked_failed"] == 3
@@ -66,7 +66,7 @@ class TestCleanupZombieJobs:
         db = MagicMock()
         db.query.return_value.filter.return_value.all.side_effect = RuntimeError("db gone")
 
-        with patch("app.tasks.cleanup.SessionLocal", return_value=db):
+        with patch("app.database.SessionLocal", return_value=db):
             with pytest.raises(RuntimeError, match="db gone"):
                 cleanup_zombie_jobs()
 
