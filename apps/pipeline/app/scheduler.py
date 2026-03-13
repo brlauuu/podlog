@@ -7,6 +7,7 @@ from celery.schedules import crontab
 
 from app.config import settings
 from app.tasks.celery_app import celery_app
+from app.tasks.cleanup import cleanup_zombie_jobs
 
 
 @celery_app.on_after_finalize.connect
@@ -16,6 +17,13 @@ def setup_periodic_tasks(sender, **kwargs):
         interval_hours * 3600,
         poll_all_feeds.s(),
         name=f"poll-all-feeds-every-{interval_hours}h",
+    )
+
+    # GAP-01 / RISK-01: detect and recover zombie jobs left by SIGKILL'd workers
+    sender.add_periodic_task(
+        30 * 60,  # every 30 minutes
+        cleanup_zombie_jobs.s(),
+        name="cleanup-zombie-jobs-every-30m",
     )
 
 

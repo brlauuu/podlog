@@ -1,8 +1,8 @@
 # Podlog — Risks, Gaps & Hardware Requirements
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
-**Document:** RISKS-AND-GAPS  
-**Version:** 1.2  
+**Document:** RISKS-AND-GAPS
+**Version:** 1.3
 **Status:** Living document — update as risks are resolved or new ones are identified  
 **How to use:** When a risk is mitigated or a gap is closed, move it to the Resolved section at the bottom with a note on how it was addressed. Add new entries as they are discovered during development.
 
@@ -122,7 +122,7 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 3. Recommend `WHISPER_MODEL=medium` or `small` for machines with <16 GB RAM.
 4. Known gap: if the OS kills the process with SIGKILL (rather than Python raising an exception), Celery cannot catch it. The job stalls. Add a periodic "zombie job" cleanup task in V1 that marks jobs stuck in non-terminal states for >2 hours as failed.
 
-**Status:** Partially mitigated. Zombie job cleanup is a V1 item.
+**Status:** Fully mitigated in v1.3. Zombie job cleanup task implemented (see GAP-01 resolved).
 
 ---
 
@@ -203,12 +203,9 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ## Part 3: Active Gaps
 
-### GAP-01: Zombie Job Cleanup
+### ~~GAP-01: Zombie Job Cleanup~~ → Resolved in v1.3
 
-**Component:** PRD-01 — Worker  
-**Description:** If the worker process is killed with SIGKILL (e.g. by the OOM killer) while processing a job, Celery cannot catch the exception. The episode remains in a non-terminal status (`TRANSCRIBING`, `DIARIZING`, etc.) indefinitely. There is no automated recovery.  
-**Proposed fix:** Add a periodic Celery Beat task (every 30 minutes) that queries for episodes with non-terminal status and `updated_at` older than 2 hours, and marks them `FAILED` with `error_class=SYSTEM_ERROR` and a note: "Job stalled — worker may have been killed."  
-**Target phase:** V1
+*Moved to Part 4: Resolved Items.*
 
 ---
 
@@ -266,3 +263,4 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 | GAP-N/A | `updated_at` missing from episodes table | Added `updated_at` to episodes model (prerequisite for GAP-01 zombie detection) | v1.2 |
 | GAP-N/A | `beat` container startup ordering | Changed `beat` dependency from `- worker` to `pipeline: service_healthy` | v1.2 |
 | GAP-N/A | Next.js standalone output missing | Added `output: 'standalone'` to `next.config.ts` (required for Docker build) | v1.2 |
+| GAP-01 | Zombie job cleanup | Periodic Celery Beat task every 30 min — queries episodes stuck in non-terminal status for >2 h and marks them `failed` with `error_class=SYSTEM_ERROR` (`app/tasks/cleanup.py`) | v1.3 |
