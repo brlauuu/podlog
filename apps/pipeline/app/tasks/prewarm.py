@@ -46,7 +46,7 @@ def main() -> None:
         logger.error('"action": "prewarm_whisper_failed", "error": "%s"', exc)
         sys.exit(1)
 
-    # Download pyannote
+    # Download pyannote — failure is non-fatal (per PRD-01 §5.4)
     try:
         from app.services.pyannote import load_pipeline, unload_pipeline
         logger.info('"action": "prewarm_pyannote_download"')
@@ -54,8 +54,7 @@ def main() -> None:
         unload_pipeline()
         logger.info('"action": "prewarm_pyannote_done"')
     except Exception as exc:
-        logger.error('"action": "prewarm_pyannote_failed", "error": "%s"', exc)
-        sys.exit(1)
+        logger.warning('"action": "prewarm_pyannote_failed", "error": "%s"', exc)
 
     r.set(PREWARM_DONE_KEY, "1")
     logger.info('"action": "prewarm_complete"')

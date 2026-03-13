@@ -10,9 +10,9 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Float,
     ForeignKey,
     Integer,
-    Real,
     Text,
     UniqueConstraint,
     func,
@@ -108,8 +108,8 @@ class Segment(Base):
     )
     speaker_label: Mapped[str | None] = mapped_column(Text)
     # SPEAKER_00, SPEAKER_01, etc. — NULL if diarization unavailable
-    start_time: Mapped[float] = mapped_column(Real, nullable=False)
-    end_time: Mapped[float] = mapped_column(Real, nullable=False)
+    start_time: Mapped[float] = mapped_column(Float, nullable=False)
+    end_time: Mapped[float] = mapped_column(Float, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
