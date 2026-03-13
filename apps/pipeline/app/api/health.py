@@ -9,9 +9,9 @@ States:
   OK          — worker is ready to process jobs
   DEGRADED    — worker unreachable (no heartbeat in Redis)
 """
-import json
 import logging
 
+import redis
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -31,8 +31,6 @@ class HealthResponse(BaseModel):
 @router.get("/health", response_model=HealthResponse)
 def health_check() -> HealthResponse:
     try:
-        import redis
-
         r = redis.from_url(settings.redis_url, socket_connect_timeout=2)
         r.ping()
         prewarm_done = r.get(PREWARM_DONE_KEY)

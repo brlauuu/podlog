@@ -57,11 +57,14 @@ class TestFeedsEndpoint:
             assert "Not an RSS feed" in resp.json()["detail"]
 
     def test_list_feeds_returns_empty(self):
-        with patch("app.api.feeds.get_db") as mock_get_db:
-            mock_db = MagicMock()
-            mock_db.query.return_value.order_by.return_value.all.return_value = []
-            mock_get_db.return_value = iter([mock_db])
+        mock_db = MagicMock()
+        mock_db.query.return_value.order_by.return_value.all.return_value = []
 
+        from app.database import get_db
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
             resp = client.get("/api/feeds")
             assert resp.status_code == 200
             assert resp.json() == []
+        finally:
+            app.dependency_overrides.clear()

@@ -55,6 +55,11 @@ def validate_and_parse_feed(url: str) -> FeedMeta:
 
     parsed = feedparser.parse(content)
 
+    if not parsed.version:
+        raise InvalidFeedError(
+            "URL does not appear to be a valid RSS or Atom feed"
+        )
+
     if parsed.bozo and not parsed.entries:
         raise InvalidFeedError(
             f"URL does not appear to be a valid RSS or Atom feed: {parsed.bozo_exception}"
