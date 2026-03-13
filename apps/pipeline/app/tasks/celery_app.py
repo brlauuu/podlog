@@ -12,6 +12,7 @@ celery_app = Celery(
         "app.tasks.transcribe",
         "app.tasks.diarize",
         "app.tasks.archive",
+        "app.tasks.infer",
         "app.tasks.cleanup",
         "app.scheduler",
     ],

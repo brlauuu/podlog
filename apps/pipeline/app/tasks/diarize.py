@@ -79,8 +79,9 @@ def diarize_episode(self, episode_id: str) -> str:
                 str(exc),
             )
 
-        from app.tasks.archive import archive_episode
-        archive_episode.delay(episode_id)
+        # PRD-04 §4.6: inference runs after diarization, before archival
+        from app.tasks.infer import infer_speakers
+        infer_speakers.delay(episode_id)
         return episode_id
     finally:
         db.close()

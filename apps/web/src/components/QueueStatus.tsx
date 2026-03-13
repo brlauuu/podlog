@@ -77,7 +77,16 @@ function JobCard({ job, onRetry }: { job: Job; onRetry: (taskId: string) => void
       )}
 
       {job.status !== "failed" && job.status !== "pending" && (
-        <div className="text-xs text-muted-foreground">{job.status}</div>
+        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+          {job.status === "inferring" ? (
+            <>
+              <span className="inline-block h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              Inferring speakers...
+            </>
+          ) : (
+            job.status
+          )}
+        </div>
       )}
     </div>
   );

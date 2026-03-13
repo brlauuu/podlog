@@ -80,6 +80,10 @@ class Episode(Base):
     has_diarization: Mapped[bool] = mapped_column(Boolean, default=False)
     diarization_error: Mapped[str | None] = mapped_column(Text)
 
+    # Inference result (PRD-04 §5.2)
+    inference_skipped: Mapped[bool] = mapped_column(Boolean, default=False)
+    inference_error: Mapped[str | None] = mapped_column(Text)
+
     # Celery task reference
     celery_task_id: Mapped[str | None] = mapped_column(Text)
 
@@ -130,5 +134,10 @@ class SpeakerName(Base):
     )
     speaker_label: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # PRD-04 §5.1: inference metadata
+    inferred: Mapped[bool] = mapped_column(Boolean, default=False)
+    confidence: Mapped[str | None] = mapped_column(Text)  # HIGH | MEDIUM | LOW | NULL
+    confirmed_by_user: Mapped[bool] = mapped_column(Boolean, default=False)
 
     episode: Mapped["Episode"] = relationship("Episode", back_populates="speaker_names")

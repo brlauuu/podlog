@@ -75,7 +75,7 @@ class TestCleanupZombieJobs:
 
     def test_non_terminal_statuses_are_complete(self):
         # Ensure the set covers every state between pending and a terminal state
-        expected = {"pending", "downloading", "transcribing", "diarizing", "archiving"}
+        expected = {"pending", "downloading", "transcribing", "diarizing", "inferring", "archiving"}
         assert set(NON_TERMINAL_STATUSES) == expected
 
     def test_zombie_timeout_is_two_hours(self):

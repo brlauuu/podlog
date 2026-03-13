@@ -41,6 +41,9 @@ accelerate = "^0.29.0"
 # ML — pyannote diarization
 pyannote-audio = "^3.1.0"
 
+# ML — spaCy NER for host/guest inference (PRD-04)
+spacy = "^3.7"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
 pytest-cov = "^5.0.0"

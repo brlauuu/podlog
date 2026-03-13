@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Disk space guard (GAP-06): minimum free bytes before starting a download
     disk_headroom_bytes: int = 2 * 1024 * 1024 * 1024  # 2 GB
 
+    # Host/guest inference (PRD-04 §9)
+    inference_enabled: bool = True
+    spacy_model: str = "en_core_web_trf"
+
     @property
     def audio_raw_dir(self) -> str:
         return f"{self.data_dir}/audio/raw"

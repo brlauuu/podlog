@@ -13,11 +13,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: "speaker_label and display_name are required" }, { status: 400 });
     }
 
+    // PRD-04 §5.1: when user edits, mark confirmed and clear inferred flag
     await pool.query(
-      `INSERT INTO speaker_names (episode_id, speaker_label, display_name)
-       VALUES ($1, $2, $3)
+      `INSERT INTO speaker_names (episode_id, speaker_label, display_name, inferred, confirmed_by_user)
+       VALUES ($1, $2, $3, false, true)
        ON CONFLICT (episode_id, speaker_label)
-       DO UPDATE SET display_name = EXCLUDED.display_name`,
+       DO UPDATE SET display_name = EXCLUDED.display_name,
+                     inferred = false,
+                     confirmed_by_user = true`,
       [params.id, speaker_label, display_name.trim()]
     );
 

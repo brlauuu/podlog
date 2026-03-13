@@ -14,7 +14,7 @@ from celery import shared_task
 
 from app.config import settings
 from app.database import SessionLocal
-from app.models import Episode, Segment
+from app.models import Episode, Segment, SpeakerName
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +56,20 @@ def archive_episode(self, episode_id: str) -> str:
         elif not settings.archive_audio and raw_path and raw_path.exists():
             raw_path.unlink()
 
-        # Write flat .txt transcript
+        # Write flat .txt transcript (PRD-04 §4.7: include inferred names)
         segments = (
             db.query(Segment)
             .filter(Segment.episode_id == episode_id)
             .order_by(Segment.start_time)
             .all()
         )
-        transcript_path = _write_transcript(episode, segments)
+        speaker_names = (
+            db.query(SpeakerName)
+            .filter(SpeakerName.episode_id == episode_id)
+            .all()
+        )
+        name_map = {sn.speaker_label: sn for sn in speaker_names}
+        transcript_path = _write_transcript(episode, segments, name_map)
 
         db.query(Episode).filter(Episode.id == episode_id).update(
             {
@@ -97,10 +103,14 @@ def _compress_audio(raw_path: Path, episode_id: str) -> Path:
     return dest
 
 
-def _write_transcript(episode: Episode, segments: list[Segment]) -> str:
+def _write_transcript(
+    episode: Episode, segments: list[Segment], name_map: dict[str, "SpeakerName"] | None = None
+) -> str:
+    """Write flat .txt transcript file. Uses inferred names where available (PRD-04 §4.7)."""
     transcript_dir = Path(settings.transcript_dir)
     transcript_dir.mkdir(parents=True, exist_ok=True)
     dest = transcript_dir / f"{episode.id}.txt"
+    name_map = name_map or {}
 
     def _fmt_time(secs: float) -> str:
         h = int(secs // 3600)
@@ -114,12 +124,27 @@ def _write_transcript(episode: Episode, segments: list[Segment]) -> str:
     if not episode.has_diarization:
         reason = episode.diarization_error or "unknown"
         lines.append(f"# Diarization: FAILED ({reason})")
+
+    # PRD-04 §4.7: header with inferred host/guest names
+    host_sn = name_map.get("SPEAKER_00")
+    if host_sn and host_sn.inferred:
+        lines.append(f"# Host: {host_sn.display_name} (inferred)")
+    guests = [
+        sn for label, sn in sorted(name_map.items())
+        if label != "SPEAKER_00" and sn.inferred
+    ]
+    if guests:
+        guest_names = ", ".join(f"{g.display_name} (inferred)" for g in guests)
+        lines.append(f"# Guests: {guest_names}")
+
     lines.append("")
 
     for seg in segments:
         ts = f"[{_fmt_time(seg.start_time)} - {_fmt_time(seg.end_time)}]"
         if episode.has_diarization and seg.speaker_label:
-            lines.append(f"{ts} {seg.speaker_label}: {seg.text}")
+            sn = name_map.get(seg.speaker_label)
+            display = sn.display_name if sn else seg.speaker_label
+            lines.append(f"{ts} {display}: {seg.text}")
         else:
             lines.append(f"{ts} {seg.text}")
 

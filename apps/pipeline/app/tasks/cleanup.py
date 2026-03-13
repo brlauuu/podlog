@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Statuses that should always progress. If an episode is stuck in one of these
 # for longer than ZOMBIE_TIMEOUT_HOURS it means the worker died mid-job.
-NON_TERMINAL_STATUSES = ("pending", "downloading", "transcribing", "diarizing", "archiving")
+NON_TERMINAL_STATUSES = ("pending", "downloading", "transcribing", "diarizing", "inferring", "archiving")
 ZOMBIE_TIMEOUT_HOURS = 2
 
 

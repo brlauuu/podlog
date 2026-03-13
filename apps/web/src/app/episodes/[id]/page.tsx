@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 import pool from "@/lib/db";
-import SpeakerLabel from "@/components/SpeakerLabel";
+import TranscriptView from "@/components/TranscriptView";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,8 @@ interface Segment {
   end_time: number;
   speaker_label: string | null;
   display_name: string | null;
+  inferred: boolean;
+  confirmed_by_user: boolean;
   text: string;
 }
 
@@ -23,6 +25,7 @@ interface Episode {
   status: string;
   has_diarization: boolean;
   diarization_error: string | null;
+  inference_error: string | null;
   feed_id: string | null;
   feed_title: string | null;
 }
@@ -41,7 +44,9 @@ async function getEpisode(id: string): Promise<Episode | null> {
 async function getSegments(episodeId: string): Promise<Segment[]> {
   const result = await pool.query(
     `SELECT s.id, s.start_time, s.end_time, s.speaker_label, s.text,
-            sn.display_name
+            sn.display_name,
+            COALESCE(sn.inferred, false) AS inferred,
+            COALESCE(sn.confirmed_by_user, false) AS confirmed_by_user
      FROM segments s
      LEFT JOIN speaker_names sn ON sn.episode_id = s.episode_id
        AND sn.speaker_label = s.speaker_label
@@ -65,11 +70,6 @@ export default async function EpisodePage({ params }: { params: { id: string } }
 
   if (!episode) notFound();
 
-  // Collect unique speaker labels for display
-  const uniqueSpeakers = Array.from(
-    new Set(segments.map((s) => s.speaker_label).filter(Boolean) as string[])
-  );
-
   return (
     <div className="space-y-6">
       <div>
@@ -78,7 +78,7 @@ export default async function EpisodePage({ params }: { params: { id: string } }
             href={`/podcasts/${episode.feed_id}`}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
-            ← {episode.feed_title ?? "Podcast"}
+            &larr; {episode.feed_title ?? "Podcast"}
           </Link>
         )}
         <h1 className="text-xl font-semibold mt-2">{episode.title ?? "Untitled Episode"}</h1>
@@ -101,35 +101,23 @@ export default async function EpisodePage({ params }: { params: { id: string } }
         </div>
       )}
 
-      {/* Transcript */}
-      <div className="space-y-3">
-        {segments.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {episode.status === "done"
-              ? "No transcript segments found."
-              : `Processing... (${episode.status})`}
+      {/* PRD-04 §8.1: inference error banner */}
+      {episode.inference_error && episode.status === "done" && (
+        <div className="flex items-start gap-2 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 rounded-lg p-3">
+          <Info size={16} className="text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            Speaker name inference was unavailable for this episode.
           </p>
-        ) : (
-          segments.map((seg) => (
-            <div key={seg.id} className="flex gap-3 group">
-              <span className="text-xs text-muted-foreground font-mono shrink-0 mt-0.5 w-14 text-right">
-                {formatTime(seg.start_time)}
-              </span>
-              <div className="flex-1 min-w-0">
-                {episode.has_diarization && seg.speaker_label && (
-                  <div className="mb-0.5">
-                    {/* SpeakerLabel is a client component for inline editing */}
-                    <span className="text-xs font-semibold text-primary">
-                      {seg.display_name ?? seg.speaker_label}
-                    </span>
-                  </div>
-                )}
-                <p className="text-sm leading-relaxed">{seg.text}</p>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Transcript — PRD-04 §8.1: inferred/confirmed badges on speaker labels */}
+      <TranscriptView
+        episodeId={episode.id}
+        hasDiarization={episode.has_diarization}
+        status={episode.status}
+        segments={segments}
+      />
     </div>
   );
 }
