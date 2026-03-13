@@ -10,8 +10,6 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from celery import shared_task
-
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment, SpeakerName
@@ -19,7 +17,10 @@ from app.models import Episode, Segment, SpeakerName
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, name="archive_episode")
+from app.tasks.celery_app import celery_app
+
+
+@celery_app.task(bind=True, name="archive_episode")
 def archive_episode(self, episode_id: str) -> str:
     db = SessionLocal()
     try:

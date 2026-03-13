@@ -7,6 +7,7 @@ DELETE /api/feeds/{id}    Remove a feed (optionally delete episodes)
 POST   /api/feeds/{id}/poll  Trigger immediate re-poll
 """
 import logging
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -33,8 +34,8 @@ class FeedResponse(BaseModel):
     description: Optional[str]
     image_url: Optional[str]
     website_url: Optional[str]
-    last_polled_at: Optional[str]
-    created_at: str
+    last_polled_at: Optional[datetime]
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

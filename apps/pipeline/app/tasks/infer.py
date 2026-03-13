@@ -10,8 +10,6 @@ inference_error populated. No retry.
 """
 import logging
 
-from celery import shared_task
-
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Feed, Segment
@@ -20,7 +18,10 @@ from app.tasks.archive import archive_episode
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, name="infer_speakers")
+from app.tasks.celery_app import celery_app
+
+
+@celery_app.task(bind=True, name="infer_speakers")
 def infer_speakers(self, episode_id: str) -> str:
     db = SessionLocal()
     try:

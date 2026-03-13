@@ -13,8 +13,6 @@ import shutil
 from pathlib import Path
 
 import httpx
-from celery import shared_task
-
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode
@@ -36,7 +34,10 @@ def _update_episode(db, episode_id: str, **kwargs) -> None:
     db.commit()
 
 
-@shared_task(
+from app.tasks.celery_app import celery_app
+
+
+@celery_app.task(
     bind=True,
     name="download_episode",
     max_retries=0,  # We handle retries manually for fine-grained error classification

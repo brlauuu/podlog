@@ -10,15 +10,16 @@ Diarization task — PRD-01 §5.5
 import logging
 from pathlib import Path
 
-from celery import shared_task
-
 from app.database import SessionLocal
 from app.models import Episode, Segment
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, name="diarize_episode")
+from app.tasks.celery_app import celery_app
+
+
+@celery_app.task(bind=True, name="diarize_episode")
 def diarize_episode(self, episode_id: str) -> str:
     db = SessionLocal()
     try:

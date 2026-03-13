@@ -7,16 +7,15 @@ ingest_episode — run the full pipeline for a single episode
 import logging
 from datetime import datetime, timezone
 
-from celery import shared_task
-
 from app.database import SessionLocal
 from app.models import Episode, Feed
 from app.services import rss as rss_service
+from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, name="ingest_feed")
+@celery_app.task(bind=True, name="ingest_feed")
 def ingest_feed(self, feed_id: str) -> dict:
     """Poll a registered RSS feed and enqueue any new episodes."""
     from app.tasks.download import download_episode
@@ -71,7 +70,7 @@ def ingest_feed(self, feed_id: str) -> dict:
         db.close()
 
 
-@shared_task(bind=True, name="ingest_episode")
+@celery_app.task(bind=True, name="ingest_episode")
 def ingest_episode(self, episode_id: str) -> dict:
     """Re-queue a single episode through the full pipeline (used for manual retry)."""
     from app.tasks.download import download_episode

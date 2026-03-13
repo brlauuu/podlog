@@ -12,8 +12,6 @@ import logging
 import os
 from pathlib import Path
 
-from celery import shared_task
-
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
@@ -21,7 +19,10 @@ from app.models import Episode, Segment
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, name="transcribe_episode")
+from app.tasks.celery_app import celery_app
+
+
+@celery_app.task(bind=True, name="transcribe_episode")
 def transcribe_episode(self, episode_id: str) -> str:
     db = SessionLocal()
     try:
