@@ -26,6 +26,8 @@ interface Episode {
   has_diarization: boolean;
   diarization_error: string | null;
   inference_error: string | null;
+  transcribe_duration_secs: number | null;
+  diarize_duration_secs: number | null;
   feed_id: string | null;
   feed_title: string | null;
 }
@@ -88,6 +90,16 @@ export default async function EpisodePage({ params }: { params: { id: string } }
           )}
           {episode.duration_secs && <span>{formatTime(episode.duration_secs)}</span>}
         </div>
+        {(episode.transcribe_duration_secs || episode.diarize_duration_secs) && (
+          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            {episode.transcribe_duration_secs != null && (
+              <span>Transcription: {formatTime(episode.transcribe_duration_secs)}</span>
+            )}
+            {episode.diarize_duration_secs != null && (
+              <span>Diarization: {formatTime(episode.diarize_duration_secs)}</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Diarization failure banner — PRD-02 §5.3 */}

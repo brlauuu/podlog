@@ -11,6 +11,7 @@ import gc
 import json
 import logging
 import os
+import time
 from pathlib import Path
 
 from app.config import settings
@@ -48,9 +49,15 @@ def transcribe_episode(self, episode_id: str) -> str:
         try:
             from app.services.whisper import transcribe
 
+            t0 = time.monotonic()
             segments_data, language, aligned_result = transcribe(
                 str(wav_path), model_name=settings.whisper_model
             )
+            transcribe_secs = round(time.monotonic() - t0, 1)
+            db.query(Episode).filter(Episode.id == episode_id).update(
+                {"transcribe_duration_secs": transcribe_secs}
+            )
+            db.commit()
         except MemoryError as exc:
             _mark_failed(db, episode_id, "OOM", str(exc))
             return episode_id
@@ -95,10 +102,11 @@ def transcribe_episode(self, episode_id: str) -> str:
         db.commit()
 
         logger.info(
-            '"action": "transcribe_complete", "episode_id": "%s", "segments": %d, "language": "%s"',
+            '"action": "transcribe_complete", "episode_id": "%s", "segments": %d, "language": "%s", "duration_secs": %.1f',
             episode_id,
             len(segments_data),
             language,
+            transcribe_secs,
         )
 
         from app.tasks.diarize import diarize_episode

@@ -84,6 +84,10 @@ class Episode(Base):
     inference_skipped: Mapped[bool] = mapped_column(Boolean, default=False)
     inference_error: Mapped[str | None] = mapped_column(Text)
 
+    # Processing duration (seconds)
+    transcribe_duration_secs: Mapped[float | None] = mapped_column(Float)
+    diarize_duration_secs: Mapped[float | None] = mapped_column(Float)
+
     # Celery task reference
     celery_task_id: Mapped[str | None] = mapped_column(Text)
 

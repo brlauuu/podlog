@@ -10,6 +10,7 @@ Diarization task — PRD-01 §5.5
 """
 import json
 import logging
+import time
 from pathlib import Path
 
 from app.config import settings
@@ -36,6 +37,7 @@ def diarize_episode(self, episode_id: str) -> str:
         try:
             from app.services.pyannote import diarize
 
+            t0 = time.monotonic()
             diarization_segments = diarize(audio_path)
 
             # Try word-level alignment first (preferred)
@@ -44,8 +46,9 @@ def diarize_episode(self, episode_id: str) -> str:
             else:
                 _diarize_segment_level(db, episode_id, diarization_segments)
 
+            diarize_secs = round(time.monotonic() - t0, 1)
             db.query(Episode).filter(Episode.id == episode_id).update(
-                {"has_diarization": True, "diarization_error": None}
+                {"has_diarization": True, "diarization_error": None, "diarize_duration_secs": diarize_secs}
             )
             db.commit()
 
