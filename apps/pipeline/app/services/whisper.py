@@ -1,7 +1,8 @@
 """
 Whisper speech-to-text service — PRD-01 §5.4
 
-Uses faster-whisper (CTranslate2 backend) for optimized CPU inference.
+Uses WhisperX (CTranslate2 backend + wav2vec2 word-level alignment)
+for optimized CPU inference.
 
 CRITICAL: The caller (transcribe.py) is responsible for calling unload_model()
 after transcription. Whisper and pyannote must never be in memory simultaneously.
@@ -22,18 +23,22 @@ def load_model(model_name: str = "large-v3-turbo") -> None:
     if _model is not None:
         return
 
-    from faster_whisper import WhisperModel
+    import whisperx
     from app.config import settings
 
     device = "cuda" if _cuda_available() else "cpu"
     compute_type = settings.whisper_compute_type
 
     logger.info(
-        '"action": "whisper_load_start", "model": "%s", "compute_type": "%s"',
-        model_name, compute_type,
+        '"action": "whisper_load_start", "model": "%s", "backend": "whisperx"',
+        model_name,
     )
 
-    _model = WhisperModel(model_name, device=device, compute_type=compute_type)
+    _model = whisperx.load_model(
+        model_name,
+        device=device,
+        compute_type=compute_type,
+    )
 
     logger.info(
         '"action": "whisper_load_complete", "model": "%s", "device": "%s"',
@@ -61,32 +66,40 @@ def transcribe(audio_path: str, model_name: str = "large-v3-turbo") -> tuple[lis
     segments: list of {"start": float, "end": float, "text": str}
     language: detected language code (e.g. "en")
     """
+    import whisperx
     from app.config import settings
 
     load_model(model_name)
 
-    # IMPORTANT: model.transcribe() returns a generator — segments are produced
-    # lazily as transcription progresses. We must materialize with list().
-    result_segments, info = _model.transcribe(
-        audio_path,
-        beam_size=settings.whisper_beam_size,
-        vad_filter=True,       # Skip silence — important for podcasts
-    )
+    device = "cuda" if _cuda_available() else "cpu"
+    audio = whisperx.load_audio(audio_path)
 
-    language = info.language if info.language else "unknown"
+    # Stage 1: Transcribe (batched inference via faster-whisper)
+    result = _model.transcribe(audio, batch_size=settings.whisper_batch_size)
+    language = result.get("language", "unknown") or "unknown"
 
+    # Stage 2: Word-level alignment (optional but recommended)
+    try:
+        model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
+        result = whisperx.align(result["segments"], model_a, metadata, audio, device)
+        del model_a
+        gc.collect()
+    except Exception as exc:
+        logger.warning('"action": "whisper_align_failed", "error": "%s"', exc)
+        # Fall back to segment-level timestamps (still usable)
+
+    # Convert to expected output format
     segments = []
-    for seg in result_segments:
+    for seg in result.get("segments", []):
         segments.append({
-            "start": seg.start,
-            "end": seg.end,
-            "text": seg.text.strip(),
+            "start": seg.get("start", 0.0),
+            "end": seg.get("end", 0.0),
+            "text": seg.get("text", "").strip(),
         })
 
     logger.info(
         '"action": "whisper_transcribe_complete", "segments": %d, "language": "%s"',
-        len(segments),
-        language,
+        len(segments), language,
     )
     return segments, language
 

@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     # HuggingFace
     hf_token: str
 
-    # Whisper
+    # Whisper (WhisperX / CTranslate2 backend)
     whisper_model: str = "large-v3-turbo"
     whisper_compute_type: str = "int8"
-    whisper_beam_size: int = 5
+    whisper_batch_size: int = 16
 
     # Storage
     data_dir: str = "/data"
