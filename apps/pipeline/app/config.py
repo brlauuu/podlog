@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     hf_token: str
 
     # Whisper
-    whisper_model: str = "large-v3"
+    whisper_model: str = "large-v3-turbo"
 
     # Storage
     data_dir: str = "/data"
