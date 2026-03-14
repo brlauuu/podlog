@@ -10,6 +10,7 @@ WARMING_UP → OK.
 Usage (from docker-compose.yml):
   python -m app.tasks.prewarm
 """
+import gc
 import logging
 import sys
 from pathlib import Path
@@ -35,7 +36,7 @@ def main() -> None:
 
     logger.info('"action": "prewarm_start", "whisper_model": "%s"', settings.whisper_model)
 
-    # Download Whisper
+    # Download Whisper (WhisperX + CTranslate2 model)
     try:
         from app.services.whisper import load_model, unload_model
         logger.info('"action": "prewarm_whisper_download"')
@@ -45,6 +46,18 @@ def main() -> None:
     except Exception as exc:
         logger.error('"action": "prewarm_whisper_failed", "error": "%s"', exc)
         sys.exit(1)
+
+    # Download wav2vec2 alignment model — failure is non-fatal
+    try:
+        import whisperx
+        device = "cpu"
+        logger.info('"action": "prewarm_align_model_download"')
+        model_a, metadata = whisperx.load_align_model(language_code="en", device=device)
+        del model_a, metadata
+        gc.collect()
+        logger.info('"action": "prewarm_align_model_done"')
+    except Exception as exc:
+        logger.warning('"action": "prewarm_align_model_failed", "error": "%s"', exc)
 
     # Download pyannote — failure is non-fatal (per PRD-01 §5.4)
     try:
