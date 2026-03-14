@@ -7,7 +7,7 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11,<3.14"
 
 # Web / API
 fastapi = "^0.111.0"
@@ -37,8 +37,8 @@ ffmpeg-python = "^0.2.0"
 whisperx = "^3.8.0"
 torch = "^2.2.0"
 
-# ML — pyannote diarization
-pyannote-audio = "^3.1.0"
+# ML — pyannote diarization (>=4.0 required by whisperx)
+pyannote-audio = ">=3.1.0"
 
 # ML — spaCy NER for host/guest inference (PRD-04)
 spacy = "^3.7"
