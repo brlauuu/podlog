@@ -70,12 +70,13 @@ class TestTranscribe:
              patch("whisperx.load_audio", return_value=MagicMock()), \
              patch("whisperx.load_align_model", return_value=(mock_align_model, mock_metadata)), \
              patch("whisperx.align", return_value=aligned_result):
-            segments, language = ws.transcribe("/tmp/test.wav")
+            segments, language, result = ws.transcribe("/tmp/test.wav")
 
         assert language == "en"
         assert len(segments) == 2
         assert segments[0] == {"start": 0.0, "end": 2.5, "text": "Hello world."}
         assert segments[1] == {"start": 2.5, "end": 5.0, "text": "Second segment."}
+        assert "segments" in result
 
     def test_transcribe_handles_unknown_language(self):
         """transcribe() returns 'unknown' when language detection fails."""
@@ -91,7 +92,7 @@ class TestTranscribe:
              patch("app.services.whisper._cuda_available", return_value=False), \
              patch("whisperx.load_audio", return_value=MagicMock()), \
              patch("whisperx.load_align_model", side_effect=Exception("no model for unknown")):
-            segments, language = ws.transcribe("/tmp/test.wav")
+            segments, language, result = ws.transcribe("/tmp/test.wav")
 
         assert language == "unknown"
         assert segments == []
@@ -110,7 +111,7 @@ class TestTranscribe:
              patch("app.services.whisper._cuda_available", return_value=False), \
              patch("whisperx.load_audio", return_value=MagicMock()), \
              patch("whisperx.load_align_model", side_effect=Exception("alignment failed")):
-            segments, language = ws.transcribe("/tmp/test.wav")
+            segments, language, result = ws.transcribe("/tmp/test.wav")
 
         assert language == "en"
         assert len(segments) == 2

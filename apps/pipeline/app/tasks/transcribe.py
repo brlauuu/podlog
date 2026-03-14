@@ -8,6 +8,7 @@ Transcription task — PRD-01 §5.3, §5.4
   (mandatory — Whisper + pyannote must never be resident simultaneously)
 """
 import gc
+import json
 import logging
 import os
 from pathlib import Path
@@ -47,7 +48,9 @@ def transcribe_episode(self, episode_id: str) -> str:
         try:
             from app.services.whisper import transcribe
 
-            segments_data, language = transcribe(str(wav_path), model_name=settings.whisper_model)
+            segments_data, language, aligned_result = transcribe(
+                str(wav_path), model_name=settings.whisper_model
+            )
         except MemoryError as exc:
             _mark_failed(db, episode_id, "OOM", str(exc))
             return episode_id
@@ -60,6 +63,18 @@ def transcribe_episode(self, episode_id: str) -> str:
             _unload_whisper()
             if wav_path.exists():
                 wav_path.unlink()
+
+        # Step 2b: save word-level alignment data for diarization
+        alignment_path = Path(settings.transcript_dir) / f"{episode_id}.whisperx.json"
+        try:
+            alignment_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(alignment_path, "w") as f:
+                json.dump(aligned_result, f)
+        except Exception as exc:
+            logger.warning(
+                '"action": "alignment_save_failed", "episode_id": "%s", "error": "%s"',
+                episode_id, exc,
+            )
 
         # Step 3: persist segments
         db.query(Segment).filter(Segment.episode_id == episode_id).delete()

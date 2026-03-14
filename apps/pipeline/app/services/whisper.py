@@ -59,12 +59,14 @@ def unload_model() -> None:
     logger.info('"action": "whisper_unloaded"')
 
 
-def transcribe(audio_path: str, model_name: str = "large-v3-turbo") -> tuple[list[dict], str]:
+def transcribe(audio_path: str, model_name: str = "large-v3-turbo") -> tuple[list[dict], str, dict]:
     """
-    Transcribe audio file. Returns (segments, language).
+    Transcribe audio file. Returns (segments, language, aligned_result).
 
     segments: list of {"start": float, "end": float, "text": str}
     language: detected language code (e.g. "en")
+    aligned_result: full WhisperX result dict with word-level timestamps
+                    (contains "segments" with "words" arrays if alignment succeeded)
     """
     import whisperx
     from app.config import settings
@@ -101,7 +103,7 @@ def transcribe(audio_path: str, model_name: str = "large-v3-turbo") -> tuple[lis
         '"action": "whisper_transcribe_complete", "segments": %d, "language": "%s"',
         len(segments), language,
     )
-    return segments, language
+    return segments, language, result
 
 
 def _cuda_available() -> bool:
