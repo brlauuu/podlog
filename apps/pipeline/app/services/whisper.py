@@ -1,53 +1,50 @@
 """
 Whisper speech-to-text service — PRD-01 §5.4
 
-Uses openai/whisper-large-v3 via HuggingFace transformers.
+Uses faster-whisper (CTranslate2 backend) for optimized CPU inference.
 
 CRITICAL: The caller (transcribe.py) is responsible for calling unload_model()
 after transcription. Whisper and pyannote must never be in memory simultaneously.
 """
 import gc
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # Module-level model cache — explicitly set to None by unload_model()
 _model = None
-_processor = None
 
 
-def load_model(model_name: str = "large-v3"):
+def load_model(model_name: str = "large-v3-turbo") -> None:
     """Load Whisper model into module-level cache. No-op if already loaded."""
-    global _model, _processor
+    global _model
 
     if _model is not None:
         return
 
-    from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
-    import torch
+    from faster_whisper import WhisperModel
+    from app.config import settings
 
-    hf_model_id = f"openai/whisper-{model_name}"
-    logger.info('"action": "whisper_load_start", "model": "%s"', hf_model_id)
+    device = "cuda" if _cuda_available() else "cpu"
+    compute_type = settings.whisper_compute_type
 
-    dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info(
+        '"action": "whisper_load_start", "model": "%s", "compute_type": "%s"',
+        model_name, compute_type,
+    )
 
-    _processor = AutoProcessor.from_pretrained(hf_model_id)
-    _model = AutoModelForSpeechSeq2Seq.from_pretrained(
-        hf_model_id,
-        torch_dtype=dtype,
-        low_cpu_mem_usage=True,
-    ).to(device)
+    _model = WhisperModel(model_name, device=device, compute_type=compute_type)
 
-    logger.info('"action": "whisper_load_complete", "model": "%s", "device": "%s"', hf_model_id, device)
+    logger.info(
+        '"action": "whisper_load_complete", "model": "%s", "device": "%s"',
+        model_name, device,
+    )
 
 
 def unload_model() -> None:
     """Explicitly remove Whisper from memory. Must be called before loading pyannote."""
-    global _model, _processor
+    global _model
     _model = None
-    _processor = None
     try:
         import torch
         torch.cuda.empty_cache()
@@ -57,46 +54,34 @@ def unload_model() -> None:
     logger.info('"action": "whisper_unloaded"')
 
 
-def transcribe(audio_path: str, model_name: str = "large-v3") -> tuple[list[dict], str]:
+def transcribe(audio_path: str, model_name: str = "large-v3-turbo") -> tuple[list[dict], str]:
     """
     Transcribe audio file. Returns (segments, language).
 
     segments: list of {"start": float, "end": float, "text": str}
     language: detected language code (e.g. "en")
     """
-    from transformers import pipeline as hf_pipeline
-    import torch
+    from app.config import settings
 
     load_model(model_name)
 
-    hf_model_id = f"openai/whisper-{model_name}"
-    dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
-
-    pipe = hf_pipeline(
-        "automatic-speech-recognition",
-        model=_model,
-        tokenizer=_processor.tokenizer,
-        feature_extractor=_processor.feature_extractor,
-        torch_dtype=dtype,
-        device=device,
-    )
-
-    result = pipe(
+    # IMPORTANT: model.transcribe() returns a generator — segments are produced
+    # lazily as transcription progresses. We must materialize with list().
+    result_segments, info = _model.transcribe(
         audio_path,
-        return_timestamps=True,
-        generate_kwargs={"language": None},  # Auto-detect language
+        beam_size=settings.whisper_beam_size,
+        vad_filter=True,       # Skip silence — important for podcasts
     )
 
-    language = result.get("language", "unknown") or "unknown"
-    chunks = result.get("chunks", [])
+    language = info.language if info.language else "unknown"
 
     segments = []
-    for chunk in chunks:
-        ts = chunk.get("timestamp", (0.0, 0.0))
-        start = ts[0] if ts[0] is not None else 0.0
-        end = ts[1] if ts[1] is not None else start
-        segments.append({"start": start, "end": end, "text": chunk["text"]})
+    for seg in result_segments:
+        segments.append({
+            "start": seg.start,
+            "end": seg.end,
+            "text": seg.text.strip(),
+        })
 
     logger.info(
         '"action": "whisper_transcribe_complete", "segments": %d, "language": "%s"',
@@ -104,3 +89,11 @@ def transcribe(audio_path: str, model_name: str = "large-v3") -> tuple[list[dict
         language,
     )
     return segments, language
+
+
+def _cuda_available() -> bool:
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except Exception:
+        return False

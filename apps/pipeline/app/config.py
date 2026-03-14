@@ -16,6 +16,8 @@ class Settings(BaseSettings):
 
     # Whisper
     whisper_model: str = "large-v3-turbo"
+    whisper_compute_type: str = "int8"
+    whisper_beam_size: int = 5
 
     # Storage
     data_dir: str = "/data"

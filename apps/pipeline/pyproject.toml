@@ -33,10 +33,9 @@ feedparser = "^6.0.11"
 # Audio processing
 ffmpeg-python = "^0.2.0"
 
-# ML — Whisper
-transformers = "^4.40.0"
+# ML — Whisper (CTranslate2 backend)
+faster-whisper = "^1.2.0"
 torch = "^2.2.0"
-accelerate = "^0.29.0"
 
 # ML — pyannote diarization
 pyannote-audio = "^3.1.0"
