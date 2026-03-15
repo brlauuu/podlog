@@ -47,6 +47,7 @@ def ingest_feed(self, feed_id: str) -> dict:
                 published_at=meta.published_at,
                 duration_secs=meta.duration_secs,
                 audio_url=meta.audio_url,
+                episode_url=meta.episode_url,
                 status="pending",
             )
             db.add(episode)

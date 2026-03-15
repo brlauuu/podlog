@@ -60,6 +60,7 @@ class Episode(Base):
     published_at: Mapped[datetime | None] = mapped_column()
     duration_secs: Mapped[int | None] = mapped_column(Integer)
     audio_url: Mapped[str] = mapped_column(Text, nullable=False)
+    episode_url: Mapped[str | None] = mapped_column(Text)
     audio_local_path: Mapped[str | None] = mapped_column(Text)
     transcript_path: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str | None] = mapped_column(Text)

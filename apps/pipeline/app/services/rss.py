@@ -34,6 +34,7 @@ class EpisodeMeta:
     title: Optional[str]
     description: Optional[str]
     audio_url: str
+    episode_url: Optional[str]
     published_at: Optional[datetime]
     duration_secs: Optional[int]
 
@@ -95,12 +96,16 @@ def fetch_episodes(url: str) -> list[EpisodeMeta]:
         published_at = _parse_date(entry.get("published"))
         duration_secs = _parse_duration(entry.get("itunes_duration"))
 
+        raw_link = entry.get("link") or ""
+        episode_url = raw_link if raw_link.startswith(("http://", "https://")) else None
+
         episodes.append(
             EpisodeMeta(
                 guid=guid,
                 title=entry.get("title"),
                 description=entry.get("summary"),
                 audio_url=audio_url,
+                episode_url=episode_url,
                 published_at=published_at,
                 duration_secs=duration_secs,
             )

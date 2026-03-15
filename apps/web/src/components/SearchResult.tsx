@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Play } from "lucide-react";
+import { AlertTriangle, ExternalLink, Play } from "lucide-react";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { buildTimestampUrl, formatTimestamp } from "@/lib/timestamp";
 import type { SearchResult as SearchResultType } from "@/lib/search";
@@ -14,16 +14,24 @@ interface Props {
  * Search result card — PRD-02 §9.1
  *
  * Shows: episode title, podcast name, speaker, timestamp, highlighted snippet.
- * Diarization warning badge if has_diarization = false.
- * "Play locally" button if audio_local_path is set.
+ * Primary action: open external link (episode page or remote audio URL).
+ * Secondary: embedded player fallback if local audio exists and no remote URL.
  */
 export default function SearchResult({ result }: Props) {
   const { playEpisode } = useAudioPlayer();
 
-  const remoteUrl = buildTimestampUrl(
-    { id: result.episodeId, audioUrl: result.audioUrl, audioLocalPath: result.audioLocalPath },
+  const externalUrl = buildTimestampUrl(
+    {
+      id: result.episodeId,
+      audioUrl: result.audioUrl,
+      audioLocalPath: result.audioLocalPath,
+      episodeUrl: result.episodeUrl,
+    },
     result.startTime
   );
+
+  const hasLocalAudio = !!result.audioLocalPath;
+  const hasExternalLink = !!result.episodeUrl || !!result.audioUrl;
 
   function handlePlayLocally() {
     if (!result.audioLocalPath) return;
@@ -68,24 +76,27 @@ export default function SearchResult({ result }: Props) {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {result.audioLocalPath && (
-            <button
-              onClick={handlePlayLocally}
+          {hasExternalLink && (
+            <a
+              href={externalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={result.episodeUrl ? "Open episode page" : "Open audio in browser"}
               className="inline-flex items-center gap-1 text-xs bg-primary text-primary-foreground px-2 py-1 rounded hover:opacity-90 transition-opacity"
             >
+              <ExternalLink size={11} />
+              {formatTimestamp(result.startTime)}
+            </a>
+          )}
+          {hasLocalAudio && (
+            <button
+              onClick={handlePlayLocally}
+              title="Play in embedded player"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-input px-2 py-1 rounded transition-colors"
+            >
               <Play size={11} />
-              Play
             </button>
           )}
-          <a
-            href={remoteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Opens in browser audio player. May not seek in all podcast apps."
-            className="text-xs text-primary underline"
-          >
-            {formatTimestamp(result.startTime)}
-          </a>
         </div>
       </div>
 

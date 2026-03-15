@@ -4,27 +4,46 @@ export interface Episode {
   id: string;
   audioUrl: string;
   audioLocalPath: string | null;
+  episodeUrl: string | null;
 }
 
 /**
- * Build a URL for playing an episode at a specific timestamp.
+ * Build a URL for opening an episode at a specific timestamp.
  *
- * If the episode has a local archived file, returns a path to the
- * path-validated local serving API route.
- * Otherwise, returns the remote URL with an #t= fragment.
- *
- * Per PRD-02 §5.2, §11.
+ * Priority: episode web page > remote audio URL > local fallback.
+ * Per issue #14: external playback is primary, local is fallback only.
  */
 export function buildTimestampUrl(episode: Episode, startTimeSecs: number): string {
   const t = Math.floor(startTimeSecs);
 
+  // Prefer the episode's web page if available
+  if (episode.episodeUrl) {
+    return episode.episodeUrl;
+  }
+
+  // Remote audio URL with #t= fragment (works in browser <audio>)
+  if (episode.audioUrl) {
+    return `${episode.audioUrl}#t=${t}`;
+  }
+
+  // Local fallback only when no remote URL is available
   if (episode.audioLocalPath) {
-    // Use basename only — path traversal prevention is enforced in the route handler
     const safeName = path.basename(episode.audioLocalPath);
     return `/api/audio/${episode.id}/${encodeURIComponent(safeName)}#t=${t}`;
   }
 
-  return `${episode.audioUrl}#t=${t}`;
+  return "#";
+}
+
+/**
+ * Build a local playback URL for the embedded audio player.
+ * Returns null if no local path is available.
+ */
+export function buildLocalPlaybackUrl(episode: Episode, startTimeSecs: number): string | null {
+  if (!episode.audioLocalPath) return null;
+  const t = Math.floor(startTimeSecs);
+  const safeName = path.basename(episode.audioLocalPath);
+  return `/api/audio/${episode.id}/${encodeURIComponent(safeName)}#t=${t}`;
 }
 
 /**
