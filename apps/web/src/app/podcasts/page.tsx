@@ -1,6 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import pool from "@/lib/db";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -35,12 +37,9 @@ export default async function PodcastsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Podcasts</h1>
-        <Link
-          href="/feeds"
-          className="text-sm px-3 py-1.5 border border-border rounded hover:bg-accent transition-colors"
-        >
-          Manage feeds
-        </Link>
+        <Button variant="outline" size="sm" asChild>
+          <Link href="/feeds">Manage feeds</Link>
+        </Button>
       </div>
 
       {feeds.length === 0 ? (
@@ -50,34 +49,32 @@ export default async function PodcastsPage() {
             href="/feeds"
             className="text-sm text-primary underline"
           >
-            Add your first RSS feed →
+            Add your first RSS feed
           </Link>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {feeds.map((feed) => (
-            <Link
-              key={feed.id}
-              href={`/podcasts/${feed.id}`}
-              className="border border-border rounded-lg overflow-hidden hover:bg-accent/30 transition-colors"
-            >
-              {feed.image_url ? (
-                <Image
-                  src={feed.image_url}
-                  alt={feed.title ?? "Podcast"}
-                  width={300}
-                  height={300}
-                  className="w-full aspect-square object-cover"
-                />
-              ) : (
-                <div className="w-full aspect-square bg-muted flex items-center justify-center text-4xl">
-                  🎙
-                </div>
-              )}
-              <div className="p-3 space-y-1">
-                <p className="text-sm font-medium line-clamp-2">{feed.title ?? "Untitled"}</p>
-                <p className="text-xs text-muted-foreground">{feed.episode_count} episodes</p>
-              </div>
+            <Link key={feed.id} href={`/podcasts/${feed.id}`}>
+              <Card className="overflow-hidden hover:bg-accent/30 transition-colors h-full">
+                {feed.image_url ? (
+                  <Image
+                    src={feed.image_url}
+                    alt={feed.title ?? "Podcast"}
+                    width={300}
+                    height={300}
+                    className="w-full aspect-square object-cover"
+                  />
+                ) : (
+                  <div className="w-full aspect-square bg-muted flex items-center justify-center text-4xl">
+                    🎙
+                  </div>
+                )}
+                <CardContent className="p-3 space-y-1">
+                  <p className="text-sm font-medium line-clamp-2">{feed.title ?? "Untitled"}</p>
+                  <p className="text-xs text-muted-foreground">{feed.episode_count} episodes</p>
+                </CardContent>
+              </Card>
             </Link>
           ))}
         </div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronRight, Radio, FileText } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import EpisodeMentionList from "@/components/EpisodeMentionList";
 import type { FeedGroup } from "@/lib/search";
 
@@ -29,7 +30,7 @@ export default function FeedGroupCard({ feed, query }: Props) {
   }
 
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
+    <Card className="overflow-hidden">
       {/* Feed header */}
       <button
         onClick={() => setExpandedFeed((v) => !v)}
@@ -37,7 +38,7 @@ export default function FeedGroupCard({ feed, query }: Props) {
       >
         <ChevronRight
           size={16}
-          className={`shrink-0 text-muted-foreground transition-transform ${
+          className={`shrink-0 text-muted-foreground transition-transform duration-200 ${
             expandedFeed ? "rotate-90" : ""
           }`}
         />
@@ -64,7 +65,7 @@ export default function FeedGroupCard({ feed, query }: Props) {
                 >
                   <ChevronRight
                     size={14}
-                    className={`shrink-0 text-muted-foreground transition-transform ${
+                    className={`shrink-0 text-muted-foreground transition-transform duration-200 ${
                       isExpanded ? "rotate-90" : ""
                     }`}
                   />
@@ -97,6 +98,6 @@ export default function FeedGroupCard({ feed, query }: Props) {
           })}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

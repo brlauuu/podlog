@@ -3,6 +3,17 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface Feed {
   id: string;
@@ -65,19 +76,60 @@ export default function FeedsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Feeds</h1>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 bg-primary text-primary-foreground rounded hover:opacity-90 transition-opacity"
-        >
-          <Plus size={14} />
-          Add Feed
-        </button>
+        <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="gap-1.5">
+              <Plus size={14} />
+              Add Feed
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add RSS Feed</DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                addFeed.mutate(newUrl.trim());
+              }}
+              className="space-y-4"
+            >
+              <Input
+                type="url"
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+                placeholder="https://feeds.example.com/podcast.xml"
+                required
+                autoFocus
+              />
+              {addError && <p className="text-sm text-destructive">{addError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowAddModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={addFeed.isPending}>
+                  {addFeed.isPending ? "Adding..." : "Add"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {isLoading ? (
         <div className="space-y-2">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="h-16 bg-muted rounded-lg animate-pulse" />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-2">
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-3 w-3/4" />
+                <Skeleton className="h-3 w-1/3" />
+              </CardContent>
+            </Card>
           ))}
         </div>
       ) : feeds.length === 0 ? (
@@ -93,92 +145,46 @@ export default function FeedsPage() {
       ) : (
         <div className="space-y-2">
           {feeds.map((feed) => (
-            <div
-              key={feed.id}
-              className="border border-border rounded-lg p-4 flex items-center justify-between gap-4"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{feed.title ?? feed.url}</p>
-                <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
-                <p className="text-xs text-muted-foreground">
-                  {feed.episode_count} episodes ·{" "}
-                  {feed.last_polled_at
-                    ? `Last polled ${new Date(feed.last_polled_at).toLocaleString()}`
-                    : "Never polled"}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => pollFeed.mutate(feed.id)}
-                  title="Poll now"
-                  className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-accent transition-colors"
-                >
-                  <RefreshCw size={14} />
-                </button>
-                <button
-                  onClick={() => {
-                    const deleteEps = confirm(
-                      "Also delete all episodes and transcripts for this feed?"
-                    );
-                    deleteFeed.mutate({ id: feed.id, deleteEpisodes: deleteEps });
-                  }}
-                  title="Remove feed"
-                  className="p-1.5 text-muted-foreground hover:text-destructive rounded hover:bg-accent transition-colors"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
+            <Card key={feed.id} className="hover:bg-accent/30 transition-colors">
+              <CardContent className="p-4 flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{feed.title ?? feed.url}</p>
+                  <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {feed.episode_count} episodes ·{" "}
+                    {feed.last_polled_at
+                      ? `Last polled ${new Date(feed.last_polled_at).toLocaleString()}`
+                      : "Never polled"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => pollFeed.mutate(feed.id)}
+                    title="Poll now"
+                    className="h-8 w-8"
+                  >
+                    <RefreshCw size={14} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      const deleteEps = confirm(
+                        "Also delete all episodes and transcripts for this feed?"
+                      );
+                      deleteFeed.mutate({ id: feed.id, deleteEpisodes: deleteEps });
+                    }}
+                    title="Remove feed"
+                    className="h-8 w-8 hover:text-destructive"
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           ))}
-        </div>
-      )}
-
-      {/* Add Feed Modal */}
-      {showAddModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={() => setShowAddModal(false)}
-        >
-          <div
-            className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-lg space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-semibold">Add RSS Feed</h2>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                addFeed.mutate(newUrl.trim());
-              }}
-              className="space-y-3"
-            >
-              <input
-                type="url"
-                value={newUrl}
-                onChange={(e) => setNewUrl(e.target.value)}
-                placeholder="https://feeds.example.com/podcast.xml"
-                required
-                autoFocus
-                className="w-full border border-input rounded px-3 py-2 text-sm bg-background"
-              />
-              {addError && <p className="text-sm text-destructive">{addError}</p>}
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="text-sm px-3 py-1.5 border border-border rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addFeed.isPending}
-                  className="text-sm px-3 py-1.5 bg-primary text-primary-foreground rounded disabled:opacity-60"
-                >
-                  {addFeed.isPending ? "Adding..." : "Add"}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </div>

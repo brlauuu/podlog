@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, Volume2 } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, ChevronUp, ChevronDown, SkipBack, SkipForward } from "lucide-react";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { formatTimestamp } from "@/lib/timestamp";
 
@@ -14,6 +14,8 @@ export default function AudioPlayer() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const progressRef = useRef<HTMLDivElement>(null);
 
   // Seek to startTime whenever a new episode is loaded
   useEffect(() => {
@@ -49,28 +51,62 @@ export default function AudioPlayer() {
     };
   }, []);
 
+  function handleSeek(e: React.MouseEvent<HTMLDivElement>) {
+    const audio = audioRef.current;
+    const bar = progressRef.current;
+    if (!audio || !bar || !duration) return;
+    const rect = bar.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    audio.currentTime = pct * duration;
+  }
+
+  function skip(seconds: number) {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = Math.max(0, Math.min(duration, audio.currentTime + seconds));
+  }
+
+  function toggleMute() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.muted = !audio.muted;
+    setMuted(audio.muted);
+  }
+
   if (!state.src) return null;
 
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
+    <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 shadow-lg">
       <audio ref={audioRef} preload="metadata" />
+
+      {/* Progress bar — always visible, clickable */}
+      <div
+        ref={progressRef}
+        className="h-1 bg-muted cursor-pointer group"
+        onClick={handleSeek}
+      >
+        <div
+          className="h-full bg-primary transition-[width] duration-100 group-hover:h-1.5"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
 
       {collapsed ? (
         <div className="flex items-center gap-3 px-4 py-2">
-          <button onClick={togglePlayPause} className="text-foreground hover:text-primary">
+          <button onClick={togglePlayPause} className="text-foreground hover:text-primary transition-colors">
             {state.isPlaying ? <Pause size={18} /> : <Play size={18} />}
           </button>
           <span className="text-sm truncate flex-1">{state.title}</span>
-          <button onClick={() => setCollapsed(false)} className="text-xs text-muted-foreground">
-            Expand
+          <span className="text-xs text-muted-foreground tabular-nums">{formatTimestamp(currentTime)}</span>
+          <button onClick={() => setCollapsed(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronUp size={16} />
           </button>
         </div>
       ) : (
         <div className="flex items-center gap-4 px-4 py-3">
-          <button onClick={togglePlayPause} className="text-foreground hover:text-primary shrink-0">
-            {state.isPlaying ? <Pause size={20} /> : <Play size={20} />}
-          </button>
-
+          {/* Track info */}
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium truncate">{state.title}</div>
             {state.feedTitle && (
@@ -78,29 +114,38 @@ export default function AudioPlayer() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+          {/* Playback controls */}
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={() => skip(-15)} className="text-muted-foreground hover:text-foreground transition-colors" title="Back 15s">
+              <SkipBack size={16} />
+            </button>
+            <button
+              onClick={togglePlayPause}
+              className="h-9 w-9 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+            >
+              {state.isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+            </button>
+            <button onClick={() => skip(30)} className="text-muted-foreground hover:text-foreground transition-colors" title="Forward 30s">
+              <SkipForward size={16} />
+            </button>
+          </div>
+
+          {/* Time + volume */}
+          <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0 tabular-nums">
             <span>{formatTimestamp(currentTime)}</span>
-            <input
-              type="range"
-              min={0}
-              max={duration || 1}
-              value={currentTime}
-              onChange={(e) => {
-                const audio = audioRef.current;
-                if (audio) audio.currentTime = Number(e.target.value);
-              }}
-              className="w-32"
-            />
+            <span>/</span>
             <span>{formatTimestamp(duration)}</span>
           </div>
 
-          <Volume2 size={16} className="text-muted-foreground shrink-0" />
+          <button onClick={toggleMute} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
+            {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          </button>
 
           <button
             onClick={() => setCollapsed(true)}
-            className="text-xs text-muted-foreground shrink-0"
+            className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
           >
-            Collapse
+            <ChevronDown size={16} />
           </button>
         </div>
       )}

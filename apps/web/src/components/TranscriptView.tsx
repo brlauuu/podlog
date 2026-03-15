@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import SpeakerLabel from "@/components/SpeakerLabel";
+import { Badge } from "@/components/ui/badge";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
+import path from "path";
 
 interface Segment {
   id: number;
@@ -71,11 +73,11 @@ export default function TranscriptView({ episodeId, hasDiarization, status, segm
       {segments.map((seg) => (
         <div key={seg.id} id={`t-${Math.floor(seg.start_time)}`} className="flex gap-3 group">
           <button
-            className="text-xs text-muted-foreground hover:text-foreground font-mono shrink-0 mt-0.5 w-14 text-right transition-colors"
+            className="text-xs text-muted-foreground hover:text-primary font-mono shrink-0 mt-0.5 w-14 text-right transition-colors"
             title="Play from here"
             onClick={() => {
               if (audioLocalPath) {
-                const filename = audioLocalPath.split("/").pop() ?? "";
+                const filename = path.basename(audioLocalPath);
                 playEpisode(episodeId, filename, seg.start_time, episodeTitle ?? undefined, feedTitle ?? undefined);
               }
             }}
@@ -94,24 +96,26 @@ export default function TranscriptView({ episodeId, hasDiarization, status, segm
                 />
                 {/* PRD-04 §8.1: inference badges */}
                 {seg.inferred && !seg.confirmed_by_user && (
-                  <span
-                    className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300"
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 h-4 bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800"
                     title="This name was inferred from the episode description. Click the edit icon to confirm or change it."
                   >
                     Inferred
-                  </span>
+                  </Badge>
                 )}
                 {seg.confirmed_by_user && (
-                  <span
-                    className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 h-4 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
                     title="Speaker name confirmed by user"
                   >
                     &#10003; Confirmed
-                  </span>
+                  </Badge>
                 )}
               </div>
             )}
-            <p className="text-sm leading-relaxed">{seg.text}</p>
+            <p className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">{seg.text}</p>
           </div>
         </div>
       ))}
