@@ -17,11 +17,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} min-h-screen bg-background`}>
+      <body className={`${inter.className} min-h-screen bg-background flex flex-col`}>
         <QueryProvider>
           <AudioPlayerProvider>
             <Navbar />
-            <main className="max-w-5xl mx-auto px-4 py-8 pb-24">
+            <main className="max-w-5xl mx-auto px-4 py-8 pb-24 flex-1 w-full">
               {children}
             </main>
             <Footer />

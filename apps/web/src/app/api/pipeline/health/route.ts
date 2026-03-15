@@ -8,6 +8,14 @@ export async function GET() {
     const data = await resp.json();
     return NextResponse.json(data);
   } catch {
-    return NextResponse.json({ status: "DEGRADED" });
+    return NextResponse.json({
+      status: "DEGRADED",
+      services: [
+        { name: "Pipeline API", status: "DEGRADED" },
+        { name: "Database", status: "DEGRADED" },
+        { name: "Redis", status: "DEGRADED" },
+        { name: "Worker", status: "DEGRADED" },
+      ],
+    });
   }
 }

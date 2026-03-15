@@ -14,32 +14,43 @@ client = TestClient(app)
 
 class TestHealthEndpoint:
     def test_ok_when_prewarm_done(self):
-        with patch("app.api.health.redis") as mock_redis_mod:
+        with patch("app.api.health.redis") as mock_redis_mod, \
+             patch("app.api.health.SessionLocal") as mock_session_cls:
             mock_r = MagicMock()
             mock_r.ping.return_value = True
             mock_r.get.return_value = b"1"  # prewarm done
             mock_redis_mod.from_url.return_value = mock_r
+            mock_session_cls.return_value = MagicMock()
 
             resp = client.get("/api/health")
             assert resp.status_code == 200
-            assert resp.json()["status"] == "OK"
+            data = resp.json()
+            assert data["status"] == "OK"
+            assert isinstance(data["services"], list)
+            assert any(s["name"] == "Worker" and s["status"] == "OK" for s in data["services"])
 
     def test_warming_up_when_prewarm_not_done(self):
-        with patch("app.api.health.redis") as mock_redis_mod:
+        with patch("app.api.health.redis") as mock_redis_mod, \
+             patch("app.api.health.SessionLocal") as mock_session_cls:
             mock_r = MagicMock()
             mock_r.ping.return_value = True
             mock_r.get.return_value = None  # prewarm not done
             mock_redis_mod.from_url.return_value = mock_r
+            mock_session_cls.return_value = MagicMock()
 
             resp = client.get("/api/health")
             assert resp.status_code == 200
-            assert resp.json()["status"] == "WARMING_UP"
+            data = resp.json()
+            assert data["status"] == "WARMING_UP"
+            assert any(s["name"] == "Worker" and s["status"] == "WARMING_UP" for s in data["services"])
 
     def test_degraded_when_redis_unreachable(self):
-        with patch("app.api.health.redis") as mock_redis_mod:
+        with patch("app.api.health.redis") as mock_redis_mod, \
+             patch("app.api.health.SessionLocal") as mock_session_cls:
             mock_r = MagicMock()
             mock_r.ping.side_effect = Exception("Connection refused")
             mock_redis_mod.from_url.return_value = mock_r
+            mock_session_cls.return_value = MagicMock()
 
             resp = client.get("/api/health")
             assert resp.status_code == 200
