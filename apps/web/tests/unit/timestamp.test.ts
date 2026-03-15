@@ -1,18 +1,30 @@
 import { buildTimestampUrl, formatTimestamp } from "@/lib/timestamp";
 
 describe("buildTimestampUrl", () => {
-  const baseEpisode = { id: "ep-123", audioUrl: "https://cdn.example.com/ep.mp3", audioLocalPath: null };
+  const baseEpisode = { id: "ep-123", audioUrl: "https://cdn.example.com/ep.mp3", audioLocalPath: null, episodeUrl: null };
 
-  test("remote URL with #t= fragment", () => {
+  test("remote URL with #t= fragment when no episode URL", () => {
     const url = buildTimestampUrl(baseEpisode, 1234.7);
     expect(url).toBe("https://cdn.example.com/ep.mp3#t=1234");
   });
 
-  test("local URL uses API route with basename", () => {
-    const ep = { ...baseEpisode, audioLocalPath: "/data/audio/archive/ep-123.mp3" };
+  test("episode URL is preferred over remote audio URL", () => {
+    const ep = { ...baseEpisode, episodeUrl: "https://example.com/episodes/1" };
+    const url = buildTimestampUrl(ep, 60);
+    expect(url).toBe("https://example.com/episodes/1");
+  });
+
+  test("local URL is fallback when no remote URLs", () => {
+    const ep = { ...baseEpisode, audioUrl: "", audioLocalPath: "/data/audio/archive/ep-123.mp3" };
     const url = buildTimestampUrl(ep, 60);
     expect(url).toMatch(/^\/api\/audio\/ep-123\/ep-123\.mp3/);
     expect(url).toContain("#t=60");
+  });
+
+  test("remote audio URL preferred over local path", () => {
+    const ep = { ...baseEpisode, audioLocalPath: "/data/audio/archive/ep-123.mp3" };
+    const url = buildTimestampUrl(ep, 60);
+    expect(url).toBe("https://cdn.example.com/ep.mp3#t=60");
   });
 
   test("fractional seconds are floored", () => {
@@ -26,7 +38,7 @@ describe("buildTimestampUrl", () => {
   });
 
   test("local path basename extraction prevents traversal in URL", () => {
-    const ep = { ...baseEpisode, audioLocalPath: "/data/audio/archive/safe.mp3" };
+    const ep = { ...baseEpisode, audioUrl: "", audioLocalPath: "/data/audio/archive/safe.mp3" };
     const url = buildTimestampUrl(ep, 0);
     expect(url).not.toContain("..");
     expect(url).toContain("safe.mp3");

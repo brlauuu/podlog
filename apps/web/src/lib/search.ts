@@ -21,6 +21,7 @@ export interface EpisodeGroup {
   episodeTitle: string;
   audioUrl: string;
   audioLocalPath: string | null;
+  episodeUrl: string | null;
   mentionCount: number;
   bestRank: number;
 }
@@ -54,6 +55,7 @@ export interface SearchResult {
   episodeTitle: string | null;
   audioUrl: string;
   audioLocalPath: string | null;
+  episodeUrl: string | null;
   hasDiarization: boolean;
   diarizationError: string | null;
   feedTitle: string | null;
@@ -93,6 +95,7 @@ export async function searchSegments(
         e.title AS episode_title,
         e.audio_url,
         e.audio_local_path,
+        e.episode_url,
         e.has_diarization,
         e.diarization_error,
         f.title AS feed_title,
@@ -132,6 +135,7 @@ export async function searchSegments(
     episodeTitle: row.episode_title,
     audioUrl: row.audio_url,
     audioLocalPath: row.audio_local_path,
+    episodeUrl: row.episode_url,
     hasDiarization: row.has_diarization,
     diarizationError: row.diarization_error,
     feedTitle: row.feed_title,
@@ -167,6 +171,7 @@ export async function searchGrouped(
         e.title AS episode_title,
         e.audio_url,
         e.audio_local_path,
+        e.episode_url,
         COUNT(s.id)::int AS mention_count,
         MAX(ts_rank(to_tsvector('english', s.text), query)) AS best_rank
       FROM segments s
@@ -175,7 +180,7 @@ export async function searchGrouped(
         plainto_tsquery('english', $1) AS query
       WHERE to_tsvector('english', s.text) @@ query
         AND ($2::uuid IS NULL OR f.id = $2)
-      GROUP BY f.id, f.title, e.id, e.title, e.audio_url, e.audio_local_path
+      GROUP BY f.id, f.title, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
       ORDER BY best_rank DESC, mention_count DESC
       LIMIT $3 OFFSET $4`,
       [query, feedId, pageSize, offset]
@@ -216,6 +221,7 @@ export async function searchGrouped(
       episodeTitle: row.episode_title,
       audioUrl: row.audio_url,
       audioLocalPath: row.audio_local_path,
+      episodeUrl: row.episode_url,
       mentionCount,
       bestRank: parseFloat(row.best_rank),
     });

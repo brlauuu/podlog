@@ -21,6 +21,7 @@ VALID_RSS = """<?xml version="1.0" encoding="UTF-8"?>
     <item>
       <title>Episode 1</title>
       <guid>ep-001</guid>
+      <link>https://example.com/episodes/1</link>
       <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" length="12345"/>
       <pubDate>Mon, 01 Jan 2024 12:00:00 +0000</pubDate>
       <itunes:duration>01:30:00</itunes:duration>
@@ -78,6 +79,8 @@ class TestFetchEpisodes:
             assert len(episodes) == 2
             assert episodes[0].guid == "ep-001"
             assert episodes[0].audio_url == "https://example.com/ep1.mp3"
+            assert episodes[0].episode_url == "https://example.com/episodes/1"
+            assert episodes[1].episode_url is None
 
     def test_skips_entries_without_audio(self):
         rss = VALID_RSS.replace('<enclosure url="https://example.com/ep2.mp3" type="audio/mpeg" length="9999"/>', "")

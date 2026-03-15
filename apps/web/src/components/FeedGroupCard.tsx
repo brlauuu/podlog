@@ -85,7 +85,9 @@ export default function FeedGroupCard({ feed, query }: Props) {
                       query={query}
                       episodeId={episode.episodeId}
                       episodeTitle={episode.episodeTitle}
+                      audioUrl={episode.audioUrl}
                       audioLocalPath={episode.audioLocalPath}
+                      episodeUrl={episode.episodeUrl}
                       feedTitle={feed.feedTitle}
                     />
                   </div>

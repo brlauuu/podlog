@@ -1,17 +1,19 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Play } from "lucide-react";
+import { ExternalLink, Play } from "lucide-react";
 import path from "path";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
-import { formatTimestamp } from "@/lib/timestamp";
+import { buildTimestampUrl, formatTimestamp } from "@/lib/timestamp";
 import type { EpisodeMentions } from "@/lib/search";
 
 interface Props {
   query: string;
   episodeId: string;
   episodeTitle: string;
+  audioUrl: string;
   audioLocalPath: string | null;
+  episodeUrl: string | null;
   feedTitle: string;
 }
 
@@ -19,7 +21,9 @@ export default function EpisodeMentionList({
   query,
   episodeId,
   episodeTitle,
+  audioUrl,
   audioLocalPath,
+  episodeUrl,
   feedTitle,
 }: Props) {
   const { playEpisode } = useAudioPlayer();
@@ -35,7 +39,7 @@ export default function EpisodeMentionList({
     staleTime: 60_000,
   });
 
-  function handlePlay(startTime: number) {
+  function handlePlayLocally(startTime: number) {
     if (!audioLocalPath) return;
     const safeName = path.basename(audioLocalPath);
     playEpisode(episodeId, safeName, startTime, episodeTitle, feedTitle);
@@ -57,39 +61,62 @@ export default function EpisodeMentionList({
     );
   }
 
+  const hasExternalLink = !!episodeUrl || !!audioUrl;
+
   return (
     <div className="space-y-1.5 py-2">
-      {data.mentions.map((mention) => (
-        <div
-          key={mention.id}
-          className="flex items-start gap-3 rounded px-3 py-2 text-sm hover:bg-accent/30 transition-colors"
-        >
-          <span className="shrink-0 font-mono text-xs text-muted-foreground pt-0.5 w-14 text-right">
-            {formatTimestamp(mention.startTime)}
-          </span>
+      {data.mentions.map((mention) => {
+        const externalUrl = buildTimestampUrl(
+          { id: episodeId, audioUrl, audioLocalPath, episodeUrl },
+          mention.startTime
+        );
 
-          <div className="min-w-0 flex-1">
-            {mention.speakerDisplay && (
-              <span className="font-medium text-foreground mr-1.5">
-                {mention.speakerDisplay}:
-              </span>
-            )}
-            <span
-              className="text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground"
-              dangerouslySetInnerHTML={{ __html: mention.snippet }}
-            />
+        return (
+          <div
+            key={mention.id}
+            className="flex items-start gap-3 rounded px-3 py-2 text-sm hover:bg-accent/30 transition-colors"
+          >
+            <span className="shrink-0 font-mono text-xs text-muted-foreground pt-0.5 w-14 text-right">
+              {formatTimestamp(mention.startTime)}
+            </span>
+
+            <div className="min-w-0 flex-1">
+              {mention.speakerDisplay && (
+                <span className="font-medium text-foreground mr-1.5">
+                  {mention.speakerDisplay}:
+                </span>
+              )}
+              <span
+                className="text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground"
+                dangerouslySetInnerHTML={{ __html: mention.snippet }}
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {hasExternalLink && (
+                <a
+                  href={externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={episodeUrl ? "Open episode page" : "Open audio in browser"}
+                  className="inline-flex items-center text-xs text-primary hover:opacity-80 transition-opacity"
+                >
+                  <ExternalLink size={13} />
+                </a>
+              )}
+              {audioLocalPath && (
+                <button
+                  onClick={() => handlePlayLocally(mention.startTime)}
+                  title="Play in embedded player"
+                  className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Play size={13} />
+                </button>
+              )}
+            </div>
           </div>
-
-          {audioLocalPath && (
-            <button
-              onClick={() => handlePlay(mention.startTime)}
-              className="shrink-0 inline-flex items-center gap-1 text-xs bg-primary text-primary-foreground px-2 py-1 rounded hover:opacity-90 transition-opacity"
-            >
-              <Play size={11} />
-            </button>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
