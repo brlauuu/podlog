@@ -5,6 +5,8 @@ import { Search, List, Layers } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import SearchResult from "@/components/SearchResult";
 import FeedGroupCard from "@/components/FeedGroupCard";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import type { SearchPage, GroupedSearchResult } from "@/lib/search";
 
 const PAGE_SIZE = 20;
@@ -95,7 +97,7 @@ export default function HomePage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search transcripts..."
-            className="w-full pl-10 pr-4 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base"
+            className="w-full pl-10 pr-4 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base transition-shadow"
             autoFocus
           />
         </div>
@@ -143,11 +145,14 @@ export default function HomePage() {
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="border border-border rounded-lg p-4 space-y-2 animate-pulse">
-                  <div className="h-4 bg-muted rounded w-2/3" />
-                  <div className="h-3 bg-muted rounded w-1/3" />
-                  <div className="h-3 bg-muted rounded w-full" />
-                  <div className="h-3 bg-muted rounded w-5/6" />
+                <div key={i} className="border border-border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-48" />
+                  </div>
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-5/6" />
                 </div>
               ))}
             </div>
@@ -179,23 +184,25 @@ export default function HomePage() {
 
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between pt-2">
-                    <button
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
                       disabled={page === 1}
-                      className="text-sm px-3 py-1.5 border border-border rounded disabled:opacity-40"
                     >
                       &larr; Previous
-                    </button>
+                    </Button>
                     <span className="text-sm text-muted-foreground">
                       Page {page} of {totalPages}
                     </span>
-                    <button
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                       disabled={page === totalPages}
-                      className="text-sm px-3 py-1.5 border border-border rounded disabled:opacity-40"
                     >
                       Next &rarr;
-                    </button>
+                    </Button>
                   </div>
                 )}
               </>

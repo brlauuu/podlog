@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Info } from "lucide-react";
 import pool from "@/lib/db";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import TranscriptView from "@/components/TranscriptView";
 import EpisodeDescription from "@/components/EpisodeDescription";
 import TranscriptExportButton from "@/components/TranscriptExportButton";
@@ -88,11 +90,12 @@ export default async function EpisodePage({ params }: { params: { id: string } }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         {episode.feed_id && (
           <Link
             href={`/podcasts/${episode.feed_id}`}
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             &larr; {episode.feed_title ?? "Podcast"}
           </Link>
@@ -114,10 +117,12 @@ export default async function EpisodePage({ params }: { params: { id: string } }
             )}
           </div>
         )}
+      </div>
 
-        {/* Podcast context */}
-        {episode.feed_id && (
-          <div className="flex items-center gap-3 mt-3">
+      {/* Podcast context card */}
+      {episode.feed_id && (
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
             {episode.feed_image_url && (
               <img
                 src={episode.feed_image_url}
@@ -137,15 +142,15 @@ export default async function EpisodePage({ params }: { params: { id: string } }
                   href={episode.feed_website_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block text-xs text-muted-foreground hover:text-foreground"
+                  className="block text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {episode.feed_website_url}
                 </a>
               )}
             </div>
-          </div>
-        )}
-      </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Episode description */}
       {episode.description && (
@@ -154,24 +159,30 @@ export default async function EpisodePage({ params }: { params: { id: string } }
 
       {/* Diarization failure banner — PRD-02 §5.3 */}
       {!episode.has_diarization && episode.status === "done" && (
-        <div className="flex items-start gap-2 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 rounded-lg p-3">
-          <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-          <p className="text-sm text-amber-800 dark:text-amber-200">
-            Speaker labels unavailable — diarization failed
-            {episode.diarization_error ? `: ${episode.diarization_error}` : ""}
-          </p>
-        </div>
+        <Card className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950">
+          <CardContent className="p-3 flex items-start gap-2">
+            <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              Speaker labels unavailable — diarization failed
+              {episode.diarization_error ? `: ${episode.diarization_error}` : ""}
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       {/* PRD-04 §8.1: inference error banner */}
       {episode.inference_error && episode.status === "done" && (
-        <div className="flex items-start gap-2 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 rounded-lg p-3">
-          <Info size={16} className="text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-          <p className="text-sm text-blue-800 dark:text-blue-200">
-            Speaker name inference was unavailable for this episode.
-          </p>
-        </div>
+        <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950">
+          <CardContent className="p-3 flex items-start gap-2">
+            <Info size={16} className="text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              Speaker name inference was unavailable for this episode.
+            </p>
+          </CardContent>
+        </Card>
       )}
+
+      <Separator />
 
       {/* Transcript header with export */}
       <div className="flex items-center justify-between">
