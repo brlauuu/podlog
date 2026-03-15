@@ -3,6 +3,8 @@ import Link from "next/link";
 import { AlertTriangle, Info } from "lucide-react";
 import pool from "@/lib/db";
 import TranscriptView from "@/components/TranscriptView";
+import EpisodeDescription from "@/components/EpisodeDescription";
+import TranscriptExportButton from "@/components/TranscriptExportButton";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +22,7 @@ interface Segment {
 interface Episode {
   id: string;
   title: string | null;
+  description: string | null;
   published_at: string | null;
   duration_secs: number | null;
   status: string;
@@ -28,13 +31,24 @@ interface Episode {
   inference_error: string | null;
   transcribe_duration_secs: number | null;
   diarize_duration_secs: number | null;
+  audio_url: string | null;
+  audio_local_path: string | null;
+  guid: string | null;
   feed_id: string | null;
   feed_title: string | null;
+  feed_description: string | null;
+  feed_image_url: string | null;
+  feed_website_url: string | null;
+  feed_url: string | null;
 }
 
 async function getEpisode(id: string): Promise<Episode | null> {
   const result = await pool.query(
-    `SELECT e.*, f.title AS feed_title
+    `SELECT e.*, f.title AS feed_title,
+            f.description AS feed_description,
+            f.image_url AS feed_image_url,
+            f.website_url AS feed_website_url,
+            f.url AS feed_url
      FROM episodes e
      LEFT JOIN feeds f ON f.id = e.feed_id
      WHERE e.id = $1`,
@@ -100,7 +114,43 @@ export default async function EpisodePage({ params }: { params: { id: string } }
             )}
           </div>
         )}
+
+        {/* Podcast context */}
+        {episode.feed_id && (
+          <div className="flex items-center gap-3 mt-3">
+            {episode.feed_image_url && (
+              <img
+                src={episode.feed_image_url}
+                alt={episode.feed_title ?? "Podcast artwork"}
+                className="w-12 h-12 rounded-lg object-cover shrink-0"
+              />
+            )}
+            <div className="text-sm">
+              <Link
+                href={`/podcasts/${episode.feed_id}`}
+                className="font-medium hover:underline"
+              >
+                {episode.feed_title ?? "Podcast"}
+              </Link>
+              {episode.feed_website_url && (
+                <a
+                  href={episode.feed_website_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {episode.feed_website_url}
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Episode description */}
+      {episode.description && (
+        <EpisodeDescription description={episode.description} />
+      )}
 
       {/* Diarization failure banner — PRD-02 §5.3 */}
       {!episode.has_diarization && episode.status === "done" && (
@@ -123,12 +173,35 @@ export default async function EpisodePage({ params }: { params: { id: string } }
         </div>
       )}
 
+      {/* Transcript header with export */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Transcript</h2>
+        {segments.length > 0 && (
+          <TranscriptExportButton
+            episodeTitle={episode.title ?? "Untitled Episode"}
+            feedTitle={episode.feed_title}
+            publishedAt={episode.published_at}
+            durationSecs={episode.duration_secs}
+            description={episode.description}
+            feedUrl={episode.feed_url}
+            feedWebsiteUrl={episode.feed_website_url}
+            feedDescription={episode.feed_description}
+            audioUrl={episode.audio_url}
+            guid={episode.guid}
+            segments={segments}
+          />
+        )}
+      </div>
+
       {/* Transcript — PRD-04 §8.1: inferred/confirmed badges on speaker labels */}
       <TranscriptView
         episodeId={episode.id}
         hasDiarization={episode.has_diarization}
         status={episode.status}
         segments={segments}
+        audioLocalPath={episode.audio_local_path}
+        episodeTitle={episode.title}
+        feedTitle={episode.feed_title}
       />
     </div>
   );

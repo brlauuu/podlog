@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import SpeakerLabel from "@/components/SpeakerLabel";
+import { useAudioPlayer } from "@/components/AudioPlayerContext";
 
 interface Segment {
   id: number;
@@ -19,6 +20,9 @@ interface Props {
   hasDiarization: boolean;
   status: string;
   segments: Segment[];
+  audioLocalPath: string | null;
+  episodeTitle: string | null;
+  feedTitle: string | null;
 }
 
 function formatTime(secs: number): string {
@@ -32,8 +36,17 @@ function formatTime(secs: number): string {
 /**
  * Client-side transcript view with inline speaker renaming and inference badges (PRD-04 §8.1).
  */
-export default function TranscriptView({ episodeId, hasDiarization, status, segments: initial }: Props) {
+export default function TranscriptView({ episodeId, hasDiarization, status, segments: initial, audioLocalPath, episodeTitle, feedTitle }: Props) {
   const [segments, setSegments] = useState(initial);
+  const { playEpisode } = useAudioPlayer();
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith("#t-")) {
+      const el = document.getElementById(hash.slice(1));
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, []);
 
   function handleRenamed(speakerLabel: string, newName: string) {
     setSegments((prev) =>
@@ -56,10 +69,20 @@ export default function TranscriptView({ episodeId, hasDiarization, status, segm
   return (
     <div className="space-y-3">
       {segments.map((seg) => (
-        <div key={seg.id} className="flex gap-3 group">
-          <span className="text-xs text-muted-foreground font-mono shrink-0 mt-0.5 w-14 text-right">
+        <div key={seg.id} id={`t-${Math.floor(seg.start_time)}`} className="flex gap-3 group">
+          <button
+            className="text-xs text-muted-foreground hover:text-foreground font-mono shrink-0 mt-0.5 w-14 text-right transition-colors"
+            title="Play from here"
+            onClick={() => {
+              if (audioLocalPath) {
+                const filename = audioLocalPath.split("/").pop() ?? "";
+                playEpisode(episodeId, filename, seg.start_time, episodeTitle ?? undefined, feedTitle ?? undefined);
+              }
+            }}
+            disabled={!audioLocalPath}
+          >
             {formatTime(seg.start_time)}
-          </span>
+          </button>
           <div className="flex-1 min-w-0">
             {hasDiarization && seg.speaker_label && (
               <div className="mb-0.5 flex items-center gap-1.5">
