@@ -1,25 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sun, Moon } from "lucide-react";
+import Image from "next/image";
 
 const STORAGE_KEY = "podlog-theme";
 
 /**
- * Dark mode toggle — Tailwind class strategy.
+ * Dark mode toggle — lightbulb style matching brlauuu.github.io.
  * Persists preference to localStorage (PRD-02 §5.8).
  */
 export default function DarkModeToggle() {
   const [dark, setDark] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // On mount: check localStorage, fall back to OS preference
     const stored = localStorage.getItem(STORAGE_KEY);
     const prefersDark =
       stored === "dark" ||
       (stored === null && window.matchMedia("(prefers-color-scheme: dark)").matches);
     setDark(prefersDark);
     document.documentElement.classList.toggle("dark", prefersDark);
+    setMounted(true);
   }, []);
 
   function toggle() {
@@ -29,13 +30,24 @@ export default function DarkModeToggle() {
     localStorage.setItem(STORAGE_KEY, next ? "dark" : "light");
   }
 
+  // Prevent flash of wrong icon on SSR
+  if (!mounted) {
+    return <div className="w-[18px] h-[18px]" />;
+  }
+
   return (
     <button
       onClick={toggle}
       aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-      className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+      className="hover:scale-[1.15] active:scale-95 transition-transform duration-200"
     >
-      {dark ? <Sun size={18} /> : <Moon size={18} />}
+      <Image
+        src={dark ? "/imgs/lightbulb-off.png" : "/imgs/lightbulb-on.png"}
+        alt={dark ? "Dark mode" : "Light mode"}
+        width={18}
+        height={18}
+        className="select-none"
+      />
     </button>
   );
 }
