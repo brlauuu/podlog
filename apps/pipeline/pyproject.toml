@@ -3,7 +3,7 @@ name = "podlog-pipeline"
 version = "0.1.0"
 description = "Podlog ingestion pipeline — RSS fetch, Whisper transcription, pyannote diarization"
 authors = []
-license = "MIT"
+license = "O'Saasy"
 readme = "README.md"
 
 [tool.poetry.dependencies]

@@ -2,6 +2,7 @@
   "name": "podlog-web",
   "version": "0.1.0",
   "private": true,
+  "license": "O'Saasy",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
