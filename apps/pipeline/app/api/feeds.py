@@ -64,11 +64,21 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
         website_url=feed_meta.website_url,
     )
     db.add(feed)
+    db.flush()  # Assign ID without committing, so we can roll back on dispatch failure
+
+    # Enqueue ingestion — if dispatch fails, roll back the feed insert
+    try:
+        ingest_feed.delay(feed.id)
+    except Exception as exc:
+        db.rollback()
+        logger.error('"action": "feed_add_failed", "url": "%s", "error": "%s"', body.url, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Feed validated but task queue is unavailable: {type(exc).__name__}",
+        )
+
     db.commit()
     db.refresh(feed)
-
-    # Enqueue ingestion of all existing episodes in the background
-    ingest_feed.delay(feed.id)
 
     logger.info('"action": "feed_added", "feed_id": "%s", "url": "%s"', feed.id, feed.url)
     return FeedResponse.model_validate(feed)

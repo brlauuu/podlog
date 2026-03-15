@@ -31,7 +31,13 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(body),
     });
 
-    const data = await resp.json();
+    const text = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { detail: text || "Pipeline API returned a non-JSON error" };
+    }
     return NextResponse.json(data, { status: resp.status });
   } catch (err) {
     console.error("Add feed error:", err);
