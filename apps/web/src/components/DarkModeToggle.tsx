@@ -42,7 +42,7 @@ export default function DarkModeToggle() {
       className="hover:scale-[1.15] active:scale-95 transition-transform duration-200"
     >
       <Image
-        src={dark ? "/imgs/lightbulb-off.png" : "/imgs/lightbulb-on.png"}
+        src={dark ? "/imgs/lightbulb-on.png" : "/imgs/lightbulb-off.png"}
         alt={dark ? "Dark mode" : "Light mode"}
         width={18}
         height={18}
