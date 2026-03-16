@@ -91,8 +91,8 @@ export default function EpisodeMentionList({
 
           <div className="flex items-center gap-1.5 shrink-0">
             <Link
-              href={`/episodes/${episodeId}`}
-              title="Go to episode"
+              href={`/episodes/${episodeId}#t-${Math.floor(mention.startTime)}`}
+              title="Go to episode at this timestamp"
               className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <FileText size={13} />

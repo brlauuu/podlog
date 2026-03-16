@@ -53,7 +53,7 @@ export default function SearchResult({ result }: Props) {
                 <>
                   <span className="text-muted-foreground">·</span>
                   <Link
-                    href={`/episodes/${result.episodeId}`}
+                    href={`/episodes/${result.episodeId}#t-${Math.floor(result.startTime)}`}
                     className="text-sm text-muted-foreground truncate hover:text-foreground hover:underline transition-colors"
                   >
                     {result.episodeTitle}
@@ -82,8 +82,8 @@ export default function SearchResult({ result }: Props) {
 
           <div className="flex items-center gap-2 shrink-0">
             <Link
-              href={`/episodes/${result.episodeId}`}
-              title="Go to episode"
+              href={`/episodes/${result.episodeId}#t-${Math.floor(result.startTime)}`}
+              title="Go to episode at this timestamp"
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-input px-2.5 py-1 rounded-md transition-colors"
             >
               <FileText size={11} />
