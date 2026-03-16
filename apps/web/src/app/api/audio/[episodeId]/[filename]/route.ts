@@ -2,15 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
 
-const AUDIO_ARCHIVE_DIR = "/data/audio/archive";
+const AUDIO_DIRS = ["/data/audio/archive", "/data/audio/raw"];
 
 /**
- * Serve archived audio files with path traversal prevention — PRD-02 §5.2, §11
+ * Serve audio files with path traversal prevention — PRD-02 §5.2, §11
+ *
+ * Checks archive first, then raw (for episodes not yet archived).
  *
  * Security:
  * - filename parameter is treated as basename only (path separators stripped)
- * - Resolved path is verified to start with AUDIO_ARCHIVE_DIR before serving
- * - Any path that escapes the archive directory returns HTTP 400
+ * - Resolved path is verified to stay within allowed directories
+ * - Any path that escapes the audio directories returns HTTP 400
  */
 export async function GET(
   req: NextRequest,
@@ -18,14 +20,19 @@ export async function GET(
 ) {
   // Strip any path separators — treat filename as basename only
   const safeName = path.basename(params.filename);
-  const resolved = path.resolve(AUDIO_ARCHIVE_DIR, safeName);
 
-  // Verify resolved path stays within archive directory
-  if (!resolved.startsWith(AUDIO_ARCHIVE_DIR + path.sep)) {
-    return new NextResponse("Invalid path", { status: 400 });
+  // Find the file in archive or raw directories
+  let resolved: string | null = null;
+  for (const dir of AUDIO_DIRS) {
+    const candidate = path.resolve(dir, safeName);
+    if (!candidate.startsWith(dir + path.sep)) continue;
+    if (fs.existsSync(candidate)) {
+      resolved = candidate;
+      break;
+    }
   }
 
-  if (!fs.existsSync(resolved)) {
+  if (!resolved) {
     return new NextResponse("Not found", { status: 404 });
   }
 

@@ -27,7 +27,6 @@ export default function SearchResult({ result }: Props) {
   const { playEpisode } = useAudioPlayer();
 
   const hasLocalAudio = !!result.audioLocalPath;
-  const hasExternalLink = !!result.episodeUrl || !!result.audioUrl;
 
   function handlePlayLocally() {
     if (!result.audioLocalPath) return;
@@ -100,15 +99,16 @@ export default function SearchResult({ result }: Props) {
                 Play
               </button>
             )}
-            {hasExternalLink && (
+            {result.audioUrl && (
               <a
-                href={result.episodeUrl ?? result.audioUrl}
+                href={`${result.audioUrl}#t=${Math.floor(result.startTime)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                title={result.episodeUrl ? "Open original episode page" : "Open audio in browser"}
+                title="Listen on RSS audio at this timestamp"
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-input px-2.5 py-1 rounded-md transition-colors"
               >
                 <ExternalLink size={11} />
+                {formatTimestamp(result.startTime)}
               </a>
             )}
           </div>

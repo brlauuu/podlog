@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, Play } from "lucide-react";
+import { ExternalLink, FileText, Play } from "lucide-react";
 import Link from "next/link";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { formatTimestamp } from "@/lib/timestamp";
@@ -95,7 +95,7 @@ export default function EpisodeMentionList({
               title="Go to episode"
               className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              <ExternalLink size={13} />
+              <FileText size={13} />
             </Link>
             {audioLocalPath && (
               <button
@@ -105,6 +105,17 @@ export default function EpisodeMentionList({
               >
                 <Play size={13} />
               </button>
+            )}
+            {audioUrl && (
+              <a
+                href={`${audioUrl}#t=${Math.floor(mention.startTime)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Listen on RSS audio at this timestamp"
+                className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ExternalLink size={13} />
+              </a>
             )}
           </div>
         </div>
