@@ -1,12 +1,17 @@
 "use client";
 
-import { AlertTriangle, ExternalLink, FlaskConical, Play } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ExternalLink, FileText, FlaskConical, Play } from "lucide-react";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
-import { buildTimestampUrl, formatTimestamp } from "@/lib/timestamp";
+import { formatTimestamp } from "@/lib/timestamp";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { SearchResult as SearchResultType } from "@/lib/search";
-import path from "path";
+
+/** Client-safe basename — extracts filename from a path string */
+function basename(filePath: string): string {
+  return filePath.split("/").pop() ?? filePath;
+}
 
 interface Props {
   result: SearchResultType;
@@ -16,28 +21,17 @@ interface Props {
  * Search result card — PRD-02 §9.1
  *
  * Shows: episode title, podcast name, speaker, timestamp, highlighted snippet.
- * Primary action: open external link (episode page or remote audio URL).
- * Secondary: embedded player fallback if local audio exists and no remote URL.
+ * Actions: go to episode page, play locally, open external link.
  */
 export default function SearchResult({ result }: Props) {
   const { playEpisode } = useAudioPlayer();
-
-  const externalUrl = buildTimestampUrl(
-    {
-      id: result.episodeId,
-      audioUrl: result.audioUrl,
-      audioLocalPath: result.audioLocalPath,
-      episodeUrl: result.episodeUrl,
-    },
-    result.startTime
-  );
 
   const hasLocalAudio = !!result.audioLocalPath;
   const hasExternalLink = !!result.episodeUrl || !!result.audioUrl;
 
   function handlePlayLocally() {
     if (!result.audioLocalPath) return;
-    const safeName = path.basename(result.audioLocalPath);
+    const safeName = basename(result.audioLocalPath);
     playEpisode(
       result.episodeId,
       safeName,
@@ -59,9 +53,12 @@ export default function SearchResult({ result }: Props) {
               {result.episodeTitle && (
                 <>
                   <span className="text-muted-foreground">·</span>
-                  <span className="text-sm text-muted-foreground truncate">
+                  <Link
+                    href={`/episodes/${result.episodeId}`}
+                    className="text-sm text-muted-foreground truncate hover:text-foreground hover:underline transition-colors"
+                  >
                     {result.episodeTitle}
-                  </span>
+                  </Link>
                 </>
               )}
               {result.feedMode === "test" && (
@@ -85,18 +82,14 @@ export default function SearchResult({ result }: Props) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {hasExternalLink && (
-              <a
-                href={externalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={result.episodeUrl ? "Open episode page" : "Open audio in browser"}
-                className="inline-flex items-center gap-1 text-xs bg-primary text-primary-foreground px-2.5 py-1 rounded-md hover:opacity-90 transition-opacity"
-              >
-                <ExternalLink size={11} />
-                {formatTimestamp(result.startTime)}
-              </a>
-            )}
+            <Link
+              href={`/episodes/${result.episodeId}`}
+              title="Go to episode"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-input px-2.5 py-1 rounded-md transition-colors"
+            >
+              <FileText size={11} />
+              Episode
+            </Link>
             {hasLocalAudio && (
               <button
                 onClick={handlePlayLocally}
@@ -104,7 +97,19 @@ export default function SearchResult({ result }: Props) {
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-input px-2.5 py-1 rounded-md transition-colors"
               >
                 <Play size={11} />
+                Play
               </button>
+            )}
+            {hasExternalLink && (
+              <a
+                href={result.episodeUrl ?? result.audioUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={result.episodeUrl ? "Open original episode page" : "Open audio in browser"}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-input px-2.5 py-1 rounded-md transition-colors"
+              >
+                <ExternalLink size={11} />
+              </a>
             )}
           </div>
         </div>

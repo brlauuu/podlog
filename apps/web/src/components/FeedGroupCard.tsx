@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Radio, FileText, FlaskConical } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, ExternalLink, Radio, FileText, FlaskConical } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import EpisodeMentionList from "@/components/EpisodeMentionList";
@@ -66,25 +67,35 @@ export default function FeedGroupCard({ feed, query }: Props) {
             return (
               <div key={episode.episodeId} className="border-b border-border last:border-b-0">
                 {/* Episode row */}
-                <button
-                  onClick={() => toggleEpisode(episode.episodeId)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 pl-11 hover:bg-accent/30 transition-colors text-left"
-                >
-                  <ChevronRight
-                    size={14}
-                    className={`shrink-0 text-muted-foreground transition-transform duration-200 ${
-                      isExpanded ? "rotate-90" : ""
-                    }`}
-                  />
-                  <FileText size={14} className="shrink-0 text-muted-foreground" />
-                  <span className="text-sm truncate flex-1">
-                    {episode.episodeTitle}
-                  </span>
+                <div className="flex items-center gap-0 pl-11 hover:bg-accent/30 transition-colors">
+                  <button
+                    onClick={() => toggleEpisode(episode.episodeId)}
+                    className="flex items-center gap-3 px-4 py-2.5 pl-0 flex-1 min-w-0 text-left"
+                  >
+                    <ChevronRight
+                      size={14}
+                      className={`shrink-0 text-muted-foreground transition-transform duration-200 ${
+                        isExpanded ? "rotate-90" : ""
+                      }`}
+                    />
+                    <FileText size={14} className="shrink-0 text-muted-foreground" />
+                    <span className="text-sm truncate flex-1">
+                      {episode.episodeTitle}
+                    </span>
+                  </button>
                   <span className="text-xs text-muted-foreground shrink-0">
                     {episode.mentionCount} mention
                     {episode.mentionCount !== 1 ? "s" : ""}
                   </span>
-                </button>
+                  <Link
+                    href={`/episodes/${episode.episodeId}`}
+                    title="Go to episode"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-3 py-2.5 shrink-0 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ExternalLink size={12} />
+                  </Link>
+                </div>
 
                 {/* Expanded mentions */}
                 {isExpanded && (

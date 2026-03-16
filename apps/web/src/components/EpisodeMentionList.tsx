@@ -2,10 +2,15 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, Play } from "lucide-react";
-import path from "path";
+import Link from "next/link";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
-import { buildTimestampUrl, formatTimestamp } from "@/lib/timestamp";
+import { formatTimestamp } from "@/lib/timestamp";
 import type { EpisodeMentions } from "@/lib/search";
+
+/** Client-safe basename — extracts filename from a path string */
+function basename(filePath: string): string {
+  return filePath.split("/").pop() ?? filePath;
+}
 
 interface Props {
   query: string;
@@ -41,7 +46,7 @@ export default function EpisodeMentionList({
 
   function handlePlayLocally(startTime: number) {
     if (!audioLocalPath) return;
-    const safeName = path.basename(audioLocalPath);
+    const safeName = basename(audioLocalPath);
     playEpisode(episodeId, safeName, startTime, episodeTitle, feedTitle);
   }
 
@@ -61,62 +66,49 @@ export default function EpisodeMentionList({
     );
   }
 
-  const hasExternalLink = !!episodeUrl || !!audioUrl;
-
   return (
     <div className="space-y-1.5 py-2">
-      {data.mentions.map((mention) => {
-        const externalUrl = buildTimestampUrl(
-          { id: episodeId, audioUrl, audioLocalPath, episodeUrl },
-          mention.startTime
-        );
+      {data.mentions.map((mention) => (
+        <div
+          key={mention.id}
+          className="flex items-start gap-3 rounded px-3 py-2 text-sm hover:bg-accent/30 transition-colors"
+        >
+          <span className="shrink-0 font-mono text-xs text-muted-foreground pt-0.5 w-14 text-right">
+            {formatTimestamp(mention.startTime)}
+          </span>
 
-        return (
-          <div
-            key={mention.id}
-            className="flex items-start gap-3 rounded px-3 py-2 text-sm hover:bg-accent/30 transition-colors"
-          >
-            <span className="shrink-0 font-mono text-xs text-muted-foreground pt-0.5 w-14 text-right">
-              {formatTimestamp(mention.startTime)}
-            </span>
-
-            <div className="min-w-0 flex-1">
-              {mention.speakerDisplay && (
-                <span className="font-medium text-foreground mr-1.5">
-                  {mention.speakerDisplay}:
-                </span>
-              )}
-              <span
-                className="text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground"
-                dangerouslySetInnerHTML={{ __html: mention.snippet }}
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              {hasExternalLink && (
-                <a
-                  href={externalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={episodeUrl ? "Open episode page" : "Open audio in browser"}
-                  className="inline-flex items-center text-xs text-primary hover:opacity-80 transition-opacity"
-                >
-                  <ExternalLink size={13} />
-                </a>
-              )}
-              {audioLocalPath && (
-                <button
-                  onClick={() => handlePlayLocally(mention.startTime)}
-                  title="Play in embedded player"
-                  className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Play size={13} />
-                </button>
-              )}
-            </div>
+          <div className="min-w-0 flex-1">
+            {mention.speakerDisplay && (
+              <span className="font-medium text-foreground mr-1.5">
+                {mention.speakerDisplay}:
+              </span>
+            )}
+            <span
+              className="text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground"
+              dangerouslySetInnerHTML={{ __html: mention.snippet }}
+            />
           </div>
-        );
-      })}
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Link
+              href={`/episodes/${episodeId}`}
+              title="Go to episode"
+              className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ExternalLink size={13} />
+            </Link>
+            {audioLocalPath && (
+              <button
+                onClick={() => handlePlayLocally(mention.startTime)}
+                title="Play in embedded player"
+                className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Play size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
