@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Trash2, FlaskConical } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -14,11 +14,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface Feed {
   id: string;
   url: string;
   title: string | null;
+  mode: string;
   last_polled_at: string | null;
   episode_count: number;
 }
@@ -33,16 +35,17 @@ export default function FeedsPage() {
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newUrl, setNewUrl] = useState("");
+  const [addMode, setAddMode] = useState<"test" | "full">("test");
   const [addError, setAddError] = useState<string | null>(null);
 
   const { data: feeds = [], isLoading } = useQuery({ queryKey: ["feeds"], queryFn: fetchFeeds });
 
   const addFeed = useMutation({
-    mutationFn: async (url: string) => {
+    mutationFn: async ({ url, mode }: { url: string; mode: string }) => {
       const resp = await fetch("/api/feeds", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, mode }),
       });
       if (!resp.ok) {
         const err = await resp.json();
@@ -54,9 +57,26 @@ export default function FeedsPage() {
       queryClient.invalidateQueries({ queryKey: ["feeds"] });
       setShowAddModal(false);
       setNewUrl("");
+      setAddMode("test");
       setAddError(null);
     },
     onError: (err: Error) => setAddError(err.message),
+  });
+
+  const promoteFeed = useMutation({
+    mutationFn: async ({ url }: { url: string }) => {
+      const resp = await fetch("/api/feeds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, mode: "full" }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.detail ?? "Failed to promote feed");
+      }
+      return resp.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feeds"] }),
   });
 
   const pollFeed = useMutation({
@@ -90,7 +110,7 @@ export default function FeedsPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                addFeed.mutate(newUrl.trim());
+                addFeed.mutate({ url: newUrl.trim(), mode: addMode });
               }}
               className="space-y-4"
             >
@@ -102,6 +122,31 @@ export default function FeedsPage() {
                 required
                 autoFocus
               />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAddMode("test")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    addMode === "test"
+                      ? "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200 ring-1 ring-violet-300 dark:ring-violet-700"
+                      : "bg-muted text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  <FlaskConical size={14} />
+                  Test (5 episodes)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddMode("full")}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    addMode === "full"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  Full
+                </button>
+              </div>
               {addError && <p className="text-sm text-destructive">{addError}</p>}
               <div className="flex justify-end gap-2">
                 <Button
@@ -148,7 +193,15 @@ export default function FeedsPage() {
             <Card key={feed.id} className="hover:bg-accent/30 transition-colors">
               <CardContent className="p-4 flex items-center justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{feed.title ?? feed.url}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">{feed.title ?? feed.url}</p>
+                    {feed.mode === "test" && (
+                      <Badge variant="outline" className="shrink-0 text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-1">
+                        <FlaskConical size={10} />
+                        Test
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
                   <p className="text-xs text-muted-foreground">
                     {feed.episode_count} episodes ·{" "}
@@ -158,6 +211,20 @@ export default function FeedsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {feed.mode === "test" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm("Promote this feed to full mode? All remaining episodes will be ingested.")) {
+                          promoteFeed.mutate({ url: feed.url });
+                        }
+                      }}
+                      className="h-8 text-xs"
+                    >
+                      Promote to Full
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"

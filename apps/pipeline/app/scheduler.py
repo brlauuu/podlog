@@ -29,14 +29,14 @@ def setup_periodic_tasks(sender, **kwargs):
 
 @celery_app.task(name="poll_all_feeds")
 def poll_all_feeds() -> dict:
-    """Poll all registered feeds for new episodes."""
+    """Poll all registered feeds for new episodes. Issue #23: skip test feeds."""
     from app.database import SessionLocal
     from app.models import Feed
     from app.tasks.ingest import ingest_feed
 
     db = SessionLocal()
     try:
-        feeds = db.query(Feed).all()
+        feeds = db.query(Feed).filter(Feed.mode == "full").all()
         for feed in feeds:
             ingest_feed.delay(feed.id)
         return {"polled": len(feeds)}

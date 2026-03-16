@@ -1,5 +1,5 @@
 """
-Feed management API — PRD-01 §10
+Feed management API — PRD-01 §10, Issue #23
 
 POST   /api/feeds         Add a new RSS feed (with validation — GAP-02)
 GET    /api/feeds         List all feeds
@@ -8,7 +8,7 @@ POST   /api/feeds/{id}/poll  Trigger immediate re-poll
 """
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -25,6 +25,7 @@ router = APIRouter()
 
 class AddFeedRequest(BaseModel):
     url: str
+    mode: Literal["test", "full"] = "full"
 
 
 class FeedResponse(BaseModel):
@@ -34,6 +35,7 @@ class FeedResponse(BaseModel):
     description: Optional[str]
     image_url: Optional[str]
     website_url: Optional[str]
+    mode: str
     last_polled_at: Optional[datetime]
     created_at: datetime
 
@@ -45,16 +47,37 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
     """
     Add a new RSS feed. Validates the URL is a parseable RSS/Atom feed (GAP-02)
     before persisting. Enqueues ingestion of all existing episodes.
+
+    Issue #23: If a feed already exists in test mode and is re-added, it gets
+    promoted to full mode and remaining episodes are ingested.
     """
+    # Check for existing feed first — handle test→full promotion
+    existing = db.query(Feed).filter(Feed.url == body.url).first()
+    if existing:
+        if existing.mode == "test" and body.mode == "full":
+            # Promote test → full: flip mode and re-ingest to pick up remaining episodes
+            existing.mode = "full"
+            db.commit()
+            db.refresh(existing)
+            try:
+                ingest_feed.delay(existing.id)
+            except Exception as exc:
+                logger.error(
+                    '"action": "promote_feed_dispatch_failed", "feed_id": "%s", "error": "%s"',
+                    existing.id, exc,
+                )
+            logger.info(
+                '"action": "feed_promoted", "feed_id": "%s", "url": "%s"',
+                existing.id, body.url,
+            )
+            return FeedResponse.model_validate(existing)
+        raise HTTPException(status_code=409, detail="Feed already registered")
+
     # GAP-02: validate the feed is parseable before storing
     try:
         feed_meta = rss_service.validate_and_parse_feed(body.url)
     except rss_service.InvalidFeedError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-
-    existing = db.query(Feed).filter(Feed.url == body.url).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="Feed already registered")
 
     feed = Feed(
         url=body.url,
@@ -62,6 +85,7 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
         description=feed_meta.description,
         image_url=feed_meta.image_url,
         website_url=feed_meta.website_url,
+        mode=body.mode,
     )
     db.add(feed)
     db.flush()  # Assign ID without committing, so we can roll back on dispatch failure
@@ -80,7 +104,10 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
     db.commit()
     db.refresh(feed)
 
-    logger.info('"action": "feed_added", "feed_id": "%s", "url": "%s"', feed.id, feed.url)
+    logger.info(
+        '"action": "feed_added", "feed_id": "%s", "url": "%s", "mode": "%s"',
+        feed.id, feed.url, feed.mode,
+    )
     return FeedResponse.model_validate(feed)
 
 

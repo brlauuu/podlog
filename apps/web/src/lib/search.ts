@@ -12,6 +12,7 @@ export interface GroupedSearchResult {
 export interface FeedGroup {
   feedId: string;
   feedTitle: string;
+  feedMode: string;
   mentionCount: number;
   episodes: EpisodeGroup[];
 }
@@ -59,6 +60,7 @@ export interface SearchResult {
   hasDiarization: boolean;
   diarizationError: string | null;
   feedTitle: string | null;
+  feedMode: string;
   feedId: string;
 }
 
@@ -99,6 +101,7 @@ export async function searchSegments(
         e.has_diarization,
         e.diarization_error,
         f.title AS feed_title,
+        f.mode AS feed_mode,
         f.id AS feed_id
       FROM segments s
       JOIN episodes e ON s.episode_id = e.id
@@ -139,6 +142,7 @@ export async function searchSegments(
     hasDiarization: row.has_diarization,
     diarizationError: row.diarization_error,
     feedTitle: row.feed_title,
+    feedMode: row.feed_mode,
     feedId: row.feed_id,
   }));
 
@@ -167,6 +171,7 @@ export async function searchGrouped(
       `SELECT
         f.id AS feed_id,
         f.title AS feed_title,
+        f.mode AS feed_mode,
         e.id AS episode_id,
         e.title AS episode_title,
         e.audio_url,
@@ -180,7 +185,7 @@ export async function searchGrouped(
         plainto_tsquery('english', $1) AS query
       WHERE to_tsvector('english', s.text) @@ query
         AND ($2::uuid IS NULL OR f.id = $2)
-      GROUP BY f.id, f.title, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
+      GROUP BY f.id, f.title, f.mode, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
       ORDER BY best_rank DESC, mention_count DESC
       LIMIT $3 OFFSET $4`,
       [query, feedId, pageSize, offset]
@@ -209,6 +214,7 @@ export async function searchGrouped(
       feedMap.set(feedKey, {
         feedId: row.feed_id,
         feedTitle: row.feed_title,
+        feedMode: row.feed_mode,
         mentionCount: 0,
         episodes: [],
       });
