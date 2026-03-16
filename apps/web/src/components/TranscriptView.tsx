@@ -40,13 +40,18 @@ function formatTime(secs: number): string {
  */
 export default function TranscriptView({ episodeId, hasDiarization, status, segments: initial, audioLocalPath, episodeTitle, feedTitle }: Props) {
   const [segments, setSegments] = useState(initial);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const { playEpisode } = useAudioPlayer();
 
   useEffect(() => {
     const hash = window.location.hash;
     if (hash.startsWith("#t-")) {
-      const el = document.getElementById(hash.slice(1));
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const targetId = hash.slice(1);
+      const el = document.getElementById(targetId);
+      if (el) {
+        setHighlightedId(targetId);
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     }
   }, []);
 
@@ -70,8 +75,19 @@ export default function TranscriptView({ episodeId, hasDiarization, status, segm
 
   return (
     <div className="space-y-3">
-      {segments.map((seg) => (
-        <div key={seg.id} id={`t-${Math.floor(seg.start_time)}`} className="flex gap-3 group">
+      {segments.map((seg) => {
+        const segId = `t-${Math.floor(seg.start_time)}`;
+        const isHighlighted = segId === highlightedId;
+        return (
+        <div
+          key={seg.id}
+          id={segId}
+          className={`flex gap-3 group rounded-md transition-colors ${
+            isHighlighted
+              ? "border-l-2 border-primary bg-primary/5 pl-2 -ml-2"
+              : ""
+          }`}
+        >
           <button
             className="text-xs text-muted-foreground hover:text-primary font-mono shrink-0 mt-0.5 w-14 text-right transition-colors"
             title="Play from here"
@@ -118,7 +134,8 @@ export default function TranscriptView({ episodeId, hasDiarization, status, segm
             <p className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">{seg.text}</p>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
