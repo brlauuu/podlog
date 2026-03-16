@@ -1,7 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
+import { FlaskConical } from "lucide-react";
 import pool from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +12,7 @@ interface Feed {
   id: string;
   title: string | null;
   image_url: string | null;
+  mode: string;
   episode_count: number;
   last_polled_at: string | null;
 }
@@ -20,6 +23,7 @@ async function getFeeds(): Promise<Feed[]> {
       f.id,
       f.title,
       f.image_url,
+      f.mode,
       f.last_polled_at,
       COUNT(e.id)::int AS episode_count
     FROM feeds f
@@ -71,7 +75,15 @@ export default async function PodcastsPage() {
                   </div>
                 )}
                 <CardContent className="p-3 space-y-1">
-                  <p className="text-sm font-medium line-clamp-2">{feed.title ?? "Untitled"}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium line-clamp-2">{feed.title ?? "Untitled"}</p>
+                    {feed.mode === "test" && (
+                      <Badge variant="outline" className="shrink-0 text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-0.5 text-[10px] px-1 py-0">
+                        <FlaskConical size={9} />
+                        Test
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">{feed.episode_count} episodes</p>
                 </CardContent>
               </Card>

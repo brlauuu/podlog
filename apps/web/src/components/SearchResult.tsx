@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ExternalLink, Play } from "lucide-react";
+import { AlertTriangle, ExternalLink, FlaskConical, Play } from "lucide-react";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { buildTimestampUrl, formatTimestamp } from "@/lib/timestamp";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,6 +63,12 @@ export default function SearchResult({ result }: Props) {
                     {result.episodeTitle}
                   </span>
                 </>
+              )}
+              {result.feedMode === "test" && (
+                <Badge variant="outline" className="text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-0.5 text-[10px] px-1 py-0">
+                  <FlaskConical size={9} />
+                  Test
+                </Badge>
               )}
               {!result.hasDiarization && (
                 <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700 gap-1">

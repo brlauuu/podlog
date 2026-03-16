@@ -6,7 +6,7 @@ const PIPELINE_API = process.env.PIPELINE_API_URL ?? "http://pipeline:8000";
 export async function GET() {
   try {
     const result = await pool.query(`
-      SELECT f.id, f.url, f.title, f.last_polled_at,
+      SELECT f.id, f.url, f.title, f.mode, f.last_polled_at,
              COUNT(e.id)::int AS episode_count
       FROM feeds f
       LEFT JOIN episodes e ON e.feed_id = f.id

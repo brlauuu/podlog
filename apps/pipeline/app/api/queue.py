@@ -51,6 +51,7 @@ def get_queue(db: Session = Depends(get_db)) -> QueueStateResponse:
             "error_class": ep.error_class,
             "retry_count": ep.retry_count,
             "retry_max": ep.retry_max,
+            "feed_mode": ep.feed.mode if ep.feed else None,
         }
 
     return QueueStateResponse(

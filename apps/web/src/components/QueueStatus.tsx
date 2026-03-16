@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, RefreshCw, ChevronDown } from "lucide-react";
+import { AlertTriangle, RefreshCw, ChevronDown, FlaskConical } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,6 +15,7 @@ interface Job {
   error_class: string | null;
   retry_count: number;
   retry_max: number;
+  feed_mode: string | null;
 }
 
 interface QueueState {
@@ -44,7 +45,15 @@ function JobCard({ job, onRetry }: { job: Job; onRetry: (taskId: string) => void
     <Card>
       <CardContent className="p-3 space-y-1">
         <div className="flex items-start justify-between gap-2">
-          <span className="text-sm font-medium">{job.title ?? job.episode_id}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium">{job.title ?? job.episode_id}</span>
+            {job.feed_mode === "test" && (
+              <Badge variant="outline" className="text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-0.5 text-[10px] px-1 py-0">
+                <FlaskConical size={9} />
+                Test
+              </Badge>
+            )}
+          </div>
           {job.status === "failed" && (
             <button
               onClick={() => canRetry && job.celery_task_id && onRetry(job.celery_task_id)}

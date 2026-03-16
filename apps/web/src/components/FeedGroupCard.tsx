@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Radio, FileText } from "lucide-react";
+import { ChevronRight, Radio, FileText, FlaskConical } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import EpisodeMentionList from "@/components/EpisodeMentionList";
 import type { FeedGroup } from "@/lib/search";
 
@@ -44,6 +45,12 @@ export default function FeedGroupCard({ feed, query }: Props) {
         />
         <Radio size={16} className="shrink-0 text-primary" />
         <span className="font-medium truncate flex-1">{feed.feedTitle}</span>
+        {feed.feedMode === "test" && (
+          <Badge variant="outline" className="shrink-0 text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-0.5 text-[10px] px-1 py-0">
+            <FlaskConical size={9} />
+            Test
+          </Badge>
+        )}
         <span className="text-xs text-muted-foreground shrink-0">
           {feed.mentionCount} mention{feed.mentionCount !== 1 ? "s" : ""} in{" "}
           {feed.episodes.length} episode{feed.episodes.length !== 1 ? "s" : ""}

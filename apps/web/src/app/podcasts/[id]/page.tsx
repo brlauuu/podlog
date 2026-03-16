@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, FlaskConical } from "lucide-react";
 import pool from "@/lib/db";
+import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ interface Feed {
   title: string | null;
   image_url: string | null;
   website_url: string | null;
+  mode: string;
 }
 
 async function getFeed(id: string): Promise<Feed | null> {
@@ -61,7 +63,15 @@ export default async function PodcastPage({ params }: { params: { id: string } }
         <Link href="/podcasts" className="text-sm text-muted-foreground hover:text-foreground">
           ← Podcasts
         </Link>
-        <h1 className="text-2xl font-semibold mt-2">{feed.title ?? "Untitled podcast"}</h1>
+        <div className="flex items-center gap-2 mt-2">
+          <h1 className="text-2xl font-semibold">{feed.title ?? "Untitled podcast"}</h1>
+          {feed.mode === "test" && (
+            <Badge variant="outline" className="text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-1">
+              <FlaskConical size={12} />
+              Test
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="space-y-2">
