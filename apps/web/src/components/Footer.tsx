@@ -90,7 +90,7 @@ export default function Footer() {
             <p className="font-medium text-foreground">Credits</p>
             <p>
               Built by{" "}
-              <a href="https://github.com/brlauuu" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">
+              <a href="https://brlauuu.github.io" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">
                 @brlauuu
               </a>
               {" "}and{" "}
@@ -134,7 +134,7 @@ export default function Footer() {
 
         {/* Bottom row */}
         <div className="flex items-center justify-between pt-2 border-t border-border text-xs">
-          <p>&copy; 2026 brlauuu. O&apos;Saasy License.</p>
+          <p>&copy; 2026 <a href="https://brlauuu.github.io" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">brlauuu</a>. O&apos;Saasy License.</p>
           <p>v{APP_VERSION}</p>
         </div>
       </div>
