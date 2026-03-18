@@ -26,27 +26,36 @@ A compact horizontal bar across the top showing episode counts per pipeline stag
 | Done | Green (#16a34a) |
 | Failed | Red (#dc2626) |
 
-Each stage cell shows the count and stage name. Stages with zero episodes are still shown (dimmed) to preserve the pipeline shape.
+Each stage cell shows the count and stage name. Stages with zero episodes are still shown (dimmed) to preserve the pipeline shape. The stage bar is display-only (no click interaction).
 
 ### 2. Search Bar
 
-Text input below the stage bar. Filters the episode table by title or podcast name (case-insensitive, client-side). Debounced at ~300ms.
+Text input below the stage bar, with summary counts ("N active · N failed · N done") on the right. Filters the episode table and done section by title or podcast name (case-insensitive, client-side). Debounced at ~300ms. When no episodes match the search, show "No episodes match your search" in place of the table.
 
 ### 3. Episode Table
 
 Columns: Episode Title, Podcast, Stage (colored badge), Updated (relative time), Retries.
 
-**Sort order:** Failed episodes first (highlighted with red background tint), then active episodes sorted by most recently updated, then pending episodes.
+**Sort order:**
+- **Failed** episodes first, sorted by `updated_at` desc (most recent failure on top)
+- **Active** episodes second (status in: downloading, transcribing, diarizing, inferring, archiving), sorted by `updated_at` desc
+- **Pending** episodes last, sorted by `updated_at` desc
 
-**Failed row expansion:** Clicking a failed row expands it to show error details: error class label, error message text, and a Retry button (disabled for DISK_FULL and OOM errors, per existing logic).
+**Retries column:** Displays as "N/M" (e.g., "1/3") when `retry_count > 0`, otherwise "—".
+
+**Test badge:** Episodes from test-mode feeds (`feed_mode = 'test'`) show a "Test" badge next to the podcast name, preserving the existing behavior.
+
+**Failed row expansion:** Clicking a failed row expands it to show error details: error class label (human-readable, e.g., "Network error", "Out of memory"), error message text, and a Retry button (disabled for DISK_FULL and OOM errors, per existing logic).
+
+**Empty state:** When there are no episodes at all (no active, pending, failed, or done), show "No episodes in the queue. Add a feed to get started." with a link to the feeds page.
 
 ### 4. Done Section
 
-Below the table: a collapsed section showing "Show N completed episodes" that expands to reveal done episodes in a table with the same columns. Collapsed by default to keep the view focused on in-progress and failed work.
+Below the table: a collapsed section showing "Show N completed episodes" that expands to reveal done episodes in a table with the same columns. Collapsed by default to keep the view focused on in-progress and failed work. Done episodes sorted by `updated_at` desc.
 
-### 5. Summary Counts
+### 5. Responsiveness
 
-Inline with the search bar, show a text summary: "N active · N failed · N done" for quick orientation.
+On narrow screens (<640px), hide the Podcast and Retries columns. The table scrolls horizontally only as a last resort.
 
 ## Components
 
@@ -64,14 +73,24 @@ All components live in `QueueStatus.tsx` as a single file (not split into separa
 
 ### Pipeline API (`apps/pipeline/app/api/queue.py`)
 
-Add `done_jobs` to the queue response:
-- Query episodes with `status = 'done'`, ordered by `updated_at` desc
-- Include in `QueueStateResponse` alongside existing active/pending/failed arrays
-- Add `done_count` to the response
+1. **Add `inferring` to the active jobs query.** The current query filters on `["downloading", "transcribing", "diarizing", "archiving"]` but misses `"inferring"`. Add it.
+
+2. **Add `updated_at` to `_job_dict` serialization.** The table's "Updated" column and sort order depend on this field. Serialize as ISO 8601 string (or null).
+
+3. **Add `done_jobs` to the response.** Query episodes with `status = 'done'`, ordered by `updated_at` desc, **limited to 50 rows** to avoid returning the entire history on every 5-second poll. Add `done_count: int` (total count) and `done_jobs: list[dict]` (limited set) to `QueueStateResponse`.
 
 ### Web API proxy (`apps/web/src/app/api/queue/route.ts`)
 
 No changes — already proxies the full response.
+
+## PRD-02 Deviations
+
+The following PRD-02 §5.6 features are intentionally dropped in this redesign:
+
+- **Worker warm-up banner:** Removed. The warm-up phase is brief and the banner adds complexity for minimal value. PRD-02 should be updated to note this.
+- **Retry countdown timer ("Next attempt in 2m"):** Dropped. The retry count (N/M) is shown but not the countdown to next attempt, since this would require tracking backoff timers client-side. The retries column provides sufficient information.
+
+PRD-02 will be updated as part of implementation to reflect these changes.
 
 ## What Gets Removed
 
@@ -89,3 +108,4 @@ No changes — already proxies the full response.
 - Relative time display ("5m ago", "2h ago")
 - Dark mode support via Tailwind `class` strategy
 - Pulse animation on active stage badges
+- Test badge for test-mode feeds
