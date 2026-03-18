@@ -58,7 +58,7 @@ services:
     # Pre-warm downloads model weights before accepting any jobs
     command: >
       sh -c "python -m app.tasks.prewarm &&
-             celery -A app.tasks.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
+             celery -A app.tasks.celery_app worker -Q heavy --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
@@ -74,6 +74,27 @@ services:
         condition: service_healthy
       pipeline:
         condition: service_healthy  # Ensures migrations are done before worker writes to DB
+
+  worker-light:
+    build: ./apps/pipeline
+    command: >
+      celery -A app.tasks.celery_app worker -Q light
+      --loglevel=info --concurrency=${CELERY_LIGHT_CONCURRENCY:-3}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - audio_data:/data/audio
+      - transcript_data:/data/transcripts
+      - model_cache:/root/.cache/huggingface
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pipeline:
+        condition: service_healthy
 
   beat:
     build: ./apps/pipeline

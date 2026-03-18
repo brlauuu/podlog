@@ -36,4 +36,17 @@ celery_app.conf.update(
     # Only prefetch one task at a time — with concurrency=1, prefetched messages
     # would sit idle and hit the visibility timeout, triggering redelivery.
     worker_prefetch_multiplier=1,
+    # --- Task routing: heavy vs light worker queues ---
+    task_default_queue="light",
+    task_routes={
+        "transcribe_episode": {"queue": "heavy"},
+        "diarize_episode": {"queue": "heavy"},
+        "infer_speakers": {"queue": "light"},
+        "download_episode": {"queue": "light"},
+        "archive_episode": {"queue": "light"},
+        "ingest_episode": {"queue": "light"},
+        "ingest_feed": {"queue": "light"},
+        "cleanup_zombie_jobs": {"queue": "light"},
+        "poll_all_feeds": {"queue": "light"},
+    },
 )

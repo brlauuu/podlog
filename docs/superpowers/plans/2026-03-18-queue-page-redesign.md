@@ -1,6 +1,201 @@
+# Queue Page Redesign Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace the 648-line QueueStatus component (kanban + 3 grouping modes) with a Summary + Table hybrid layout showing a stage progress bar, searchable episode table, and expandable error details.
+
+**Architecture:** Backend adds `inferring` to active query, `updated_at` to job serialization, and `done_jobs` (limit 50) to the queue response. Frontend is a full rewrite of `QueueStatus.tsx` with StageBar, EpisodeTable, StatusBadge, and expandable failed rows. No new dependencies.
+
+**Tech Stack:** Python/FastAPI (pipeline API), TypeScript/Next.js 14 (web app), Tailwind CSS for styling.
+
+**Spec:** `docs/superpowers/specs/2026-03-18-queue-page-redesign-design.md`
+
+---
+
+### Task 1: Update Pipeline Queue API
+
+**Files:**
+- Modify: `apps/pipeline/app/api/queue.py:27-65`
+- Test: `apps/pipeline/tests/unit/test_queue_api.py` (create if not exists)
+
+- [ ] **Step 1: Write failing test for `inferring` in active jobs**
+
+```python
+# apps/pipeline/tests/unit/test_queue_api.py
+"""Tests for the queue API response structure."""
+from unittest.mock import MagicMock, patch
+
+import pytest
+from app.api.queue import get_queue
+
+
+def _make_episode(status, **kwargs):
+    """Create a mock Episode with required fields."""
+    ep = MagicMock()
+    ep.id = kwargs.get("id", "ep-1")
+    ep.title = kwargs.get("title", "Test Episode")
+    ep.status = status
+    ep.celery_task_id = kwargs.get("celery_task_id", "task-1")
+    ep.error_message = kwargs.get("error_message", None)
+    ep.error_class = kwargs.get("error_class", None)
+    ep.retry_count = kwargs.get("retry_count", 0)
+    ep.retry_max = kwargs.get("retry_max", 3)
+    ep.updated_at = kwargs.get("updated_at", None)
+    ep.feed = MagicMock()
+    ep.feed.mode = kwargs.get("feed_mode", "live")
+    ep.feed.title = kwargs.get("feed_title", "Test Feed")
+    return ep
+
+
+class TestGetQueue:
+    def test_inferring_episodes_are_active(self):
+        """Inferring episodes should appear in active_jobs, not be omitted."""
+        inferring_ep = _make_episode("inferring", id="ep-inf")
+        db = MagicMock()
+        # Mock the query chain to return our episode for active, empty for others
+        query = db.query.return_value
+        filter_result = MagicMock()
+        query.filter.return_value = filter_result
+        filter_result.all.side_effect = [
+            [inferring_ep],  # active_jobs query
+            [],              # pending_jobs query
+            [],              # failed_jobs query
+            [],              # done_jobs query
+        ]
+        # We'll test the response after implementing — for now verify the status list
+        # includes "inferring"
+        from app.api.queue import ACTIVE_STATUSES
+        assert "inferring" in ACTIVE_STATUSES
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd apps/pipeline && python -m pytest tests/unit/test_queue_api.py::TestGetQueue::test_inferring_episodes_are_active -v`
+Expected: FAIL with `ImportError` — `ACTIVE_STATUSES` does not exist yet as a module-level export
+
+- [ ] **Step 3: Add `inferring` to active statuses, `updated_at` to job dict, and `done_jobs` to response**
+
+In `apps/pipeline/app/api/queue.py`, make these changes:
+
+1. Extract active statuses to a module-level constant:
+```python
+ACTIVE_STATUSES = ["downloading", "transcribing", "diarizing", "inferring", "archiving"]
+```
+
+2. Move `_job_dict` from a nested function inside `get_queue()` to a **module-level function** so it can be imported in tests. Update it to include `updated_at`:
+```python
+def _job_dict(ep) -> dict:
+    return {
+        "episode_id": ep.id,
+        "title": ep.title,
+        "status": ep.status,
+        "celery_task_id": ep.celery_task_id,
+        "error_message": ep.error_message,
+        "error_class": ep.error_class,
+        "retry_count": ep.retry_count,
+        "retry_max": ep.retry_max,
+        "feed_mode": ep.feed.mode if ep.feed else None,
+        "feed_title": ep.feed.title if ep.feed else None,
+        "updated_at": ep.updated_at.isoformat() if ep.updated_at else None,
+    }
+```
+
+3. Update `QueueStateResponse` to include done:
+```python
+class QueueStateResponse(BaseModel):
+    active_count: int
+    pending_count: int
+    failed_count: int
+    done_count: int
+    active_jobs: list[dict]
+    pending_jobs: list[dict]
+    failed_jobs: list[dict]
+    done_jobs: list[dict]
+```
+
+4. In `get_queue()`, use `ACTIVE_STATUSES` for the active query, and add done query with separate total count:
+```python
+from sqlalchemy import func
+
+# Total count (unlimited) for display
+done_count = db.query(func.count(Episode.id)).filter(
+    Episode.status == "done"
+).scalar() or 0
+
+# Limited result set for the response
+done = db.query(Episode).filter(
+    Episode.status == "done"
+).order_by(Episode.updated_at.desc()).limit(50).all()
+```
+
+Include both `done_count` (total count) and `done_jobs` (limited to 50) in the response.
+
+- [ ] **Step 4: Write test for `updated_at` in job dict**
+
+```python
+    def test_job_dict_includes_updated_at(self):
+        """updated_at should be serialized as ISO 8601 string."""
+        from datetime import datetime
+        from app.api.queue import _job_dict
+
+        ep = _make_episode("downloading", updated_at=datetime(2026, 3, 18, 12, 0, 0))
+        result = _job_dict(ep)
+        assert result["updated_at"] == "2026-03-18T12:00:00"
+
+    def test_job_dict_updated_at_none(self):
+        """updated_at should be None when not set."""
+        from app.api.queue import _job_dict
+
+        ep = _make_episode("pending", updated_at=None)
+        result = _job_dict(ep)
+        assert result["updated_at"] is None
+```
+
+- [ ] **Step 5: Write test for done_jobs in response**
+
+```python
+    def test_done_jobs_included_in_response(self):
+        """Done episodes should appear in the response with a count."""
+        from app.api.queue import _job_dict
+        # Verify the QueueStateResponse model includes done fields
+        from app.api.queue import QueueStateResponse
+        schema = QueueStateResponse.model_json_schema()
+        assert "done_count" in schema["properties"]
+        assert "done_jobs" in schema["properties"]
+```
+
+- [ ] **Step 6: Run all queue API tests**
+
+Run: `cd apps/pipeline && python -m pytest tests/unit/test_queue_api.py -v`
+Expected: All PASS
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add apps/pipeline/app/api/queue.py apps/pipeline/tests/unit/test_queue_api.py
+git commit -m "feat(queue-api): add inferring status, updated_at, and done_jobs to queue response"
+```
+
+---
+
+### Task 2: Rewrite QueueStatus Component
+
+**Files:**
+- Rewrite: `apps/web/src/components/QueueStatus.tsx`
+- Reference: `docs/superpowers/specs/2026-03-18-queue-page-redesign-design.md`
+
+This is the main task — replacing the entire 648-line component.
+
+**Note:** The existing code uses `useEffect` + `setInterval` for polling (not React Query despite CLAUDE.md mentioning it). We keep the same pattern for consistency with the existing codebase.
+
+- [ ] **Step 1: Write the new QueueStatus.tsx**
+
+Replace the entire file with the new implementation. The component structure:
+
+```typescript
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
 // --- Types ---
@@ -293,14 +488,7 @@ export default function QueueStatus() {
   const filteredDone = q ? queue.done_jobs.filter(matchesSearch) : queue.done_jobs;
 
   async function handleRetry(taskId: string) {
-    try {
-      const res = await fetch(`/api/pipeline/queue/${taskId}/retry`, { method: "POST" });
-      if (!res.ok) {
-        console.error("Retry failed with status", res.status);
-      }
-    } catch (err) {
-      console.error("Retry request failed", err);
-    }
+    await fetch(`/api/pipeline/queue/${taskId}/retry`, { method: "POST" });
   }
 
   const isEmpty = allJobs.length === 0 && doneCount === 0;
@@ -373,7 +561,25 @@ export default function QueueStatus() {
           {showDone && filteredDone.length > 0 && (
             <div className="mt-2 rounded-lg border border-border overflow-hidden">
               <table className="w-full">
-                <TableHeader />
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+                      Episode
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">
+                      Podcast
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+                      Stage
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+                      Updated
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">
+                      Retries
+                    </th>
+                  </tr>
+                </thead>
                 <tbody>
                   {filteredDone.map((job) => (
                     <EpisodeRow
@@ -396,3 +602,74 @@ export default function QueueStatus() {
     </div>
   );
 }
+```
+
+- [ ] **Step 2: Verify it builds**
+
+Run: `cd apps/web && npx next build`
+Expected: Build succeeds with no type errors
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/web/src/components/QueueStatus.tsx
+git commit -m "feat(queue-ui): rewrite QueueStatus with Summary + Table hybrid layout"
+```
+
+---
+
+### Task 3: Update PRD-02
+
+**Files:**
+- Modify: `prds/PRD-02-search-web-app.md` (queue dashboard section §5.6)
+
+- [ ] **Step 1: Update PRD-02 §5.6 to reflect the redesign**
+
+In `prds/PRD-02-search-web-app.md`, find section 5.6 (Queue Dashboard) and update to reflect:
+- Summary + Table hybrid layout replaces kanban/grouping modes
+- Worker warm-up banner removed (brief warm-up doesn't warrant UI)
+- Retry countdown timer removed (retry count N/M shown instead)
+- Stage progress bar added
+- Search filtering added
+- Done episodes collapsed by default
+
+Bump the version number and add a changelog entry.
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add prds/PRD-02-search-web-app.md
+git commit -m "docs: update PRD-02 §5.6 to reflect queue page redesign"
+```
+
+---
+
+### Task 4: Manual Smoke Test
+
+- [ ] **Step 1: Rebuild web image**
+
+```bash
+make build
+```
+
+- [ ] **Step 2: Restart services**
+
+```bash
+make up
+```
+
+- [ ] **Step 3: Verify queue page**
+
+Open http://localhost:3000/queue and verify:
+- Stage progress bar shows correct counts
+- Episode table shows active/failed/pending episodes
+- Failed episodes expand on click to show error details
+- Retry button works on failed episodes (that aren't DISK_FULL/OOM)
+- Search filters episodes by title and podcast name
+- "Show N completed episodes" expands to show done episodes
+- Dark mode works (toggle if available)
+- Narrow the browser window below 640px and verify Podcast and Retries columns hide
+
+- [ ] **Step 4: Commit any fixes from smoke testing**
+
+If any issues were found during smoke testing, fix them and commit.
