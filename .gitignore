@@ -2,6 +2,9 @@
 .env
 docker-compose.override.yml
 
+# Worktrees
+.worktrees/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -34,3 +37,4 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+.superpowers/
