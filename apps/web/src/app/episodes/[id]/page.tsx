@@ -154,7 +154,13 @@ export default async function EpisodePage({ params }: { params: { id: string } }
 
       {/* Episode description */}
       {episode.description && (
-        <EpisodeDescription description={episode.description} />
+        <EpisodeDescription
+          description={episode.description}
+          episodeId={episode.id}
+          audioLocalPath={episode.audio_local_path}
+          episodeTitle={episode.title}
+          feedTitle={episode.feed_title}
+        />
       )}
 
       {/* Diarization failure banner — PRD-02 §5.3 */}
