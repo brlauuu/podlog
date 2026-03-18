@@ -32,6 +32,7 @@ export default function EpisodeMentionList({
   feedTitle,
 }: Props) {
   const { playEpisode } = useAudioPlayer();
+  const queryParam = query ? `?q=${encodeURIComponent(query)}` : "";
 
   const { data, isLoading } = useQuery<EpisodeMentions>({
     queryKey: ["mentions", query, episodeId],
@@ -91,7 +92,7 @@ export default function EpisodeMentionList({
 
           <div className="flex items-center gap-1.5 shrink-0">
             <Link
-              href={`/episodes/${episodeId}#t-${Math.floor(mention.startTime)}`}
+              href={`/episodes/${episodeId}${queryParam}#t-${Math.floor(mention.startTime)}`}
               title="Go to episode at this timestamp"
               className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
             >

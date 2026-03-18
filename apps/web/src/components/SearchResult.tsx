@@ -15,6 +15,8 @@ function basename(filePath: string): string {
 
 interface Props {
   result: SearchResultType;
+  /** Current search query, used to preserve search context in episode links */
+  query?: string;
 }
 
 /**
@@ -23,10 +25,11 @@ interface Props {
  * Shows: episode title, podcast name, speaker, timestamp, highlighted snippet.
  * Actions: go to episode page, play locally, open external link.
  */
-export default function SearchResult({ result }: Props) {
+export default function SearchResult({ result, query }: Props) {
   const { playEpisode } = useAudioPlayer();
 
   const hasLocalAudio = !!result.audioLocalPath;
+  const queryParam = query ? `?q=${encodeURIComponent(query)}` : "";
 
   function handlePlayLocally() {
     if (!result.audioLocalPath) return;
@@ -51,9 +54,9 @@ export default function SearchResult({ result }: Props) {
               </span>
               {result.episodeTitle && (
                 <>
-                  <span className="text-muted-foreground">·</span>
+                  <span className="text-muted-foreground">&middot;</span>
                   <Link
-                    href={`/episodes/${result.episodeId}#t-${Math.floor(result.startTime)}`}
+                    href={`/episodes/${result.episodeId}${queryParam}#t-${Math.floor(result.startTime)}`}
                     className="text-sm text-muted-foreground truncate hover:text-foreground hover:underline transition-colors"
                   >
                     {result.episodeTitle}
@@ -82,7 +85,7 @@ export default function SearchResult({ result }: Props) {
 
           <div className="flex items-center gap-2 shrink-0">
             <Link
-              href={`/episodes/${result.episodeId}#t-${Math.floor(result.startTime)}`}
+              href={`/episodes/${result.episodeId}${queryParam}#t-${Math.floor(result.startTime)}`}
               title="Go to episode at this timestamp"
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-input px-2.5 py-1 rounded-md transition-colors"
             >
