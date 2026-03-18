@@ -5,6 +5,7 @@ import { Search, List, Layers } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import SearchResult from "@/components/SearchResult";
 import FeedGroupCard from "@/components/FeedGroupCard";
+import DownloadReportButton from "@/components/DownloadReportButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import type { SearchPage, GroupedSearchResult } from "@/lib/search";
@@ -114,31 +115,39 @@ export default function HomePage() {
                   ? `Page ${page} of ${totalPages} · ${flatQuery.data.total} results`
                   : ""}
             </div>
-            <div className="flex items-center border border-border rounded-lg overflow-hidden">
-              <button
-                onClick={() => { setViewMode("grouped"); setPage(1); }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
-                  viewMode === "grouped"
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-accent/30"
-                }`}
-                title="Grouped view"
-              >
-                <Layers size={13} />
-                Grouped
-              </button>
-              <button
-                onClick={() => { setViewMode("flat"); setPage(1); }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
-                  viewMode === "flat"
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-accent/30"
-                }`}
-                title="Flat view"
-              >
-                <List size={13} />
-                Flat
-              </button>
+            <div className="flex items-center gap-2">
+              <DownloadReportButton
+                query={submittedQuery}
+                viewMode={viewMode}
+                flatResults={viewMode === "flat" ? flatQuery.data?.results : undefined}
+                groupedResults={viewMode === "grouped" ? groupedQuery.data : undefined}
+              />
+              <div className="flex items-center border border-border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => { setViewMode("grouped"); setPage(1); }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
+                    viewMode === "grouped"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-accent/30"
+                  }`}
+                  title="Grouped view"
+                >
+                  <Layers size={13} />
+                  Grouped
+                </button>
+                <button
+                  onClick={() => { setViewMode("flat"); setPage(1); }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
+                    viewMode === "flat"
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-accent/30"
+                  }`}
+                  title="Flat view"
+                >
+                  <List size={13} />
+                  Flat
+                </button>
+              </div>
             </div>
           </div>
 
