@@ -91,8 +91,8 @@ def retry_job(task_id: str, db: Session = Depends(get_db)) -> dict:
     if not episode:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if episode.status != "failed":
-        raise HTTPException(status_code=409, detail="Job is not in failed state")
+    if episode.status != "failed" and episode.error_class is None:
+        raise HTTPException(status_code=409, detail="Job has no error to retry")
 
     if episode.error_class in NON_RETRYABLE:
         raise HTTPException(
