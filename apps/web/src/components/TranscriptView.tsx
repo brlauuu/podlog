@@ -74,15 +74,18 @@ export default function TranscriptView({ episodeId, hasDiarization, status, segm
   }
 
   return (
-    <div className="space-y-3">
-      {segments.map((seg) => {
+    <div className="space-y-1">
+      {segments.map((seg, i) => {
         const segId = `t-${Math.floor(seg.start_time)}`;
         const isHighlighted = segId === highlightedId;
+        const showSpeaker = i === 0 || seg.speaker_label !== segments[i - 1].speaker_label;
         return (
         <div
           key={seg.id}
           id={segId}
           className={`flex gap-3 group rounded-md transition-colors ${
+            showSpeaker && hasDiarization && seg.speaker_label ? "mt-4" : ""
+          } ${
             isHighlighted
               ? "border-l-2 border-primary bg-primary/5 pl-2 -ml-2"
               : ""
@@ -102,7 +105,7 @@ export default function TranscriptView({ episodeId, hasDiarization, status, segm
             {formatTime(seg.start_time)}
           </button>
           <div className="flex-1 min-w-0">
-            {hasDiarization && seg.speaker_label && (
+            {hasDiarization && seg.speaker_label && showSpeaker && (
               <div className="mb-0.5 flex items-center gap-1.5">
                 <SpeakerLabel
                   episodeId={episodeId}
