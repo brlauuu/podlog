@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, X } from "lucide-react";
 import { getSpeakerColor, getSpeakerInitials, getSpeakerSlot } from "@/lib/speakerColors";
 
@@ -33,6 +33,7 @@ function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
     if (existing) {
       existing.segmentCount++;
       if (seg.display_name) existing.displayName = seg.display_name;
+      if (seg.inferred && !existing.confirmedByUser) existing.inferred = true;
       if (seg.confirmed_by_user) {
         existing.confirmedByUser = true;
         existing.inferred = false;
@@ -40,7 +41,7 @@ function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
     } else {
       map.set(seg.speaker_label, {
         speakerLabel: seg.speaker_label,
-        displayName: seg.display_name ?? seg.speaker_label,
+        displayName: seg.display_name || seg.speaker_label,
         segmentCount: 1,
         inferred: seg.inferred,
         confirmedByUser: seg.confirmed_by_user,
@@ -64,6 +65,10 @@ function SpeakerCard({
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(speaker.displayName);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!editing) setValue(speaker.displayName);
+  }, [speaker.displayName, editing]);
 
   const color = getSpeakerColor(speaker.speakerLabel);
   const initials = getSpeakerInitials(speaker.displayName, speaker.speakerLabel);
@@ -90,6 +95,9 @@ function SpeakerCard({
         setValue(speaker.displayName);
         setEditing(false);
       }
+    } catch {
+      setValue(speaker.displayName);
+      setEditing(false);
     } finally {
       setSaving(false);
     }

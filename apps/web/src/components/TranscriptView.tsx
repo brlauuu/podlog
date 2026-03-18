@@ -46,6 +46,7 @@ export default function TranscriptView({
   const { playEpisode } = useAudioPlayer();
 
   useEffect(() => {
+    if (highlightedId) return;
     const hash = window.location.hash;
     if (hash.startsWith("#t-")) {
       const targetId = hash.slice(1);
@@ -55,7 +56,7 @@ export default function TranscriptView({
         el.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }
-  }, []);
+  }, [segments, highlightedId]);
 
   function handleTimestampClick(startTime: number) {
     if (!audioLocalPath) return;
