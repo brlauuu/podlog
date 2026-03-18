@@ -3,7 +3,7 @@ Host & guest inference from episode metadata — PRD-04
 
 Uses spaCy NER to extract person names from episode/feed text, then classifies
 them as host or guest using heuristic pattern matching. Assigns speaker slots
-so SPEAKER_00 = host (most speaking time).
+so SPEAKER_00 = first speaker to appear (host).
 
 Memory note: spaCy model must be explicitly unloaded after use, following the
 same GC pattern as Whisper and pyannote (PRD-01 §5.4).
@@ -296,7 +296,7 @@ def assign_speaker_slots(
         return {}
 
     # Sort by first appearance — first speaker becomes SPEAKER_00 (host)
-    sorted_speakers = sorted(first_appearance.keys(), key=lambda s: first_appearance[s])
+    sorted_speakers = sorted(first_appearance.keys(), key=lambda s: (first_appearance[s], s))
 
     label_map: dict[str, str] = {}
     for i, old_label in enumerate(sorted_speakers):

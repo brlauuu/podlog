@@ -2,7 +2,7 @@
 
 **Project:** PodSearch — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-04 — Host & Guest Inference  
-**Version:** 1.0  
+**Version:** 1.1  
 **Status:** Draft  
 **Depends on:** PRD-01 v1.1, PRD-02 v1.1, PRD-03 v1.1
 
@@ -89,20 +89,20 @@ Every inferred name is tagged with a confidence level stored in the `speaker_nam
 After diarization completes and speaker segments exist in the database, the inference service assigns speaker slots as follows:
 
 1. Identify the host name (if any) from the inference result.
-2. Identify the pyannote speaker label that corresponds to the most speaking time across all segments — this is `SPEAKER_00` and is assigned to the host.
-3. Remaining pyannote speakers are assigned guest slots in order of their first appearance in the transcript: first-appearing guest → `SPEAKER_01`, next → `SPEAKER_02`, etc.
-4. Write inferred display names to the `speaker_names` table with `inferred = true` and the appropriate confidence level.
-5. If no host name was inferred, `SPEAKER_00` is still assigned to the highest-speaking-time speaker, but no display name is written (user must rename manually as before).
+2. All speakers are assigned slots in order of their first appearance in the transcript: the first speaker to appear becomes `SPEAKER_00` (host), next becomes `SPEAKER_01`, etc.
+3. Write inferred display names to the `speaker_names` table with `inferred = true` and the appropriate confidence level.
+4. If no host name was inferred, `SPEAKER_00` is still assigned to the first speaker to appear, but no display name is written (user must rename manually as before).
 
-**Rationale for most-speaking-time = host:** Hosts consistently speak more than guests across podcast formats. This heuristic is correct in the large majority of cases.
+**Rationale for first-appearance = host:** The first speaker in a podcast episode is overwhelmingly the host (introducing the show, welcoming the guest). This heuristic is simpler and more reliable than speaking-time, which can misfire when a guest dominates the conversation.
 
 ### 4.5 Re-ordering of pyannote Speaker Labels
 
-pyannote outputs speaker labels in the order it first detects them (`SPEAKER_00` is whoever speaks first, which is often the host but not always). To enforce the invariant that `SPEAKER_00` = host:
+pyannote outputs speaker labels in an arbitrary internal order. To enforce the invariant that `SPEAKER_00` = first speaker:
 
-- After diarization, before writing segments to the database, the pipeline remaps pyannote's internal labels so that the highest-total-speaking-time speaker is always written as `SPEAKER_00`.
+- After diarization, before writing segments to the database, the pipeline remaps pyannote's internal labels so that the first-appearing speaker is always written as `SPEAKER_00`.
 - The remapping is a label swap only — no audio data is changed.
-- If inference found no host, the remapping still applies (most-speaking-time speaker gets `SPEAKER_00`) for consistency.
+- If inference found no host, the remapping still applies (first-appearing speaker gets `SPEAKER_00`) for consistency.
+- Tiebreaking: if two speakers first appear at the same timestamp, they are ordered alphabetically by their original pyannote label.
 
 ### 4.6 Pipeline Integration
 
@@ -286,14 +286,14 @@ All tests in `tests/unit/test_inference.py`. No live models needed — mock spaC
 | Multi-guest | "featuring Alice Chen and Bob Kim" | `guests = ["Alice Chen", "Bob Kim"]` |
 | No names found | "Today we discuss the economy" | `host = None, guests = []` |
 | Recurring host detection | Name appears in 8 of 10 recent episodes | `host = that name, confidence = HIGH` |
-| Slot assignment — host is most-speaking | Segments with 60% SPEAKER_01, 40% SPEAKER_00 | SPEAKER_01 remapped to SPEAKER_00 |
+| Slot assignment — first appearance | SPEAKER_01 appears first, SPEAKER_00 appears second | SPEAKER_01 remapped to SPEAKER_00 |
 | Soft failure | spaCy raises exception | `inference_error` set, episode continues to DONE |
 | Inference skipped | `has_diarization = false` | No `speaker_names` rows written, `inference_skipped = true` |
 
 ### Integration Tests
 
 - Full pipeline run with fixture episode and feed that has a known description → assert `speaker_names` rows written with correct `inferred = true` and `confidence`
-- Assert `SPEAKER_00` is always the highest-speaking-time speaker after remapping
+- Assert `SPEAKER_00` is always the first-appearing speaker after remapping
 
 ### What is NOT tested
 - spaCy model accuracy (model quality is upstream)
@@ -318,9 +318,17 @@ All tests in `tests/unit/test_inference.py`. No live models needed — mock spaC
 Build in this sequence due to hard dependencies:
 
 1. **`inference.py` service** — core extraction and classification logic with unit tests
-2. **`diarize.py` speaker slot remapping** — reorder pyannote labels by speaking time before DB write
+2. **`diarize.py` speaker slot remapping** — reorder pyannote labels by first appearance before DB write
 3. **Pipeline stage integration** — add `INFERRING` state to `ingest.py` task flow
 4. **Database migration** — add new columns to `speaker_names` and `episodes`
 5. **UI: episode page badge** — inferred/confirmed badge on speaker labels
 6. **UI: queue dashboard** — INFERRING stage in progress display
 7. **Flat .txt output update** — write inferred names to transcript file header and segments
+
+---
+
+## Changelog
+
+### v1.1 — 2026-03-18
+
+- **Changed:** Speaker slot assignment now uses first appearance instead of most speaking time (§4.4, §4.5). The first speaker to appear becomes `SPEAKER_00` (host). Rationale: first speaker is a more reliable host signal than total speaking time.

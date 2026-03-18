@@ -213,29 +213,29 @@ class TestClassifyCandidates:
 # --- assign_speaker_slots ---
 
 class TestAssignSpeakerSlots:
-    def test_most_speaking_time_gets_speaker_00(self):
-        """PRD-04 §4.5: highest speaking time → SPEAKER_00"""
+    def test_first_appearance_gets_speaker_00(self):
+        """PRD-04 §4.5: first speaker to appear → SPEAKER_00"""
         segments = [
-            {"speaker_label": "SPEAKER_01", "start_time": 0, "end_time": 60},   # 60s
-            {"speaker_label": "SPEAKER_00", "start_time": 60, "end_time": 100},  # 40s
+            {"speaker_label": "SPEAKER_01", "start_time": 0, "end_time": 60},   # appears first
+            {"speaker_label": "SPEAKER_00", "start_time": 60, "end_time": 100},  # appears second
         ]
         result = InferenceResult()
         label_map = assign_speaker_slots(result, segments)
-        assert label_map["SPEAKER_01"] == "SPEAKER_00"  # most speaking time
+        assert label_map["SPEAKER_01"] == "SPEAKER_00"  # first to appear
         assert label_map["SPEAKER_00"] == "SPEAKER_01"
 
-    def test_guest_order_by_first_appearance(self):
-        """PRD-04 §4.4: guests ordered by first appearance"""
+    def test_all_speakers_ordered_by_first_appearance(self):
+        """PRD-04 §4.4: all speakers ordered by first appearance"""
         segments = [
-            {"speaker_label": "SPEAKER_02", "start_time": 0, "end_time": 10},
-            {"speaker_label": "SPEAKER_00", "start_time": 10, "end_time": 100},  # most time
-            {"speaker_label": "SPEAKER_01", "start_time": 100, "end_time": 110},
+            {"speaker_label": "SPEAKER_02", "start_time": 0, "end_time": 10},    # appears first
+            {"speaker_label": "SPEAKER_00", "start_time": 10, "end_time": 100},   # appears second
+            {"speaker_label": "SPEAKER_01", "start_time": 100, "end_time": 110},  # appears third
         ]
         result = InferenceResult()
         label_map = assign_speaker_slots(result, segments)
-        assert label_map["SPEAKER_00"] == "SPEAKER_00"  # most time → SPEAKER_00
-        assert label_map["SPEAKER_02"] == "SPEAKER_01"  # appeared first among guests
-        assert label_map["SPEAKER_01"] == "SPEAKER_02"  # appeared second
+        assert label_map["SPEAKER_02"] == "SPEAKER_00"  # first to appear → SPEAKER_00
+        assert label_map["SPEAKER_00"] == "SPEAKER_01"  # second to appear
+        assert label_map["SPEAKER_01"] == "SPEAKER_02"  # third to appear
 
     def test_empty_segments(self):
         result = InferenceResult()
