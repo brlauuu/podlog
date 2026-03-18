@@ -33,6 +33,10 @@ function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
     if (existing) {
       existing.segmentCount++;
       if (seg.display_name) existing.displayName = seg.display_name;
+      if (seg.confirmed_by_user) {
+        existing.confirmedByUser = true;
+        existing.inferred = false;
+      }
     } else {
       map.set(seg.speaker_label, {
         speakerLabel: seg.speaker_label,
@@ -82,6 +86,9 @@ function SpeakerCard({
       if (resp.ok) {
         onRenamed(trimmed);
         setEditing(false);
+      } else {
+        setValue(speaker.displayName);
+        setEditing(false);
       }
     } finally {
       setSaving(false);
@@ -117,7 +124,7 @@ function SpeakerCard({
                 className="border border-input rounded px-1.5 py-0.5 text-sm bg-background w-full min-w-0"
               />
               <button onClick={(e) => { e.stopPropagation(); save(); }} disabled={saving} className="text-green-600 shrink-0">
-                <Check size={14} />
+                {saving ? <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full" /> : <Check size={14} />}
               </button>
               <button onClick={(e) => { e.stopPropagation(); setValue(speaker.displayName); setEditing(false); }} className="text-muted-foreground shrink-0">
                 <X size={14} />
