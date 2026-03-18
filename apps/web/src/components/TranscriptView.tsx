@@ -1,10 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import SpeakerLabel from "@/components/SpeakerLabel";
-import { Badge } from "@/components/ui/badge";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
-import path from "path";
+import { getSpeakerColor, getSpeakerInitials } from "@/lib/speakerColors";
 
 interface Segment {
   id: number;
@@ -35,15 +33,20 @@ function formatTime(secs: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/**
- * Client-side transcript view with inline speaker renaming and inference badges (PRD-04 §8.1).
- */
-export default function TranscriptView({ episodeId, hasDiarization, status, segments: initial, audioLocalPath, episodeTitle, feedTitle }: Props) {
-  const [segments, setSegments] = useState(initial);
+export default function TranscriptView({
+  episodeId,
+  hasDiarization,
+  status,
+  segments,
+  audioLocalPath,
+  episodeTitle,
+  feedTitle,
+}: Props) {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const { playEpisode } = useAudioPlayer();
 
   useEffect(() => {
+    if (highlightedId) return;
     const hash = window.location.hash;
     if (hash.startsWith("#t-")) {
       const targetId = hash.slice(1);
@@ -53,16 +56,12 @@ export default function TranscriptView({ episodeId, hasDiarization, status, segm
         el.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }
-  }, []);
+  }, [segments, highlightedId]);
 
-  function handleRenamed(speakerLabel: string, newName: string) {
-    setSegments((prev) =>
-      prev.map((seg) =>
-        seg.speaker_label === speakerLabel
-          ? { ...seg, display_name: newName, inferred: false, confirmed_by_user: true }
-          : seg
-      )
-    );
+  function handleTimestampClick(startTime: number) {
+    if (!audioLocalPath) return;
+    const filename = audioLocalPath.split("/").pop() ?? "";
+    playEpisode(episodeId, filename, startTime, episodeTitle ?? undefined, feedTitle ?? undefined);
   }
 
   if (segments.length === 0) {
@@ -78,65 +77,100 @@ export default function TranscriptView({ episodeId, hasDiarization, status, segm
       {segments.map((seg, i) => {
         const segId = `t-${Math.floor(seg.start_time)}`;
         const isHighlighted = segId === highlightedId;
-        const showSpeaker = i === 0 || seg.speaker_label !== segments[i - 1].speaker_label;
-        return (
-        <div
-          key={seg.id}
-          id={segId}
-          className={`flex gap-3 group rounded-md transition-colors ${
-            showSpeaker && hasDiarization && seg.speaker_label ? "mt-4" : ""
-          } ${
-            isHighlighted
-              ? "border-l-2 border-primary bg-primary/5 pl-2 -ml-2"
-              : ""
-          }`}
-        >
-          <button
-            className="text-xs text-muted-foreground hover:text-primary font-mono shrink-0 mt-0.5 w-14 text-right transition-colors"
-            title="Play from here"
-            onClick={() => {
-              if (audioLocalPath) {
-                const filename = path.basename(audioLocalPath);
-                playEpisode(episodeId, filename, seg.start_time, episodeTitle ?? undefined, feedTitle ?? undefined);
-              }
-            }}
-            disabled={!audioLocalPath}
-          >
-            {formatTime(seg.start_time)}
-          </button>
-          <div className="flex-1 min-w-0">
-            {hasDiarization && seg.speaker_label && showSpeaker && (
-              <div className="mb-0.5 flex items-center gap-1.5">
-                <SpeakerLabel
-                  episodeId={episodeId}
-                  speakerLabel={seg.speaker_label}
-                  displayName={seg.display_name ?? seg.speaker_label}
-                  onRenamed={(newName) => handleRenamed(seg.speaker_label!, newName)}
-                />
-                {/* PRD-04 §8.1: inference badges */}
-                {seg.inferred && !seg.confirmed_by_user && (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] px-1.5 py-0 h-4 bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800"
-                    title="This name was inferred from the episode description. Click the edit icon to confirm or change it."
+        const prevSpeaker = i > 0 ? segments[i - 1].speaker_label : null;
+        const isSpeakerChange = seg.speaker_label !== prevSpeaker;
+        const hasSpeaker = hasDiarization && seg.speaker_label;
+
+        if (!hasSpeaker) {
+          // No diarization — plain text with timestamp
+          return (
+            <div
+              key={seg.id}
+              id={segId}
+              className={`flex gap-3 rounded-md py-1 ${isHighlighted ? "border-l-2 border-primary bg-primary/5 pl-2 -ml-2" : ""}`}
+            >
+              <button
+                className="text-xs text-muted-foreground hover:text-primary font-mono shrink-0 mt-0.5 w-14 text-right transition-colors"
+                title="Play from here"
+                onClick={() => handleTimestampClick(seg.start_time)}
+                disabled={!audioLocalPath}
+              >
+                {formatTime(seg.start_time)}
+              </button>
+              <p className="text-sm leading-relaxed flex-1">{seg.text}</p>
+            </div>
+          );
+        }
+
+        const color = getSpeakerColor(seg.speaker_label!);
+        const displayName = seg.display_name ?? seg.speaker_label!;
+        const initials = getSpeakerInitials(displayName, seg.speaker_label!);
+
+        if (isSpeakerChange) {
+          // Speaker change — show avatar + name + bubble
+          return (
+            <div
+              key={seg.id}
+              id={segId}
+              className={`flex gap-3 mt-4 ${isHighlighted ? "border-l-2 border-primary bg-primary/5 pl-2 -ml-2" : ""}`}
+            >
+              <span
+                className="shrink-0 rounded-full flex items-center justify-center text-white text-xs font-semibold mt-0.5"
+                style={{ background: color.hex, width: 32, height: 32 }}
+              >
+                {initials}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2 mb-1">
+                  <span className="text-sm font-semibold" style={{ color: color.hex }}>
+                    {displayName}
+                  </span>
+                  <button
+                    className="text-xs text-muted-foreground hover:text-primary font-mono transition-colors"
+                    title="Play from here"
+                    onClick={() => handleTimestampClick(seg.start_time)}
+                    disabled={!audioLocalPath}
                   >
-                    Inferred
-                  </Badge>
-                )}
-                {seg.confirmed_by_user && (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] px-1.5 py-0 h-4 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
-                    title="Speaker name confirmed by user"
-                  >
-                    &#10003; Confirmed
-                  </Badge>
-                )}
+                    {formatTime(seg.start_time)}
+                  </button>
+                </div>
+                <div
+                  className="text-sm leading-relaxed rounded-b-xl rounded-tr-xl px-3 py-2"
+                  style={{ background: color.bg }}
+                >
+                  {seg.text}
+                </div>
               </div>
-            )}
-            <p className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">{seg.text}</p>
+            </div>
+          );
+        }
+
+        // Consecutive segment — same speaker, smaller bubble
+        return (
+          <div
+            key={seg.id}
+            id={segId}
+            className={`flex gap-3 ${isHighlighted ? "border-l-2 border-primary bg-primary/5 pl-2 -ml-2" : ""}`}
+          >
+            {/* Spacer to align with avatar column */}
+            <div className="shrink-0" style={{ width: 32 }} />
+            <div className="flex-1 min-w-0">
+              <div
+                className="text-sm leading-relaxed rounded-xl px-3 py-2"
+                style={{ background: color.bg }}
+              >
+                <button
+                  className="text-xs text-muted-foreground hover:text-primary font-mono mr-2 transition-colors"
+                  title="Play from here"
+                  onClick={() => handleTimestampClick(seg.start_time)}
+                  disabled={!audioLocalPath}
+                >
+                  {formatTime(seg.start_time)}
+                </button>
+                {seg.text}
+              </div>
+            </div>
           </div>
-        </div>
         );
       })}
     </div>

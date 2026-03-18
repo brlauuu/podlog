@@ -5,9 +5,8 @@ import { AlertTriangle, Info } from "lucide-react";
 import pool from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import TranscriptView from "@/components/TranscriptView";
 import EpisodeDescription from "@/components/EpisodeDescription";
-import TranscriptExportButton from "@/components/TranscriptExportButton";
+import TranscriptSection from "@/components/TranscriptSection";
 import BackToSearchLink from "@/components/BackToSearchLink";
 
 export const dynamic = "force-dynamic";
@@ -195,28 +194,7 @@ export default async function EpisodePage({ params }: { params: { id: string } }
 
       <Separator />
 
-      {/* Transcript header with export */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Transcript</h2>
-        {segments.length > 0 && (
-          <TranscriptExportButton
-            episodeTitle={episode.title ?? "Untitled Episode"}
-            feedTitle={episode.feed_title}
-            publishedAt={episode.published_at}
-            durationSecs={episode.duration_secs}
-            description={episode.description}
-            feedUrl={episode.feed_url}
-            feedWebsiteUrl={episode.feed_website_url}
-            feedDescription={episode.feed_description}
-            audioUrl={episode.audio_url}
-            guid={episode.guid}
-            segments={segments}
-          />
-        )}
-      </div>
-
-      {/* Transcript — PRD-04 §8.1: inferred/confirmed badges on speaker labels */}
-      <TranscriptView
+      <TranscriptSection
         episodeId={episode.id}
         hasDiarization={episode.has_diarization}
         status={episode.status}
@@ -224,6 +202,14 @@ export default async function EpisodePage({ params }: { params: { id: string } }
         audioLocalPath={episode.audio_local_path}
         episodeTitle={episode.title}
         feedTitle={episode.feed_title}
+        publishedAt={episode.published_at}
+        durationSecs={episode.duration_secs}
+        description={episode.description}
+        feedUrl={episode.feed_url}
+        feedWebsiteUrl={episode.feed_website_url}
+        feedDescription={episode.feed_description}
+        audioUrl={episode.audio_url}
+        guid={episode.guid}
       />
     </div>
   );
