@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { RefreshCw, ChevronDown, ChevronRight, FlaskConical, LayoutList } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronRight, FlaskConical, LayoutList, Kanban } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +24,7 @@ interface Job {
   retry_max: number;
   feed_mode: string | null;
   feed_title: string | null;
+  updated_at?: string | null;
 }
 
 interface QueueState {
@@ -36,6 +37,7 @@ interface QueueState {
 }
 
 type GroupMode = "status" | "podcast" | "stage";
+type ViewStyle = "list" | "board";
 
 const GROUP_MODE_LABELS: Record<GroupMode, string> = {
   status: "By Status",
@@ -58,29 +60,99 @@ const STATUS_BADGE_VARIANT: Record<string, "default" | "secondary" | "destructiv
   downloading: "default",
   transcribing: "default",
   diarizing: "default",
+  inferring: "default",
   archiving: "default",
   done: "outline",
   failed: "destructive",
 };
 
-const STAGE_ORDER = ["pending", "downloading", "transcribing", "diarizing", "archiving", "failed"];
+/** Ordered stages for the Kanban board — per issue #44 */
+const STAGE_ORDER = ["pending", "downloading", "transcribing", "diarizing", "inferring", "archiving", "done", "failed"];
 
 const STAGE_LABELS: Record<string, string> = {
   pending: "Pending",
   downloading: "Downloading",
   transcribing: "Transcribing",
   diarizing: "Diarizing",
+  inferring: "Inferring",
   archiving: "Archiving",
+  done: "Done",
   failed: "Failed",
 };
 
+/** Status order for the "By Status" Kanban board — per issue #44 */
+const STATUS_ORDER = ["pending", "active", "done", "failed"];
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
+  active: "Active",
+  done: "Done",
+  failed: "Failed",
+};
+
+/** Subtle background colors for Kanban column headers */
+const COLUMN_COLORS: Record<string, string> = {
+  pending: "bg-slate-100 dark:bg-slate-800/50",
+  active: "bg-blue-50 dark:bg-blue-950/40",
+  downloading: "bg-sky-50 dark:bg-sky-950/40",
+  transcribing: "bg-indigo-50 dark:bg-indigo-950/40",
+  diarizing: "bg-violet-50 dark:bg-violet-950/40",
+  inferring: "bg-purple-50 dark:bg-purple-950/40",
+  archiving: "bg-teal-50 dark:bg-teal-950/40",
+  done: "bg-green-50 dark:bg-green-950/40",
+  failed: "bg-red-50 dark:bg-red-950/40",
+};
+
+const COLUMN_BORDER_COLORS: Record<string, string> = {
+  pending: "border-slate-200 dark:border-slate-700",
+  active: "border-blue-200 dark:border-blue-800",
+  downloading: "border-sky-200 dark:border-sky-800",
+  transcribing: "border-indigo-200 dark:border-indigo-800",
+  diarizing: "border-violet-200 dark:border-violet-800",
+  inferring: "border-purple-200 dark:border-purple-800",
+  archiving: "border-teal-200 dark:border-teal-800",
+  done: "border-green-200 dark:border-green-800",
+  failed: "border-red-200 dark:border-red-800",
+};
+
 const STORAGE_KEY = "podlog-queue-grouping";
+const VIEW_STYLE_KEY = "podlog-queue-view-style";
 
 function getStoredGroupMode(): GroupMode {
   if (typeof window === "undefined") return "status";
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === "status" || stored === "podcast" || stored === "stage") return stored;
   return "status";
+}
+
+function getStoredViewStyle(): ViewStyle {
+  if (typeof window === "undefined") return "list";
+  const stored = localStorage.getItem(VIEW_STYLE_KEY);
+  if (stored === "list" || stored === "board") return stored;
+  return "list";
+}
+
+/** Active statuses that should show a pulse animation on the board */
+const ACTIVE_STATUSES = new Set(["downloading", "transcribing", "diarizing", "inferring", "archiving"]);
+
+function isActiveJob(job: Job): boolean {
+  return ACTIVE_STATUSES.has(job.status);
+}
+
+/** Format relative time since a given ISO timestamp */
+function timeAgo(isoDate: string | null | undefined): string | null {
+  if (!isoDate) return null;
+  const then = new Date(isoDate).getTime();
+  if (isNaN(then)) return null;
+  const diffMs = Date.now() - then;
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}d ago`;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -161,6 +233,62 @@ function JobCard({ job, onRetry, showStatus }: { job: Job; onRetry: (taskId: str
   );
 }
 
+/** Compact card for the Kanban board view — per issue #44 */
+function BoardCard({ job, onRetry }: { job: Job; onRetry: (taskId: string) => void }) {
+  const canRetry = job.celery_task_id && !NON_RETRYABLE.includes(job.error_class ?? "");
+  const active = isActiveJob(job);
+  const elapsed = timeAgo(job.updated_at);
+
+  return (
+    <div
+      className={`rounded-lg border bg-card text-card-foreground p-2.5 space-y-1 transition-all ${
+        active ? "ring-1 ring-blue-400/50 dark:ring-blue-500/30 animate-pulse-subtle" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-1.5">
+        <p className="text-sm font-medium leading-tight line-clamp-2">
+          {job.title ?? job.episode_id}
+        </p>
+        {job.status === "failed" && (
+          <button
+            onClick={() => canRetry && job.celery_task_id && onRetry(job.celery_task_id)}
+            disabled={!canRetry}
+            title={!canRetry ? "Cannot retry — resolve the underlying issue first" : undefined}
+            className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+          >
+            Retry
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {job.feed_title && (
+          <span className="text-[11px] text-muted-foreground truncate max-w-[140px]">
+            {job.feed_title}
+          </span>
+        )}
+        {job.feed_mode === "test" && (
+          <Badge variant="outline" className="text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-0.5 text-[10px] px-1 py-0">
+            <FlaskConical size={8} />
+            Test
+          </Badge>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-1">
+        {job.error_class && (
+          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+            {ERROR_CLASS_LABELS[job.error_class] ?? job.error_class}
+          </Badge>
+        )}
+        {elapsed && (
+          <span className="text-[10px] text-muted-foreground ml-auto">{elapsed}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface CollapsibleGroupProps {
   label: string;
   count: number;
@@ -200,6 +328,73 @@ function CollapsibleGroup({ label, count, emptyMessage, jobs, onRetry, showStatu
   );
 }
 
+interface KanbanColumnProps {
+  columnKey: string;
+  label: string;
+  jobs: Job[];
+  onRetry: (taskId: string) => void;
+}
+
+/** Single Kanban column — per issue #44 */
+function KanbanColumn({ columnKey, label, jobs, onRetry }: KanbanColumnProps) {
+  const isEmpty = jobs.length === 0;
+  const bgColor = COLUMN_COLORS[columnKey] ?? "bg-muted/30";
+  const borderColor = COLUMN_BORDER_COLORS[columnKey] ?? "border-border";
+
+  return (
+    <div
+      className={`flex flex-col min-w-[220px] max-w-[280px] w-full rounded-lg border ${borderColor} ${
+        isEmpty ? "opacity-50" : ""
+      } snap-start`}
+    >
+      {/* Column header */}
+      <div className={`flex items-center justify-between px-3 py-2 rounded-t-lg ${bgColor}`}>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </h3>
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 min-w-[20px] justify-center">
+          {jobs.length}
+        </Badge>
+      </div>
+
+      {/* Cards */}
+      <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[60vh]">
+        {isEmpty ? (
+          <p className="text-xs text-muted-foreground text-center py-4">No episodes</p>
+        ) : (
+          jobs.map((job) => (
+            <BoardCard key={job.episode_id} job={job} onRetry={onRetry} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface KanbanBoardProps {
+  columns: { key: string; label: string; jobs: Job[] }[];
+  onRetry: (taskId: string) => void;
+}
+
+/** Kanban board layout with horizontal scroll — per issue #44 */
+function KanbanBoard({ columns, onRetry }: KanbanBoardProps) {
+  return (
+    <div className="overflow-x-auto -mx-4 px-4 pb-2 snap-x snap-mandatory lg:snap-none">
+      <div className="flex gap-3 min-w-min">
+        {columns.map((col) => (
+          <KanbanColumn
+            key={col.key}
+            columnKey={col.key}
+            label={col.label}
+            jobs={col.jobs}
+            onRetry={onRetry}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function getAllJobs(queue: QueueState): Job[] {
   return [...queue.active_jobs, ...queue.pending_jobs, ...queue.failed_jobs];
 }
@@ -218,7 +413,8 @@ function groupByPodcast(queue: QueueState): { label: string; jobs: Job[] }[] {
     .map(([label, jobs]) => ({ label, jobs }));
 }
 
-function groupByStage(queue: QueueState): { label: string; jobs: Job[] }[] {
+/** Group jobs by processing stage — returns all stages (including empty) for board view */
+function groupByStage(queue: QueueState, includeEmpty: boolean): { key: string; label: string; jobs: Job[] }[] {
   const all = getAllJobs(queue);
   const groups = new Map<string, Job[]>();
   for (const stage of STAGE_ORDER) {
@@ -229,25 +425,62 @@ function groupByStage(queue: QueueState): { label: string; jobs: Job[] }[] {
     groups.get(stage)!.push(job);
   }
   return STAGE_ORDER
-    .filter((stage) => groups.get(stage)!.length > 0)
-    .map((stage) => ({ label: STAGE_LABELS[stage], jobs: groups.get(stage)! }));
+    .filter((stage) => includeEmpty || groups.get(stage)!.length > 0)
+    .map((stage) => ({ key: stage, label: STAGE_LABELS[stage], jobs: groups.get(stage)! }));
+}
+
+/** Group jobs by status (active/pending/done/failed) — returns all statuses for board view */
+function groupByStatus(queue: QueueState): { key: string; label: string; jobs: Job[] }[] {
+  const statusMap: Record<string, Job[]> = {
+    pending: [...queue.pending_jobs],
+    active: [...queue.active_jobs],
+    done: [],
+    failed: [...queue.failed_jobs],
+  };
+
+  // Active jobs that are "done" should be in the done column; active_jobs from the API
+  // represent currently processing jobs, so they stay in "active".
+  // Done jobs are not returned by the queue API (they've completed), so the column
+  // will typically be empty but we show it to convey the pipeline shape.
+
+  return STATUS_ORDER.map((status) => ({
+    key: status,
+    label: STATUS_LABELS[status],
+    jobs: statusMap[status] ?? [],
+  }));
 }
 
 /**
  * Queue dashboard component — PRD-02 §5.6
  * Polls /api/queue every 5s and /api/health for warm-up state.
  * Supports grouping by status, podcast, or processing stage.
+ * Supports list and Kanban board view styles — per issue #44.
  */
 export default function QueueStatus() {
   const [queue, setQueue] = useState<QueueState | null>(null);
   const [workerStatus, setWorkerStatus] = useState<string>("OK");
   const [groupMode, setGroupMode] = useState<GroupMode>(getStoredGroupMode);
+  const [viewStyle, setViewStyle] = useState<ViewStyle>(getStoredViewStyle);
 
   const handleGroupChange = useCallback((value: string) => {
     const mode = value as GroupMode;
     setGroupMode(mode);
     localStorage.setItem(STORAGE_KEY, mode);
   }, []);
+
+  const handleViewStyleToggle = useCallback(() => {
+    setViewStyle((prev) => {
+      const next = prev === "list" ? "board" : "list";
+      localStorage.setItem(VIEW_STYLE_KEY, next);
+      return next;
+    });
+  }, []);
+
+  /** Board view is available for status and stage groupings, not podcast */
+  const boardAvailable = groupMode !== "podcast";
+
+  /** Effective view style — force list for podcast grouping */
+  const effectiveView = boardAvailable ? viewStyle : "list";
 
   useEffect(() => {
     async function fetchAll() {
@@ -273,7 +506,9 @@ export default function QueueStatus() {
   }
 
   const podcastGroups = useMemo(() => queue ? groupByPodcast(queue) : [], [queue]);
-  const stageGroups = useMemo(() => queue ? groupByStage(queue) : [], [queue]);
+  const stageGroupsForList = useMemo(() => queue ? groupByStage(queue, false) : [], [queue]);
+  const stageColumnsForBoard = useMemo(() => queue ? groupByStage(queue, true) : [], [queue]);
+  const statusColumnsForBoard = useMemo(() => queue ? groupByStatus(queue) : [], [queue]);
 
   if (!queue) {
     return (
@@ -290,8 +525,20 @@ export default function QueueStatus() {
 
   return (
     <div className="space-y-6">
-      {/* Grouping selector */}
-      <div className="flex items-center justify-end">
+      {/* Toolbar: grouping selector + view style toggle */}
+      <div className="flex items-center justify-end gap-2">
+        {/* View style toggle — per issue #44 */}
+        {boardAvailable && (
+          <button
+            onClick={handleViewStyleToggle}
+            title={effectiveView === "list" ? "Switch to board view" : "Switch to list view"}
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border bg-background hover:bg-accent transition-colors"
+          >
+            {effectiveView === "list" ? <Kanban size={14} /> : <LayoutList size={14} />}
+            {effectiveView === "list" ? "Board" : "List"}
+          </button>
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border bg-background hover:bg-accent transition-colors">
@@ -322,8 +569,18 @@ export default function QueueStatus() {
         </Card>
       )}
 
-      {/* Group by Status (default — matches original behavior) */}
-      {groupMode === "status" && (
+      {/* Board view: Status grouping — per issue #44 */}
+      {groupMode === "status" && effectiveView === "board" && (
+        <KanbanBoard columns={statusColumnsForBoard} onRetry={handleRetry} />
+      )}
+
+      {/* Board view: Stage grouping — per issue #44 */}
+      {groupMode === "stage" && effectiveView === "board" && (
+        <KanbanBoard columns={stageColumnsForBoard} onRetry={handleRetry} />
+      )}
+
+      {/* List view: Group by Status (default — matches original behavior) */}
+      {groupMode === "status" && effectiveView === "list" && (
         <>
           <CollapsibleGroup
             label="Active"
@@ -349,7 +606,7 @@ export default function QueueStatus() {
         </>
       )}
 
-      {/* Group by Podcast */}
+      {/* List view: Group by Podcast (always list — per issue #44) */}
       {groupMode === "podcast" && (
         podcastGroups.length === 0 ? (
           <p className="text-sm text-muted-foreground">No jobs in queue</p>
@@ -368,12 +625,12 @@ export default function QueueStatus() {
         )
       )}
 
-      {/* Group by Processing Stage */}
-      {groupMode === "stage" && (
-        stageGroups.length === 0 ? (
+      {/* List view: Group by Processing Stage */}
+      {groupMode === "stage" && effectiveView === "list" && (
+        stageGroupsForList.length === 0 ? (
           <p className="text-sm text-muted-foreground">No jobs in queue</p>
         ) : (
-          stageGroups.map((group) => (
+          stageGroupsForList.map((group) => (
             <CollapsibleGroup
               key={group.label}
               label={group.label}
