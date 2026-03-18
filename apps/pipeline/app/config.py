@@ -36,7 +36,7 @@ class Settings(BaseSettings):
 
     # Host/guest inference (PRD-04 §9)
     inference_enabled: bool = True
-    spacy_model: str = "en_core_web_trf"
+    spacy_model: str = "en_core_web_lg"
 
     @property
     def audio_raw_dir(self) -> str:
