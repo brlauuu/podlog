@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-02 — Search Web Application  
-**Version:** 1.2
+**Version:** 1.3
 **Status:** Draft
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.3 — Queue dashboard (§5.6) redesigned: replaced kanban/grouping modes with a Summary + Table hybrid layout. Worker warm-up banner removed (brief warm-up does not warrant persistent UI). Retry countdown timer removed; retry count shown as N/M instead. Stage progress bar added (horizontal bar showing per-stage episode counts). Search/filter input added (debounced, filters by episode title or podcast name). Done episodes collapsed by default in an expandable section. Responsiveness: Podcast and Retries columns hidden on screens narrower than 640 px. ASCII diagram in §9.3 updated to match new layout.
 - v1.2 — Renamed project from PodSearch to Podlog. localStorage key changed to `podlog-theme`. Added `/feeds` page separate from `/podcasts` for feed management. Added `QueryProvider` wrapper in root layout for React Query. Web API routes proxy to pipeline API for feed management, queue retries, and health checks. Database name changed to `podlog`.
 - v1.1 — Dark mode added (OQ-04 resolved), persistent audio player added (OQ-03 resolved), search result grouping deferred to V1 (OQ-01 resolved), pagination count query specified (gap resolved), path traversal mitigation for audio serving added (gap resolved), diarization failure surfaced in all three UI locations, queue dashboard updated with retry state and error classification display, model warm-up banner added.
 
@@ -131,19 +132,45 @@ The backend serves archived audio files via a Next.js API route: `GET /api/audio
 
 ### 5.6 Queue Dashboard
 
-- `/queue` — shows current job queue state: active job (with live progress bar), pending jobs (count and list), failed jobs (with error message and retry button).
-- Progress for the active job is fetched by polling `GET /api/queue` every 5 seconds.
-- **Worker warm-up banner:** When `GET /api/health` returns `{ status: "WARMING_UP" }`, the queue page displays a top banner: *"Worker is initializing — downloading models (~3 GB). Jobs will begin processing once complete."* The banner dismisses automatically when warm-up finishes.
-- **Retry state display:** When a job is in auto-retry, the active job card shows: `"Retrying (2/3) — HTTP 403 — Next attempt in 2m"`. The progress bar is replaced with a retry countdown during the backoff period.
-- **Error classification display:** Failed jobs display their `error_class` as a human-readable label:
+`/queue` uses a **Summary + Table hybrid layout**. The page is divided into two areas:
+
+1. **Summary strip** — a horizontal stage progress bar at the top showing per-stage episode counts (Pending / Downloading / Transcribing / Diarizing / Done / Failed). Each stage is a labelled segment proportional to its count. This gives an at-a-glance view of pipeline throughput without requiring the user to scroll the table.
+
+2. **Episode table** — a flat table of all in-progress and recently completed episodes, one row per episode. Columns are:
+
+   | Column | Visibility |
+   |--------|-----------|
+   | Episode title | Always |
+   | Podcast name | Hidden on <640 px |
+   | Stage | Always |
+   | Status / progress | Always |
+   | Retries | Hidden on <640 px |
+   | Actions | Always |
+
+Queue data is fetched by polling `GET /api/queue` every 5 seconds via React Query.
+
+**Search / filter input:** A debounced text input at the top of the table filters rows by episode title or podcast name. Filtering is client-side (no additional API call); it operates on the already-fetched queue payload.
+
+**Stage and status display:** Each row shows the current pipeline stage (e.g. "Downloading", "Transcribing") and a status badge. For the actively processing episode, a live progress bar replaces the status badge.
+
+**Retry count display:** When a job has been retried, the Retries column shows `N/3` (e.g. `2/3`). There is no countdown timer — retries happen in the background and the table refreshes automatically on the next poll.
+
+**Error classification display:** Failed jobs display their `error_class` as a human-readable label in the Status column:
   - `TRANSIENT_NETWORK` → "Network error"
   - `HTTP_ACCESS` → "Access error (HTTP NNN)"
   - `DISK_FULL` → "Disk full — free space and retry"
   - `OOM` → "Out of memory — check hardware requirements"
   - `SYSTEM_ERROR` → "Unexpected error"
-- Failed jobs show a collapsible error detail panel with the full traceback.
-- A "Retry" button on failed jobs calls `POST /api/queue/{task_id}/retry`. The button is disabled (greyed out with tooltip "Cannot retry — resolve the underlying issue first") for `DISK_FULL` and `OOM` errors, since these require user action before retrying.
-- A "Retry" button is shown for `TRANSIENT_NETWORK`, `HTTP_ACCESS`, and `SYSTEM_ERROR` failures.
+
+Failed jobs show a collapsible error detail panel with the full traceback (toggled by a chevron in the row).
+
+**Retry action:** A "Retry" button in the Actions column calls `POST /api/queue/{task_id}/retry`. The button is disabled (greyed out with tooltip "Cannot retry — resolve the underlying issue first") for `DISK_FULL` and `OOM` errors since these require manual intervention. A Retry button is shown for `TRANSIENT_NETWORK`, `HTTP_ACCESS`, and `SYSTEM_ERROR` failures.
+
+**Done episodes:** Completed episodes are collapsed into an expandable "Done (N)" disclosure section at the bottom of the table. Expanding it reveals the full list sorted by completion time descending.
+
+**Removed from earlier design:**
+- Worker warm-up banner — model warm-up is brief and does not warrant a persistent UI element.
+- Retry countdown timer — replaced by the N/M retry count display; the countdown added visual noise with minimal user value.
 
 ### 5.7 Persistent Audio Player
 
@@ -308,33 +335,30 @@ Top navigation bar (fixed):
 ┌─────────────────────────────────────────────────────────┐
 │  Queue                                                   │
 ├─────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ 🔄 Worker is initializing — downloading models  │   │
-│  │    (~3 GB). Jobs will begin processing once     │   │
-│  │    complete.                                    │   │
-│  └─────────────────────────────────────────────────┘   │
+│  Stage progress                                         │
+│  Pending      Downloading  Transcribing  Done   Failed  │
+│  ████░░░░░░░░░████░░░░░░░░░███░░░░░░░░░░████░░░░██░░░░  │
+│    3               2            1          8      2     │
+├─────────────────────────────────────────────────────────┤
+│  🔍 Filter by title or podcast...                       │
+├─────────────────────────────────────────────────────────┤
+│  Episode              Stage        Status      Actions  │
+│  ─────────────────────────────────────────────────────  │
+│  Lex Fridman #402     Transcribing ████████░░  [—]      │
+│  (Lex Fridman)                     62%                  │
 │                                                         │
-│  ● Active                                               │
-│  Lex Fridman #402 — Retrying (2/3) — HTTP 403           │
-│  Next attempt in 1m 48s                                 │
+│  Huberman Lab #189    Pending      Queued       [—]     │
+│  Huberman Lab #188    Pending      Queued       [—]     │
+│  Tim Ferriss #713     Pending      Queued       [—]     │
 │                                                         │
-│  ● Active (after retry)                                 │
-│  Lex Fridman #402 — Transcribing...                     │
-│  ████████████░░░░░░░░  62%                              │
+│  Hard Fork #95        Failed       Access error [Retry] │
+│  (Hard Fork)                       (HTTP 403)   ▼       │
+│  └ Traceback: HTTPError 403 ...                         │
 │                                                         │
-│  ⏳ Pending  (3)                                        │
-│  Huberman Lab #189                                      │
-│  Huberman Lab #188                                      │
-│  The Tim Ferriss Show #713                              │
+│  My Podcast #12       Failed       Disk full    [Retry⊘]│
+│  (My Podcast)                                   ▼       │
 │                                                         │
-│  ✗ Failed  (2)                                          │
-│  Hard Fork #95  [Retry]                                 │
-│  Access error (HTTP 403)                                │
-│  ▼ Error detail...                                      │
-│                                                         │
-│  My Podcast #12  [Retry disabled ⓘ]                    │
-│  Disk full — free space and retry                       │
-│  ▼ Error detail...                                      │
+│  ▶ Done (8)                                             │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -455,8 +479,7 @@ const { playEpisode } = useAudioPlayer();
 - Diarization failure badge/banner in search results, episode list, and episode page
 - Speaker label renaming per episode
 - Feed management (add/remove, poll now)
-- Queue dashboard (status, progress, retry, error classification, retry countdown)
-- Worker warm-up banner
+- Queue dashboard (summary strip, table view, search filter, retry N/M, error classification, done section collapsed)
 - Dark mode (Tailwind `class` strategy, `localStorage` persistence)
 - Responsive layout (mobile + desktop)
 - Path-safe audio file serving
