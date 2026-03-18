@@ -75,7 +75,7 @@ def infer_speakers(self, episode_id: str) -> str:
                 unload_spacy_model()
 
             if not candidates:
-                # No names found — still remap speaker slots by speaking time
+                # No names found — still remap speaker slots by first appearance
                 segments = (
                     db.query(Segment)
                     .filter(Segment.episode_id == episode_id)
@@ -97,7 +97,7 @@ def infer_speakers(self, episode_id: str) -> str:
                     candidates, episode.description, feed_title, feed_description
                 )
 
-                # Step 3: remap speaker labels by speaking time
+                # Step 3: remap speaker labels by first appearance
                 segments = (
                     db.query(Segment)
                     .filter(Segment.episode_id == episode_id)
