@@ -38,16 +38,29 @@ Set `task_default_queue = "light"` as a safety net so any unrouted tasks (includ
 ### Docker Compose Changes
 
 **Modify existing `worker` service:**
-- Add `-Q heavy` to the Celery command so it only consumes the `heavy` queue
-- Keep prewarm step (loads Whisper/pyannote models)
-- Keep `concurrency=1`
+
+Current command:
+```
+sh -c "python -m app.tasks.prewarm && celery -A app.tasks.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
+```
+
+Updated command (add `-Q heavy`):
+```
+sh -c "python -m app.tasks.prewarm && celery -A app.tasks.celery_app worker -Q heavy --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
+```
 
 **Add `worker-light` service:**
 - Same image as `worker` (same `build: ./apps/pipeline`)
-- Command: `celery -A app.tasks.celery_app worker -Q light --loglevel=info --concurrency=3`
 - No prewarm step needed (no heavy models to load)
 - Same env vars and dependencies as `worker`
 - Depends on: db (healthy), redis (healthy), pipeline (healthy)
+
+Command:
+```
+celery -A app.tasks.celery_app worker -Q light --loglevel=info --concurrency=${CELERY_LIGHT_CONCURRENCY:-3}
+```
+
+**Note on `worker_concurrency` in `celery_app.py`:** The app-level config sets `worker_concurrency` from `settings.celery_concurrency` (default 1). The CLI `--concurrency` flag overrides this at worker startup. The light worker's `--concurrency=3` (or `${CELERY_LIGHT_CONCURRENCY:-3}`) takes precedence over the app-level setting. No change to `celery_app.py`'s concurrency config is needed.
 
 ### Cross-Queue Handoffs
 
@@ -59,6 +72,12 @@ Both use `.delay()` which respects `task_routes` and dispatches to the correct q
 
 **Failure mode:** If `worker-light` is down, tasks dispatched to the `light` queue will accumulate in Redis until it recovers. Episodes will appear stuck in their current stage. The `cleanup_zombie_jobs` task (which itself runs on `light`) cannot catch these since it's also on the down worker. This is acceptable — if a worker is down, manual intervention is expected. Both workers start independently and tasks are queue-buffered, so brief startup ordering differences are harmless.
 
+### Celery Config Notes
+
+**`worker_prefetch_multiplier`:** Currently set to 1 globally in `celery_app.py`. This remains appropriate for both workers. For the heavy worker (concurrency=1), it prevents a second long-running task from being prefetched and hitting visibility timeout. For the light worker (concurrency=3), each process prefetches 1 task, meaning up to 3 tasks buffered — adequate since light tasks complete quickly and the queue is always nearby in Redis.
+
+**`visibility_timeout`:** Currently 7200s (2 hours) globally. This was sized for heavy transcription/diarization jobs. It's acceptable for both queues — light tasks complete well within this window, and per-queue visibility timeouts are not supported by Celery's Redis broker.
+
 ### What Doesn't Change
 
 - Task code — no modifications to any task files. Routing is config-only.
@@ -68,4 +87,4 @@ Both use `.delay()` which respects `task_routes` and dispatches to the correct q
 
 ### Environment Variables
 
-Add `CELERY_LIGHT_CONCURRENCY` to `.env.example` with default of 3. The existing `CELERY_CONCURRENCY` (default 1) continues to control the heavy worker.
+Add `CELERY_LIGHT_CONCURRENCY` to `.env.example` with default of 3. This var is consumed only in `docker-compose.yml` (as `${CELERY_LIGHT_CONCURRENCY:-3}` in the `worker-light` command), not via `config.py`. This differs from `CELERY_CONCURRENCY` which flows through `config.py` into the app-level Celery config — but since the CLI `--concurrency` flag overrides the app setting anyway, both approaches are equivalent. The existing `CELERY_CONCURRENCY` (default 1) continues to control the heavy worker.
