@@ -1,8 +1,8 @@
 """Tests for the queue API response structure."""
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from app.api.queue import ACTIVE_STATUSES, QueueStateResponse, _job_dict
+from app.api.queue import ACTIVE_STATUSES, NON_RETRYABLE, QueueStateResponse, _job_dict, retry_job
 
 
 def _make_episode(status, **kwargs):
@@ -42,3 +42,44 @@ class TestGetQueue:
         schema = QueueStateResponse.model_json_schema()
         assert "done_count" in schema["properties"]
         assert "done_jobs" in schema["properties"]
+
+
+class TestRetryJob:
+    """Tests for the retry endpoint guard logic (issue #46)."""
+
+    def _call_retry(self, episode):
+        """Call retry_job with a mocked DB that returns the given episode."""
+        import pytest
+        from fastapi import HTTPException
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = episode
+        try:
+            with patch("app.api.queue.ingest_episode") as mock_ingest:
+                mock_ingest.delay.return_value = MagicMock(id="new-task-id")
+                return retry_job("task-1", db=db)
+        except HTTPException as exc:
+            return exc
+
+    def test_retry_failed_episode_succeeds(self):
+        ep = _make_episode("failed", error_class="TRANSIENT_NETWORK")
+        result = self._call_retry(ep)
+        assert result["queued"] is True
+
+    def test_retry_stalled_episode_with_error_class_succeeds(self):
+        """Stalled jobs with error_class set should be retryable (issue #46)."""
+        ep = _make_episode("diarizing", error_class="SYSTEM_ERROR", error_message="Worker killed")
+        result = self._call_retry(ep)
+        assert result["queued"] is True
+
+    def test_retry_active_episode_without_error_rejected(self):
+        """Active jobs without an error should not be retryable."""
+        ep = _make_episode("diarizing", error_class=None)
+        result = self._call_retry(ep)
+        assert result.status_code == 409
+
+    def test_retry_non_retryable_error_rejected(self):
+        """Jobs with DISK_FULL or OOM should not be retryable."""
+        ep = _make_episode("failed", error_class="DISK_FULL")
+        result = self._call_retry(ep)
+        assert result.status_code == 422
