@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Search, List, Layers } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import SearchResult from "@/components/SearchResult";
@@ -14,12 +15,38 @@ const PAGE_SIZE = 20;
 
 type ViewMode = "grouped" | "flat";
 
+/**
+ * Wrapper that provides the required Suspense boundary for useSearchParams().
+ * See https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+ */
 export default function HomePage() {
-  const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
+  return (
+    <Suspense fallback={null}>
+      <HomePageContent />
+    </Suspense>
+  );
+}
+
+function HomePageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const initialQuery = searchParams.get("q") ?? "";
+
+  const [query, setQuery] = useState(initialQuery);
+  const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
   const [feedFilter, setFeedFilter] = useState<string>("");
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>("grouped");
+
+  // Sync state when URL ?q= param changes (e.g. browser back/forward)
+  useEffect(() => {
+    const urlQuery = searchParams.get("q") ?? "";
+    if (urlQuery !== submittedQuery) {
+      setQuery(urlQuery);
+      setSubmittedQuery(urlQuery);
+      setPage(1);
+    }
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Flat search query
   const flatQuery = useQuery<SearchPage>({
@@ -62,8 +89,15 @@ export default function HomePage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const trimmed = query.trim();
     setPage(1);
-    setSubmittedQuery(query.trim());
+    setSubmittedQuery(trimmed);
+    // Update URL so the search query is bookmarkable and restorable via back-navigation
+    if (trimmed) {
+      router.replace(`/?q=${encodeURIComponent(trimmed)}`, { scroll: false });
+    } else {
+      router.replace("/", { scroll: false });
+    }
   }
 
   const isLoading =
@@ -187,7 +221,7 @@ export default function HomePage() {
               <>
                 <div className="space-y-3">
                   {flatQuery.data.results.map((result) => (
-                    <SearchResult key={result.id} result={result} />
+                    <SearchResult key={result.id} result={result} query={submittedQuery} />
                   ))}
                 </div>
 

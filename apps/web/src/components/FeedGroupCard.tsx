@@ -18,6 +18,7 @@ export default function FeedGroupCard({ feed, query }: Props) {
   const [expandedEpisodes, setExpandedEpisodes] = useState<Set<string>>(
     new Set()
   );
+  const queryParam = query ? `?q=${encodeURIComponent(query)}` : "";
 
   function toggleEpisode(episodeId: string) {
     setExpandedEpisodes((prev) => {
@@ -88,7 +89,7 @@ export default function FeedGroupCard({ feed, query }: Props) {
                     {episode.mentionCount !== 1 ? "s" : ""}
                   </span>
                   <Link
-                    href={`/episodes/${episode.episodeId}`}
+                    href={`/episodes/${episode.episodeId}${queryParam}`}
                     title="Go to episode"
                     className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-3 py-2.5 shrink-0 transition-colors"
                     onClick={(e) => e.stopPropagation()}

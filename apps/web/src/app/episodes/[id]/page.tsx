@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Info } from "lucide-react";
@@ -7,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import TranscriptView from "@/components/TranscriptView";
 import EpisodeDescription from "@/components/EpisodeDescription";
 import TranscriptExportButton from "@/components/TranscriptExportButton";
+import BackToSearchLink from "@/components/BackToSearchLink";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +94,9 @@ export default async function EpisodePage({ params }: { params: { id: string } }
     <div className="space-y-6">
       {/* Header */}
       <div>
+        <Suspense fallback={null}>
+          <BackToSearchLink />
+        </Suspense>
         {episode.feed_id && (
           <Link
             href={`/podcasts/${episode.feed_id}`}
