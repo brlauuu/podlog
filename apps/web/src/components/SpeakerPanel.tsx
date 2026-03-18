@@ -48,7 +48,7 @@ function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
       });
     }
   }
-  return [...map.values()].sort(
+  return Array.from(map.values()).sort(
     (a, b) => getSpeakerSlot(a.speakerLabel) - getSpeakerSlot(b.speakerLabel)
   );
 }
