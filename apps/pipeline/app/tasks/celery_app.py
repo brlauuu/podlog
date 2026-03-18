@@ -29,4 +29,11 @@ celery_app.conf.update(
     result_expires=604800,
     # Store custom state metadata (stage, progress, retry_count)
     task_track_started=True,
+    # Prevent Redis from redelivering long-running tasks (transcription/diarization
+    # can take 30-60+ min on CPU). Default visibility_timeout is 1h which causes
+    # duplicate task execution and starves downstream tasks like diarization.
+    broker_transport_options={"visibility_timeout": 7200},  # 2 hours
+    # Only prefetch one task at a time — with concurrency=1, prefetched messages
+    # would sit idle and hit the visibility timeout, triggering redelivery.
+    worker_prefetch_multiplier=1,
 )

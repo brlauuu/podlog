@@ -39,6 +39,7 @@ torch = "^2.2.0"
 
 # ML — pyannote diarization (>=4.0 required by whisperx)
 pyannote-audio = ">=3.1.0"
+soundfile = ">=0.12.0"  # Audio backend for pyannote (fallback when torchcodec unavailable)
 
 # ML — spaCy NER for host/guest inference (PRD-04)
 spacy = "^3.7"

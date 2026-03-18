@@ -67,6 +67,10 @@ def diarize_episode(self, episode_id: str) -> str:
                 episode_id,
                 str(exc),
             )
+        finally:
+            # MANDATORY: unload pyannote before next episode's Whisper can load (PRD-01 §5.4)
+            from app.services.pyannote import unload_pipeline
+            unload_pipeline()
 
         # PRD-04 §4.6: inference runs after diarization, before archival
         from app.tasks.infer import infer_speakers

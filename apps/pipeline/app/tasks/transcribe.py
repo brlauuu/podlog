@@ -32,6 +32,14 @@ def transcribe_episode(self, episode_id: str) -> str:
         if not episode or not episode.audio_local_path:
             raise RuntimeError(f"Episode {episode_id} not found or missing audio path")
 
+        # Idempotency guard: skip if already transcribed (redelivered message)
+        if episode.status in ("diarizing", "inferring", "archiving", "done"):
+            logger.info(
+                '"action": "transcribe_skip_already_done", "episode_id": "%s", "status": "%s"',
+                episode_id, episode.status,
+            )
+            return episode_id
+
         db.query(Episode).filter(Episode.id == episode_id).update({"status": "transcribing"})
         db.commit()
 
