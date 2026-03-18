@@ -19,6 +19,7 @@ node_modules/
 .next/
 out/
 *.tsbuildinfo
+next-env.d.ts
 apps/web/.next/
 apps/web/node_modules/
 
