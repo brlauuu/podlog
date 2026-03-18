@@ -274,40 +274,33 @@ def assign_speaker_slots(
     segments: list[dict],
 ) -> dict[str, str]:
     """
-    Remap pyannote speaker labels so SPEAKER_00 = most speaking time (host).
+    Remap pyannote speaker labels so SPEAKER_00 = first speaker (host).
     Returns a mapping of {old_label: new_label}.
 
-    Per PRD-04 §4.5: remapping always applies (even without host inference)
-    to ensure SPEAKER_00 is consistently the highest-speaking-time speaker.
+    Speakers are numbered by order of first appearance: the first person
+    to speak is SPEAKER_00 (host), others get SPEAKER_01, SPEAKER_02, etc.
     """
     if not segments:
         return {}
 
-    # Calculate total speaking time per speaker
-    speaking_time: dict[str, float] = {}
+    # Track first appearance of each speaker
     first_appearance: dict[str, float] = {}
     for seg in segments:
         label = seg.get("speaker_label")
         if not label:
             continue
-        duration = seg["end_time"] - seg["start_time"]
-        speaking_time[label] = speaking_time.get(label, 0.0) + duration
         if label not in first_appearance:
             first_appearance[label] = seg["start_time"]
 
-    if not speaking_time:
+    if not first_appearance:
         return {}
 
-    # Sort by speaking time descending — most talkative speaker becomes SPEAKER_00
-    sorted_speakers = sorted(speaking_time.keys(), key=lambda s: speaking_time[s], reverse=True)
+    # Sort by first appearance — first speaker becomes SPEAKER_00 (host)
+    sorted_speakers = sorted(first_appearance.keys(), key=lambda s: first_appearance[s])
 
-    # Guest speakers (non-host) sorted by first appearance
-    host_old_label = sorted_speakers[0]
-    guest_old_labels = sorted(sorted_speakers[1:], key=lambda s: first_appearance[s])
-
-    label_map: dict[str, str] = {host_old_label: "SPEAKER_00"}
-    for i, old_label in enumerate(guest_old_labels):
-        label_map[old_label] = f"SPEAKER_{i + 1:02d}"
+    label_map: dict[str, str] = {}
+    for i, old_label in enumerate(sorted_speakers):
+        label_map[old_label] = f"SPEAKER_{i:02d}"
 
     return label_map
 
