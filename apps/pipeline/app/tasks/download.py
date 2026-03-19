@@ -156,8 +156,9 @@ def _download_file(url: str, dest: Path, episode_id: str, db) -> None:
                 downloaded += len(chunk)
                 if total > 0:
                     pct = int(downloaded * 100 / total)
+                    from datetime import datetime, timezone
                     db.query(Episode).filter(Episode.id == episode_id).update(
-                        {"status": f"downloading:{pct}"}
+                        {"status": f"downloading:{pct}", "updated_at": datetime.now(timezone.utc)}
                     )
                     # Don't commit every chunk — commit in batches
                     if pct % 10 == 0:

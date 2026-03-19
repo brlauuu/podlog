@@ -11,6 +11,7 @@ Diarization task — PRD-01 §5.5
 import json
 import logging
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.config import settings
@@ -48,7 +49,8 @@ def diarize_episode(self, episode_id: str) -> str:
 
             diarize_secs = round(time.monotonic() - t0, 1)
             db.query(Episode).filter(Episode.id == episode_id).update(
-                {"has_diarization": True, "diarization_error": None, "diarize_duration_secs": diarize_secs}
+                {"has_diarization": True, "diarization_error": None, "diarize_duration_secs": diarize_secs,
+                 "updated_at": datetime.now(timezone.utc)}
             )
             db.commit()
 
@@ -58,6 +60,7 @@ def diarize_episode(self, episode_id: str) -> str:
                 {
                     "has_diarization": False,
                     "diarization_error": str(exc),
+                    "updated_at": datetime.now(timezone.utc),
                     # Note: error_class is NOT set — this is not a job failure
                 }
             )
@@ -109,6 +112,15 @@ def _diarize_wordlevel(
         return
 
     rebuilt_segments = assign_speakers_wordlevel(aligned_segments, diarization_segments)
+
+    if not rebuilt_segments:
+        logger.warning(
+            '"action": "diarize_wordlevel_empty_result", "episode_id": "%s", '
+            '"reason": "word-level assignment produced 0 segments, falling back to segment-level"',
+            episode_id,
+        )
+        _diarize_segment_level(db, episode_id, diarization_segments)
+        return
 
     # Replace existing segments with rebuilt ones
     db.query(Segment).filter(Segment.episode_id == episode_id).delete()

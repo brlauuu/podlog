@@ -14,6 +14,8 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment, SpeakerName
 
+_now = lambda: datetime.now(timezone.utc)  # noqa: E731
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,7 +30,9 @@ def archive_episode(self, episode_id: str) -> str:
         if not episode:
             raise RuntimeError(f"Episode {episode_id} not found")
 
-        db.query(Episode).filter(Episode.id == episode_id).update({"status": "archiving"})
+        db.query(Episode).filter(Episode.id == episode_id).update(
+            {"status": "archiving", "updated_at": _now()}
+        )
         db.commit()
 
         raw_path = Path(episode.audio_local_path) if episode.audio_local_path else None
@@ -46,6 +50,7 @@ def archive_episode(self, episode_id: str) -> str:
                             "status": "failed",
                             "error_class": "DISK_FULL",
                             "error_message": "Disk full during archival. Free space and retry.",
+                            "updated_at": _now(),
                         }
                     )
                     db.commit()
@@ -70,6 +75,20 @@ def archive_episode(self, episode_id: str) -> str:
             .all()
         )
         name_map = {sn.speaker_label: sn for sn in speaker_names}
+
+        if not segments:
+            db.query(Episode).filter(Episode.id == episode_id).update(
+                {
+                    "status": "failed",
+                    "error_class": "SYSTEM_ERROR",
+                    "error_message": "No transcript segments found at archival — cannot mark done.",
+                    "updated_at": _now(),
+                }
+            )
+            db.commit()
+            logger.error('"action": "archive_no_segments", "episode_id": "%s"', episode_id)
+            return episode_id
+
         transcript_path = _write_transcript(episode, segments, name_map)
 
         db.query(Episode).filter(Episode.id == episode_id).update(
@@ -77,7 +96,8 @@ def archive_episode(self, episode_id: str) -> str:
                 "status": "done",
                 "audio_local_path": str(archived_path) if archived_path else None,
                 "transcript_path": transcript_path,
-                "processed_at": datetime.now(timezone.utc),
+                "processed_at": _now(),
+                "updated_at": _now(),
             }
         )
         db.commit()

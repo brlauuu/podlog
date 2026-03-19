@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.config import settings
@@ -40,7 +41,9 @@ def transcribe_episode(self, episode_id: str) -> str:
             )
             return episode_id
 
-        db.query(Episode).filter(Episode.id == episode_id).update({"status": "transcribing"})
+        db.query(Episode).filter(Episode.id == episode_id).update(
+            {"status": "transcribing", "updated_at": datetime.now(timezone.utc)}
+        )
         db.commit()
 
         audio_path = Path(episode.audio_local_path)
@@ -63,7 +66,7 @@ def transcribe_episode(self, episode_id: str) -> str:
             )
             transcribe_secs = round(time.monotonic() - t0, 1)
             db.query(Episode).filter(Episode.id == episode_id).update(
-                {"transcribe_duration_secs": transcribe_secs}
+                {"transcribe_duration_secs": transcribe_secs, "updated_at": datetime.now(timezone.utc)}
             )
             db.commit()
         except MemoryError as exc:
@@ -105,7 +108,7 @@ def transcribe_episode(self, episode_id: str) -> str:
             )
 
         db.query(Episode).filter(Episode.id == episode_id).update(
-            {"language": language, "status": "diarizing"}
+            {"language": language, "status": "diarizing", "updated_at": datetime.now(timezone.utc)}
         )
         db.commit()
 
@@ -152,7 +155,8 @@ def _unload_whisper() -> None:
 
 def _mark_failed(db, episode_id: str, error_class: str, error_message: str) -> None:
     db.query(Episode).filter(Episode.id == episode_id).update(
-        {"status": "failed", "error_class": error_class, "error_message": error_message}
+        {"status": "failed", "error_class": error_class, "error_message": error_message,
+         "updated_at": datetime.now(timezone.utc)}
     )
     db.commit()
     logger.error(
