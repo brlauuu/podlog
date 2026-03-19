@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { SearchResult, GroupedSearchResult } from "@/lib/search";
+import { formatTimestamp } from "@/lib/timestamp";
 
 type ExportFormat = "csv" | "json" | "markdown";
 
@@ -24,16 +25,6 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "");
 }
 
-/** Format seconds as H:MM:SS or MM:SS. */
-function fmtTime(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = Math.floor(secs % 60);
-  if (h > 0) {
-    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
 
 /** Escape a field for CSV: wrap in quotes if it contains comma, quote, or newline. */
 function csvEscape(value: string): string {
@@ -57,7 +48,7 @@ function generateCsv(
       rows.push([
         r.feedTitle ?? "",
         r.episodeTitle ?? "",
-        fmtTime(r.startTime),
+        formatTimestamp(r.startTime),
         r.speakerDisplay ?? r.speakerLabel ?? "",
         stripHtml(r.snippet),
       ]);
@@ -95,7 +86,7 @@ function generateJson(
       podcast: r.feedTitle,
       episode: r.episodeTitle,
       episodeId: r.episodeId,
-      timestamp: fmtTime(r.startTime),
+      timestamp: formatTimestamp(r.startTime),
       startTime: r.startTime,
       endTime: r.endTime,
       speaker: r.speakerDisplay ?? r.speakerLabel ?? null,
@@ -150,7 +141,7 @@ function generateMarkdown(
       for (const r of results) {
         const speaker = r.speakerDisplay ?? r.speakerLabel ?? "";
         const speakerPrefix = speaker ? `**${speaker}:** ` : "";
-        lines.push(`- \`${fmtTime(r.startTime)}\` ${speakerPrefix}${stripHtml(r.snippet)}`);
+        lines.push(`- \`${formatTimestamp(r.startTime)}\` ${speakerPrefix}${stripHtml(r.snippet)}`);
       }
       lines.push("");
     }

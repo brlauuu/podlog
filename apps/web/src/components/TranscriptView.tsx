@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { getSpeakerColor, getSpeakerInitials } from "@/lib/speakerColors";
 import type { Segment } from "@/lib/types";
+import { formatTimestamp } from "@/lib/timestamp";
 
 interface Props {
   episodeId: string;
@@ -15,13 +16,6 @@ interface Props {
   feedTitle: string | null;
 }
 
-function formatTime(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = Math.floor(secs % 60);
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
 
 export default function TranscriptView({
   episodeId,
@@ -85,7 +79,7 @@ export default function TranscriptView({
                 onClick={() => handleTimestampClick(seg.start_time)}
                 disabled={!audioLocalPath}
               >
-                {formatTime(seg.start_time)}
+                {formatTimestamp(seg.start_time)}
               </button>
               <p className="text-sm leading-relaxed flex-1">{seg.text}</p>
             </div>
@@ -121,7 +115,7 @@ export default function TranscriptView({
                     onClick={() => handleTimestampClick(seg.start_time)}
                     disabled={!audioLocalPath}
                   >
-                    {formatTime(seg.start_time)}
+                    {formatTimestamp(seg.start_time)}
                   </button>
                 </div>
                 <div
@@ -155,7 +149,7 @@ export default function TranscriptView({
                   onClick={() => handleTimestampClick(seg.start_time)}
                   disabled={!audioLocalPath}
                 >
-                  {formatTime(seg.start_time)}
+                  {formatTimestamp(seg.start_time)}
                 </button>
                 {seg.text}
               </div>

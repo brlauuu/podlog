@@ -2,6 +2,7 @@
 
 import { Download } from "lucide-react";
 import type { Segment } from "@/lib/types";
+import { formatTimestamp } from "@/lib/timestamp";
 
 interface Props {
   episodeTitle: string;
@@ -17,13 +18,6 @@ interface Props {
   segments: Segment[];
 }
 
-function formatTimestamp(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = Math.floor(secs % 60);
-  if (h > 0) return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
 
 function formatDuration(secs: number): string {
   const h = Math.floor(secs / 3600);
@@ -73,7 +67,7 @@ function buildExportText(props: Props): string {
   lines.push("");
 
   for (const seg of props.segments) {
-    const ts = formatTimestamp(seg.start_time);
+    const ts = formatTimestamp(seg.start_time, { padHours: true });
     const speaker = seg.display_name || seg.speaker_label;
     if (speaker) {
       lines.push(`[${ts}] ${speaker}:`);
