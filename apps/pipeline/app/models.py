@@ -10,12 +10,15 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -92,7 +95,7 @@ class Episode(Base):
     transcribe_duration_secs: Mapped[float | None] = mapped_column(Float)
     diarize_duration_secs: Mapped[float | None] = mapped_column(Float)
 
-    # Celery task reference
+    # Legacy field — kept for schema compat during transition, no longer written
     celery_task_id: Mapped[str | None] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
@@ -149,3 +152,32 @@ class SpeakerName(Base):
     confirmed_by_user: Mapped[bool] = mapped_column(Boolean, default=False)
 
     episode: Mapped["Episode"] = relationship("Episode", back_populates="speaker_names")
+
+
+class Job(Base):
+    """DB-backed job queue — replaces Celery/Redis."""
+
+    __tablename__ = "job_queue"
+    __table_args__ = (
+        Index(
+            "idx_job_queue_poll",
+            "status",
+            "retry_at",
+            "created_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    episode_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("episodes.id", ondelete="CASCADE"), nullable=False
+    )
+    task: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    picked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

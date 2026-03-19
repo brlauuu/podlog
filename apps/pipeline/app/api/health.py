@@ -4,25 +4,24 @@ GET /api/health
 Returns per-service status for the system dashboard.
 
 States per service:
-  OK          — service is reachable and healthy
-  WARMING_UP  — worker is still loading models
-  DEGRADED    — service unreachable or unhealthy
+  OK          -- service is reachable and healthy
+  WARMING_UP  -- worker is still loading models
+  DEGRADED    -- service unreachable or unhealthy
 """
 import logging
+from pathlib import Path
 
-import redis
 from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from app.config import settings
 from app.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# The prewarm task writes this key to Redis when it finishes.
-PREWARM_DONE_KEY = "podlog:prewarm:done"
+# The prewarm script writes this file when it finishes.
+PREWARM_FLAG_FILE = "/tmp/podlog_prewarm_done"
 
 
 class ServiceStatus(BaseModel):
@@ -46,33 +45,14 @@ def health_check() -> HealthResponse:
         db.close()
         services.append(ServiceStatus(name="Database", status="OK"))
     except Exception as exc:
-        logger.warning("Health check — database failed: %s", exc)
+        logger.warning("Health check -- database failed: %s", exc)
         services.append(ServiceStatus(name="Database", status="DEGRADED"))
 
-    # Redis
-    redis_ok = False
-    try:
-        r = redis.from_url(settings.redis_url, socket_connect_timeout=2)
-        r.ping()
-        redis_ok = True
-        services.append(ServiceStatus(name="Redis", status="OK"))
-    except Exception as exc:
-        logger.warning("Health check — redis failed: %s", exc)
-        services.append(ServiceStatus(name="Redis", status="DEGRADED"))
-
-    # Worker (via Redis prewarm key)
-    if redis_ok:
-        try:
-            r = redis.from_url(settings.redis_url, socket_connect_timeout=2)
-            prewarm_done = r.get(PREWARM_DONE_KEY)
-            if prewarm_done:
-                services.append(ServiceStatus(name="Worker", status="OK"))
-            else:
-                services.append(ServiceStatus(name="Worker", status="WARMING_UP"))
-        except Exception:
-            services.append(ServiceStatus(name="Worker", status="DEGRADED"))
+    # Worker (via prewarm flag file)
+    if Path(PREWARM_FLAG_FILE).exists():
+        services.append(ServiceStatus(name="Worker", status="OK"))
     else:
-        services.append(ServiceStatus(name="Worker", status="DEGRADED"))
+        services.append(ServiceStatus(name="Worker", status="WARMING_UP"))
 
     # Pipeline API is implicitly OK if this endpoint responds
     services.append(ServiceStatus(name="Pipeline API", status="OK"))

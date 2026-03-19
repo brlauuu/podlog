@@ -15,16 +15,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
   pipeline:
     build:
       context: ./apps/pipeline
@@ -35,7 +25,6 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
-      REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     volumes:
@@ -43,8 +32,6 @@ services:
       - transcript_data:/data/transcripts
     depends_on:
       db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       # Returns 200 only after migrations complete and app is ready
@@ -58,23 +45,17 @@ services:
     build:
       context: ./apps/pipeline
       dockerfile: Dockerfile.worker
-    # Pre-warm downloads model weights, then run worker with embedded beat (-B)
-    # and both heavy+light queues (merges old worker, worker-light, and beat)
     command: >
-      sh -c "python -m app.tasks.prewarm &&
-             celery -A app.tasks.celery_app worker -B -Q heavy,light --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
+      sh -c "python -m app.tasks.prewarm && python -m app.worker"
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
-      REDIS_URL: redis://redis:6379/0
     volumes:
       - audio_data:/data/audio
       - transcript_data:/data/transcripts
       - model_cache:/root/.cache/huggingface
     depends_on:
       db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       pipeline:
         condition: service_healthy  # Ensures migrations are done before worker writes to DB
@@ -92,26 +73,10 @@ services:
       db:
         condition: service_healthy
       pipeline:
-        condition: service_healthy  # Waits for migrations — prevents schema-not-found errors
-
-  # Optional debug services — start with: docker compose --profile debug up
-  flower:
-    profiles: ["debug"]
-    build:
-      context: ./apps/pipeline
-      dockerfile: Dockerfile.control
-    command: celery -A app.tasks.celery_app flower --port=5555
-    env_file: .env
-    environment:
-      REDIS_URL: redis://redis:6379/0
-    ports:
-      - "5555:5555"
-    depends_on:
-      - redis
+        condition: service_healthy  # Waits for migrations -- prevents schema-not-found errors
 
 volumes:
   postgres_data:
-  redis_data:
   audio_data:
   transcript_data:
   model_cache:

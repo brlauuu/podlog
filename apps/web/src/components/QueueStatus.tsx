@@ -9,7 +9,6 @@ interface Job {
   episode_id: string;
   title: string | null;
   status: string;
-  celery_task_id: string | null;
   error_message: string | null;
   error_class: string | null;
   retry_count: number;
@@ -153,7 +152,6 @@ function EpisodeRow({
   const isFailed = job.status === "failed";
   const canRetry =
     isFailed &&
-    job.celery_task_id &&
     !NON_RETRYABLE.has(job.error_class ?? "");
 
   return (
@@ -204,7 +202,7 @@ function EpisodeRow({
                   className="mt-2 px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRetry(job.celery_task_id!);
+                    onRetry(job.episode_id);
                   }}
                 >
                   Retry
@@ -292,9 +290,9 @@ export default function QueueStatus() {
   const filtered = q ? allJobs.filter(matchesSearch) : allJobs;
   const filteredDone = q ? queue.done_jobs.filter(matchesSearch) : queue.done_jobs;
 
-  async function handleRetry(taskId: string) {
+  async function handleRetry(episodeId: string) {
     try {
-      const res = await fetch(`/api/pipeline/queue/${taskId}/retry`, { method: "POST" });
+      const res = await fetch(`/api/pipeline/queue/${episodeId}/retry`, { method: "POST" });
       if (!res.ok) {
         console.error("Retry failed with status", res.status);
       }

@@ -1,13 +1,12 @@
 """
-Queue management API — PRD-01 §10
+Queue management API -- PRD-01 S10
 
-GET   /api/queue                    Current queue state
-POST  /api/queue/{task_id}/retry    Retry a failed job
+GET   /api/queue                         Current queue state
+POST  /api/queue/{episode_id}/retry      Retry a failed job
 """
 import logging
 from typing import Optional
 
-from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -15,13 +14,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Episode
-from app.tasks.celery_app import celery_app
 from app.tasks.ingest import ingest_episode
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Error classes that cannot be auto-retried — user must resolve the root cause first
+# Error classes that cannot be auto-retried -- user must resolve the root cause first
 NON_RETRYABLE = {"DISK_FULL", "OOM"}
 
 ACTIVE_STATUSES = ["downloading", "transcribing", "diarizing", "inferring", "archiving"]
@@ -44,7 +42,6 @@ def _job_dict(ep) -> dict:
         "episode_id": ep.id,
         "title": ep.title,
         "status": ep.status,
-        "celery_task_id": ep.celery_task_id,
         "error_message": ep.error_message,
         "error_class": ep.error_class,
         "retry_count": ep.retry_count,
@@ -85,9 +82,9 @@ def get_queue(db: Session = Depends(get_db)) -> QueueStateResponse:
     )
 
 
-@router.post("/queue/{task_id}/retry", status_code=202)
-def retry_job(task_id: str, db: Session = Depends(get_db)) -> dict:
-    episode = db.query(Episode).filter(Episode.celery_task_id == task_id).first()
+@router.post("/queue/{episode_id}/retry", status_code=202)
+def retry_job(episode_id: str, db: Session = Depends(get_db)) -> dict:
+    episode = db.query(Episode).filter(Episode.id == episode_id).first()
     if not episode:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -97,7 +94,7 @@ def retry_job(task_id: str, db: Session = Depends(get_db)) -> dict:
     if episode.error_class in NON_RETRYABLE:
         raise HTTPException(
             status_code=422,
-            detail=f"Cannot retry — resolve the underlying issue first ({episode.error_class})",
+            detail=f"Cannot retry -- resolve the underlying issue first ({episode.error_class})",
         )
 
     # Reset state and re-enqueue
@@ -106,9 +103,7 @@ def retry_job(task_id: str, db: Session = Depends(get_db)) -> dict:
     episode.error_class = None
     db.commit()
 
-    result = ingest_episode.delay(episode.id)
-    episode.celery_task_id = result.id
-    db.commit()
+    ingest_episode(episode.id)
 
     logger.info('"action": "manual_retry", "episode_id": "%s"', episode.id)
-    return {"queued": True, "task_id": result.id}
+    return {"queued": True, "episode_id": episode.id}

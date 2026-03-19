@@ -1,11 +1,11 @@
 """
-Model pre-warm — PRD-01 §5.11
+Model pre-warm -- PRD-01 S5.11
 
-Run before the Celery worker starts accepting jobs. Downloads and caches
+Run before the worker starts accepting jobs. Downloads and caches
 Whisper + pyannote model weights (~3 GB on first run).
 
-Sets a Redis key when complete so the health endpoint can transition from
-WARMING_UP → OK.
+Sets a flag file when complete so the health endpoint can transition from
+WARMING_UP -> OK.
 
 Usage (from docker-compose.yml):
   python -m app.tasks.prewarm
@@ -17,20 +17,18 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-PREWARM_DONE_KEY = "podlog:prewarm:done"
+PREWARM_FLAG_FILE = "/tmp/podlog_prewarm_done"
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     from app.config import settings
-    import redis
-
-    r = redis.from_url(settings.redis_url)
 
     # Check if models are already cached
     whisper_cache = Path(settings.model_cache_dir) / "hub"
-    if whisper_cache.exists() and r.get(PREWARM_DONE_KEY):
+    flag = Path(PREWARM_FLAG_FILE)
+    if whisper_cache.exists() and flag.exists():
         logger.info('"action": "prewarm_skipped", "reason": "models_already_cached"')
         return
 
@@ -47,7 +45,7 @@ def main() -> None:
         logger.error('"action": "prewarm_whisper_failed", "error": "%s"', exc)
         sys.exit(1)
 
-    # Download wav2vec2 alignment model — failure is non-fatal
+    # Download wav2vec2 alignment model -- failure is non-fatal
     try:
         import whisperx
         device = "cpu"
@@ -59,7 +57,7 @@ def main() -> None:
     except Exception as exc:
         logger.warning('"action": "prewarm_align_model_failed", "error": "%s"', exc)
 
-    # Download pyannote — failure is non-fatal (per PRD-01 §5.4)
+    # Download pyannote -- failure is non-fatal (per PRD-01 S5.4)
     try:
         from app.services.pyannote import load_pipeline, unload_pipeline
         logger.info('"action": "prewarm_pyannote_download"')
@@ -69,7 +67,7 @@ def main() -> None:
     except Exception as exc:
         logger.warning('"action": "prewarm_pyannote_failed", "error": "%s"', exc)
 
-    r.set(PREWARM_DONE_KEY, "1")
+    flag.write_text("1")
     logger.info('"action": "prewarm_complete"')
 
 

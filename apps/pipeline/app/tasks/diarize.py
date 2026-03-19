@@ -1,5 +1,5 @@
 """
-Diarization task — PRD-01 §5.5
+Diarization task -- PRD-01 S5.5
 
 - Runs pyannote speaker diarization on the audio file
 - If word-level alignment data exists (from WhisperX), assigns speakers per word
@@ -17,15 +17,12 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
 from app.tasks.helpers import update_episode
+from app import job_queue
 
 logger = logging.getLogger(__name__)
 
 
-from app.tasks.celery_app import celery_app
-
-
-@celery_app.task(bind=True, name="diarize_episode")
-def diarize_episode(self, episode_id: str) -> str:
+def diarize_episode(episode_id: str) -> str:
     db = SessionLocal()
     alignment_path = Path(settings.transcript_dir) / f"{episode_id}.whisperx.json"
     try:
@@ -54,8 +51,7 @@ def diarize_episode(self, episode_id: str) -> str:
             )
 
         except Exception as exc:
-            # Diarization failure is non-fatal — transcript is preserved (PRD-01 §5.5)
-            # Note: error_class is NOT set — this is not a job failure
+            # Diarization failure is non-fatal -- transcript is preserved (PRD-01 S5.5)
             update_episode(
                 db, episode_id,
                 has_diarization=False,
@@ -67,13 +63,11 @@ def diarize_episode(self, episode_id: str) -> str:
                 str(exc),
             )
         finally:
-            # MANDATORY: unload pyannote before next episode's Whisper can load (PRD-01 §5.4)
+            # MANDATORY: unload pyannote before next episode's Whisper can load (PRD-01 S5.4)
             from app.services.pyannote import unload_pipeline
             unload_pipeline()
 
-        # PRD-04 §4.6: inference runs after diarization, before archival
-        from app.tasks.infer import infer_speakers
-        infer_speakers.delay(episode_id)
+        job_queue.enqueue(db, episode_id, "infer")
         return episode_id
     finally:
         # Clean up alignment file

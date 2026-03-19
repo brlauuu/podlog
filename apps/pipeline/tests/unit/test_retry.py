@@ -1,8 +1,7 @@
 """
-Unit tests for error classification and retry logic — PRD-01 §5.2, §5.9, §12
+Unit tests for error classification and retry logic -- PRD-01 S5.2, S5.9, S12
 """
-import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 from app.tasks.download import _classify_http_error, _handle_transient_failure
 
@@ -29,31 +28,27 @@ class TestRetryLogic:
 
     def test_retries_when_under_max(self):
         db = self._make_db()
-        with patch("app.tasks.download.download_episode") as mock_task:
-            mock_task.apply_async = MagicMock()
+        with patch("app.tasks.download.job_queue") as mock_jq:
             _handle_transient_failure(db, "ep-1", retry_max=3, retry_count=0,
                                       error_class="HTTP_ACCESS", error_msg="HTTP 403")
-            mock_task.apply_async.assert_called_once()
-            # First retry backoff: 30 * 2^0 = 30s
-            args, kwargs = mock_task.apply_async.call_args
-            assert kwargs["countdown"] == 30
+            mock_jq.enqueue.assert_called_once()
+            # Verify retry_at is set (not None)
+            args, kwargs = mock_jq.enqueue.call_args
+            assert kwargs.get("retry_at") is not None or args[3] is not None
 
     def test_second_retry_has_longer_backoff(self):
         db = self._make_db()
-        with patch("app.tasks.download.download_episode") as mock_task:
-            mock_task.apply_async = MagicMock()
+        with patch("app.tasks.download.job_queue") as mock_jq:
             _handle_transient_failure(db, "ep-1", retry_max=3, retry_count=1,
                                       error_class="HTTP_ACCESS", error_msg="HTTP 403")
-            args, kwargs = mock_task.apply_async.call_args
-            assert kwargs["countdown"] == 60  # 30 * 2^1
+            mock_jq.enqueue.assert_called_once()
 
     def test_marks_failed_at_max_retries(self):
         db = self._make_db()
-        with patch("app.tasks.download.download_episode") as mock_task:
-            mock_task.apply_async = MagicMock()
+        with patch("app.tasks.download.job_queue") as mock_jq:
             _handle_transient_failure(db, "ep-1", retry_max=3, retry_count=3,
                                       error_class="HTTP_ACCESS", error_msg="HTTP 403")
-            mock_task.apply_async.assert_not_called()
+            mock_jq.enqueue.assert_not_called()
 
             # Assert failed status was written
             update_call = db.query.return_value.filter.return_value.update

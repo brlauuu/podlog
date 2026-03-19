@@ -1,5 +1,5 @@
 """
-Unit tests for zombie job cleanup task — GAP-01 / RISK-01
+Unit tests for zombie job cleanup task -- GAP-01 / RISK-01
 """
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch

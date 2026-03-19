@@ -1,16 +1,15 @@
 """
-Transcription task — PRD-01 §5.3, §5.4
+Transcription task -- PRD-01 S5.3, S5.4
 
 - Converts audio to 16kHz mono WAV (ffmpeg)
 - Transcribes with Whisper large-v3 (or configured model)
 - Writes segments to database
 - EXPLICITLY unloads Whisper from memory before returning
-  (mandatory — Whisper + pyannote must never be resident simultaneously)
+  (mandatory -- Whisper + pyannote must never be resident simultaneously)
 """
 import gc
 import json
 import logging
-import os
 import time
 from pathlib import Path
 
@@ -18,15 +17,12 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
 from app.tasks.helpers import mark_failed as _mark_failed, update_episode
+from app import job_queue
 
 logger = logging.getLogger(__name__)
 
 
-from app.tasks.celery_app import celery_app
-
-
-@celery_app.task(bind=True, name="transcribe_episode")
-def transcribe_episode(self, episode_id: str) -> str:
+def transcribe_episode(episode_id: str) -> str:
     db = SessionLocal()
     try:
         episode = db.query(Episode).filter(Episode.id == episode_id).first()
@@ -71,7 +67,7 @@ def transcribe_episode(self, episode_id: str) -> str:
             logger.exception('"action": "transcribe_failed", "episode_id": "%s"', episode_id)
             return episode_id
         finally:
-            # MANDATORY: unload Whisper before pyannote can be loaded (PRD-01 §5.4)
+            # MANDATORY: unload Whisper before pyannote can be loaded (PRD-01 S5.4)
             _unload_whisper()
             if wav_path.exists():
                 wav_path.unlink()
@@ -111,8 +107,7 @@ def transcribe_episode(self, episode_id: str) -> str:
             transcribe_secs,
         )
 
-        from app.tasks.diarize import diarize_episode
-        diarize_episode.delay(episode_id)
+        job_queue.enqueue(db, episode_id, "diarize")
         return episode_id
     finally:
         db.close()
@@ -142,5 +137,3 @@ def _unload_whisper() -> None:
 
     gc.collect()
     logger.info('"action": "whisper_unloaded"')
-
-

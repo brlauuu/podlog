@@ -21,8 +21,6 @@ const TECH_STACK = [
   { name: "pyannote", url: "https://github.com/pyannote/pyannote-audio" },
   { name: "Next.js", url: "https://nextjs.org" },
   { name: "PostgreSQL", url: "https://www.postgresql.org" },
-  { name: "Celery", url: "https://docs.celeryq.dev" },
-  { name: "Redis", url: "https://redis.io" },
   { name: "Tailwind CSS", url: "https://tailwindcss.com" },
   { name: "shadcn/ui", url: "https://ui.shadcn.com" },
 ];

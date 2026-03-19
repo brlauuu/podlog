@@ -1,8 +1,9 @@
 """
 Top-level ingestion orchestrator.
 
-ingest_feed   — poll an RSS feed, enqueue any new episodes
-ingest_episode — run the full pipeline for a single episode
+ingest_feed   -- poll an RSS feed, enqueue any new episodes
+ingest_episode -- run the full pipeline for a single episode
+poll_all_feeds -- poll all registered feeds (called periodically)
 """
 import logging
 import random
@@ -11,7 +12,7 @@ from datetime import datetime, timezone
 from app.database import SessionLocal
 from app.models import Episode, Feed
 from app.services import rss as rss_service
-from app.tasks.celery_app import celery_app
+from app import job_queue
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +20,8 @@ logger = logging.getLogger(__name__)
 TEST_MODE_MAX_EPISODES = 5
 
 
-@celery_app.task(bind=True, name="ingest_feed")
-def ingest_feed(self, feed_id: str) -> dict:
+def ingest_feed(feed_id: str) -> dict:
     """Poll a registered RSS feed and enqueue any new episodes."""
-    from app.tasks.download import download_episode
-
     db = SessionLocal()
     try:
         feed = db.query(Feed).filter(Feed.id == feed_id).first()
@@ -71,8 +69,7 @@ def ingest_feed(self, feed_id: str) -> dict:
             db.flush()
             db.refresh(episode)
 
-            result = download_episode.delay(episode.id)
-            episode.celery_task_id = result.id
+            job_queue.enqueue(db, episode.id, "download")
             new_count += 1
 
         feed.last_polled_at = datetime.now(timezone.utc)
@@ -89,10 +86,23 @@ def ingest_feed(self, feed_id: str) -> dict:
         db.close()
 
 
-@celery_app.task(bind=True, name="ingest_episode")
-def ingest_episode(self, episode_id: str) -> dict:
+def ingest_episode(episode_id: str) -> dict:
     """Re-queue a single episode through the full pipeline (used for manual retry)."""
-    from app.tasks.download import download_episode
+    db = SessionLocal()
+    try:
+        job_queue.enqueue(db, episode_id, "download")
+        return {"queued": True}
+    finally:
+        db.close()
 
-    result = download_episode.delay(episode_id)
-    return {"task_id": result.id}
+
+def poll_all_feeds() -> dict:
+    """Poll all registered feeds for new episodes. Issue #23: skip test feeds."""
+    db = SessionLocal()
+    try:
+        feeds = db.query(Feed).filter(Feed.mode == "full").all()
+        for feed in feeds:
+            job_queue.enqueue(db, feed.id, "ingest_feed")
+        return {"polled": len(feeds)}
+    finally:
+        db.close()

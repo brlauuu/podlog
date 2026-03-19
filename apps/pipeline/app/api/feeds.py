@@ -1,7 +1,7 @@
 """
-Feed management API — PRD-01 §10, Issue #23
+Feed management API -- PRD-01 S10, Issue #23
 
-POST   /api/feeds         Add a new RSS feed (with validation — GAP-02)
+POST   /api/feeds         Add a new RSS feed (with validation -- GAP-02)
 GET    /api/feeds         List all feeds
 DELETE /api/feeds/{id}    Remove a feed (optionally delete episodes)
 POST   /api/feeds/{id}/poll  Trigger immediate re-poll
@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Feed
 from app.services import rss as rss_service
-from app.tasks.ingest import ingest_feed
+from app import job_queue
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -51,16 +51,16 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
     Issue #23: If a feed already exists in test mode and is re-added, it gets
     promoted to full mode and remaining episodes are ingested.
     """
-    # Check for existing feed first — handle test→full promotion
+    # Check for existing feed first -- handle test->full promotion
     existing = db.query(Feed).filter(Feed.url == body.url).first()
     if existing:
         if existing.mode == "test" and body.mode == "full":
-            # Promote test → full: flip mode and re-ingest to pick up remaining episodes
+            # Promote test -> full: flip mode and re-ingest to pick up remaining episodes
             existing.mode = "full"
             db.commit()
             db.refresh(existing)
             try:
-                ingest_feed.delay(existing.id)
+                job_queue.enqueue(db, existing.id, "ingest_feed")
             except Exception as exc:
                 logger.error(
                     '"action": "promote_feed_dispatch_failed", "feed_id": "%s", "error": "%s"',
@@ -90,15 +90,15 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
     db.add(feed)
     db.flush()  # Assign ID without committing, so we can roll back on dispatch failure
 
-    # Enqueue ingestion — if dispatch fails, roll back the feed insert
+    # Enqueue ingestion
     try:
-        ingest_feed.delay(feed.id)
+        job_queue.enqueue(db, feed.id, "ingest_feed")
     except Exception as exc:
         db.rollback()
         logger.error('"action": "feed_add_failed", "url": "%s", "error": "%s"', body.url, exc)
         raise HTTPException(
             status_code=503,
-            detail=f"Feed validated but task queue is unavailable: {type(exc).__name__}",
+            detail=f"Feed validated but job queue is unavailable: {type(exc).__name__}",
         )
 
     db.commit()
@@ -144,5 +144,5 @@ def poll_feed(feed_id: str, db: Session = Depends(get_db)) -> dict:
     feed = db.query(Feed).filter(Feed.id == feed_id).first()
     if not feed:
         raise HTTPException(status_code=404, detail="Feed not found")
-    ingest_feed.delay(feed.id)
+    job_queue.enqueue(db, feed.id, "ingest_feed")
     return {"queued": True}

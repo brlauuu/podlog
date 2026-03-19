@@ -310,12 +310,10 @@ class TestInferSpeakersTask:
         with (
             patch("app.tasks.infer.SessionLocal", return_value=db),
             patch("app.services.inference.load_spacy_model", side_effect=RuntimeError("No model")),
-            patch("app.tasks.infer.archive_episode") as mock_archive,
+            patch("app.tasks.infer.job_queue") as mock_jq,
         ):
-            mock_archive.delay = MagicMock()
             from app.tasks.infer import infer_speakers
-            # Call .run() to bypass Celery result backend
-            infer_speakers.run("ep-1")
+            infer_speakers("ep-1")
 
         # Verify inference_error was set
         update_calls = db.query.return_value.filter.return_value.update.call_args_list
@@ -333,11 +331,10 @@ class TestInferSpeakersTask:
 
         with (
             patch("app.tasks.infer.SessionLocal", return_value=db),
-            patch("app.tasks.infer.archive_episode") as mock_archive,
+            patch("app.tasks.infer.job_queue") as mock_jq,
         ):
-            mock_archive.delay = MagicMock()
             from app.tasks.infer import infer_speakers
-            infer_speakers.run("ep-1")
+            infer_speakers("ep-1")
 
         # Should have set inference_skipped
         update_calls = db.query.return_value.filter.return_value.update.call_args_list
