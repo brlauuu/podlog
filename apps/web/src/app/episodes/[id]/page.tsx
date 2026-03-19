@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Info } from "lucide-react";
 import pool from "@/lib/db";
+import type { Segment } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import EpisodeDescription from "@/components/EpisodeDescription";
@@ -10,17 +11,6 @@ import TranscriptSection from "@/components/TranscriptSection";
 import BackToSearchLink from "@/components/BackToSearchLink";
 
 export const dynamic = "force-dynamic";
-
-interface Segment {
-  id: number;
-  start_time: number;
-  end_time: number;
-  speaker_label: string | null;
-  display_name: string | null;
-  inferred: boolean;
-  confirmed_by_user: boolean;
-  text: string;
-}
 
 interface Episode {
   id: string;

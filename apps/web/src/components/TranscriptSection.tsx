@@ -4,17 +4,7 @@ import { useState } from "react";
 import SpeakerPanel from "@/components/SpeakerPanel";
 import TranscriptView from "@/components/TranscriptView";
 import TranscriptExportButton from "@/components/TranscriptExportButton";
-
-interface Segment {
-  id: number;
-  start_time: number;
-  end_time: number;
-  speaker_label: string | null;
-  display_name: string | null;
-  inferred: boolean;
-  confirmed_by_user: boolean;
-  text: string;
-}
+import type { Segment } from "@/lib/types";
 
 interface Props {
   episodeId: string;

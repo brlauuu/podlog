@@ -1,13 +1,7 @@
 "use client";
 
 import { Download } from "lucide-react";
-
-interface Segment {
-  start_time: number;
-  speaker_label: string | null;
-  display_name: string | null;
-  text: string;
-}
+import type { Segment } from "@/lib/types";
 
 interface Props {
   episodeTitle: string;

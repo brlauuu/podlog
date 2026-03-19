@@ -3,17 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { getSpeakerColor, getSpeakerInitials } from "@/lib/speakerColors";
-
-interface Segment {
-  id: number;
-  start_time: number;
-  end_time: number;
-  speaker_label: string | null;
-  display_name: string | null;
-  inferred: boolean;
-  confirmed_by_user: boolean;
-  text: string;
-}
+import type { Segment } from "@/lib/types";
 
 interface Props {
   episodeId: string;
