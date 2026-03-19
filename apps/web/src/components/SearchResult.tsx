@@ -7,11 +7,7 @@ import { formatTimestamp } from "@/lib/timestamp";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { SearchResult as SearchResultType } from "@/lib/search";
-
-/** Client-safe basename — extracts filename from a path string */
-function basename(filePath: string): string {
-  return filePath.split("/").pop() ?? filePath;
-}
+import { basename } from "@/lib/utils";
 
 interface Props {
   result: SearchResultType;

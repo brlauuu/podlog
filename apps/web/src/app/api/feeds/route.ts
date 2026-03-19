@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
-
-const PIPELINE_API = process.env.PIPELINE_API_URL ?? "http://pipeline:8000";
+import { PIPELINE_API } from "@/lib/pipeline";
 
 export async function GET() {
   try {

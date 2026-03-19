@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const PIPELINE_API = process.env.PIPELINE_API_URL ?? "http://pipeline:8000";
+import { PIPELINE_API } from "@/lib/pipeline";
 
 export async function POST(req: NextRequest, { params }: { params: { taskId: string } }) {
   const resp = await fetch(`${PIPELINE_API}/api/queue/${params.taskId}/retry`, {
