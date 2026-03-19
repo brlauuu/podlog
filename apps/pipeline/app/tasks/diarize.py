@@ -11,12 +11,12 @@ Diarization task — PRD-01 §5.5
 import json
 import logging
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
+from app.tasks.helpers import update_episode
 
 logger = logging.getLogger(__name__)
 
@@ -48,23 +48,19 @@ def diarize_episode(self, episode_id: str) -> str:
                 _diarize_segment_level(db, episode_id, diarization_segments)
 
             diarize_secs = round(time.monotonic() - t0, 1)
-            db.query(Episode).filter(Episode.id == episode_id).update(
-                {"has_diarization": True, "diarization_error": None, "diarize_duration_secs": diarize_secs,
-                 "updated_at": datetime.now(timezone.utc)}
+            update_episode(
+                db, episode_id,
+                has_diarization=True, diarization_error=None, diarize_duration_secs=diarize_secs,
             )
-            db.commit()
 
         except Exception as exc:
             # Diarization failure is non-fatal — transcript is preserved (PRD-01 §5.5)
-            db.query(Episode).filter(Episode.id == episode_id).update(
-                {
-                    "has_diarization": False,
-                    "diarization_error": str(exc),
-                    "updated_at": datetime.now(timezone.utc),
-                    # Note: error_class is NOT set — this is not a job failure
-                }
+            # Note: error_class is NOT set — this is not a job failure
+            update_episode(
+                db, episode_id,
+                has_diarization=False,
+                diarization_error=str(exc),
             )
-            db.commit()
             logger.warning(
                 '"action": "diarize_failed_graceful", "episode_id": "%s", "error": "%s"',
                 episode_id,

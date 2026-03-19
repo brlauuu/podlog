@@ -7,14 +7,12 @@ Archive task — PRD-01 §5.7, §5.8
 - Handles disk-full during archival: marks FAILED, preserves raw audio
 """
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment, SpeakerName
-
-_now = lambda: datetime.now(timezone.utc)  # noqa: E731
+from app.tasks.helpers import update_episode
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +28,7 @@ def archive_episode(self, episode_id: str) -> str:
         if not episode:
             raise RuntimeError(f"Episode {episode_id} not found")
 
-        db.query(Episode).filter(Episode.id == episode_id).update(
-            {"status": "archiving", "updated_at": _now()}
-        )
-        db.commit()
+        update_episode(db, episode_id, status="archiving")
 
         raw_path = Path(episode.audio_local_path) if episode.audio_local_path else None
 
@@ -45,15 +40,12 @@ def archive_episode(self, episode_id: str) -> str:
                 raw_path.unlink()  # Delete raw file after successful compression
             except OSError as exc:
                 if "No space left on device" in str(exc) or getattr(exc, "errno", None) == 28:
-                    db.query(Episode).filter(Episode.id == episode_id).update(
-                        {
-                            "status": "failed",
-                            "error_class": "DISK_FULL",
-                            "error_message": "Disk full during archival. Free space and retry.",
-                            "updated_at": _now(),
-                        }
+                    update_episode(
+                        db, episode_id,
+                        status="failed",
+                        error_class="DISK_FULL",
+                        error_message="Disk full during archival. Free space and retry.",
                     )
-                    db.commit()
                     logger.error(
                         '"action": "archive_disk_full", "episode_id": "%s"', episode_id
                     )
@@ -77,30 +69,25 @@ def archive_episode(self, episode_id: str) -> str:
         name_map = {sn.speaker_label: sn for sn in speaker_names}
 
         if not segments:
-            db.query(Episode).filter(Episode.id == episode_id).update(
-                {
-                    "status": "failed",
-                    "error_class": "SYSTEM_ERROR",
-                    "error_message": "No transcript segments found at archival — cannot mark done.",
-                    "updated_at": _now(),
-                }
+            update_episode(
+                db, episode_id,
+                status="failed",
+                error_class="SYSTEM_ERROR",
+                error_message="No transcript segments found at archival — cannot mark done.",
             )
-            db.commit()
             logger.error('"action": "archive_no_segments", "episode_id": "%s"', episode_id)
             return episode_id
 
         transcript_path = _write_transcript(episode, segments, name_map)
 
-        db.query(Episode).filter(Episode.id == episode_id).update(
-            {
-                "status": "done",
-                "audio_local_path": str(archived_path) if archived_path else None,
-                "transcript_path": transcript_path,
-                "processed_at": _now(),
-                "updated_at": _now(),
-            }
+        from datetime import datetime, timezone
+        update_episode(
+            db, episode_id,
+            status="done",
+            audio_local_path=str(archived_path) if archived_path else None,
+            transcript_path=transcript_path,
+            processed_at=datetime.now(timezone.utc),
         )
-        db.commit()
 
         logger.info('"action": "archive_complete", "episode_id": "%s"', episode_id)
         return episode_id

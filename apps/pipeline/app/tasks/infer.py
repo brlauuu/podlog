@@ -9,12 +9,12 @@ Soft failure: if inference fails, episode continues to archival with
 inference_error populated. No retry.
 """
 import logging
-from datetime import datetime, timezone
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Feed, Segment
 from app.tasks.archive import archive_episode
+from app.tasks.helpers import update_episode
 
 logger = logging.getLogger(__name__)
 
@@ -32,26 +32,17 @@ def infer_speakers(self, episode_id: str) -> str:
 
         # Skip if inference is disabled
         if not settings.inference_enabled:
-            db.query(Episode).filter(Episode.id == episode_id).update(
-                {"inference_skipped": True, "updated_at": datetime.now(timezone.utc)}
-            )
-            db.commit()
+            update_episode(db, episode_id, inference_skipped=True)
             archive_episode.delay(episode_id)
             return episode_id
 
         # Skip if no diarization (PRD-04 §4.6)
         if not episode.has_diarization:
-            db.query(Episode).filter(Episode.id == episode_id).update(
-                {"inference_skipped": True, "updated_at": datetime.now(timezone.utc)}
-            )
-            db.commit()
+            update_episode(db, episode_id, inference_skipped=True)
             archive_episode.delay(episode_id)
             return episode_id
 
-        db.query(Episode).filter(Episode.id == episode_id).update(
-            {"status": "inferring", "updated_at": datetime.now(timezone.utc)}
-        )
-        db.commit()
+        update_episode(db, episode_id, status="inferring")
 
         try:
             from app.services.inference import (
@@ -127,10 +118,7 @@ def infer_speakers(self, episode_id: str) -> str:
         except Exception as exc:
             # Soft failure — non-blocking (PRD-04 §4.6)
             db.rollback()
-            db.query(Episode).filter(Episode.id == episode_id).update(
-                {"inference_error": str(exc), "updated_at": datetime.now(timezone.utc)}
-            )
-            db.commit()
+            update_episode(db, episode_id, inference_error=str(exc))
             logger.warning(
                 '"action": "inference_failed_graceful", "episode_id": "%s", "error": "%s"',
                 episode_id,

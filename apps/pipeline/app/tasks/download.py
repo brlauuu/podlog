@@ -27,12 +27,7 @@ def _classify_http_error(status_code: int) -> str:
     return "TRANSIENT_NETWORK" if status_code in TRANSIENT_HTTP_CODES else "HTTP_ACCESS"
 
 
-def _update_episode(db, episode_id: str, **kwargs) -> None:
-    from datetime import datetime, timezone
-    kwargs.setdefault("updated_at", datetime.now(timezone.utc))
-    db.query(Episode).filter(Episode.id == episode_id).update(kwargs)
-    db.commit()
-
+from app.tasks.helpers import update_episode as _update_episode
 
 from app.tasks.celery_app import celery_app
 
