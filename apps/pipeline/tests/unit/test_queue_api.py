@@ -11,7 +11,6 @@ def _make_episode(status, **kwargs):
     ep.id = kwargs.get("id", "ep-1")
     ep.title = kwargs.get("title", "Test Episode")
     ep.status = status
-    ep.celery_task_id = kwargs.get("celery_task_id", "task-1")
     ep.error_message = kwargs.get("error_message", None)
     ep.error_class = kwargs.get("error_class", None)
     ep.retry_count = kwargs.get("retry_count", 0)
@@ -38,6 +37,12 @@ class TestGetQueue:
         result = _job_dict(ep)
         assert result["updated_at"] is None
 
+    def test_job_dict_no_celery_task_id(self):
+        """Job dict should not include celery_task_id anymore."""
+        ep = _make_episode("pending")
+        result = _job_dict(ep)
+        assert "celery_task_id" not in result
+
     def test_done_jobs_included_in_response(self):
         schema = QueueStateResponse.model_json_schema()
         assert "done_count" in schema["properties"]
@@ -56,8 +61,7 @@ class TestRetryJob:
         db.query.return_value.filter.return_value.first.return_value = episode
         try:
             with patch("app.api.queue.ingest_episode") as mock_ingest:
-                mock_ingest.delay.return_value = MagicMock(id="new-task-id")
-                return retry_job("task-1", db=db)
+                return retry_job("ep-1", db=db)
         except HTTPException as exc:
             return exc
 

@@ -1,18 +1,15 @@
 """
-Zombie job cleanup task — GAP-01 / RISK-01.
+Zombie job cleanup task -- GAP-01 / RISK-01.
 
 If the worker process is killed with SIGKILL (e.g. by the Linux OOM killer)
-while processing a job, Celery cannot catch the exception and the episode
-remains in a non-terminal status indefinitely. This task runs periodically
-and marks any such stalled episodes as failed so the user can see the problem
-and retry manually.
+while processing a job, the episode remains in a non-terminal status
+indefinitely. This task runs periodically and marks any such stalled episodes
+as failed so the user can see the problem and retry manually.
 
-Per PRD-01 §5.9: stalled jobs are classified as SYSTEM_ERROR.
+Per PRD-01 S5.9: stalled jobs are classified as SYSTEM_ERROR.
 """
 import logging
 from datetime import datetime, timedelta, timezone
-
-from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +19,6 @@ NON_TERMINAL_STATUSES = ("pending", "downloading", "transcribing", "diarizing", 
 ZOMBIE_TIMEOUT_HOURS = 2
 
 
-@celery_app.task(name="cleanup_zombie_jobs")
 def cleanup_zombie_jobs() -> dict:
     """Mark episodes stuck in non-terminal states for >2 hours as failed."""
     from app.database import SessionLocal
@@ -49,7 +45,7 @@ def cleanup_zombie_jobs() -> dict:
             ep.status = "failed"
             ep.error_class = "SYSTEM_ERROR"
             ep.error_message = (
-                f"Job stalled in '{ep.status}' state — worker may have been killed (OOM or SIGKILL). "
+                f"Job stalled in '{ep.status}' state -- worker may have been killed (OOM or SIGKILL). "
                 "Reset status to 'pending' to retry."
             )
             ep.updated_at = datetime.now(timezone.utc)

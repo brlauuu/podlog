@@ -1,5 +1,5 @@
 """
-Speaker inference task — PRD-04 §4.6
+Speaker inference task -- PRD-04 S4.6
 
 Runs after diarization, before archival. Extracts host/guest names from
 episode metadata using spaCy NER, remaps speaker labels, and pre-populates
@@ -13,17 +13,13 @@ import logging
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Feed, Segment
-from app.tasks.archive import archive_episode
 from app.tasks.helpers import update_episode
+from app import job_queue
 
 logger = logging.getLogger(__name__)
 
 
-from app.tasks.celery_app import celery_app
-
-
-@celery_app.task(bind=True, name="infer_speakers")
-def infer_speakers(self, episode_id: str) -> str:
+def infer_speakers(episode_id: str) -> str:
     db = SessionLocal()
     try:
         episode = db.query(Episode).filter(Episode.id == episode_id).first()
@@ -33,13 +29,13 @@ def infer_speakers(self, episode_id: str) -> str:
         # Skip if inference is disabled
         if not settings.inference_enabled:
             update_episode(db, episode_id, inference_skipped=True)
-            archive_episode.delay(episode_id)
+            job_queue.enqueue(db, episode_id, "archive")
             return episode_id
 
-        # Skip if no diarization (PRD-04 §4.6)
+        # Skip if no diarization (PRD-04 S4.6)
         if not episode.has_diarization:
             update_episode(db, episode_id, inference_skipped=True)
-            archive_episode.delay(episode_id)
+            job_queue.enqueue(db, episode_id, "archive")
             return episode_id
 
         update_episode(db, episode_id, status="inferring")
@@ -69,7 +65,7 @@ def infer_speakers(self, episode_id: str) -> str:
                 unload_spacy_model()
 
             if not candidates:
-                # No names found — still remap speaker slots by first appearance
+                # No names found -- still remap speaker slots by first appearance
                 segments = (
                     db.query(Segment)
                     .filter(Segment.episode_id == episode_id)
@@ -116,7 +112,7 @@ def infer_speakers(self, episode_id: str) -> str:
             )
 
         except Exception as exc:
-            # Soft failure — non-blocking (PRD-04 §4.6)
+            # Soft failure -- non-blocking (PRD-04 S4.6)
             db.rollback()
             update_episode(db, episode_id, inference_error=str(exc))
             logger.warning(
@@ -125,7 +121,7 @@ def infer_speakers(self, episode_id: str) -> str:
                 str(exc),
             )
 
-        archive_episode.delay(episode_id)
+        job_queue.enqueue(db, episode_id, "archive")
         return episode_id
     finally:
         db.close()

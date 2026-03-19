@@ -22,11 +22,6 @@ sqlalchemy = "^2.0.0"
 alembic = "^1.13.0"
 psycopg2-binary = "^2.9.9"
 
-# Task queue
-celery = {extras = ["redis"], version = "^5.3.0"}
-redis = "^5.0.0"
-flower = "^2.0.0"
-
 # RSS parsing
 feedparser = "^6.0.11"
 

@@ -1,5 +1,5 @@
 """
-Archive task — PRD-01 §5.7, §5.8
+Archive task -- PRD-01 S5.7, S5.8
 
 - Compresses audio to MP3 64kbps
 - Writes flat .txt transcript file (with or without speaker labels)
@@ -7,6 +7,7 @@ Archive task — PRD-01 §5.7, §5.8
 - Handles disk-full during archival: marks FAILED, preserves raw audio
 """
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.config import settings
@@ -17,11 +18,7 @@ from app.tasks.helpers import update_episode
 logger = logging.getLogger(__name__)
 
 
-from app.tasks.celery_app import celery_app
-
-
-@celery_app.task(bind=True, name="archive_episode")
-def archive_episode(self, episode_id: str) -> str:
+def archive_episode(episode_id: str) -> str:
     db = SessionLocal()
     try:
         episode = db.query(Episode).filter(Episode.id == episode_id).first()
@@ -54,7 +51,7 @@ def archive_episode(self, episode_id: str) -> str:
         elif not settings.archive_audio and raw_path and raw_path.exists():
             raw_path.unlink()
 
-        # Write flat .txt transcript (PRD-04 §4.7: include inferred names)
+        # Write flat .txt transcript (PRD-04 S4.7: include inferred names)
         segments = (
             db.query(Segment)
             .filter(Segment.episode_id == episode_id)
@@ -73,14 +70,13 @@ def archive_episode(self, episode_id: str) -> str:
                 db, episode_id,
                 status="failed",
                 error_class="SYSTEM_ERROR",
-                error_message="No transcript segments found at archival — cannot mark done.",
+                error_message="No transcript segments found at archival -- cannot mark done.",
             )
             logger.error('"action": "archive_no_segments", "episode_id": "%s"', episode_id)
             return episode_id
 
         transcript_path = _write_transcript(episode, segments, name_map)
 
-        from datetime import datetime, timezone
         update_episode(
             db, episode_id,
             status="done",
@@ -114,7 +110,7 @@ def _compress_audio(raw_path: Path, episode_id: str) -> Path:
 def _write_transcript(
     episode: Episode, segments: list[Segment], name_map: dict[str, "SpeakerName"] | None = None
 ) -> str:
-    """Write flat .txt transcript file. Uses inferred names where available (PRD-04 §4.7)."""
+    """Write flat .txt transcript file. Uses inferred names where available (PRD-04 S4.7)."""
     transcript_dir = Path(settings.transcript_dir)
     transcript_dir.mkdir(parents=True, exist_ok=True)
     dest = transcript_dir / f"{episode.id}.txt"
@@ -133,7 +129,7 @@ def _write_transcript(
         reason = episode.diarization_error or "unknown"
         lines.append(f"# Diarization: FAILED ({reason})")
 
-    # PRD-04 §4.7: header with inferred host/guest names
+    # PRD-04 S4.7: header with inferred host/guest names
     host_sn = name_map.get("SPEAKER_00")
     if host_sn and host_sn.inferred:
         lines.append(f"# Host: {host_sn.display_name} (inferred)")

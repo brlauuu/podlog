@@ -12,7 +12,6 @@ export async function GET() {
       services: [
         { name: "Pipeline API", status: "DEGRADED" },
         { name: "Database", status: "DEGRADED" },
-        { name: "Redis", status: "DEGRADED" },
         { name: "Worker", status: "DEGRADED" },
       ],
     });

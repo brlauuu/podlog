@@ -13,14 +13,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis_test:
-    image: redis:7-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
   mock_rss:
     image: nginx:alpine
     volumes:
@@ -33,13 +25,10 @@ services:
     command: pytest tests/ -v --cov=app --cov-report=term-missing
     environment:
       DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
-      REDIS_URL: redis://redis_test:6379/0
       MOCK_RSS_URL: http://mock_rss/feed.xml
       HF_TOKEN: ${HF_TOKEN:-}
     depends_on:
       db_test:
-        condition: service_healthy
-      redis_test:
         condition: service_healthy
       mock_rss:
         condition: service_started

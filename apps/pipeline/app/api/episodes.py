@@ -1,5 +1,5 @@
 """
-Episode API — PRD-01 §10
+Episode API -- PRD-01 S10
 
 POST  /api/episodes/ingest   Manually ingest a single audio URL
 GET   /api/episodes           List episodes (filterable by feed, status)
@@ -78,7 +78,7 @@ def ingest_manual(body: IngestEpisodeRequest, db: Session = Depends(get_db)) -> 
     db.commit()
     db.refresh(episode)
 
-    ingest_episode.delay(episode.id)
+    ingest_episode(episode.id)
     logger.info('"action": "manual_ingest", "episode_id": "%s"', episode.id)
     return {"episode_id": episode.id}
 

@@ -4,25 +4,21 @@ GET /api/health
 Returns per-service status for the system dashboard.
 
 States per service:
-  OK          — service is reachable and healthy
-  WARMING_UP  — worker is still loading models
-  DEGRADED    — service unreachable or unhealthy
+  OK          -- service is reachable and healthy
+  WARMING_UP  -- worker is still loading models
+  DEGRADED    -- service unreachable or unhealthy
 """
 import logging
 
-import redis
 from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from app.config import settings
 from app.database import SessionLocal
+from app.models import SystemState
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# The prewarm task writes this key to Redis when it finishes.
-PREWARM_DONE_KEY = "podlog:prewarm:done"
 
 
 class ServiceStatus(BaseModel):
@@ -39,40 +35,28 @@ class HealthResponse(BaseModel):
 def health_check() -> HealthResponse:
     services: list[ServiceStatus] = []
 
-    # Database
+    # Database + Worker (both need a DB session)
+    db = None
     try:
         db = SessionLocal()
         db.execute(text("SELECT 1"))
-        db.close()
         services.append(ServiceStatus(name="Database", status="OK"))
-    except Exception as exc:
-        logger.warning("Health check — database failed: %s", exc)
-        services.append(ServiceStatus(name="Database", status="DEGRADED"))
 
-    # Redis
-    redis_ok = False
-    try:
-        r = redis.from_url(settings.redis_url, socket_connect_timeout=2)
-        r.ping()
-        redis_ok = True
-        services.append(ServiceStatus(name="Redis", status="OK"))
+        # Worker (via prewarm flag in DB — shared across containers)
+        row = db.query(SystemState).filter(SystemState.key == "prewarm_done").first()
+        if row is not None and row.value == "1":
+            services.append(ServiceStatus(name="Worker", status="OK"))
+        else:
+            services.append(ServiceStatus(name="Worker", status="WARMING_UP"))
     except Exception as exc:
-        logger.warning("Health check — redis failed: %s", exc)
-        services.append(ServiceStatus(name="Redis", status="DEGRADED"))
-
-    # Worker (via Redis prewarm key)
-    if redis_ok:
-        try:
-            r = redis.from_url(settings.redis_url, socket_connect_timeout=2)
-            prewarm_done = r.get(PREWARM_DONE_KEY)
-            if prewarm_done:
-                services.append(ServiceStatus(name="Worker", status="OK"))
-            else:
-                services.append(ServiceStatus(name="Worker", status="WARMING_UP"))
-        except Exception:
-            services.append(ServiceStatus(name="Worker", status="DEGRADED"))
-    else:
-        services.append(ServiceStatus(name="Worker", status="DEGRADED"))
+        logger.warning("Health check -- database failed: %s", exc)
+        if not any(s.name == "Database" for s in services):
+            services.append(ServiceStatus(name="Database", status="DEGRADED"))
+        if not any(s.name == "Worker" for s in services):
+            services.append(ServiceStatus(name="Worker", status="WARMING_UP"))
+    finally:
+        if db is not None:
+            db.close()
 
     # Pipeline API is implicitly OK if this endpoint responds
     services.append(ServiceStatus(name="Pipeline API", status="OK"))

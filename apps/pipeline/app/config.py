@@ -7,10 +7,6 @@ class Settings(BaseSettings):
     # Database
     database_url: str
 
-    # Redis / Celery
-    redis_url: str = "redis://redis:6379/0"
-    celery_concurrency: int = 1
-
     # HuggingFace
     hf_token: str
 
@@ -29,12 +25,12 @@ class Settings(BaseSettings):
 
     # Retry configuration
     retry_max: int = 3
-    retry_backoff_base: int = 30  # seconds; actual = base * 2^(attempt-1) → 30s, 60s, 120s
+    retry_backoff_base: int = 30  # seconds; actual = base * 2^(attempt-1) -> 30s, 60s, 120s
 
     # Disk space guard (GAP-06): minimum free bytes before starting a download
     disk_headroom_bytes: int = 2 * 1024 * 1024 * 1024  # 2 GB
 
-    # Host/guest inference (PRD-04 §9)
+    # Host/guest inference (PRD-04 S9)
     inference_enabled: bool = True
     spacy_model: str = "en_core_web_lg"
 

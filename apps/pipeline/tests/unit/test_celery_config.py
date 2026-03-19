@@ -1,46 +1,63 @@
-"""Tests for Celery task routing configuration."""
+"""Tests for the DB-backed job queue module."""
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch, call
 
-from app.tasks.celery_app import celery_app
-
-
-HEAVY_TASKS = ["transcribe_episode", "diarize_episode"]
-LIGHT_TASKS = [
-    "infer_speakers",
-    "download_episode",
-    "archive_episode",
-    "ingest_episode",
-    "ingest_feed",
-    "cleanup_zombie_jobs",
-    "poll_all_feeds",
-]
+from app.models import Job
 
 
-def test_heavy_tasks_route_to_heavy_queue():
-    routes = celery_app.conf.task_routes
-    for task_name in HEAVY_TASKS:
-        assert routes[task_name]["queue"] == "heavy", f"{task_name} should route to heavy"
+class TestJobQueue:
+    def test_enqueue_creates_job(self):
+        db = MagicMock()
+        db.refresh = MagicMock()
 
+        with patch("app.job_queue.Job") as MockJob:
+            mock_job = MagicMock()
+            mock_job.id = 1
+            MockJob.return_value = mock_job
 
-def test_light_tasks_route_to_light_queue():
-    routes = celery_app.conf.task_routes
-    for task_name in LIGHT_TASKS:
-        assert routes[task_name]["queue"] == "light", f"{task_name} should route to light"
+            from app.job_queue import enqueue
+            result = enqueue(db, "ep-1", "download")
 
+            MockJob.assert_called_once_with(episode_id="ep-1", task="download", retry_at=None)
+            db.add.assert_called_once_with(mock_job)
+            db.commit.assert_called_once()
 
-def test_default_queue_is_light():
-    assert celery_app.conf.task_default_queue == "light"
+    def test_enqueue_with_retry_at(self):
+        db = MagicMock()
+        db.refresh = MagicMock()
+        retry_at = datetime.now(timezone.utc) + timedelta(seconds=30)
 
+        with patch("app.job_queue.Job") as MockJob:
+            mock_job = MagicMock()
+            mock_job.id = 1
+            MockJob.return_value = mock_job
 
-def test_all_registered_tasks_have_routes():
-    """Every task in the 'include' modules should have an explicit route."""
-    routes = celery_app.conf.task_routes
-    routed_tasks = set(routes.keys())
-    expected = set(HEAVY_TASKS + LIGHT_TASKS)
-    assert routed_tasks == expected
+            from app.job_queue import enqueue
+            enqueue(db, "ep-1", "download", retry_at=retry_at)
 
+            MockJob.assert_called_once_with(episode_id="ep-1", task="download", retry_at=retry_at)
 
-def test_no_tasks_route_to_default_celery_queue():
-    """No task should route to the built-in 'celery' queue."""
-    routes = celery_app.conf.task_routes
-    for task_name, route in routes.items():
-        assert route["queue"] != "celery", f"{task_name} routes to default 'celery' queue"
+    def test_complete_sets_status_done(self):
+        db = MagicMock()
+        job = MagicMock()
+        job.id = 1
+        job.task = "download"
+
+        from app.job_queue import complete
+        complete(db, job)
+
+        assert job.status == "done"
+        db.commit.assert_called_once()
+
+    def test_fail_sets_status_and_error(self):
+        db = MagicMock()
+        job = MagicMock()
+        job.id = 1
+        job.task = "download"
+
+        from app.job_queue import fail
+        fail(db, job, "something went wrong")
+
+        assert job.status == "failed"
+        assert job.error == "something went wrong"
+        db.commit.assert_called_once()

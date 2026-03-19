@@ -1,4 +1,4 @@
-.PHONY: up down build logs test test-unit test-e2e migrate shell-db shell-pipeline flower web
+.PHONY: up down build logs test test-unit test-e2e migrate shell-db shell-pipeline web
 
 up:             ## Start full stack
 	docker compose up -d
@@ -36,10 +36,6 @@ shell-pipeline: ## Open shell in pipeline container
 
 shell-web:      ## Open shell in web container
 	docker compose exec web sh
-
-flower:         ## Start Flower queue monitor and open in browser
-	docker compose --profile debug up -d flower
-	open http://localhost:5555
 
 web:            ## Open web app in browser
 	open http://localhost:3000
