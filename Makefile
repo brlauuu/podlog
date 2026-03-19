@@ -37,7 +37,8 @@ shell-pipeline: ## Open shell in pipeline container
 shell-web:      ## Open shell in web container
 	docker compose exec web sh
 
-flower:         ## Open Flower queue monitor in browser
+flower:         ## Start Flower queue monitor and open in browser
+	docker compose --profile debug up -d flower
 	open http://localhost:5555
 
 web:            ## Open web app in browser

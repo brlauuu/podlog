@@ -26,7 +26,9 @@ services:
       retries: 5
 
   pipeline:
-    build: ./apps/pipeline
+    build:
+      context: ./apps/pipeline
+      dockerfile: Dockerfile.control
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000"
@@ -39,7 +41,6 @@ services:
     volumes:
       - audio_data:/data/audio
       - transcript_data:/data/transcripts
-      - model_cache:/root/.cache/huggingface
     depends_on:
       db:
         condition: service_healthy
@@ -54,11 +55,15 @@ services:
       start_period: 30s
 
   worker:
-    build: ./apps/pipeline
-    # Pre-warm downloads model weights before accepting any jobs
+    build:
+      context: ./apps/pipeline
+      dockerfile: Dockerfile.worker
+    # Pre-warm downloads model weights, then run worker with embedded beat (-B)
+    # and both heavy+light queues (merges old worker, worker-light, and beat)
     command: >
       sh -c "python -m app.tasks.prewarm &&
-             celery -A app.tasks.celery_app worker -Q heavy --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
+             celery -A app.tasks.celery_app worker -B -Q heavy,light
+             --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
@@ -75,50 +80,6 @@ services:
       pipeline:
         condition: service_healthy  # Ensures migrations are done before worker writes to DB
 
-  worker-light:
-    build: ./apps/pipeline
-    command: >
-      celery -A app.tasks.celery_app worker -Q light
-      --loglevel=info --concurrency=${CELERY_LIGHT_CONCURRENCY:-3}
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
-      REDIS_URL: redis://redis:6379/0
-    volumes:
-      - audio_data:/data/audio
-      - transcript_data:/data/transcripts
-      - model_cache:/root/.cache/huggingface
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      pipeline:
-        condition: service_healthy
-
-  beat:
-    build: ./apps/pipeline
-    command: celery -A app.tasks.celery_app beat --loglevel=info
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      pipeline:
-        condition: service_healthy
-
-  flower:
-    build: ./apps/pipeline
-    command: celery -A app.tasks.celery_app flower --port=5555
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
-      REDIS_URL: redis://redis:6379/0
-    ports:
-      - "5555:5555"
-    depends_on:
-      - redis
-
   web:
     build: ./apps/web
     ports:
@@ -133,6 +94,22 @@ services:
         condition: service_healthy
       pipeline:
         condition: service_healthy  # Waits for migrations — prevents schema-not-found errors
+
+  # Optional debug services — start with: docker compose --profile debug up
+  flower:
+    profiles: ["debug"]
+    build:
+      context: ./apps/pipeline
+      dockerfile: Dockerfile.control
+    command: celery -A app.tasks.celery_app flower --port=5555
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
 
 volumes:
   postgres_data:
