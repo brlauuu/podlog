@@ -1,8 +1,7 @@
-"""Tests for the queue API response structure."""
-from datetime import datetime
+"""Tests for the queue API retry logic."""
 from unittest.mock import MagicMock, patch
 
-from app.api.queue import ACTIVE_STATUSES, NON_RETRYABLE, QueueStateResponse, _job_dict, retry_job
+from app.api.queue import NON_RETRYABLE, retry_job
 
 
 def _make_episode(status, **kwargs):
@@ -22,31 +21,12 @@ def _make_episode(status, **kwargs):
     return ep
 
 
-class TestGetQueue:
-    def test_inferring_episodes_are_active(self):
-        """Inferring episodes should appear in active_jobs, not be omitted."""
-        assert "inferring" in ACTIVE_STATUSES
+class TestNonRetryable:
+    def test_disk_full_is_non_retryable(self):
+        assert "DISK_FULL" in NON_RETRYABLE
 
-    def test_job_dict_includes_updated_at(self):
-        ep = _make_episode("downloading", updated_at=datetime(2026, 3, 18, 12, 0, 0))
-        result = _job_dict(ep)
-        assert result["updated_at"] == "2026-03-18T12:00:00"
-
-    def test_job_dict_updated_at_none(self):
-        ep = _make_episode("pending", updated_at=None)
-        result = _job_dict(ep)
-        assert result["updated_at"] is None
-
-    def test_job_dict_no_celery_task_id(self):
-        """Job dict should not include celery_task_id anymore."""
-        ep = _make_episode("pending")
-        result = _job_dict(ep)
-        assert "celery_task_id" not in result
-
-    def test_done_jobs_included_in_response(self):
-        schema = QueueStateResponse.model_json_schema()
-        assert "done_count" in schema["properties"]
-        assert "done_jobs" in schema["properties"]
+    def test_oom_is_non_retryable(self):
+        assert "OOM" in NON_RETRYABLE
 
 
 class TestRetryJob:
@@ -54,13 +34,12 @@ class TestRetryJob:
 
     def _call_retry(self, episode):
         """Call retry_job with a mocked DB that returns the given episode."""
-        import pytest
         from fastapi import HTTPException
 
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = episode
         try:
-            with patch("app.api.queue.ingest_episode") as mock_ingest:
+            with patch("app.api.queue.ingest_episode"):
                 return retry_job("ep-1", db=db)
         except HTTPException as exc:
             return exc

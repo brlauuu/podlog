@@ -1,15 +1,14 @@
 """
-Queue management API -- PRD-01 S10
+Queue management API — control-plane endpoints only.
 
-GET   /api/queue                         Current queue state
 POST  /api/queue/{episode_id}/retry      Retry a failed job
+
+Queue read (GET /api/queue) is served directly by the Next.js web app
+via PostgreSQL queries (no proxy needed).
 """
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -21,65 +20,6 @@ router = APIRouter()
 
 # Error classes that cannot be auto-retried -- user must resolve the root cause first
 NON_RETRYABLE = {"DISK_FULL", "OOM"}
-
-ACTIVE_STATUSES = ["downloading", "transcribing", "diarizing", "inferring", "archiving"]
-
-
-class QueueStateResponse(BaseModel):
-    active_count: int
-    pending_count: int
-    failed_count: int
-    done_count: int
-    active_jobs: list[dict]
-    pending_jobs: list[dict]
-    failed_jobs: list[dict]
-    done_jobs: list[dict]
-
-
-def _job_dict(ep) -> dict:
-    """Convert an Episode to a dict for the queue API response."""
-    return {
-        "episode_id": ep.id,
-        "title": ep.title,
-        "status": ep.status,
-        "error_message": ep.error_message,
-        "error_class": ep.error_class,
-        "retry_count": ep.retry_count,
-        "retry_max": ep.retry_max,
-        "feed_mode": ep.feed.mode if ep.feed else None,
-        "feed_title": ep.feed.title if ep.feed else None,
-        "updated_at": ep.updated_at.isoformat() if ep.updated_at else None,
-    }
-
-
-@router.get("/queue", response_model=QueueStateResponse)
-def get_queue(db: Session = Depends(get_db)) -> QueueStateResponse:
-    active = db.query(Episode).filter(
-        Episode.status.in_(ACTIVE_STATUSES)
-    ).all()
-    pending = db.query(Episode).filter(Episode.status == "pending").all()
-    failed = db.query(Episode).filter(Episode.status == "failed").all()
-
-    # Total count (unlimited) for display
-    done_count = db.query(func.count(Episode.id)).filter(
-        Episode.status == "done"
-    ).scalar() or 0
-
-    # Limited result set for the response
-    done = db.query(Episode).filter(
-        Episode.status == "done"
-    ).order_by(Episode.updated_at.desc()).limit(50).all()
-
-    return QueueStateResponse(
-        active_count=len(active),
-        pending_count=len(pending),
-        failed_count=len(failed),
-        done_count=done_count,
-        active_jobs=[_job_dict(ep) for ep in active],
-        pending_jobs=[_job_dict(ep) for ep in pending],
-        failed_jobs=[_job_dict(ep) for ep in failed],
-        done_jobs=[_job_dict(ep) for ep in done],
-    )
 
 
 @router.post("/queue/{episode_id}/retry", status_code=202)
