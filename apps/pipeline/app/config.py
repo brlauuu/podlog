@@ -5,14 +5,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Database
-    database_url: str
+    database_url: str = "postgresql://localhost/podlog"
 
     # Redis / Celery
     redis_url: str = "redis://redis:6379/0"
     celery_concurrency: int = 1
 
     # HuggingFace
-    hf_token: str
+    hf_token: str = ""
 
     # Whisper (WhisperX / CTranslate2 backend)
     whisper_model: str = "large-v3-turbo"
