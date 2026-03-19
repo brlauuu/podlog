@@ -1,10 +1,12 @@
 """
-Feed management API -- PRD-01 S10, Issue #23
+Feed management API — control-plane endpoints.
 
-POST   /api/feeds         Add a new RSS feed (with validation -- GAP-02)
-GET    /api/feeds         List all feeds
-DELETE /api/feeds/{id}    Remove a feed (optionally delete episodes)
+POST   /api/feeds            Add a new RSS feed (with validation — GAP-02)
+DELETE /api/feeds/{id}       Remove a feed (optionally delete episodes)
 POST   /api/feeds/{id}/poll  Trigger immediate re-poll
+
+Feed listing (GET /api/feeds) is served directly by the Next.js web app
+via PostgreSQL queries (no proxy needed).
 """
 import logging
 from datetime import datetime
@@ -104,12 +106,6 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
         feed.id, feed.url, feed.mode,
     )
     return FeedResponse.model_validate(feed)
-
-
-@router.get("/feeds", response_model=list[FeedResponse])
-def list_feeds(db: Session = Depends(get_db)) -> list[FeedResponse]:
-    feeds = db.query(Feed).order_by(Feed.created_at.desc()).all()
-    return [FeedResponse.model_validate(f) for f in feeds]
 
 
 @router.delete("/feeds/{feed_id}", status_code=204)

@@ -70,15 +70,7 @@ class TestFeedsEndpoint:
         finally:
             app.dependency_overrides.clear()
 
-    def test_list_feeds_returns_empty(self):
-        mock_db = MagicMock()
-        mock_db.query.return_value.order_by.return_value.all.return_value = []
-
-        from app.database import get_db
-        app.dependency_overrides[get_db] = lambda: mock_db
-        try:
-            resp = client.get("/api/feeds")
-            assert resp.status_code == 200
-            assert resp.json() == []
-        finally:
-            app.dependency_overrides.clear()
+    def test_list_feeds_removed(self):
+        """GET /api/feeds was moved to Next.js direct DB — should return 405."""
+        resp = client.get("/api/feeds")
+        assert resp.status_code == 405
