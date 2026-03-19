@@ -4,8 +4,8 @@ Model pre-warm -- PRD-01 S5.11
 Run before the worker starts accepting jobs. Downloads and caches
 Whisper + pyannote model weights (~3 GB on first run).
 
-Sets a flag file when complete so the health endpoint can transition from
-WARMING_UP -> OK.
+Sets a DB flag (system_state table) when complete so the health endpoint
+can transition from WARMING_UP -> OK.
 
 Usage (from docker-compose.yml):
   python -m app.tasks.prewarm

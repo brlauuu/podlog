@@ -88,17 +88,16 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
         mode=body.mode,
     )
     db.add(feed)
-    db.flush()  # Assign ID without committing, so we can roll back on dispatch failure
+    db.commit()
+    db.refresh(feed)
 
-    # Trigger ingestion (creates download jobs for each episode)
+    # Trigger ingestion (creates download jobs for each episode).
+    # Called after commit so ingest_feed's own session can see the feed row.
     try:
         _ingest_feed(feed.id)
     except Exception as exc:
         # Feed is saved but ingestion failed — not fatal, can be re-polled
         logger.error('"action": "feed_ingest_failed", "url": "%s", "error": "%s"', body.url, exc)
-
-    db.commit()
-    db.refresh(feed)
 
     logger.info(
         '"action": "feed_added", "feed_id": "%s", "url": "%s", "mode": "%s"',

@@ -95,9 +95,6 @@ class Episode(Base):
     transcribe_duration_secs: Mapped[float | None] = mapped_column(Float)
     diarize_duration_secs: Mapped[float | None] = mapped_column(Float)
 
-    # Legacy field — kept for schema compat during transition, no longer written
-    celery_task_id: Mapped[str | None] = mapped_column(Text)
-
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc),

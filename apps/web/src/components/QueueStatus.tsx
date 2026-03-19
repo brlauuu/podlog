@@ -146,7 +146,7 @@ function EpisodeRow({
   onRetry,
 }: {
   job: Job;
-  onRetry: (taskId: string) => void;
+  onRetry: (episodeId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isFailed = job.status === "failed";
