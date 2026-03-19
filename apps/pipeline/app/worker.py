@@ -25,7 +25,6 @@ TASK_HANDLERS: dict[str, str] = {
     "diarize": "app.tasks.diarize:diarize_episode",
     "infer": "app.tasks.infer:infer_speakers",
     "archive": "app.tasks.archive:archive_episode",
-    "ingest_feed": "app.tasks.ingest:ingest_feed",
 }
 
 POLL_INTERVAL = 2  # seconds between queue polls when idle

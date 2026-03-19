@@ -17,7 +17,35 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-PREWARM_FLAG_FILE = "/tmp/podlog_prewarm_done"
+
+def _is_prewarm_done() -> bool:
+    """Check if prewarm has already completed (via DB flag)."""
+    try:
+        from app.database import SessionLocal
+        from app.models import SystemState
+        db = SessionLocal()
+        try:
+            row = db.query(SystemState).filter(SystemState.key == "prewarm_done").first()
+            return row is not None and row.value == "1"
+        finally:
+            db.close()
+    except Exception:
+        return False
+
+
+def _set_prewarm_done() -> None:
+    """Write prewarm completion flag to DB (visible to all containers)."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from app.database import SessionLocal
+    from app.models import SystemState
+    db = SessionLocal()
+    try:
+        stmt = pg_insert(SystemState.__table__).values(key="prewarm_done", value="1")
+        stmt = stmt.on_conflict_do_update(index_elements=["key"], set_={"value": "1"})
+        db.execute(stmt)
+        db.commit()
+    finally:
+        db.close()
 
 
 def main() -> None:
@@ -27,8 +55,7 @@ def main() -> None:
 
     # Check if models are already cached
     whisper_cache = Path(settings.model_cache_dir) / "hub"
-    flag = Path(PREWARM_FLAG_FILE)
-    if whisper_cache.exists() and flag.exists():
+    if whisper_cache.exists() and _is_prewarm_done():
         logger.info('"action": "prewarm_skipped", "reason": "models_already_cached"')
         return
 
@@ -67,7 +94,7 @@ def main() -> None:
     except Exception as exc:
         logger.warning('"action": "prewarm_pyannote_failed", "error": "%s"', exc)
 
-    flag.write_text("1")
+    _set_prewarm_done()
     logger.info('"action": "prewarm_complete"')
 
 

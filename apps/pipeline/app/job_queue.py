@@ -5,7 +5,7 @@ Uses PostgreSQL FOR UPDATE SKIP LOCKED for safe concurrent polling.
 Jobs flow through: pending -> picked -> (task runs) -> done/failed.
 """
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 

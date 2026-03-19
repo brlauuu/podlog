@@ -181,3 +181,12 @@ class Job(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     picked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SystemState(Base):
+    """Simple key-value store for cross-container state (e.g. prewarm status)."""
+
+    __tablename__ = "system_state"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)

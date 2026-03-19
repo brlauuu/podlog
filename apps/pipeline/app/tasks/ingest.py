@@ -101,8 +101,13 @@ def poll_all_feeds() -> dict:
     db = SessionLocal()
     try:
         feeds = db.query(Feed).filter(Feed.mode == "full").all()
+        results = []
         for feed in feeds:
-            job_queue.enqueue(db, feed.id, "ingest_feed")
+            try:
+                result = ingest_feed(feed.id)
+                results.append(result)
+            except Exception:
+                logger.exception('"action": "poll_feed_failed", "feed_id": "%s"', feed.id)
         return {"polled": len(feeds)}
     finally:
         db.close()

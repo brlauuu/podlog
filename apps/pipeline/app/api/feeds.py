@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Feed
 from app.services import rss as rss_service
-from app import job_queue
+from app.tasks.ingest import ingest_feed as _ingest_feed
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -60,7 +60,7 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
             db.commit()
             db.refresh(existing)
             try:
-                job_queue.enqueue(db, existing.id, "ingest_feed")
+                _ingest_feed(existing.id)
             except Exception as exc:
                 logger.error(
                     '"action": "promote_feed_dispatch_failed", "feed_id": "%s", "error": "%s"',
@@ -90,16 +90,12 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
     db.add(feed)
     db.flush()  # Assign ID without committing, so we can roll back on dispatch failure
 
-    # Enqueue ingestion
+    # Trigger ingestion (creates download jobs for each episode)
     try:
-        job_queue.enqueue(db, feed.id, "ingest_feed")
+        _ingest_feed(feed.id)
     except Exception as exc:
-        db.rollback()
-        logger.error('"action": "feed_add_failed", "url": "%s", "error": "%s"', body.url, exc)
-        raise HTTPException(
-            status_code=503,
-            detail=f"Feed validated but job queue is unavailable: {type(exc).__name__}",
-        )
+        # Feed is saved but ingestion failed — not fatal, can be re-polled
+        logger.error('"action": "feed_ingest_failed", "url": "%s", "error": "%s"', body.url, exc)
 
     db.commit()
     db.refresh(feed)
@@ -144,5 +140,5 @@ def poll_feed(feed_id: str, db: Session = Depends(get_db)) -> dict:
     feed = db.query(Feed).filter(Feed.id == feed_id).first()
     if not feed:
         raise HTTPException(status_code=404, detail="Feed not found")
-    job_queue.enqueue(db, feed.id, "ingest_feed")
+    _ingest_feed(feed.id)
     return {"queued": True}
