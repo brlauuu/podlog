@@ -62,8 +62,7 @@ services:
     # and both heavy+light queues (merges old worker, worker-light, and beat)
     command: >
       sh -c "python -m app.tasks.prewarm &&
-             celery -A app.tasks.celery_app worker -B -Q heavy,light
-             --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
+             celery -A app.tasks.celery_app worker -B -Q heavy,light --loglevel=info --concurrency=${CELERY_CONCURRENCY:-1}"
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
@@ -104,7 +103,6 @@ services:
     command: celery -A app.tasks.celery_app flower --port=5555
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
       REDIS_URL: redis://redis:6379/0
     ports:
       - "5555:5555"
