@@ -9,21 +9,24 @@ const ACTIVE_STATUSES = [
   "archiving",
 ];
 
+const JOB_COLUMNS = `
+  e.id        AS episode_id,
+  e.title,
+  e.status,
+  e.error_message,
+  e.error_class,
+  e.retry_count,
+  e.retry_max,
+  e.updated_at,
+  f.mode      AS feed_mode,
+  f.title     AS feed_title
+`;
+
 export async function GET() {
   try {
     // Fetch active, pending, and failed episodes in one query
     const { rows: jobs } = await pool.query(
-      `SELECT
-         e.id        AS episode_id,
-         e.title,
-         e.status,
-         e.error_message,
-         e.error_class,
-         e.retry_count,
-         e.retry_max,
-         e.updated_at,
-         f.mode      AS feed_mode,
-         f.title     AS feed_title
+      `SELECT ${JOB_COLUMNS}
        FROM episodes e
        LEFT JOIN feeds f ON f.id = e.feed_id
        WHERE e.status != 'done'
@@ -33,17 +36,7 @@ export async function GET() {
     // Fetch done episodes (limited to 50, plus total count)
     const [doneResult, doneCountResult] = await Promise.all([
       pool.query(
-        `SELECT
-           e.id        AS episode_id,
-           e.title,
-           e.status,
-           e.error_message,
-           e.error_class,
-           e.retry_count,
-           e.retry_max,
-           e.updated_at,
-           f.mode      AS feed_mode,
-           f.title     AS feed_title
+        `SELECT ${JOB_COLUMNS}
          FROM episodes e
          LEFT JOIN feeds f ON f.id = e.feed_id
          WHERE e.status = 'done'
