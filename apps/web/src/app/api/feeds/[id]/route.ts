@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const PIPELINE_API = process.env.PIPELINE_API_URL ?? "http://pipeline:8000";
+import { PIPELINE_API } from "@/lib/pipeline";
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const deleteEpisodes = req.nextUrl.searchParams.get("delete_episodes") === "true";

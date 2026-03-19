@@ -3,13 +3,7 @@
 import { useState, useEffect } from "react";
 import { Check, X } from "lucide-react";
 import { getSpeakerColor, getSpeakerInitials, getSpeakerSlot } from "@/lib/speakerColors";
-
-interface Segment {
-  speaker_label: string | null;
-  display_name: string | null;
-  inferred: boolean;
-  confirmed_by_user: boolean;
-}
+import type { Segment } from "@/lib/types";
 
 interface SpeakerInfo {
   speakerLabel: string;

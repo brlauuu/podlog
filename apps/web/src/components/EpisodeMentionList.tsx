@@ -6,11 +6,7 @@ import Link from "next/link";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { formatTimestamp } from "@/lib/timestamp";
 import type { EpisodeMentions } from "@/lib/search";
-
-/** Client-safe basename — extracts filename from a path string */
-function basename(filePath: string): string {
-  return filePath.split("/").pop() ?? filePath;
-}
+import { basename } from "@/lib/utils";
 
 interface Props {
   query: string;

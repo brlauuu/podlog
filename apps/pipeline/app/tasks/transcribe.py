@@ -17,6 +17,7 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
+from app.tasks.helpers import mark_failed as _mark_failed, update_episode
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,7 @@ def transcribe_episode(self, episode_id: str) -> str:
             )
             return episode_id
 
-        db.query(Episode).filter(Episode.id == episode_id).update({"status": "transcribing"})
-        db.commit()
+        update_episode(db, episode_id, status="transcribing")
 
         audio_path = Path(episode.audio_local_path)
 
@@ -62,10 +62,7 @@ def transcribe_episode(self, episode_id: str) -> str:
                 str(wav_path), model_name=settings.whisper_model
             )
             transcribe_secs = round(time.monotonic() - t0, 1)
-            db.query(Episode).filter(Episode.id == episode_id).update(
-                {"transcribe_duration_secs": transcribe_secs}
-            )
-            db.commit()
+            update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
         except MemoryError as exc:
             _mark_failed(db, episode_id, "OOM", str(exc))
             return episode_id
@@ -104,10 +101,7 @@ def transcribe_episode(self, episode_id: str) -> str:
                 )
             )
 
-        db.query(Episode).filter(Episode.id == episode_id).update(
-            {"language": language, "status": "diarizing"}
-        )
-        db.commit()
+        update_episode(db, episode_id, language=language, status="diarizing")
 
         logger.info(
             '"action": "transcribe_complete", "episode_id": "%s", "segments": %d, "language": "%s", "duration_secs": %.1f',
@@ -150,14 +144,3 @@ def _unload_whisper() -> None:
     logger.info('"action": "whisper_unloaded"')
 
 
-def _mark_failed(db, episode_id: str, error_class: str, error_message: str) -> None:
-    db.query(Episode).filter(Episode.id == episode_id).update(
-        {"status": "failed", "error_class": error_class, "error_message": error_message}
-    )
-    db.commit()
-    logger.error(
-        '"action": "transcribe_error", "episode_id": "%s", "error_class": "%s", "error": "%s"',
-        episode_id,
-        error_class,
-        error_message,
-    )

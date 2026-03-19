@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Info } from "lucide-react";
 import pool from "@/lib/db";
+import type { Segment } from "@/lib/types";
+import { formatTimestamp } from "@/lib/timestamp";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import EpisodeDescription from "@/components/EpisodeDescription";
@@ -10,17 +12,6 @@ import TranscriptSection from "@/components/TranscriptSection";
 import BackToSearchLink from "@/components/BackToSearchLink";
 
 export const dynamic = "force-dynamic";
-
-interface Segment {
-  id: number;
-  start_time: number;
-  end_time: number;
-  speaker_label: string | null;
-  display_name: string | null;
-  inferred: boolean;
-  confirmed_by_user: boolean;
-  text: string;
-}
 
 interface Episode {
   id: string;
@@ -76,13 +67,6 @@ async function getSegments(episodeId: string): Promise<Segment[]> {
   return result.rows;
 }
 
-function formatTime(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = Math.floor(secs % 60);
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
 
 export default async function EpisodePage({ params }: { params: { id: string } }) {
   const [episode, segments] = await Promise.all([getEpisode(params.id), getSegments(params.id)]);
@@ -109,15 +93,15 @@ export default async function EpisodePage({ params }: { params: { id: string } }
           {episode.published_at && (
             <span>{new Date(episode.published_at).toLocaleDateString()}</span>
           )}
-          {episode.duration_secs && <span>{formatTime(episode.duration_secs)}</span>}
+          {episode.duration_secs && <span>{formatTimestamp(episode.duration_secs)}</span>}
         </div>
         {(episode.transcribe_duration_secs || episode.diarize_duration_secs) && (
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
             {episode.transcribe_duration_secs != null && (
-              <span>Transcription: {formatTime(episode.transcribe_duration_secs)}</span>
+              <span>Transcription: {formatTimestamp(episode.transcribe_duration_secs)}</span>
             )}
             {episode.diarize_duration_secs != null && (
-              <span>Diarization: {formatTime(episode.diarize_duration_secs)}</span>
+              <span>Diarization: {formatTimestamp(episode.diarize_duration_secs)}</span>
             )}
           </div>
         )}

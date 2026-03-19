@@ -65,7 +65,7 @@ def assign_speakers_wordlevel(
             rebuilt.append({
                 "start": current_start,
                 "end": current_end,
-                "text": "".join(current_words).strip(),
+                "text": " ".join(w.strip() for w in current_words),
                 "speaker": current_speaker,
             })
             current_speaker = word["speaker"]
@@ -77,7 +77,7 @@ def assign_speakers_wordlevel(
     rebuilt.append({
         "start": current_start,
         "end": current_end,
-        "text": "".join(current_words).strip(),
+        "text": " ".join(w.strip() for w in current_words),
         "speaker": current_speaker,
     })
 

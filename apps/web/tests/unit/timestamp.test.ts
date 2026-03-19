@@ -57,4 +57,12 @@ describe("formatTimestamp", () => {
   test("zero is 0:00", () => {
     expect(formatTimestamp(0)).toBe("0:00");
   });
+
+  it("pads hours when padHours is true", () => {
+    expect(formatTimestamp(3661, { padHours: true })).toBe("01:01:01");
+  });
+
+  it("pads minutes when padHours is true and no hours", () => {
+    expect(formatTimestamp(65, { padHours: true })).toBe("01:05");
+  });
 });
