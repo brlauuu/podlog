@@ -27,7 +27,9 @@ services:
       - ./apps/pipeline/tests/fixtures:/usr/share/nginx/html:ro
 
   test:
-    build: ./apps/pipeline
+    build:
+      context: ./apps/pipeline
+      dockerfile: Dockerfile.worker
     command: pytest tests/ -v --cov=app --cov-report=term-missing
     environment:
       DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test

@@ -33,15 +33,19 @@ feedparser = "^6.0.11"
 # Audio processing
 ffmpeg-python = "^0.2.0"
 
-# ML — WhisperX (CTranslate2 backend + wav2vec2 alignment)
+[tool.poetry.group.ml]
+optional = true
+
+[tool.poetry.group.ml.dependencies]
+# WhisperX (CTranslate2 backend + wav2vec2 alignment)
 whisperx = "^3.8.0"
 torch = "^2.2.0"
 
-# ML — pyannote diarization (>=4.0 required by whisperx)
+# pyannote diarization (>=4.0 required by whisperx)
 pyannote-audio = ">=3.1.0"
 soundfile = ">=0.12.0"  # Audio backend for pyannote (fallback when torchcodec unavailable)
 
-# ML — spaCy NER for host/guest inference (PRD-04)
+# spaCy NER for host/guest inference (PRD-04)
 spacy = "^3.7"
 
 [tool.poetry.group.dev.dependencies]
