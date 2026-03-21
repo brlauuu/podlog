@@ -122,54 +122,59 @@ export async function searchSegments(
   query: string,
   feedId: string | null,
   page: number,
-  pageSize: number = 20
+  pageSize: number = 20,
+  skipCount: boolean = false
 ): Promise<SearchPage> {
   const offset = (page - 1) * pageSize;
 
-  const [rowsResult, countResult] = await Promise.all([
-    pool.query(
-      `WITH ${SPEAKER_TURNS_CTE}
-      SELECT
-        t.min_id AS id,
-        t.start_time,
-        t.end_time,
-        t.speaker_label,
-        COALESCE(sn.display_name, t.speaker_label) AS speaker_display,
-        ts_headline('english', t.full_text, query, 'MaxWords=25, MinWords=12') AS snippet,
-        ts_rank(to_tsvector('english', t.full_text), query) AS rank,
-        e.id AS episode_id,
-        e.title AS episode_title,
-        e.audio_url,
-        e.audio_local_path,
-        e.episode_url,
-        e.has_diarization,
-        e.diarization_error,
-        f.title AS feed_title,
-        f.mode AS feed_mode,
-        f.id AS feed_id
-      FROM speaker_turns t
-      JOIN episodes e ON t.episode_id = e.id
-      JOIN feeds f ON e.feed_id = f.id
-      LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = t.speaker_label,
-        plainto_tsquery('english', $1) AS query
-      WHERE to_tsvector('english', t.full_text) @@ query
-        AND ($2::uuid IS NULL OR f.id = $2)
-      ORDER BY rank DESC
-      LIMIT $3 OFFSET $4`,
-      [query, feedId, pageSize, offset]
-    ),
-    pool.query(
-      `WITH ${SPEAKER_TURNS_CTE}
-      SELECT COUNT(*)
-      FROM speaker_turns t
-      JOIN episodes e ON t.episode_id = e.id
-      JOIN feeds f ON e.feed_id = f.id,
-        plainto_tsquery('english', $1) AS query
-      WHERE to_tsvector('english', t.full_text) @@ query
-        AND ($2::uuid IS NULL OR f.id = $2)`,
-      [query, feedId]
-    ),
-  ]);
+  const rowsPromise = pool.query(
+    `WITH ${SPEAKER_TURNS_CTE}
+    SELECT
+      t.min_id AS id,
+      t.start_time,
+      t.end_time,
+      t.speaker_label,
+      COALESCE(sn.display_name, t.speaker_label) AS speaker_display,
+      ts_headline('english', t.full_text, query, 'MaxWords=25, MinWords=12') AS snippet,
+      ts_rank(to_tsvector('english', t.full_text), query) AS rank,
+      e.id AS episode_id,
+      e.title AS episode_title,
+      e.audio_url,
+      e.audio_local_path,
+      e.episode_url,
+      e.has_diarization,
+      e.diarization_error,
+      f.title AS feed_title,
+      f.mode AS feed_mode,
+      f.id AS feed_id
+    FROM speaker_turns t
+    JOIN episodes e ON t.episode_id = e.id
+    JOIN feeds f ON e.feed_id = f.id
+    LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = t.speaker_label,
+      plainto_tsquery('english', $1) AS query
+    WHERE to_tsvector('english', t.full_text) @@ query
+      AND ($2::uuid IS NULL OR f.id = $2)
+    ORDER BY rank DESC
+    LIMIT $3 OFFSET $4`,
+    [query, feedId, pageSize, offset]
+  );
+
+  // Skip the expensive COUNT(*) query on page 2+ when the frontend already has the total
+  const countPromise = skipCount
+    ? Promise.resolve(null)
+    : pool.query(
+        `WITH ${SPEAKER_TURNS_CTE}
+        SELECT COUNT(*)
+        FROM speaker_turns t
+        JOIN episodes e ON t.episode_id = e.id
+        JOIN feeds f ON e.feed_id = f.id,
+          plainto_tsquery('english', $1) AS query
+        WHERE to_tsvector('english', t.full_text) @@ query
+          AND ($2::uuid IS NULL OR f.id = $2)`,
+        [query, feedId]
+      );
+
+  const [rowsResult, countResult] = await Promise.all([rowsPromise, countPromise]);
 
   const results: SearchResult[] = rowsResult.rows.map((row) => ({
     id: row.id,
@@ -193,7 +198,7 @@ export async function searchSegments(
 
   return {
     results,
-    total: parseInt(countResult.rows[0].count, 10),
+    total: countResult ? parseInt(countResult.rows[0].count, 10) : -1,
     page,
     pageSize,
   };
@@ -207,50 +212,54 @@ export async function searchGrouped(
   query: string,
   feedId: string | null,
   page: number,
-  pageSize: number = 20
+  pageSize: number = 20,
+  skipCount: boolean = false
 ): Promise<GroupedSearchResult> {
   const offset = (page - 1) * pageSize;
 
-  const [rowsResult, countResult] = await Promise.all([
-    pool.query(
-      `WITH ${SPEAKER_TURNS_CTE}
-      SELECT
-        f.id AS feed_id,
-        f.title AS feed_title,
-        f.mode AS feed_mode,
-        e.id AS episode_id,
-        e.title AS episode_title,
-        e.audio_url,
-        e.audio_local_path,
-        e.episode_url,
-        COUNT(*)::int AS mention_count,
-        MAX(ts_rank(to_tsvector('english', t.full_text), query)) AS best_rank
-      FROM speaker_turns t
-      JOIN episodes e ON t.episode_id = e.id
-      JOIN feeds f ON e.feed_id = f.id,
-        plainto_tsquery('english', $1) AS query
-      WHERE to_tsvector('english', t.full_text) @@ query
-        AND ($2::uuid IS NULL OR f.id = $2)
-      GROUP BY f.id, f.title, f.mode, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
-      ORDER BY best_rank DESC, mention_count DESC
-      LIMIT $3 OFFSET $4`,
-      [query, feedId, pageSize, offset]
-    ),
-    pool.query(
-      `WITH ${SPEAKER_TURNS_CTE}
-      SELECT
-        COUNT(DISTINCT e.id)::int AS total_episodes,
-        COUNT(DISTINCT f.id)::int AS total_feeds,
-        COUNT(*)::int AS total_mentions
-      FROM speaker_turns t
-      JOIN episodes e ON t.episode_id = e.id
-      JOIN feeds f ON e.feed_id = f.id,
-        plainto_tsquery('english', $1) AS query
-      WHERE to_tsvector('english', t.full_text) @@ query
-        AND ($2::uuid IS NULL OR f.id = $2)`,
-      [query, feedId]
-    ),
-  ]);
+  const rowsPromise = pool.query(
+    `WITH ${SPEAKER_TURNS_CTE}
+    SELECT
+      f.id AS feed_id,
+      f.title AS feed_title,
+      f.mode AS feed_mode,
+      e.id AS episode_id,
+      e.title AS episode_title,
+      e.audio_url,
+      e.audio_local_path,
+      e.episode_url,
+      COUNT(*)::int AS mention_count,
+      MAX(ts_rank(to_tsvector('english', t.full_text), query)) AS best_rank
+    FROM speaker_turns t
+    JOIN episodes e ON t.episode_id = e.id
+    JOIN feeds f ON e.feed_id = f.id,
+      plainto_tsquery('english', $1) AS query
+    WHERE to_tsvector('english', t.full_text) @@ query
+      AND ($2::uuid IS NULL OR f.id = $2)
+    GROUP BY f.id, f.title, f.mode, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
+    ORDER BY best_rank DESC, mention_count DESC
+    LIMIT $3 OFFSET $4`,
+    [query, feedId, pageSize, offset]
+  );
+
+  const countPromise = skipCount
+    ? Promise.resolve(null)
+    : pool.query(
+        `WITH ${SPEAKER_TURNS_CTE}
+        SELECT
+          COUNT(DISTINCT e.id)::int AS total_episodes,
+          COUNT(DISTINCT f.id)::int AS total_feeds,
+          COUNT(*)::int AS total_mentions
+        FROM speaker_turns t
+        JOIN episodes e ON t.episode_id = e.id
+        JOIN feeds f ON e.feed_id = f.id,
+          plainto_tsquery('english', $1) AS query
+        WHERE to_tsvector('english', t.full_text) @@ query
+          AND ($2::uuid IS NULL OR f.id = $2)`,
+        [query, feedId]
+      );
+
+  const [rowsResult, countResult] = await Promise.all([rowsPromise, countPromise]);
 
   // Group episode rows by feed
   const feedMap = new Map<string, FeedGroup>();
@@ -280,13 +289,13 @@ export async function searchGrouped(
     });
   }
 
-  const counts = countResult.rows[0];
+  const counts = countResult?.rows[0];
 
   return {
     feeds: Array.from(feedMap.values()),
-    totalFeeds: counts.total_feeds,
-    totalEpisodes: counts.total_episodes,
-    totalMentions: counts.total_mentions,
+    totalFeeds: counts?.total_feeds ?? -1,
+    totalEpisodes: counts?.total_episodes ?? -1,
+    totalMentions: counts?.total_mentions ?? -1,
   };
 }
 

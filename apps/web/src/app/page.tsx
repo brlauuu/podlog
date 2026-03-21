@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Search, List, Layers } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -38,6 +38,10 @@ function HomePageContent() {
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>("grouped");
 
+  // Cache totals from page 1 to skip COUNT(*) on subsequent pages
+  const cachedFlatTotal = useRef<{ key: string; total: number } | null>(null);
+  const cachedGroupedTotals = useRef<{ key: string; totalFeeds: number; totalEpisodes: number; totalMentions: number } | null>(null);
+
   // Sync state when URL ?q= param changes (e.g. browser back/forward)
   useEffect(() => {
     const urlQuery = searchParams.get("q") ?? "";
@@ -48,40 +52,67 @@ function HomePageContent() {
     }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Flat search query
+  // Flat search query — skip COUNT(*) on page 2+ using cached total
+  const flatCacheKey = `${submittedQuery}:${feedFilter}`;
   const flatQuery = useQuery<SearchPage>({
     queryKey: ["search", submittedQuery, feedFilter, page],
     queryFn: async () => {
       if (!submittedQuery) return { results: [], total: 0, page: 1, pageSize: PAGE_SIZE };
+      const canSkipCount = page > 1 && cachedFlatTotal.current?.key === flatCacheKey;
       const params = new URLSearchParams({
         q: submittedQuery,
         page: String(page),
         pageSize: String(PAGE_SIZE),
       });
       if (feedFilter) params.set("feedId", feedFilter);
+      if (canSkipCount) params.set("skipCount", "true");
       const resp = await fetch(`/api/search?${params}`);
       if (!resp.ok) throw new Error("Search failed");
-      return resp.json();
+      const data: SearchPage = await resp.json();
+      // Cache total from page 1, or restore from cache on page 2+
+      if (data.total >= 0) {
+        cachedFlatTotal.current = { key: flatCacheKey, total: data.total };
+      } else if (cachedFlatTotal.current?.key === flatCacheKey) {
+        data.total = cachedFlatTotal.current.total;
+      }
+      return data;
     },
     enabled: Boolean(submittedQuery) && viewMode === "flat",
     staleTime: 30_000,
   });
 
-  // Grouped search query
+  // Grouped search query — skip COUNT(*) on page 2+ using cached totals
+  const groupedCacheKey = `${submittedQuery}:${feedFilter}`;
   const groupedQuery = useQuery<GroupedSearchResult>({
     queryKey: ["search-grouped", submittedQuery, feedFilter, page],
     queryFn: async () => {
       if (!submittedQuery)
         return { feeds: [], totalFeeds: 0, totalEpisodes: 0, totalMentions: 0 };
+      const canSkipCount = page > 1 && cachedGroupedTotals.current?.key === groupedCacheKey;
       const params = new URLSearchParams({
         q: submittedQuery,
         page: String(page),
         pageSize: String(PAGE_SIZE),
       });
       if (feedFilter) params.set("feedId", feedFilter);
+      if (canSkipCount) params.set("skipCount", "true");
       const resp = await fetch(`/api/search/grouped?${params}`);
       if (!resp.ok) throw new Error("Search failed");
-      return resp.json();
+      const data: GroupedSearchResult = await resp.json();
+      // Cache totals from page 1, or restore from cache on page 2+
+      if (data.totalMentions >= 0) {
+        cachedGroupedTotals.current = {
+          key: groupedCacheKey,
+          totalFeeds: data.totalFeeds,
+          totalEpisodes: data.totalEpisodes,
+          totalMentions: data.totalMentions,
+        };
+      } else if (cachedGroupedTotals.current?.key === groupedCacheKey) {
+        data.totalFeeds = cachedGroupedTotals.current.totalFeeds;
+        data.totalEpisodes = cachedGroupedTotals.current.totalEpisodes;
+        data.totalMentions = cachedGroupedTotals.current.totalMentions;
+      }
+      return data;
     },
     enabled: Boolean(submittedQuery) && viewMode === "grouped",
     staleTime: 30_000,
