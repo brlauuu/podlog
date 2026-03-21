@@ -1,5 +1,26 @@
 import pool from "@/lib/db";
 
+const PIPELINE_API = process.env.PIPELINE_API ?? "http://pipeline:8000";
+
+/**
+ * Get embedding for a search query from the pipeline's embed API.
+ * Returns null if embedding service is unavailable (graceful degradation to FTS-only).
+ */
+async function getQueryEmbedding(text: string): Promise<number[] | null> {
+  try {
+    const resp = await fetch(`${PIPELINE_API}/api/embed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.embedding;
+  } catch {
+    return null;
+  }
+}
+
 // ── Grouped search types ────────────────────────────────────
 
 export interface GroupedSearchResult {
@@ -114,9 +135,25 @@ const SPEAKER_TURNS_CTE = `
     GROUP BY episode_id, speaker_label, turn_num
   )`;
 
+// RRF constant — standard value for Reciprocal Rank Fusion
+const RRF_K = 60;
+
 /**
- * Execute full-text search against transcript segments, aggregated by speaker turn.
- * Per PRD-02 §5.1, §10. Deduplicates results so each speaker turn appears once.
+ * Truncate text to ~200 chars for vector-only result snippets.
+ */
+function truncateSnippet(text: string, maxLen = 200): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen).replace(/\s\S*$/, "") + "…";
+}
+
+/**
+ * Hybrid search: FTS + vector similarity with Reciprocal Rank Fusion.
+ *
+ * Runs keyword search (websearch_to_tsquery on speaker turns) and semantic
+ * search (pgvector cosine similarity on segments) in parallel. Results are
+ * merged using RRF so keyword-exact matches rank high while semantically
+ * similar content is also surfaced. Falls back to FTS-only if embeddings
+ * are unavailable.
  */
 export async function searchSegments(
   query: string,
@@ -125,9 +162,10 @@ export async function searchSegments(
   pageSize: number = 20,
   skipCount: boolean = false
 ): Promise<SearchPage> {
-  const offset = (page - 1) * pageSize;
+  const FETCH_LIMIT = 100; // fetch more than pageSize for RRF merging
 
-  const rowsPromise = pool.query(
+  // 1. FTS on speaker turns
+  const ftsPromise = pool.query(
     `WITH ${SPEAKER_TURNS_CTE}
     SELECT
       t.min_id AS id,
@@ -151,15 +189,49 @@ export async function searchSegments(
     JOIN episodes e ON t.episode_id = e.id
     JOIN feeds f ON e.feed_id = f.id
     LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = t.speaker_label,
-      plainto_tsquery('english', $1) AS query
+      websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
       AND ($2::uuid IS NULL OR f.id = $2)
     ORDER BY rank DESC
-    LIMIT $3 OFFSET $4`,
-    [query, feedId, pageSize, offset]
+    LIMIT $3`,
+    [query, feedId, FETCH_LIMIT]
   );
 
-  // Skip the expensive COUNT(*) query on page 2+ when the frontend already has the total
+  // 2. Vector similarity on raw segments (if embeddings available)
+  const embedding = await getQueryEmbedding(query);
+  const vecPromise = embedding
+    ? pool.query(
+        `SELECT
+          s.id,
+          s.start_time,
+          s.end_time,
+          s.speaker_label,
+          COALESCE(sn.display_name, s.speaker_label) AS speaker_display,
+          s.text,
+          1 - (s.embedding <=> $1::vector) AS similarity,
+          e.id AS episode_id,
+          e.title AS episode_title,
+          e.audio_url,
+          e.audio_local_path,
+          e.episode_url,
+          e.has_diarization,
+          e.diarization_error,
+          f.title AS feed_title,
+          f.mode AS feed_mode,
+          f.id AS feed_id
+        FROM segments s
+        JOIN episodes e ON s.episode_id = e.id
+        JOIN feeds f ON e.feed_id = f.id
+        LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = s.speaker_label
+        WHERE s.embedding IS NOT NULL
+          AND ($2::uuid IS NULL OR f.id = $2)
+        ORDER BY s.embedding <=> $1::vector
+        LIMIT $3`,
+        [`[${embedding.join(",")}]`, feedId, FETCH_LIMIT]
+      )
+    : Promise.resolve({ rows: [] });
+
+  // 3. Count (FTS-based, skipped on page 2+)
   const countPromise = skipCount
     ? Promise.resolve(null)
     : pool.query(
@@ -168,40 +240,95 @@ export async function searchSegments(
         FROM speaker_turns t
         JOIN episodes e ON t.episode_id = e.id
         JOIN feeds f ON e.feed_id = f.id,
-          plainto_tsquery('english', $1) AS query
+          websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND ($2::uuid IS NULL OR f.id = $2)`,
         [query, feedId]
       );
 
-  const [rowsResult, countResult] = await Promise.all([rowsPromise, countPromise]);
+  const [ftsResult, vecResult, countResult] = await Promise.all([
+    ftsPromise, vecPromise, countPromise,
+  ]);
 
-  const results: SearchResult[] = rowsResult.rows.map((row) => ({
-    id: row.id,
-    startTime: parseFloat(row.start_time),
-    endTime: parseFloat(row.end_time),
-    speakerLabel: row.speaker_label,
-    speakerDisplay: row.speaker_display,
-    snippet: row.snippet,
-    rank: parseFloat(row.rank),
-    episodeId: row.episode_id,
-    episodeTitle: row.episode_title,
-    audioUrl: row.audio_url,
-    audioLocalPath: row.audio_local_path,
-    episodeUrl: row.episode_url,
-    hasDiarization: row.has_diarization,
-    diarizationError: row.diarization_error,
-    feedTitle: row.feed_title,
-    feedMode: row.feed_mode,
-    feedId: row.feed_id,
-  }));
+  // 4. Build result map keyed by episodeId:bucketedTime for deduplication
+  type MergedEntry = SearchResult & { ftsRank?: number; vecRank?: number; rrfScore: number };
+  const merged = new Map<string, MergedEntry>();
 
-  return {
-    results,
-    total: countResult ? parseInt(countResult.rows[0].count, 10) : -1,
-    page,
-    pageSize,
-  };
+  function bucketKey(episodeId: string, startTime: number): string {
+    return `${episodeId}:${Math.floor(startTime / 30)}`; // 30-second buckets
+  }
+
+  // Add FTS results
+  ftsResult.rows.forEach((row, i) => {
+    const key = bucketKey(row.episode_id, parseFloat(row.start_time));
+    merged.set(key, {
+      id: row.id,
+      startTime: parseFloat(row.start_time),
+      endTime: parseFloat(row.end_time),
+      speakerLabel: row.speaker_label,
+      speakerDisplay: row.speaker_display,
+      snippet: row.snippet,
+      rank: parseFloat(row.rank),
+      episodeId: row.episode_id,
+      episodeTitle: row.episode_title,
+      audioUrl: row.audio_url,
+      audioLocalPath: row.audio_local_path,
+      episodeUrl: row.episode_url,
+      hasDiarization: row.has_diarization,
+      diarizationError: row.diarization_error,
+      feedTitle: row.feed_title,
+      feedMode: row.feed_mode,
+      feedId: row.feed_id,
+      ftsRank: i + 1,
+      rrfScore: 1 / (RRF_K + i + 1),
+    });
+  });
+
+  // Add/merge vector results
+  vecResult.rows.forEach((row, i) => {
+    const key = bucketKey(row.episode_id, parseFloat(row.start_time));
+    const vecScore = 1 / (RRF_K + i + 1);
+    const existing = merged.get(key);
+    if (existing) {
+      // Boost existing FTS result with vector score
+      existing.vecRank = i + 1;
+      existing.rrfScore += vecScore;
+    } else {
+      // Vector-only result (semantic match, no keyword match)
+      merged.set(key, {
+        id: row.id,
+        startTime: parseFloat(row.start_time),
+        endTime: parseFloat(row.end_time),
+        speakerLabel: row.speaker_label,
+        speakerDisplay: row.speaker_display,
+        snippet: truncateSnippet(row.text),
+        rank: parseFloat(row.similarity),
+        episodeId: row.episode_id,
+        episodeTitle: row.episode_title,
+        audioUrl: row.audio_url,
+        audioLocalPath: row.audio_local_path,
+        episodeUrl: row.episode_url,
+        hasDiarization: row.has_diarization,
+        diarizationError: row.diarization_error,
+        feedTitle: row.feed_title,
+        feedMode: row.feed_mode,
+        feedId: row.feed_id,
+        vecRank: i + 1,
+        rrfScore: vecScore,
+      });
+    }
+  });
+
+  // 5. Sort by RRF score, paginate
+  const sorted = Array.from(merged.values()).sort((a, b) => b.rrfScore - a.rrfScore);
+  const offset = (page - 1) * pageSize;
+  const results: SearchResult[] = sorted.slice(offset, offset + pageSize);
+
+  // Total: use FTS count (vector-only results are supplementary)
+  const ftsTotal = countResult ? parseInt(countResult.rows[0].count, 10) : -1;
+  const total = ftsTotal >= 0 ? Math.max(ftsTotal, sorted.length) : -1;
+
+  return { results, total, page, pageSize };
 }
 
 /**
@@ -233,7 +360,7 @@ export async function searchGrouped(
     FROM speaker_turns t
     JOIN episodes e ON t.episode_id = e.id
     JOIN feeds f ON e.feed_id = f.id,
-      plainto_tsquery('english', $1) AS query
+      websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
       AND ($2::uuid IS NULL OR f.id = $2)
     GROUP BY f.id, f.title, f.mode, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
@@ -253,7 +380,7 @@ export async function searchGrouped(
         FROM speaker_turns t
         JOIN episodes e ON t.episode_id = e.id
         JOIN feeds f ON e.feed_id = f.id,
-          plainto_tsquery('english', $1) AS query
+          websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND ($2::uuid IS NULL OR f.id = $2)`,
         [query, feedId]
@@ -326,7 +453,7 @@ export async function searchMentions(
         ELSE 0 END AS rank
     FROM speaker_turns t
     LEFT JOIN speaker_names sn ON sn.episode_id = t.episode_id AND sn.speaker_label = t.speaker_label,
-      plainto_tsquery('english', $1) AS query
+      websearch_to_tsquery('english', $1) AS query
     WHERE t.episode_id = $2
     ORDER BY t.start_time ASC`,
     [query, episodeId]

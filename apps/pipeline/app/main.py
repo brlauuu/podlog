@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import feeds, episodes, queue, health
+from app.api import feeds, episodes, queue, health, embed
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,3 +39,4 @@ app.include_router(feeds.router, prefix="/api")
 app.include_router(episodes.router, prefix="/api")
 app.include_router(queue.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
+app.include_router(embed.router, prefix="/api")

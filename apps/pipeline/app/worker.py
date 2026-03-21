@@ -23,6 +23,7 @@ TASK_HANDLERS: dict[str, str] = {
     "download": "app.tasks.download:download_episode",
     "transcribe": "app.tasks.transcribe:transcribe_episode",
     "diarize": "app.tasks.diarize:diarize_episode",
+    "embed": "app.tasks.embed:embed_episode",
     "infer": "app.tasks.infer:infer_speakers",
     "archive": "app.tasks.archive:archive_episode",
 }

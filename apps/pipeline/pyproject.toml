@@ -21,6 +21,7 @@ pydantic-settings = "^2.2.0"
 sqlalchemy = "^2.0.0"
 alembic = "^1.13.0"
 psycopg2-binary = "^2.9.9"
+pgvector = "^0.3.0"
 
 # RSS parsing
 feedparser = "^6.0.11"
@@ -42,6 +43,9 @@ soundfile = ">=0.12.0"  # Audio backend for pyannote (fallback when torchcodec u
 
 # spaCy NER for host/guest inference (PRD-04)
 spacy = "^3.7"
+
+# Sentence embeddings for semantic search (Level 3)
+sentence-transformers = ">=2.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
