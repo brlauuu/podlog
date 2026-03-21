@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import EpisodeDescription from "@/components/EpisodeDescription";
 import TranscriptSection from "@/components/TranscriptSection";
 import BackToSearchLink from "@/components/BackToSearchLink";
+import ReprocessButton from "@/components/ReprocessButton";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +89,10 @@ export default async function EpisodePage({ params }: { params: { id: string } }
             &larr; {episode.feed_title ?? "Podcast"}
           </Link>
         )}
-        <h1 className="text-xl font-semibold mt-2">{episode.title ?? "Untitled Episode"}</h1>
+        <div className="flex items-center gap-3 mt-2">
+          <h1 className="text-xl font-semibold">{episode.title ?? "Untitled Episode"}</h1>
+          <ReprocessButton episodeId={episode.id} status={episode.status} />
+        </div>
         <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
           {episode.published_at && (
             <span>{new Date(episode.published_at).toLocaleDateString()}</span>
@@ -164,8 +168,8 @@ export default async function EpisodePage({ params }: { params: { id: string } }
         </Card>
       )}
 
-      {/* PRD-04 §8.1: inference error banner */}
-      {episode.inference_error && episode.status === "done" && (
+      {/* PRD-04 §8.1: inference error banner — suppress if any segment has inferred names (#56) */}
+      {episode.inference_error && episode.status === "done" && !segments.some(s => s.inferred) && (
         <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950">
           <CardContent className="p-3 flex items-start gap-2">
             <Info size={16} className="text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
