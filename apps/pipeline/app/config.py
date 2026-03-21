@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     # Disk space guard (GAP-06): minimum free bytes before starting a download
     disk_headroom_bytes: int = 2 * 1024 * 1024 * 1024  # 2 GB
 
+    # Zombie job detection — only jobs that have been picked (actually started)
+    # are candidates. Expected runtime = episode.duration_secs × realtime_factor.
+    # A job is zombie if it's been running longer than expected × timeout_multiplier.
+    zombie_realtime_factor: float = 1.5  # expected processing speed vs audio duration
+    zombie_timeout_multiplier: float = 2.0  # zombie after 2× expected runtime
+    zombie_min_timeout_minutes: int = 60  # floor when audio duration is unknown
+
     # Host/guest inference (PRD-04 S9)
     inference_enabled: bool = True
     spacy_model: str = "en_core_web_lg"
