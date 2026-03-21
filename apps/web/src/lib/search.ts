@@ -71,9 +71,41 @@ export interface SearchPage {
   pageSize: number;
 }
 
+// ── Speaker turn aggregation CTE ────────────────────────────
+//
+// Assigns a turn number to each segment based on consecutive same-speaker
+// runs within an episode. Used by all search functions to deduplicate
+// results: one hit per speaker turn instead of one per segment.
+
+const SPEAKER_TURNS_CTE = `
+  lagged AS (
+    SELECT s.id, s.episode_id, s.speaker_label, s.start_time, s.end_time, s.text,
+      CASE WHEN s.speaker_label IS DISTINCT FROM
+        LAG(s.speaker_label) OVER (PARTITION BY s.episode_id ORDER BY s.start_time)
+        THEN 1 ELSE 0 END AS is_new_turn
+    FROM segments s
+  ),
+  turn_numbered AS (
+    SELECT l.*,
+      SUM(is_new_turn) OVER (PARTITION BY episode_id ORDER BY start_time) AS turn_num
+    FROM lagged l
+  ),
+  speaker_turns AS (
+    SELECT
+      episode_id,
+      speaker_label,
+      turn_num,
+      MIN(id) AS min_id,
+      MIN(start_time) AS start_time,
+      MAX(end_time) AS end_time,
+      string_agg(text, ' ' ORDER BY start_time) AS full_text
+    FROM turn_numbered
+    GROUP BY episode_id, speaker_label, turn_num
+  )`;
+
 /**
- * Execute full-text search against transcript segments.
- * Per PRD-02 §5.1, §10.
+ * Execute full-text search against transcript segments, aggregated by speaker turn.
+ * Per PRD-02 §5.1, §10. Deduplicates results so each speaker turn appears once.
  */
 export async function searchSegments(
   query: string,
@@ -85,14 +117,15 @@ export async function searchSegments(
 
   const [rowsResult, countResult] = await Promise.all([
     pool.query(
-      `SELECT
-        s.id,
-        s.start_time,
-        s.end_time,
-        s.speaker_label,
-        COALESCE(sn.display_name, s.speaker_label) AS speaker_display,
-        ts_headline('english', s.text, query, 'MaxWords=20, MinWords=10') AS snippet,
-        ts_rank(to_tsvector('english', s.text), query) AS rank,
+      `WITH ${SPEAKER_TURNS_CTE}
+      SELECT
+        t.min_id AS id,
+        t.start_time,
+        t.end_time,
+        t.speaker_label,
+        COALESCE(sn.display_name, t.speaker_label) AS speaker_display,
+        ts_headline('english', t.full_text, query, 'MaxWords=25, MinWords=12') AS snippet,
+        ts_rank(to_tsvector('english', t.full_text), query) AS rank,
         e.id AS episode_id,
         e.title AS episode_title,
         e.audio_url,
@@ -103,24 +136,25 @@ export async function searchSegments(
         f.title AS feed_title,
         f.mode AS feed_mode,
         f.id AS feed_id
-      FROM segments s
-      JOIN episodes e ON s.episode_id = e.id
+      FROM speaker_turns t
+      JOIN episodes e ON t.episode_id = e.id
       JOIN feeds f ON e.feed_id = f.id
-      LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = s.speaker_label,
+      LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = t.speaker_label,
         plainto_tsquery('english', $1) AS query
-      WHERE to_tsvector('english', s.text) @@ query
+      WHERE to_tsvector('english', t.full_text) @@ query
         AND ($2::uuid IS NULL OR f.id = $2)
       ORDER BY rank DESC
       LIMIT $3 OFFSET $4`,
       [query, feedId, pageSize, offset]
     ),
     pool.query(
-      `SELECT COUNT(*)
-      FROM segments s
-      JOIN episodes e ON s.episode_id = e.id
+      `WITH ${SPEAKER_TURNS_CTE}
+      SELECT COUNT(*)
+      FROM speaker_turns t
+      JOIN episodes e ON t.episode_id = e.id
       JOIN feeds f ON e.feed_id = f.id,
         plainto_tsquery('english', $1) AS query
-      WHERE to_tsvector('english', s.text) @@ query
+      WHERE to_tsvector('english', t.full_text) @@ query
         AND ($2::uuid IS NULL OR f.id = $2)`,
       [query, feedId]
     ),
@@ -156,7 +190,7 @@ export async function searchSegments(
 
 /**
  * Grouped search — returns results grouped by feed → episode with mention counts.
- * Paginated at the episode level.
+ * Counts are based on deduplicated speaker turns, not raw segments.
  */
 export async function searchGrouped(
   query: string,
@@ -168,7 +202,8 @@ export async function searchGrouped(
 
   const [rowsResult, countResult] = await Promise.all([
     pool.query(
-      `SELECT
+      `WITH ${SPEAKER_TURNS_CTE}
+      SELECT
         f.id AS feed_id,
         f.title AS feed_title,
         f.mode AS feed_mode,
@@ -177,13 +212,13 @@ export async function searchGrouped(
         e.audio_url,
         e.audio_local_path,
         e.episode_url,
-        COUNT(s.id)::int AS mention_count,
-        MAX(ts_rank(to_tsvector('english', s.text), query)) AS best_rank
-      FROM segments s
-      JOIN episodes e ON s.episode_id = e.id
+        COUNT(*)::int AS mention_count,
+        MAX(ts_rank(to_tsvector('english', t.full_text), query)) AS best_rank
+      FROM speaker_turns t
+      JOIN episodes e ON t.episode_id = e.id
       JOIN feeds f ON e.feed_id = f.id,
         plainto_tsquery('english', $1) AS query
-      WHERE to_tsvector('english', s.text) @@ query
+      WHERE to_tsvector('english', t.full_text) @@ query
         AND ($2::uuid IS NULL OR f.id = $2)
       GROUP BY f.id, f.title, f.mode, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
       ORDER BY best_rank DESC, mention_count DESC
@@ -191,15 +226,16 @@ export async function searchGrouped(
       [query, feedId, pageSize, offset]
     ),
     pool.query(
-      `SELECT
+      `WITH ${SPEAKER_TURNS_CTE}
+      SELECT
         COUNT(DISTINCT e.id)::int AS total_episodes,
         COUNT(DISTINCT f.id)::int AS total_feeds,
-        COUNT(s.id)::int AS total_mentions
-      FROM segments s
-      JOIN episodes e ON s.episode_id = e.id
+        COUNT(*)::int AS total_mentions
+      FROM speaker_turns t
+      JOIN episodes e ON t.episode_id = e.id
       JOIN feeds f ON e.feed_id = f.id,
         plainto_tsquery('english', $1) AS query
-      WHERE to_tsvector('english', s.text) @@ query
+      WHERE to_tsvector('english', t.full_text) @@ query
         AND ($2::uuid IS NULL OR f.id = $2)`,
       [query, feedId]
     ),
@@ -244,27 +280,29 @@ export async function searchGrouped(
 }
 
 /**
- * Fetch individual matching segments for one episode (loaded on expand).
+ * Fetch matching speaker turns for one episode (loaded on expand).
+ * Each result is a deduplicated speaker turn with all occurrences highlighted.
  */
 export async function searchMentions(
   query: string,
   episodeId: string
 ): Promise<EpisodeMentions> {
   const result = await pool.query(
-    `SELECT
-      s.id,
-      s.start_time,
-      s.end_time,
-      s.speaker_label,
-      COALESCE(sn.display_name, s.speaker_label) AS speaker_display,
-      ts_headline('english', s.text, query, 'MaxWords=20, MinWords=10') AS snippet,
-      ts_rank(to_tsvector('english', s.text), query) AS rank
-    FROM segments s
-    LEFT JOIN speaker_names sn ON sn.episode_id = s.episode_id AND sn.speaker_label = s.speaker_label,
+    `WITH ${SPEAKER_TURNS_CTE}
+    SELECT
+      t.min_id AS id,
+      t.start_time,
+      t.end_time,
+      t.speaker_label,
+      COALESCE(sn.display_name, t.speaker_label) AS speaker_display,
+      ts_headline('english', t.full_text, query, 'MaxWords=25, MinWords=12') AS snippet,
+      ts_rank(to_tsvector('english', t.full_text), query) AS rank
+    FROM speaker_turns t
+    LEFT JOIN speaker_names sn ON sn.episode_id = t.episode_id AND sn.speaker_label = t.speaker_label,
       plainto_tsquery('english', $1) AS query
-    WHERE s.episode_id = $2
-      AND to_tsvector('english', s.text) @@ query
-    ORDER BY s.start_time ASC`,
+    WHERE t.episode_id = $2
+      AND to_tsvector('english', t.full_text) @@ query
+    ORDER BY t.start_time ASC`,
     [query, episodeId]
   );
 
