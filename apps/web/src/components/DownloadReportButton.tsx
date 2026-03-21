@@ -72,6 +72,8 @@ function generateMarkdown(
       const first = results[0];
       lines.push(`## ${first.episodeTitle ?? "Unknown Episode"}`);
       lines.push(`*${first.feedTitle ?? "Unknown Podcast"}*`);
+      if (first.episodeUrl) lines.push(`Episode: ${first.episodeUrl}`);
+      if (first.audioUrl) lines.push(`RSS audio: ${first.audioUrl}`);
       lines.push("");
       for (const r of results) {
         const speaker = r.speakerDisplay ?? r.speakerLabel ?? "";
@@ -87,6 +89,8 @@ function generateMarkdown(
       for (const ep of feed.episodes) {
         lines.push(`## ${ep.episodeTitle}`);
         lines.push(`*${feed.feedTitle}* — ${ep.mentionCount} mention${ep.mentionCount !== 1 ? "s" : ""}`);
+        if (ep.episodeUrl) lines.push(`Episode: ${ep.episodeUrl}`);
+        if (ep.audioUrl) lines.push(`RSS audio: ${ep.audioUrl}`);
         lines.push("");
       }
     }
@@ -133,6 +137,8 @@ function generatePlainText(
       lines.push("────────────────────────────────────────");
       lines.push(`${first.episodeTitle ?? "Unknown Episode"}`);
       lines.push(`${first.feedTitle ?? "Unknown Podcast"}`);
+      if (first.episodeUrl) lines.push(`Episode: ${first.episodeUrl}`);
+      if (first.audioUrl) lines.push(`RSS audio: ${first.audioUrl}`);
       lines.push("");
       for (const r of results) {
         const speaker = r.speakerDisplay ?? r.speakerLabel ?? "";
@@ -148,6 +154,8 @@ function generatePlainText(
       lines.push("");
       for (const ep of feed.episodes) {
         lines.push(`  ${ep.episodeTitle} — ${ep.mentionCount} mentions`);
+        if (ep.episodeUrl) lines.push(`  Episode: ${ep.episodeUrl}`);
+        if (ep.audioUrl) lines.push(`  RSS audio: ${ep.audioUrl}`);
       }
       lines.push("");
     }

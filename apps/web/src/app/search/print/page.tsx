@@ -29,6 +29,8 @@ export default async function PrintPage({
         return {
           episodeTitle: ep.episodeTitle,
           feedTitle: feed.feedTitle,
+          episodeUrl: ep.episodeUrl,
+          audioUrl: ep.audioUrl,
           mentionCount: ep.mentionCount,
           mentions: mentions.mentions,
         };
@@ -68,6 +70,10 @@ export default async function PrintPage({
           .matched { font-size: 13px; color: #111; margin: 0 0 4px 0; line-height: 1.6; background: #fef9c3; padding: 2px 4px; border-radius: 3px; }
           .matched b:first-child { color: #111; font-weight: 600; }
           .matched b { font-weight: 700; }
+          .episode-links { font-size: 12px; color: #6b7280; margin: 0 0 12px 0; }
+          .episode-links a { color: #3b82f6; text-decoration: none; }
+          .episode-links a:hover { text-decoration: underline; }
+          @media print { .episode-links a { color: #3b82f6; } .episode-links a::after { content: " (" attr(href) ")"; font-size: 9px; color: #9ca3af; } }
           .footer { border-top: 1px solid #d1d5db; padding-top: 12px; margin-top: 32px; text-align: center; font-size: 11px; color: #9ca3af; }
           .print-btn {
             position: fixed; top: 16px; right: 16px;
@@ -96,6 +102,14 @@ export default async function PrintPage({
             <p className="episode-meta">
               {ep.feedTitle} &middot; {ep.mentionCount} mention
               {ep.mentionCount !== 1 ? "s" : ""}
+            </p>
+            <p className="episode-links">
+              {ep.episodeUrl && (
+                <><a href={ep.episodeUrl} target="_blank" rel="noopener noreferrer">Episode page</a>{ep.audioUrl ? " · " : ""}</>
+              )}
+              {ep.audioUrl && (
+                <a href={ep.audioUrl} target="_blank" rel="noopener noreferrer">RSS audio</a>
+              )}
             </p>
 
             {ep.mentions.map((mention, mIdx) => (
