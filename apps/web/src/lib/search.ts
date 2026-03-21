@@ -32,6 +32,14 @@ export interface EpisodeMentions {
   mentions: Mention[];
 }
 
+export interface ContextSegment {
+  startTime: number;
+  endTime: number;
+  speakerLabel: string | null;
+  speakerDisplay: string | null;
+  text: string;
+}
+
 export interface Mention {
   id: number;
   startTime: number;
@@ -39,7 +47,10 @@ export interface Mention {
   speakerLabel: string | null;
   speakerDisplay: string | null;
   snippet: string;
+  text: string;
   rank: number;
+  contextBefore: ContextSegment[];
+  contextAfter: ContextSegment[];
 }
 
 // ── Flat search types ───────────────────────────────────────
@@ -280,13 +291,14 @@ export async function searchGrouped(
 }
 
 /**
- * Fetch matching speaker turns for one episode (loaded on expand).
- * Each result is a deduplicated speaker turn with all occurrences highlighted.
+ * Fetch matching speaker turns for one episode with surrounding context.
+ * Returns 1-2 turns before and after each match for dialogue context.
  */
 export async function searchMentions(
   query: string,
   episodeId: string
 ): Promise<EpisodeMentions> {
+  // Fetch all speaker turns for this episode with match info in one query
   const result = await pool.query(
     `WITH ${SPEAKER_TURNS_CTE}
     SELECT
@@ -295,27 +307,68 @@ export async function searchMentions(
       t.end_time,
       t.speaker_label,
       COALESCE(sn.display_name, t.speaker_label) AS speaker_display,
-      ts_headline('english', t.full_text, query, 'MaxWords=25, MinWords=12') AS snippet,
-      ts_rank(to_tsvector('english', t.full_text), query) AS rank
+      t.full_text,
+      CASE WHEN to_tsvector('english', t.full_text) @@ query THEN true ELSE false END AS is_match,
+      CASE WHEN to_tsvector('english', t.full_text) @@ query
+        THEN ts_headline('english', t.full_text, query, 'MaxWords=25, MinWords=12')
+        ELSE '' END AS snippet,
+      CASE WHEN to_tsvector('english', t.full_text) @@ query
+        THEN ts_rank(to_tsvector('english', t.full_text), query)
+        ELSE 0 END AS rank
     FROM speaker_turns t
     LEFT JOIN speaker_names sn ON sn.episode_id = t.episode_id AND sn.speaker_label = t.speaker_label,
       plainto_tsquery('english', $1) AS query
     WHERE t.episode_id = $2
-      AND to_tsvector('english', t.full_text) @@ query
     ORDER BY t.start_time ASC`,
     [query, episodeId]
   );
 
-  return {
-    episodeId,
-    mentions: result.rows.map((row) => ({
+  const allTurns = result.rows;
+  const matchIndices = allTurns
+    .map((row, i) => (row.is_match ? i : -1))
+    .filter((i) => i >= 0);
+
+  const CONTEXT_SIZE = 2;
+
+  function toContextSegment(row: typeof allTurns[0]): ContextSegment {
+    return {
+      startTime: parseFloat(row.start_time),
+      endTime: parseFloat(row.end_time),
+      speakerLabel: row.speaker_label,
+      speakerDisplay: row.speaker_display,
+      text: row.full_text,
+    };
+  }
+
+  const mentions: Mention[] = matchIndices.map((idx) => {
+    const row = allTurns[idx];
+
+    // Gather context turns, skipping other matches
+    const before: ContextSegment[] = [];
+    for (let i = idx - 1; i >= 0 && before.length < CONTEXT_SIZE; i--) {
+      if (!allTurns[i].is_match) before.unshift(toContextSegment(allTurns[i]));
+      else break; // stop at adjacent match to avoid overlap
+    }
+
+    const after: ContextSegment[] = [];
+    for (let i = idx + 1; i < allTurns.length && after.length < CONTEXT_SIZE; i++) {
+      if (!allTurns[i].is_match) after.push(toContextSegment(allTurns[i]));
+      else break;
+    }
+
+    return {
       id: row.id,
       startTime: parseFloat(row.start_time),
       endTime: parseFloat(row.end_time),
       speakerLabel: row.speaker_label,
       speakerDisplay: row.speaker_display,
       snippet: row.snippet,
+      text: row.full_text,
       rank: parseFloat(row.rank),
-    })),
-  };
+      contextBefore: before,
+      contextAfter: after,
+    };
+  });
+
+  return { episodeId, mentions };
 }
