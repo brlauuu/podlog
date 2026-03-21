@@ -121,14 +121,21 @@ export default function EpisodeDescription({
       ) {
         e.preventDefault();
         const secs = Number(target.getAttribute("data-timestamp-secs"));
-        if (!isNaN(secs) && episodeId && audioLocalPath) {
-          const filename = path.basename(audioLocalPath);
-          playEpisode(
-            episodeId,
-            filename,
-            secs,
-            episodeTitle ?? undefined,
-            feedTitle ?? undefined,
+        if (!isNaN(secs)) {
+          // Play audio from this timestamp
+          if (episodeId && audioLocalPath) {
+            const filename = path.basename(audioLocalPath);
+            playEpisode(
+              episodeId,
+              filename,
+              secs,
+              episodeTitle ?? undefined,
+              feedTitle ?? undefined,
+            );
+          }
+          // Scroll transcript to this timestamp
+          window.dispatchEvent(
+            new CustomEvent("podlog:scroll-to-time", { detail: { secs } }),
           );
         }
       }

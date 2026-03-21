@@ -221,3 +221,31 @@ class TestAssignSpeakersWordlevel:
         result = assign_speakers_wordlevel(aligned, [])
         assert len(result) == 1
         assert result[0]["speaker"] == "SPEAKER_00"
+
+    def test_preserves_sentence_boundaries_same_speaker(self):
+        """Multiple Whisper segments from the same speaker stay separate."""
+        aligned = [
+            {
+                "start": 0.0, "end": 3.0, "text": "First sentence.",
+                "words": [
+                    {"word": " First", "start": 0.0, "end": 1.0},
+                    {"word": " sentence.", "start": 1.0, "end": 2.5},
+                ],
+            },
+            {
+                "start": 3.0, "end": 6.0, "text": "Second sentence.",
+                "words": [
+                    {"word": " Second", "start": 3.0, "end": 4.0},
+                    {"word": " sentence.", "start": 4.0, "end": 5.5},
+                ],
+            },
+        ]
+        diar = [{"speaker": "SPEAKER_00", "start": 0.0, "end": 6.0}]
+        result = assign_speakers_wordlevel(aligned, diar)
+
+        assert len(result) == 2
+        assert result[0]["text"] == "First sentence."
+        assert result[0]["start"] == 0.0
+        assert result[1]["text"] == "Second sentence."
+        assert result[1]["start"] == 3.0
+        assert result[0]["speaker"] == result[1]["speaker"] == "SPEAKER_00"

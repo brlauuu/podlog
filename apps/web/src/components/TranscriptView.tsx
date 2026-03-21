@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { getSpeakerColor, getSpeakerInitials } from "@/lib/speakerColors";
 import type { Segment } from "@/lib/types";
@@ -28,19 +28,64 @@ export default function TranscriptView({
 }: Props) {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const { playEpisode } = useAudioPlayer();
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * Find the segment element closest to a given time (in seconds) and
+   * scroll to it with a highlight flash. Returns the element ID or null.
+   */
+  const scrollToTime = useCallback(
+    (targetSecs: number) => {
+      if (segments.length === 0) return null;
+
+      // Find the segment whose start_time is closest to (but <= ) targetSecs,
+      // falling back to the first segment after targetSecs.
+      let bestSeg = segments[0];
+      for (const seg of segments) {
+        if (seg.start_time <= targetSecs) {
+          bestSeg = seg;
+        } else {
+          break;
+        }
+      }
+
+      const segId = `t-${Math.floor(bestSeg.start_time)}`;
+      const el = document.getElementById(segId);
+      if (el) {
+        setHighlightedId(segId);
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Clear highlight after a few seconds
+        if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+        highlightTimeoutRef.current = setTimeout(() => setHighlightedId(null), 4000);
+      }
+      return segId;
+    },
+    [segments],
+  );
+
+  // Handle initial hash navigation (from search results or direct links)
   useEffect(() => {
-    if (highlightedId) return;
     const hash = window.location.hash;
     if (hash.startsWith("#t-")) {
-      const targetId = hash.slice(1);
-      const el = document.getElementById(targetId);
-      if (el) {
-        setHighlightedId(targetId);
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const targetSecs = parseInt(hash.slice(3), 10);
+      if (!isNaN(targetSecs)) {
+        // Small delay to ensure DOM is rendered
+        requestAnimationFrame(() => scrollToTime(targetSecs));
       }
     }
-  }, [segments, highlightedId]);
+  }, [segments, scrollToTime]);
+
+  // Listen for custom scroll-to-time events (from EpisodeDescription timestamp clicks)
+  useEffect(() => {
+    function handleScrollEvent(e: Event) {
+      const detail = (e as CustomEvent<{ secs: number }>).detail;
+      if (detail?.secs != null) {
+        scrollToTime(detail.secs);
+      }
+    }
+    window.addEventListener("podlog:scroll-to-time", handleScrollEvent);
+    return () => window.removeEventListener("podlog:scroll-to-time", handleScrollEvent);
+  }, [scrollToTime]);
 
   function handleTimestampClick(startTime: number) {
     if (!audioLocalPath) return;
@@ -56,102 +101,116 @@ export default function TranscriptView({
     );
   }
 
+  // Group consecutive segments by speaker for cohesive rendering
+  const groups: { speaker: string | null; displayName: string; segments: typeof segments; startIndex: number }[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const prevSpeaker = i > 0 ? segments[i - 1].speaker_label : null;
+    if (i === 0 || seg.speaker_label !== prevSpeaker) {
+      groups.push({
+        speaker: seg.speaker_label,
+        displayName: seg.display_name ?? seg.speaker_label ?? "",
+        segments: [seg],
+        startIndex: i,
+      });
+    } else {
+      groups[groups.length - 1].segments.push(seg);
+    }
+  }
+
   return (
-    <div className="space-y-1">
-      {segments.map((seg, i) => {
-        const segId = `t-${Math.floor(seg.start_time)}`;
-        const isHighlighted = segId === highlightedId;
-        const prevSpeaker = i > 0 ? segments[i - 1].speaker_label : null;
-        const isSpeakerChange = seg.speaker_label !== prevSpeaker;
-        const hasSpeaker = hasDiarization && seg.speaker_label;
+    <div className="space-y-4">
+      {groups.map((group) => {
+        const firstSeg = group.segments[0];
+        const groupId = `t-${Math.floor(firstSeg.start_time)}`;
+        const hasSpeaker = hasDiarization && group.speaker;
 
         if (!hasSpeaker) {
-          // No diarization — plain text with timestamp
+          // No diarization — plain lines with timestamps
           return (
-            <div
-              key={seg.id}
-              id={segId}
-              className={`flex gap-3 rounded-md py-1 ${isHighlighted ? "border-l-2 border-primary bg-primary/5 pl-2 -ml-2" : ""}`}
-            >
-              <button
-                className="text-xs text-muted-foreground hover:text-primary font-mono shrink-0 mt-0.5 w-14 text-right transition-colors"
-                title="Play from here"
-                onClick={() => handleTimestampClick(seg.start_time)}
-                disabled={!audioLocalPath}
-              >
-                {formatTimestamp(seg.start_time)}
-              </button>
-              <p className="text-sm leading-relaxed flex-1">{seg.text}</p>
-            </div>
-          );
-        }
-
-        const color = getSpeakerColor(seg.speaker_label!);
-        const displayName = seg.display_name ?? seg.speaker_label!;
-        const initials = getSpeakerInitials(displayName, seg.speaker_label!);
-
-        if (isSpeakerChange) {
-          // Speaker change — show avatar + name + bubble
-          return (
-            <div
-              key={seg.id}
-              id={segId}
-              className={`flex gap-3 mt-4 ${isHighlighted ? "border-l-2 border-primary bg-primary/5 pl-2 -ml-2" : ""}`}
-            >
-              <span
-                className="shrink-0 rounded-full flex items-center justify-center text-white text-xs font-semibold mt-0.5"
-                style={{ background: color.hex, width: 32, height: 32 }}
-              >
-                {initials}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2 mb-1">
-                  <span className="text-sm font-semibold" style={{ color: color.hex }}>
-                    {displayName}
-                  </span>
-                  <button
-                    className="text-xs text-muted-foreground hover:text-primary font-mono transition-colors"
-                    title="Play from here"
-                    onClick={() => handleTimestampClick(seg.start_time)}
-                    disabled={!audioLocalPath}
+            <div key={firstSeg.id} className="space-y-1">
+              {group.segments.map((seg) => {
+                const segId = `t-${Math.floor(seg.start_time)}`;
+                const isHighlighted = segId === highlightedId;
+                return (
+                  <div
+                    key={seg.id}
+                    id={segId}
+                    className={`flex gap-3 rounded-md py-1 ${isHighlighted ? "border-l-2 border-primary bg-primary/5 pl-2 -ml-2" : ""}`}
                   >
-                    {formatTimestamp(seg.start_time)}
-                  </button>
-                </div>
-                <div
-                  className="text-sm leading-relaxed rounded-b-xl rounded-tr-xl px-3 py-2"
-                  style={{ background: color.bg }}
-                >
-                  {seg.text}
-                </div>
-              </div>
+                    <button
+                      className="text-xs text-muted-foreground hover:text-primary font-mono shrink-0 mt-0.5 w-14 text-right transition-colors"
+                      title="Play from here"
+                      onClick={() => handleTimestampClick(seg.start_time)}
+                      disabled={!audioLocalPath}
+                    >
+                      {formatTimestamp(seg.start_time)}
+                    </button>
+                    <p className="text-sm leading-relaxed flex-1">{seg.text}</p>
+                  </div>
+                );
+              })}
             </div>
           );
         }
 
-        // Consecutive segment — same speaker, smaller bubble
+        const color = getSpeakerColor(group.speaker!);
+        const initials = getSpeakerInitials(group.displayName, group.speaker!);
+
         return (
-          <div
-            key={seg.id}
-            id={segId}
-            className={`flex gap-3 ${isHighlighted ? "border-l-2 border-primary bg-primary/5 pl-2 -ml-2" : ""}`}
-          >
-            {/* Spacer to align with avatar column */}
-            <div className="shrink-0" style={{ width: 32 }} />
+          <div key={firstSeg.id} id={groupId} className="flex gap-3">
+            {/* Avatar */}
+            <span
+              className="shrink-0 rounded-full flex items-center justify-center text-white text-xs font-semibold mt-0.5"
+              style={{ background: color.hex, width: 32, height: 32 }}
+            >
+              {initials}
+            </span>
             <div className="flex-1 min-w-0">
-              <div
-                className="text-sm leading-relaxed rounded-xl px-3 py-2"
-                style={{ background: color.bg }}
-              >
+              {/* Speaker name + first timestamp */}
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-sm font-semibold" style={{ color: color.hex }}>
+                  {group.displayName}
+                </span>
                 <button
-                  className="text-xs text-muted-foreground hover:text-primary font-mono mr-2 transition-colors"
+                  className="text-xs text-muted-foreground hover:text-primary font-mono transition-colors"
                   title="Play from here"
-                  onClick={() => handleTimestampClick(seg.start_time)}
+                  onClick={() => handleTimestampClick(firstSeg.start_time)}
                   disabled={!audioLocalPath}
                 >
-                  {formatTimestamp(seg.start_time)}
+                  {formatTimestamp(firstSeg.start_time)}
                 </button>
-                {seg.text}
+              </div>
+              {/* Speech bubble with per-sentence timestamps */}
+              <div
+                className="rounded-b-xl rounded-tr-xl px-3 py-2 space-y-1.5"
+                style={{ background: color.bg }}
+              >
+                {group.segments.map((seg, j) => {
+                  const segId = `t-${Math.floor(seg.start_time)}`;
+                  const isHighlighted = segId === highlightedId;
+                  return (
+                    <div
+                      key={seg.id}
+                      id={segId}
+                      className={`flex gap-2 rounded-md -mx-1 px-1 ${isHighlighted ? "bg-primary/10 ring-1 ring-primary/20" : ""}`}
+                    >
+                      {j > 0 ? (
+                        <button
+                          className="text-[11px] text-muted-foreground/50 hover:text-primary font-mono shrink-0 pt-0.5 w-11 text-right transition-colors"
+                          title="Play from here"
+                          onClick={() => handleTimestampClick(seg.start_time)}
+                          disabled={!audioLocalPath}
+                        >
+                          {formatTimestamp(seg.start_time)}
+                        </button>
+                      ) : (
+                        <div className="shrink-0 w-11" />
+                      )}
+                      <p className="text-sm leading-relaxed flex-1">{seg.text}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

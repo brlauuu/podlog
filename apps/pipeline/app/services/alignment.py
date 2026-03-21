@@ -20,7 +20,12 @@ def assign_speakers_wordlevel(
     diarization_segments: list[dict],
 ) -> list[dict]:
     """
-    Word-level speaker assignment with segment rebuilding.
+    Word-level speaker assignment preserving Whisper sentence boundaries.
+
+    Assigns a speaker to each word via overlap with pyannote segments, then
+    rebuilds segments that respect BOTH the original Whisper sentence boundaries
+    AND speaker changes within a sentence. This keeps granular timestamps while
+    correctly labeling speakers.
 
     Args:
         aligned_segments: WhisperX segments with "words" arrays, each word
@@ -29,38 +34,39 @@ def assign_speakers_wordlevel(
 
     Returns:
         list of rebuilt segments: {"start": float, "end": float, "text": str, "speaker": str}
-        Consecutive words with the same speaker are merged into one segment.
     """
-    # Flatten all words from all segments
-    words = []
-    for seg in aligned_segments:
+    # Tag each word with its speaker AND which original segment it came from
+    tagged_words: list[dict] = []
+    for seg_idx, seg in enumerate(aligned_segments):
         for w in seg.get("words", []):
             start = w.get("start")
             end = w.get("end")
             word_text = w.get("word", "")
             if start is not None and end is not None and word_text:
-                words.append({"word": word_text, "start": start, "end": end})
+                speaker = _best_speaker_for_interval(
+                    start, end, diarization_segments
+                )
+                tagged_words.append({
+                    "word": word_text, "start": start, "end": end,
+                    "speaker": speaker, "seg_idx": seg_idx,
+                })
 
-    if not words:
+    if not tagged_words:
         return []
 
-    # Assign speaker to each word
-    for word in words:
-        word["speaker"] = _best_speaker_for_interval(
-            word["start"], word["end"], diarization_segments
-        )
-
-    # Rebuild segments from consecutive same-speaker words
+    # Rebuild segments: break on speaker change OR original segment boundary
     rebuilt = []
-    current_speaker = words[0]["speaker"]
-    current_start = words[0]["start"]
-    current_end = words[0]["end"]
-    current_words = [words[0]["word"]]
+    cur = tagged_words[0]
+    current_speaker = cur["speaker"]
+    current_seg_idx = cur["seg_idx"]
+    current_start = cur["start"]
+    current_end = cur["end"]
+    current_words = [cur["word"]]
 
-    for word in words[1:]:
-        if word["speaker"] == current_speaker:
-            current_end = word["end"]
-            current_words.append(word["word"])
+    for tw in tagged_words[1:]:
+        if tw["speaker"] == current_speaker and tw["seg_idx"] == current_seg_idx:
+            current_end = tw["end"]
+            current_words.append(tw["word"])
         else:
             rebuilt.append({
                 "start": current_start,
@@ -68,12 +74,12 @@ def assign_speakers_wordlevel(
                 "text": " ".join(w.strip() for w in current_words),
                 "speaker": current_speaker,
             })
-            current_speaker = word["speaker"]
-            current_start = word["start"]
-            current_end = word["end"]
-            current_words = [word["word"]]
+            current_speaker = tw["speaker"]
+            current_seg_idx = tw["seg_idx"]
+            current_start = tw["start"]
+            current_end = tw["end"]
+            current_words = [tw["word"]]
 
-    # Final segment
     rebuilt.append({
         "start": current_start,
         "end": current_end,
