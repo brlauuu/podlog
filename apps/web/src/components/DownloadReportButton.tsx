@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText, FileJson, FileSpreadsheet } from "lucide-react";
+import { Download, FileText, Printer, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,8 +11,6 @@ import {
 import type { SearchResult, GroupedSearchResult } from "@/lib/search";
 import { formatTimestamp } from "@/lib/timestamp";
 
-type ExportFormat = "csv" | "json" | "markdown";
-
 interface DownloadReportButtonProps {
   query: string;
   viewMode: "flat" | "grouped";
@@ -20,150 +18,12 @@ interface DownloadReportButtonProps {
   groupedResults?: GroupedSearchResult;
 }
 
-/** Strip HTML tags from ts_headline snippets. */
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "");
 }
 
-
-/** Escape a field for CSV: wrap in quotes if it contains comma, quote, or newline. */
-function csvEscape(value: string): string {
-  if (/[",\n\r]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
-
-function generateCsv(
-  query: string,
-  flatResults?: SearchResult[],
-  groupedResults?: GroupedSearchResult,
-): string {
-  const rows: string[][] = [];
-  const header = ["Podcast", "Episode", "Timestamp", "Speaker", "Snippet"];
-  rows.push(header);
-
-  if (flatResults && flatResults.length > 0) {
-    for (const r of flatResults) {
-      rows.push([
-        r.feedTitle ?? "",
-        r.episodeTitle ?? "",
-        formatTimestamp(r.startTime),
-        r.speakerDisplay ?? r.speakerLabel ?? "",
-        stripHtml(r.snippet),
-      ]);
-    }
-  } else if (groupedResults) {
-    for (const feed of groupedResults.feeds) {
-      for (const ep of feed.episodes) {
-        rows.push([
-          feed.feedTitle,
-          ep.episodeTitle,
-          "",
-          "",
-          `${ep.mentionCount} mention${ep.mentionCount !== 1 ? "s" : ""}`,
-        ]);
-      }
-    }
-  }
-
-  return rows.map((row) => row.map(csvEscape).join(",")).join("\n");
-}
-
-function generateJson(
-  query: string,
-  flatResults?: SearchResult[],
-  groupedResults?: GroupedSearchResult,
-): string {
-  const report: Record<string, unknown> = {
-    query,
-    exportedAt: new Date().toISOString(),
-  };
-
-  if (flatResults && flatResults.length > 0) {
-    report.totalResults = flatResults.length;
-    report.results = flatResults.map((r) => ({
-      podcast: r.feedTitle,
-      episode: r.episodeTitle,
-      episodeId: r.episodeId,
-      timestamp: formatTimestamp(r.startTime),
-      startTime: r.startTime,
-      endTime: r.endTime,
-      speaker: r.speakerDisplay ?? r.speakerLabel ?? null,
-      snippet: stripHtml(r.snippet),
-    }));
-  } else if (groupedResults) {
-    report.totalFeeds = groupedResults.totalFeeds;
-    report.totalEpisodes = groupedResults.totalEpisodes;
-    report.totalMentions = groupedResults.totalMentions;
-    report.feeds = groupedResults.feeds.map((feed) => ({
-      feedTitle: feed.feedTitle,
-      mentionCount: feed.mentionCount,
-      episodes: feed.episodes.map((ep) => ({
-        episodeTitle: ep.episodeTitle,
-        episodeId: ep.episodeId,
-        mentionCount: ep.mentionCount,
-      })),
-    }));
-  }
-
-  return JSON.stringify(report, null, 2);
-}
-
-function generateMarkdown(
-  query: string,
-  flatResults?: SearchResult[],
-  groupedResults?: GroupedSearchResult,
-): string {
-  const lines: string[] = [];
-  lines.push(`# Search Report`);
-  lines.push("");
-  lines.push(`**Query:** ${query}`);
-  lines.push(`**Exported:** ${new Date().toISOString()}`);
-  lines.push("");
-
-  if (flatResults && flatResults.length > 0) {
-    lines.push(`**Total results:** ${flatResults.length}`);
-    lines.push("");
-
-    // Group by episode for readability
-    const byEpisode = new Map<string, SearchResult[]>();
-    for (const r of flatResults) {
-      const key = r.episodeId;
-      if (!byEpisode.has(key)) byEpisode.set(key, []);
-      byEpisode.get(key)!.push(r);
-    }
-
-    for (const results of Array.from(byEpisode.values())) {
-      const first = results[0];
-      lines.push(`## ${first.feedTitle ?? "Unknown Podcast"} - ${first.episodeTitle ?? "Unknown Episode"}`);
-      lines.push("");
-      for (const r of results) {
-        const speaker = r.speakerDisplay ?? r.speakerLabel ?? "";
-        const speakerPrefix = speaker ? `**${speaker}:** ` : "";
-        lines.push(`- \`${formatTimestamp(r.startTime)}\` ${speakerPrefix}${stripHtml(r.snippet)}`);
-      }
-      lines.push("");
-    }
-  } else if (groupedResults) {
-    lines.push(
-      `**Found in** ${groupedResults.totalFeeds} podcast${groupedResults.totalFeeds !== 1 ? "s" : ""}, ` +
-      `${groupedResults.totalEpisodes} episode${groupedResults.totalEpisodes !== 1 ? "s" : ""} ` +
-      `(${groupedResults.totalMentions} mention${groupedResults.totalMentions !== 1 ? "s" : ""})`
-    );
-    lines.push("");
-
-    for (const feed of groupedResults.feeds) {
-      lines.push(`## ${feed.feedTitle}`);
-      lines.push("");
-      for (const ep of feed.episodes) {
-        lines.push(`- **${ep.episodeTitle}** — ${ep.mentionCount} mention${ep.mentionCount !== 1 ? "s" : ""}`);
-      }
-      lines.push("");
-    }
-  }
-
-  return lines.join("\n");
+function sanitizeFilename(query: string): string {
+  return query.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50);
 }
 
 function downloadFile(content: string, filename: string, mimeType: string) {
@@ -178,8 +38,127 @@ function downloadFile(content: string, filename: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
-function sanitizeFilename(query: string): string {
-  return query.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50);
+function generateMarkdown(
+  query: string,
+  flatResults?: SearchResult[],
+  groupedResults?: GroupedSearchResult,
+): string {
+  const lines: string[] = [];
+  lines.push("# Podlog Search Report");
+  lines.push("");
+  lines.push(`**Search term:** "${query}"`);
+
+  if (groupedResults) {
+    lines.push(
+      `**Found in** ${groupedResults.totalEpisodes} episode${groupedResults.totalEpisodes !== 1 ? "s" : ""} ` +
+      `across ${groupedResults.totalFeeds} podcast${groupedResults.totalFeeds !== 1 ? "s" : ""} ` +
+      `(${groupedResults.totalMentions} mention${groupedResults.totalMentions !== 1 ? "s" : ""})`
+    );
+  } else if (flatResults) {
+    lines.push(`**Total results:** ${flatResults.length}`);
+  }
+
+  lines.push(`**Exported:** ${new Date().toLocaleDateString()}`);
+  lines.push("");
+
+  if (flatResults && flatResults.length > 0) {
+    const byEpisode = new Map<string, SearchResult[]>();
+    for (const r of flatResults) {
+      if (!byEpisode.has(r.episodeId)) byEpisode.set(r.episodeId, []);
+      byEpisode.get(r.episodeId)!.push(r);
+    }
+
+    for (const results of Array.from(byEpisode.values())) {
+      const first = results[0];
+      lines.push(`## ${first.episodeTitle ?? "Unknown Episode"}`);
+      lines.push(`*${first.feedTitle ?? "Unknown Podcast"}*`);
+      lines.push("");
+      for (const r of results) {
+        const speaker = r.speakerDisplay ?? r.speakerLabel ?? "";
+        const speakerPrefix = speaker ? `**${speaker}** ` : "";
+        lines.push(`> \`${formatTimestamp(r.startTime)}\` ${speakerPrefix}${stripHtml(r.snippet)}`);
+        lines.push("");
+      }
+      lines.push("---");
+      lines.push("");
+    }
+  } else if (groupedResults) {
+    for (const feed of groupedResults.feeds) {
+      for (const ep of feed.episodes) {
+        lines.push(`## ${ep.episodeTitle}`);
+        lines.push(`*${feed.feedTitle}* — ${ep.mentionCount} mention${ep.mentionCount !== 1 ? "s" : ""}`);
+        lines.push("");
+      }
+    }
+  }
+
+  lines.push("---");
+  lines.push("*Generated by Podlog*");
+  return lines.join("\n");
+}
+
+function generatePlainText(
+  query: string,
+  flatResults?: SearchResult[],
+  groupedResults?: GroupedSearchResult,
+): string {
+  const lines: string[] = [];
+  lines.push("PODLOG SEARCH REPORT");
+  lines.push("====================");
+  lines.push("");
+  lines.push(`Search term: "${query}"`);
+
+  if (groupedResults) {
+    lines.push(
+      `Found in ${groupedResults.totalEpisodes} episodes ` +
+      `across ${groupedResults.totalFeeds} podcasts ` +
+      `(${groupedResults.totalMentions} mentions)`
+    );
+  } else if (flatResults) {
+    lines.push(`Total results: ${flatResults.length}`);
+  }
+
+  lines.push(`Exported: ${new Date().toLocaleDateString()}`);
+  lines.push("");
+
+  if (flatResults && flatResults.length > 0) {
+    const byEpisode = new Map<string, SearchResult[]>();
+    for (const r of flatResults) {
+      if (!byEpisode.has(r.episodeId)) byEpisode.set(r.episodeId, []);
+      byEpisode.get(r.episodeId)!.push(r);
+    }
+
+    for (const results of Array.from(byEpisode.values())) {
+      const first = results[0];
+      lines.push("────────────────────────────────────────");
+      lines.push(`${first.episodeTitle ?? "Unknown Episode"}`);
+      lines.push(`${first.feedTitle ?? "Unknown Podcast"}`);
+      lines.push("");
+      for (const r of results) {
+        const speaker = r.speakerDisplay ?? r.speakerLabel ?? "";
+        const speakerPrefix = speaker ? `${speaker}: ` : "";
+        lines.push(`  [${formatTimestamp(r.startTime)}] ${speakerPrefix}${stripHtml(r.snippet)}`);
+      }
+      lines.push("");
+    }
+  } else if (groupedResults) {
+    for (const feed of groupedResults.feeds) {
+      lines.push("────────────────────────────────────────");
+      lines.push(feed.feedTitle);
+      lines.push("");
+      for (const ep of feed.episodes) {
+        lines.push(`  ${ep.episodeTitle} — ${ep.mentionCount} mentions`);
+      }
+      lines.push("");
+    }
+  }
+
+  lines.push("Generated by Podlog");
+  return lines.join("\n");
+}
+
+function openPrintView(query: string) {
+  window.open(`/search/print?q=${encodeURIComponent(query)}`, "_blank");
 }
 
 export default function DownloadReportButton({
@@ -194,25 +173,24 @@ export default function DownloadReportButton({
 
   if (!hasResults) return null;
 
-  function handleExport(format: ExportFormat) {
+  function handleExport(format: "markdown" | "text" | "print") {
     const safeQuery = sanitizeFilename(query);
     const flat = viewMode === "flat" ? flatResults : undefined;
     const grouped = viewMode === "grouped" ? groupedResults : undefined;
 
     switch (format) {
-      case "csv": {
-        const content = generateCsv(query, flat, grouped);
-        downloadFile(content, `podlog-search-${safeQuery}.csv`, "text/csv;charset=utf-8");
-        break;
-      }
-      case "json": {
-        const content = generateJson(query, flat, grouped);
-        downloadFile(content, `podlog-search-${safeQuery}.json`, "application/json");
-        break;
-      }
       case "markdown": {
         const content = generateMarkdown(query, flat, grouped);
         downloadFile(content, `podlog-search-${safeQuery}.md`, "text/markdown;charset=utf-8");
+        break;
+      }
+      case "text": {
+        const content = generatePlainText(query, flat, grouped);
+        downloadFile(content, `podlog-search-${safeQuery}.txt`, "text/plain;charset=utf-8");
+        break;
+      }
+      case "print": {
+        openPrintView(query);
         break;
       }
     }
@@ -226,18 +204,27 @@ export default function DownloadReportButton({
           Export
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => handleExport("csv")}>
-          <FileSpreadsheet size={14} />
-          CSV
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleExport("json")}>
-          <FileJson size={14} />
-          JSON
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleExport("markdown")}>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuItem onClick={() => handleExport("markdown")} className="gap-2">
           <FileText size={14} />
-          Markdown
+          <div>
+            <div className="text-sm">Markdown (.md)</div>
+            <div className="text-[11px] text-muted-foreground">Speaker-attributed dialogue</div>
+          </div>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleExport("text")} className="gap-2">
+          <Type size={14} />
+          <div>
+            <div className="text-sm">Plain Text (.txt)</div>
+            <div className="text-[11px] text-muted-foreground">Simple format, no markup</div>
+          </div>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleExport("print")} className="gap-2">
+          <Printer size={14} />
+          <div>
+            <div className="text-sm">Print / PDF</div>
+            <div className="text-[11px] text-muted-foreground">Styled view for browser print</div>
+          </div>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
