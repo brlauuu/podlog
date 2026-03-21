@@ -1,0 +1,70 @@
+# Configuration
+
+All configuration is via environment variables in `.env`. Copy `.env.example` to get started:
+
+```bash
+cp .env.example .env
+```
+
+## Required Variables
+
+| Variable | Description |
+|---|---|
+| `POSTGRES_PASSWORD` | PostgreSQL password. Choose something strong — this is used for the internal database. |
+| `HF_TOKEN` | HuggingFace access token. Create one at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) (read access is sufficient). You must also accept the [pyannote model license](https://huggingface.co/pyannote/speaker-diarization-3.1). |
+
+## Pipeline Tuning
+
+| Variable | Default | Description |
+|---|---|---|
+| `WHISPER_MODEL` | `large-v3-turbo` | Whisper model size. Options: `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`. Smaller models use less RAM but produce lower quality transcripts. |
+| `WHISPER_COMPUTE_TYPE` | `int8` | Quantization type. `int8` is recommended for CPU (faster, lower RAM). Use `float32` for maximum accuracy. |
+| `WHISPER_BATCH_SIZE` | `16` | WhisperX batched inference batch size. Reduce if you encounter OOM errors. |
+| `ARCHIVE_AUDIO` | `true` | When `true`, audio is re-encoded to compressed MP3 after transcription and the raw download is deleted. Set `false` to delete audio entirely after processing (saves disk). |
+| `AUDIO_ARCHIVE_BITRATE` | `64k` | MP3 bitrate for archived audio. `64k` is fine for speech; `128k` for higher quality. |
+| `FEED_POLL_INTERVAL_HOURS` | `24` | How often the worker checks RSS feeds for new episodes. |
+| `DATA_DIR` | `/data` | Base directory for audio files and transcripts inside the container. Normally no need to change this. |
+
+## Retry and Error Handling
+
+| Variable | Default | Description |
+|---|---|---|
+| `RETRY_MAX` | `3` | Maximum auto-retries for transient download failures. |
+| `RETRY_BACKOFF_BASE` | `30` | Base backoff in seconds. Actual backoff = base x 2^(attempt-1), so: 30s, 60s, 120s. |
+| `DISK_HEADROOM_BYTES` | `2147483648` | Minimum free disk space (in bytes) before the worker will start a new download. Default is 2 GB. |
+
+## Zombie Job Detection
+
+The worker monitors running jobs and marks them as failed if they exceed expected processing time. This catches jobs that stall due to OOM kills or other system issues.
+
+| Variable | Default | Description |
+|---|---|---|
+| `ZOMBIE_REALTIME_FACTOR` | `1.5` | Expected processing speed relative to audio duration. A 1-hour episode with factor 1.5 is expected to take 1.5 hours. |
+| `ZOMBIE_TIMEOUT_MULTIPLIER` | `2.0` | A job is marked zombie after running longer than `expected_time x multiplier`. With default settings, a 1-hour episode times out after 3 hours. |
+| `ZOMBIE_MIN_TIMEOUT_MINUTES` | `60` | Minimum timeout floor in minutes. Prevents very short episodes from having unreasonably short timeouts. |
+
+## Speaker Inference
+
+| Variable | Default | Description |
+|---|---|---|
+| `INFERENCE_ENABLED` | `true` | Whether to run spaCy NER-based speaker name inference after diarization. |
+| `SPACY_MODEL` | `en_core_web_lg` | spaCy model for named entity recognition. `en_core_web_lg` gives best results. |
+
+## Advanced / Internal
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | (auto-generated) | PostgreSQL connection string. Override only if using an external database. |
+
+## Model Memory Usage
+
+| Whisper Model | Peak RAM | Recommended Machine RAM |
+|---|---|---|
+| `tiny` | ~1 GB | 4 GB |
+| `base` | ~1 GB | 4 GB |
+| `small` | ~2 GB | 8 GB |
+| `medium` | ~5 GB | 12 GB |
+| `large-v3` | ~10 GB | 16 GB |
+| `large-v3-turbo` | ~6 GB | 12 GB |
+
+pyannote diarization uses an additional ~2 GB during its phase, but Whisper is always unloaded before pyannote loads (they never coexist in memory).
