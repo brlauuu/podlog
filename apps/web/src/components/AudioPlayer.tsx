@@ -22,34 +22,34 @@ export default function AudioPlayer() {
     const audio = audioRef.current;
     if (!audio || !state.src) return;
 
-    const onLoadedMetadata = () => {
-      if (state.startTime > 0) {
-        audio.currentTime = state.startTime;
-      }
-      audio.play().catch(() => {});
-    };
-
     audio.src = state.src;
-    audio.addEventListener("loadedmetadata", onLoadedMetadata, { once: true });
     audio.load();
-
-    return () => audio.removeEventListener("loadedmetadata", onLoadedMetadata);
   }, [state.src, state.startTime]);
 
-  useEffect(() => {
+  function handleLoadedMetadata() {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const onDurationChange = () => setDuration(audio.duration || 0);
+    if (state.startTime > 0) {
+      audio.currentTime = state.startTime;
+    }
 
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("durationchange", onDurationChange);
-    return () => {
-      audio.removeEventListener("timeupdate", onTimeUpdate);
-      audio.removeEventListener("durationchange", onDurationChange);
-    };
-  }, []);
+    setCurrentTime(audio.currentTime);
+    setDuration(audio.duration || 0);
+    audio.play().catch(() => {});
+  }
+
+  function handleTimeUpdate() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    setCurrentTime(audio.currentTime);
+  }
+
+  function handleDurationChange() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    setDuration(audio.duration || 0);
+  }
 
   function handleSeek(e: React.MouseEvent<HTMLDivElement>) {
     const audio = audioRef.current;
@@ -79,7 +79,13 @@ export default function AudioPlayer() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 shadow-lg">
-      <audio ref={audioRef} preload="metadata" />
+      <audio
+        ref={audioRef}
+        preload="metadata"
+        onLoadedMetadata={handleLoadedMetadata}
+        onTimeUpdate={handleTimeUpdate}
+        onDurationChange={handleDurationChange}
+      />
 
       {/* Progress bar — always visible, clickable */}
       <div
@@ -125,7 +131,7 @@ export default function AudioPlayer() {
             >
               {state.isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
             </button>
-            <button onClick={() => skip(30)} className="text-muted-foreground hover:text-foreground transition-colors" title="Forward 30s">
+            <button onClick={() => skip(15)} className="text-muted-foreground hover:text-foreground transition-colors" title="Forward 15s">
               <SkipForward size={16} />
             </button>
           </div>
