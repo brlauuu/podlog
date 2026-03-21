@@ -81,8 +81,11 @@ export default function FeedsPage() {
 
   const pollFeed = useMutation({
     mutationFn: async (id: string) => {
-      await fetch(`/api/feeds/${id}/poll`, { method: "POST" });
+      const resp = await fetch(`/api/feeds/${id}/poll`, { method: "POST" });
+      if (!resp.ok) throw new Error("Failed to poll feed");
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feeds"] }),
+    onError: (err: Error) => console.error("Poll feed error:", err.message),
   });
 
   const deleteFeed = useMutation({
@@ -229,10 +232,11 @@ export default function FeedsPage() {
                     variant="ghost"
                     size="icon"
                     onClick={() => pollFeed.mutate(feed.id)}
+                    disabled={pollFeed.isPending && pollFeed.variables === feed.id}
                     title="Poll now"
                     className="h-8 w-8"
                   >
-                    <RefreshCw size={14} />
+                    <RefreshCw size={14} className={pollFeed.isPending && pollFeed.variables === feed.id ? "animate-spin" : ""} />
                   </Button>
                   <Button
                     variant="ghost"
