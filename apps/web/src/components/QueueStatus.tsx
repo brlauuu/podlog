@@ -97,28 +97,46 @@ function stageCounts(queue: QueueState): Record<string, number> {
 
 // --- Sub-components ---
 
-function StageBar({ counts }: { counts: Record<string, number> }) {
+function StageBar({
+  counts,
+  activeFilter,
+  onFilterChange,
+}: {
+  counts: Record<string, number>;
+  activeFilter: string | null;
+  onFilterChange: (stage: string | null) => void;
+}) {
   return (
     <div className="flex gap-0.5 rounded-lg overflow-hidden">
       {STAGES.map((s) => {
         const count = counts[s.key] || 0;
-        const dimmed = count === 0;
+        const dimmed = count === 0 && activeFilter !== s.key;
+        const isActive = activeFilter === s.key;
         return (
-          <div
+          <button
             key={s.key}
-            className="flex-1 text-center py-2 px-1"
+            className="flex-1 text-center py-2 px-1 transition-all"
             style={{
-              background: s.bg,
-              opacity: dimmed ? 0.4 : 1,
+              background: isActive ? s.color : s.bg,
+              opacity: dimmed ? 0.4 : activeFilter && !isActive ? 0.5 : 1,
+              boxShadow: isActive ? `0 0 0 2px ${s.color}` : "none",
+              cursor: count > 0 || isActive ? "pointer" : "default",
             }}
+            onClick={() => onFilterChange(isActive ? null : s.key)}
           >
-            <div className="text-sm font-semibold" style={{ color: s.color }}>
+            <div
+              className="text-sm font-semibold"
+              style={{ color: isActive ? "#fff" : s.color }}
+            >
               {count}
             </div>
-            <div className="text-[10px] text-muted-foreground truncate">
-              {s.label}
+            <div
+              className="text-[10px] truncate"
+              style={{ color: isActive ? "rgba(255,255,255,0.8)" : undefined }}
+            >
+              <span className={isActive ? "" : "text-muted-foreground"}>{s.label}</span>
             </div>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -251,6 +269,7 @@ export default function QueueStatus() {
   const [queue, setQueue] = useState<QueueState | null>(null);
   const [search, setSearch] = useState("");
   const [showDone, setShowDone] = useState(false);
+  const [stageFilter, setStageFilter] = useState<string | null>(null);
   const debouncedSearch = useDebounce(search, 300);
 
   useEffect(() => {
@@ -287,8 +306,13 @@ export default function QueueStatus() {
     (j.title ?? "").toLowerCase().includes(q) ||
     (j.feed_title ?? "").toLowerCase().includes(q);
 
-  const filtered = q ? allJobs.filter(matchesSearch) : allJobs;
-  const filteredDone = q ? queue.done_jobs.filter(matchesSearch) : queue.done_jobs;
+  const matchesStage = (j: Job) => !stageFilter || j.status === stageFilter;
+
+  const filtered = allJobs.filter((j) => matchesSearch(j) && matchesStage(j));
+  const filteredDone = queue.done_jobs.filter((j) => matchesSearch(j) && matchesStage(j));
+
+  // Auto-show done section when filtering to "done" stage
+  const effectiveShowDone = showDone || stageFilter === "done";
 
   async function handleRetry(episodeId: string) {
     try {
@@ -305,7 +329,7 @@ export default function QueueStatus() {
 
   return (
     <div className="space-y-4">
-      <StageBar counts={counts} />
+      <StageBar counts={counts} activeFilter={stageFilter} onFilterChange={setStageFilter} />
 
       {/* Search bar + summary */}
       <div className="flex items-center gap-3">
@@ -334,10 +358,25 @@ export default function QueueStatus() {
         </div>
       )}
 
+      {/* Active filter indicator */}
+      {stageFilter && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">
+            Filtering by <b>{stageFilter}</b>
+          </span>
+          <button
+            className="text-xs text-primary hover:underline"
+            onClick={() => setStageFilter(null)}
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
+
       {/* Episode table */}
-      {!isEmpty && filtered.length === 0 && q && (
+      {!isEmpty && filtered.length === 0 && (q || stageFilter) && (
         <div className="text-center py-8 text-muted-foreground text-sm">
-          No episodes match your search.
+          No episodes match {stageFilter ? `"${stageFilter}" filter` : "your search"}.
         </div>
       )}
 
@@ -362,13 +401,13 @@ export default function QueueStatus() {
       {doneCount > 0 && (
         <div>
           <button
-            onClick={() => setShowDone(!showDone)}
+            onClick={() => { setShowDone(!effectiveShowDone); if (stageFilter === "done") setStageFilter(null); }}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
-            {showDone ? "Hide" : "Show"} {doneCount} completed episode{doneCount !== 1 ? "s" : ""}{" "}
-            {showDone ? "▴" : "▾"}
+            {effectiveShowDone ? "Hide" : "Show"} {doneCount} completed episode{doneCount !== 1 ? "s" : ""}{" "}
+            {effectiveShowDone ? "▴" : "▾"}
           </button>
-          {showDone && filteredDone.length > 0 && (
+          {effectiveShowDone && filteredDone.length > 0 && (
             <div className="mt-2 rounded-lg border border-border overflow-hidden">
               <table className="w-full">
                 <TableHeader />
@@ -384,7 +423,7 @@ export default function QueueStatus() {
               </table>
             </div>
           )}
-          {showDone && filteredDone.length === 0 && q && (
+          {effectiveShowDone && filteredDone.length === 0 && (q || stageFilter) && (
             <div className="mt-2 text-center py-4 text-muted-foreground text-sm">
               No completed episodes match your search.
             </div>
