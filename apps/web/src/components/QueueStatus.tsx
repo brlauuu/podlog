@@ -181,7 +181,13 @@ function EpisodeRow({
         onClick={isFailed ? () => setExpanded(!expanded) : undefined}
       >
         <td className="px-3 py-2 text-sm">
-          {job.title ?? "Untitled"}
+          <Link
+            href={`/episodes/${job.episode_id}`}
+            className="hover:text-primary hover:underline transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {job.title ?? "Untitled"}
+          </Link>
         </td>
         <td className="px-3 py-2 text-sm text-muted-foreground hidden sm:table-cell">
           {job.feed_title ?? "—"}
