@@ -113,8 +113,8 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
     # Check for existing feed first -- handle test->full promotion
     existing = db.query(Feed).filter(Feed.url == body.url).first()
     if existing:
-        if existing.mode == "test" and body.mode == "full":
-            # Promote test -> full: flip mode and re-ingest to pick up remaining episodes
+        if existing.mode in ("test", "selective") and body.mode == "full":
+            # Promote test/selective -> full: flip mode and re-ingest to pick up remaining episodes
             existing.mode = "full"
             db.commit()
             db.refresh(existing)
@@ -192,5 +192,11 @@ def poll_feed(feed_id: str, db: Session = Depends(get_db)) -> dict:
     feed = db.query(Feed).filter(Feed.id == feed_id).first()
     if not feed:
         raise HTTPException(status_code=404, detail="Feed not found")
+    # Issue #84: selective feeds have a fixed episode set — polling adds nothing
+    if feed.mode == "selective":
+        raise HTTPException(
+            status_code=422,
+            detail="Selective feeds cannot be re-polled. Promote to full mode to ingest new episodes.",
+        )
     _ingest_feed(feed.id)
     return {"queued": True}

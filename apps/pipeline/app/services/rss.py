@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 from email.utils import parsedate_to_datetime
+from urllib.parse import urlparse
 
 import feedparser
 import httpx
@@ -46,6 +47,13 @@ class EpisodeMeta:
     duration_secs: Optional[int]
 
 
+def _require_http_url(url: str) -> None:
+    """Raise InvalidFeedError if url is not http/https (prevents SSRF via file:// etc.)."""
+    scheme = urlparse(url).scheme
+    if scheme not in ("http", "https"):
+        raise InvalidFeedError(f"Feed URL must use http or https, got: {scheme!r}")
+
+
 def validate_and_parse_feed(url: str) -> FeedMeta:
     """
     Fetch the URL and attempt to parse it as RSS/Atom (GAP-02).
@@ -54,6 +62,7 @@ def validate_and_parse_feed(url: str) -> FeedMeta:
       - The response is not a parseable feed
       - The feed contains no episodes (empty feed is still valid)
     """
+    _require_http_url(url)
     try:
         resp = httpx.get(url, follow_redirects=True, timeout=15.0)
         resp.raise_for_status()
@@ -127,6 +136,7 @@ def preview_feed(url: str) -> FeedPreview:
     Used by the preview endpoint (issue #84) to avoid a double HTTP call.
     Raises InvalidFeedError if the URL is unreachable or not a valid feed.
     """
+    _require_http_url(url)
     try:
         resp = httpx.get(url, follow_redirects=True, timeout=15.0)
         resp.raise_for_status()

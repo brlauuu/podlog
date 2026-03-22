@@ -411,16 +411,18 @@ export default function FeedsPage() {
                       Promote to Full
                     </Button>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => pollFeed.mutate(feed.id)}
-                    disabled={pollFeed.isPending && pollFeed.variables === feed.id}
-                    title="Poll now"
-                    className="h-8 w-8"
-                  >
-                    <RefreshCw size={14} className={pollFeed.isPending && pollFeed.variables === feed.id ? "animate-spin" : ""} />
-                  </Button>
+                  {feed.mode !== "selective" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => pollFeed.mutate(feed.id)}
+                      disabled={pollFeed.isPending && pollFeed.variables === feed.id}
+                      title="Poll now"
+                      className="h-8 w-8"
+                    >
+                      <RefreshCw size={14} className={pollFeed.isPending && pollFeed.variables === feed.id ? "animate-spin" : ""} />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
