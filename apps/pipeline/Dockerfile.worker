@@ -8,10 +8,16 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+ARG INSTALL_DEV=false
+
 COPY pyproject.toml poetry.lock* ./
 RUN pip install --no-cache-dir poetry \
     && poetry config virtualenvs.create false \
-    && poetry install --with ml --without dev --no-root --no-interaction --no-ansi \
+    && if [ "$INSTALL_DEV" = "true" ]; then \
+         poetry install --with ml,dev --no-root --no-interaction --no-ansi; \
+       else \
+         poetry install --with ml --without dev --no-root --no-interaction --no-ansi; \
+       fi \
     && python -m spacy download en_core_web_lg
 
 COPY . .

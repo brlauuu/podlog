@@ -70,6 +70,55 @@ class TestFeedsEndpoint:
         finally:
             app.dependency_overrides.clear()
 
+    def test_add_feed_selective_without_guids_returns_422(self):
+        """Selective mode requires selected_guids."""
+        resp = client.post(
+            "/api/feeds",
+            json={"url": "https://example.com/feed.xml", "mode": "selective"},
+        )
+        assert resp.status_code == 422
+        assert "selected_guids" in resp.json()["detail"]
+
+    def test_add_feed_selective_with_guids_accepted(self):
+        """Selective mode with valid GUIDs proceeds past validation."""
+        from datetime import datetime, timezone
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        # SQLAlchemy column defaults only run during INSERT; simulate db.refresh populating them
+        def _mock_refresh(obj):
+            obj.id = "test-feed-uuid"
+            obj.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+            obj.last_polled_at = None
+
+        mock_db.refresh.side_effect = _mock_refresh
+
+        from app.database import get_db
+        from app.services.rss import FeedMeta
+
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            with (
+                patch(
+                    "app.api.feeds.rss_service.validate_and_parse_feed",
+                    return_value=FeedMeta(title="T", description=None, image_url=None, website_url=None),
+                ),
+                patch("app.api.feeds._ingest_feed"),
+            ):
+                resp = client.post(
+                    "/api/feeds",
+                    json={
+                        "url": "https://example.com/feed.xml",
+                        "mode": "selective",
+                        "selected_guids": ["ep-001"],
+                    },
+                )
+            assert resp.status_code == 201
+            assert resp.json()["mode"] == "selective"
+        finally:
+            app.dependency_overrides.clear()
+
     def test_list_feeds_removed(self):
         """GET /api/feeds was moved to Next.js direct DB — should return 405."""
         resp = client.get("/api/feeds")
