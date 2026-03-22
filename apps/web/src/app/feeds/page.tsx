@@ -201,7 +201,7 @@ export default function FeedsPage() {
               Add Feed
             </Button>
           </DialogTrigger>
-          <DialogContent className={previewStep ? "max-w-lg" : undefined}>
+          <DialogContent className={previewStep ? "max-w-2xl" : undefined}>
             <DialogHeader>
               <DialogTitle>
                 {previewStep
@@ -291,7 +291,7 @@ export default function FeedsPage() {
                     {selectedGuids.size === preview.episodes.length ? "Deselect all" : "Select all"}
                   </button>
                 </div>
-                <div className="max-h-72 overflow-y-auto divide-y rounded-md border">
+                <div className="max-h-72 overflow-y-auto overflow-x-hidden divide-y rounded-md border">
                   {preview.episodes.map((ep) => (
                     <label
                       key={ep.guid}
