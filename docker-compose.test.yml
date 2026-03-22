@@ -22,6 +22,8 @@ services:
     build:
       context: ./apps/pipeline
       dockerfile: Dockerfile.worker
+      args:
+        INSTALL_DEV: "true"
     command: pytest tests/ -v --cov=app --cov-report=term-missing
     environment:
       DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test

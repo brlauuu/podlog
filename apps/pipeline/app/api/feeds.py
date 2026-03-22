@@ -1,9 +1,10 @@
 """
 Feed management API — control-plane endpoints.
 
-POST   /api/feeds            Add a new RSS feed (with validation — GAP-02)
-DELETE /api/feeds/{id}       Remove a feed (optionally delete episodes)
-POST   /api/feeds/{id}/poll  Trigger immediate re-poll
+GET    /api/feeds/preview     Preview a feed URL (returns metadata + episodes, no DB writes)
+POST   /api/feeds             Add a new RSS feed (with validation — GAP-02)
+DELETE /api/feeds/{id}        Remove a feed (optionally delete episodes)
+POST   /api/feeds/{id}/poll   Trigger immediate re-poll
 
 Feed listing (GET /api/feeds) is served directly by the Next.js web app
 via PostgreSQL queries (no proxy needed).
@@ -27,7 +28,9 @@ router = APIRouter()
 
 class AddFeedRequest(BaseModel):
     url: str
-    mode: Literal["test", "full"] = "full"
+    mode: Literal["test", "full", "selective"] = "full"
+    # Issue #84: required when mode == "selective"; ignored for test/full
+    selected_guids: Optional[list[str]] = None
 
 
 class FeedResponse(BaseModel):
@@ -44,20 +47,74 @@ class FeedResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EpisodePreview(BaseModel):
+    guid: str
+    title: Optional[str]
+    published_at: Optional[datetime]
+    duration_secs: Optional[int]
+    audio_url: str
+
+
+class FeedPreviewResponse(BaseModel):
+    title: Optional[str]
+    description: Optional[str]
+    image_url: Optional[str]
+    website_url: Optional[str]
+    episodes: list[EpisodePreview]
+
+
+@router.get("/feeds/preview", response_model=FeedPreviewResponse)
+def preview_feed(url: str = Query(..., description="RSS feed URL to preview")) -> FeedPreviewResponse:
+    """
+    Fetch a feed URL and return its metadata + episode list without persisting anything.
+    Used by the frontend to show episode selection before adding a feed (issue #84).
+    """
+    try:
+        preview = rss_service.preview_feed(url)
+    except rss_service.InvalidFeedError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return FeedPreviewResponse(
+        title=preview.feed.title,
+        description=preview.feed.description,
+        image_url=preview.feed.image_url,
+        website_url=preview.feed.website_url,
+        episodes=[
+            EpisodePreview(
+                guid=ep.guid,
+                title=ep.title,
+                published_at=ep.published_at,
+                duration_secs=ep.duration_secs,
+                audio_url=ep.audio_url,
+            )
+            for ep in preview.episodes
+        ],
+    )
+
+
 @router.post("/feeds", response_model=FeedResponse, status_code=201)
 def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedResponse:
     """
     Add a new RSS feed. Validates the URL is a parseable RSS/Atom feed (GAP-02)
     before persisting. Enqueues ingestion of all existing episodes.
 
-    Issue #23: If a feed already exists in test mode and is re-added, it gets
-    promoted to full mode and remaining episodes are ingested.
+    Issue #23: If a feed already exists in test mode and is re-added in full mode,
+    it gets promoted and remaining episodes are ingested.
+    Issue #84: selective mode requires selected_guids; only those episodes are ingested.
     """
+    # Issue #84: validate selective mode has at least one GUID
+    if body.mode == "selective":
+        if not body.selected_guids:
+            raise HTTPException(
+                status_code=422,
+                detail="selected_guids is required and must be non-empty for selective mode",
+            )
+
     # Check for existing feed first -- handle test->full promotion
     existing = db.query(Feed).filter(Feed.url == body.url).first()
     if existing:
-        if existing.mode == "test" and body.mode == "full":
-            # Promote test -> full: flip mode and re-ingest to pick up remaining episodes
+        if existing.mode in ("test", "selective") and body.mode == "full":
+            # Promote test/selective -> full: flip mode and re-ingest to pick up remaining episodes
             existing.mode = "full"
             db.commit()
             db.refresh(existing)
@@ -96,7 +153,7 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
     # Trigger ingestion (creates download jobs for each episode).
     # Called after commit so ingest_feed's own session can see the feed row.
     try:
-        _ingest_feed(feed.id)
+        _ingest_feed(feed.id, selected_guids=body.selected_guids)
     except Exception as exc:
         # Feed is saved but ingestion failed — not fatal, can be re-polled
         logger.error('"action": "feed_ingest_failed", "url": "%s", "error": "%s"', body.url, exc)
@@ -135,5 +192,11 @@ def poll_feed(feed_id: str, db: Session = Depends(get_db)) -> dict:
     feed = db.query(Feed).filter(Feed.id == feed_id).first()
     if not feed:
         raise HTTPException(status_code=404, detail="Feed not found")
+    # Issue #84: selective feeds have a fixed episode set — polling adds nothing
+    if feed.mode == "selective":
+        raise HTTPException(
+            status_code=422,
+            detail="Selective feeds cannot be re-polled. Promote to full mode to ingest new episodes.",
+        )
     _ingest_feed(feed.id)
     return {"queued": True}

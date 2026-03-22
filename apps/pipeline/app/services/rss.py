@@ -3,12 +3,14 @@ RSS / Atom feed parsing — PRD-01 §5.1, GAP-02
 
 validate_and_parse_feed  — fetch + validate, raise InvalidFeedError if not parseable
 fetch_episodes           — return list of episode metadata from a feed URL
+preview_feed             — validate + fetch episodes in one HTTP call (used by preview endpoint)
 """
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 from email.utils import parsedate_to_datetime
+from urllib.parse import urlparse
 
 import feedparser
 import httpx
@@ -29,6 +31,12 @@ class FeedMeta:
 
 
 @dataclass
+class FeedPreview:
+    feed: "FeedMeta"
+    episodes: "list[EpisodeMeta]"
+
+
+@dataclass
 class EpisodeMeta:
     guid: str
     title: Optional[str]
@@ -39,6 +47,13 @@ class EpisodeMeta:
     duration_secs: Optional[int]
 
 
+def _require_http_url(url: str) -> None:
+    """Raise InvalidFeedError if url is not http/https (prevents SSRF via file:// etc.)."""
+    scheme = urlparse(url).scheme
+    if scheme not in ("http", "https"):
+        raise InvalidFeedError(f"Feed URL must use http or https, got: {scheme!r}")
+
+
 def validate_and_parse_feed(url: str) -> FeedMeta:
     """
     Fetch the URL and attempt to parse it as RSS/Atom (GAP-02).
@@ -47,6 +62,7 @@ def validate_and_parse_feed(url: str) -> FeedMeta:
       - The response is not a parseable feed
       - The feed contains no episodes (empty feed is still valid)
     """
+    _require_http_url(url)
     try:
         resp = httpx.get(url, follow_redirects=True, timeout=15.0)
         resp.raise_for_status()
@@ -112,6 +128,60 @@ def fetch_episodes(url: str) -> list[EpisodeMeta]:
         )
 
     return episodes
+
+
+def preview_feed(url: str) -> FeedPreview:
+    """
+    Fetch a feed URL once and return both feed metadata and episode list.
+    Used by the preview endpoint (issue #84) to avoid a double HTTP call.
+    Raises InvalidFeedError if the URL is unreachable or not a valid feed.
+    """
+    _require_http_url(url)
+    try:
+        resp = httpx.get(url, follow_redirects=True, timeout=15.0)
+        resp.raise_for_status()
+        content = resp.text
+    except httpx.HTTPError as exc:
+        raise InvalidFeedError(f"Could not fetch feed: {exc}") from exc
+
+    parsed = feedparser.parse(content)
+
+    if not parsed.version:
+        raise InvalidFeedError("URL does not appear to be a valid RSS or Atom feed")
+
+    if parsed.bozo and not parsed.entries:
+        raise InvalidFeedError(
+            f"URL does not appear to be a valid RSS or Atom feed: {parsed.bozo_exception}"
+        )
+
+    feed_data = parsed.feed
+    feed_meta = FeedMeta(
+        title=feed_data.get("title"),
+        description=feed_data.get("subtitle") or feed_data.get("description"),
+        image_url=_extract_image(feed_data),
+        website_url=feed_data.get("link"),
+    )
+
+    episodes = []
+    for entry in parsed.entries:
+        audio_url = _extract_audio_url(entry)
+        if not audio_url:
+            continue
+        guid = entry.get("id") or audio_url
+        raw_link = entry.get("link") or ""
+        episodes.append(
+            EpisodeMeta(
+                guid=guid,
+                title=entry.get("title"),
+                description=entry.get("summary"),
+                audio_url=audio_url,
+                episode_url=raw_link if raw_link.startswith(("http://", "https://")) else None,
+                published_at=_parse_date(entry.get("published")),
+                duration_secs=_parse_duration(entry.get("itunes_duration")),
+            )
+        )
+
+    return FeedPreview(feed=feed_meta, episodes=episodes)
 
 
 def _extract_audio_url(entry: dict) -> Optional[str]:

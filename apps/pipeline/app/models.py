@@ -43,7 +43,8 @@ class Feed(Base):
     image_url: Mapped[str | None] = mapped_column(Text)
     website_url: Mapped[str | None] = mapped_column(Text)
     last_polled_at: Mapped[datetime | None] = mapped_column()
-    # Issue #23: test | full — test mode limits to 5 random episodes
+    # Issue #23: test | full — test mode limits to N most-recent episodes (default 1)
+    # Issue #84: selective — only user-chosen episodes are ingested; not auto-polled
     mode: Mapped[str] = mapped_column(Text, nullable=False, default="full")
 
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))

@@ -6,8 +6,8 @@ ingest_episode -- run the full pipeline for a single episode
 poll_all_feeds -- poll all registered feeds (called periodically)
 """
 import logging
-import random
 from datetime import datetime, timezone
+from typing import Optional
 
 from app.database import SessionLocal
 from app.models import Episode, Feed
@@ -16,12 +16,19 @@ from app import job_queue
 
 logger = logging.getLogger(__name__)
 
-# Issue #23: max episodes to process in test mode
-TEST_MODE_MAX_EPISODES = 5
+# Issue #23: max episodes to process in test mode (default 1 — most recent)
+# Issue #84: changed from random 5 to most-recent 1
+TEST_MODE_MAX_EPISODES = 1
 
 
-def ingest_feed(feed_id: str) -> dict:
-    """Poll a registered RSS feed and enqueue any new episodes."""
+def ingest_feed(feed_id: str, selected_guids: Optional[list[str]] = None) -> dict:
+    """
+    Poll a registered RSS feed and enqueue any new episodes.
+
+    selected_guids: when feed.mode == "selective", only episodes whose GUIDs
+    are in this list are ingested. GUIDs are validated against the live feed
+    to prevent injection (issue #84).
+    """
     db = SessionLocal()
     try:
         feed = db.query(Feed).filter(Feed.id == feed_id).first()
@@ -29,7 +36,28 @@ def ingest_feed(feed_id: str) -> dict:
             logger.error('"action": "ingest_feed_missing", "feed_id": "%s"', feed_id)
             return {"error": "Feed not found"}
 
+        # Issue #84: selective feeds are never auto-polled for new episodes —
+        # skip re-fetching episodes on periodic polls (selected_guids is None then)
+        if feed.mode == "selective" and selected_guids is None:
+            logger.info(
+                '"action": "selective_feed_skipped", "feed_id": "%s"', feed_id
+            )
+            return {"new_episodes": 0, "reason": "selective_mode_no_new_episodes"}
+
         episodes_meta = rss_service.fetch_episodes(feed.url)
+
+        # Issue #84: in selective mode, restrict to the caller-supplied GUIDs.
+        # Validate each requested GUID is present in the live feed to prevent injection.
+        if feed.mode == "selective" and selected_guids is not None:
+            live_guids = {ep.guid for ep in episodes_meta}
+            invalid = [g for g in selected_guids if g not in live_guids]
+            if invalid:
+                logger.error(
+                    '"action": "selective_invalid_guids", "feed_id": "%s", "invalid": %s',
+                    feed_id, invalid,
+                )
+                return {"error": "selected_guids contains GUIDs not present in feed"}
+            episodes_meta = [ep for ep in episodes_meta if ep.guid in set(selected_guids)]
 
         # Filter out episodes that already exist in the DB
         existing_guids = set(
@@ -38,7 +66,9 @@ def ingest_feed(feed_id: str) -> dict:
         )
         new_episodes_meta = [m for m in episodes_meta if m.guid not in existing_guids]
 
-        # Issue #23: in test mode, limit to TEST_MODE_MAX_EPISODES total episodes
+        # Issue #23 / #84: in test mode, limit to TEST_MODE_MAX_EPISODES most-recent episodes.
+        # Use most-recent (head of list, feedparser returns newest-first) rather than random
+        # so results are deterministic and predictable.
         if feed.mode == "test":
             existing_count = db.query(Episode).filter(Episode.feed_id == feed_id).count()
             remaining_slots = max(0, TEST_MODE_MAX_EPISODES - existing_count)
@@ -49,8 +79,7 @@ def ingest_feed(feed_id: str) -> dict:
                 feed.last_polled_at = datetime.now(timezone.utc)
                 db.commit()
                 return {"new_episodes": 0, "reason": "test_mode_limit_reached"}
-            if len(new_episodes_meta) > remaining_slots:
-                new_episodes_meta = random.sample(new_episodes_meta, remaining_slots)
+            new_episodes_meta = new_episodes_meta[:remaining_slots]
 
         new_count = 0
         for meta in new_episodes_meta:
@@ -97,9 +126,10 @@ def ingest_episode(episode_id: str) -> dict:
 
 
 def poll_all_feeds() -> dict:
-    """Poll all registered feeds for new episodes. Issue #23: skip test feeds."""
+    """Poll all registered feeds for new episodes. Skip test and selective feeds."""
     db = SessionLocal()
     try:
+        # Issue #23: skip test feeds; issue #84: skip selective feeds
         feeds = db.query(Feed).filter(Feed.mode == "full").all()
         results = []
         for feed in feeds:
