@@ -10,7 +10,11 @@ logger = logging.getLogger(__name__)
 def update_episode(db, episode_id: str, **kwargs) -> None:
     """Update episode fields with automatic updated_at timestamp."""
     kwargs.setdefault("updated_at", datetime.now(timezone.utc))
-    db.query(Episode).filter(Episode.id == episode_id).update(kwargs)
+    episode = db.query(Episode).filter(Episode.id == episode_id).first()
+    if episode is None:
+        raise RuntimeError(f"Episode {episode_id} not found for update")
+    for key, value in kwargs.items():
+        setattr(episode, key, value)
     db.commit()
 
 
