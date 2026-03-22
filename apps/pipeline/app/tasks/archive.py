@@ -34,7 +34,6 @@ def archive_episode(episode_id: str) -> str:
         if settings.archive_audio and raw_path and raw_path.exists():
             try:
                 archived_path = _compress_audio(raw_path, episode_id)
-                raw_path.unlink()  # Delete raw file after successful compression
             except OSError as exc:
                 if "No space left on device" in str(exc) or getattr(exc, "errno", None) == 28:
                     update_episode(
@@ -46,10 +45,8 @@ def archive_episode(episode_id: str) -> str:
                     logger.error(
                         '"action": "archive_disk_full", "episode_id": "%s"', episode_id
                     )
-                    return episode_id  # Raw file is preserved, no retry
+                    return episode_id
                 raise
-        elif not settings.archive_audio and raw_path and raw_path.exists():
-            raw_path.unlink()
 
         # Write flat .txt transcript (PRD-04 S4.7: include inferred names)
         segments = (
@@ -84,6 +81,23 @@ def archive_episode(episode_id: str) -> str:
             transcript_path=transcript_path,
             processed_at=datetime.now(timezone.utc),
         )
+
+        # Verify status was persisted before deleting raw audio
+        db.expire_all()
+        verified = db.query(Episode).filter(Episode.id == episode_id).first()
+        if verified is None or verified.status != "done":
+            logger.error(
+                '"action": "archive_status_verify_failed", "episode_id": "%s", "status": "%s"',
+                episode_id, verified.status if verified else "NOT_FOUND",
+            )
+            raise RuntimeError(
+                f"Episode {episode_id} status update to 'done' did not persist "
+                f"(current status: {verified.status if verified else 'NOT_FOUND'})"
+            )
+
+        # Safe to delete raw audio now that status is confirmed
+        if raw_path and raw_path.exists():
+            raw_path.unlink()
 
         logger.info('"action": "archive_complete", "episode_id": "%s"', episode_id)
         return episode_id

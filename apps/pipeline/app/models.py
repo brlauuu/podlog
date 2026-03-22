@@ -101,7 +101,7 @@ class Episode(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
-    processed_at: Mapped[datetime | None] = mapped_column()
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     feed: Mapped["Feed | None"] = relationship("Feed", back_populates="episodes")
     segments: Mapped[list["Segment"]] = relationship(
