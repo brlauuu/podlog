@@ -162,9 +162,13 @@ function StatusBadge({ status }: { status: string }) {
 function EpisodeRow({
   job,
   onRetry,
+  onPodcastClick,
+  onStageClick,
 }: {
   job: Job;
   onRetry: (episodeId: string) => void;
+  onPodcastClick: (feedTitle: string) => void;
+  onStageClick: (stage: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isFailed = job.status === "failed";
@@ -190,7 +194,19 @@ function EpisodeRow({
           </Link>
         </td>
         <td className="px-3 py-2 text-sm text-muted-foreground hidden sm:table-cell">
-          {job.feed_title ?? "—"}
+          {job.feed_title ? (
+            <button
+              className="hover:text-primary hover:underline transition-colors text-left"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPodcastClick(job.feed_title!);
+              }}
+            >
+              {job.feed_title}
+            </button>
+          ) : (
+            "—"
+          )}
           {job.feed_mode === "test" && (
             <span className="ml-1 text-[10px] bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-1 rounded">
               Test
@@ -198,7 +214,14 @@ function EpisodeRow({
           )}
         </td>
         <td className="px-3 py-2">
-          <StatusBadge status={job.status} />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStageClick(job.status);
+            }}
+          >
+            <StatusBadge status={job.status} />
+          </button>
         </td>
         <td className="px-3 py-2 text-sm text-muted-foreground">
           {timeAgo(job.updated_at)}
@@ -396,6 +419,8 @@ export default function QueueStatus() {
                   key={job.episode_id}
                   job={job}
                   onRetry={handleRetry}
+                  onPodcastClick={(title) => setSearch(title)}
+                  onStageClick={(stage) => setStageFilter(stageFilter === stage ? null : stage)}
                 />
               ))}
             </tbody>
