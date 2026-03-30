@@ -448,6 +448,8 @@ export default function QueueStatus() {
                       key={job.episode_id}
                       job={job}
                       onRetry={handleRetry}
+                      onPodcastClick={(title) => setSearch(title)}
+                      onStageClick={(stage) => setStageFilter(stageFilter === stage ? null : stage)}
                     />
                   ))}
                 </tbody>
