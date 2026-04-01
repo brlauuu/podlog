@@ -5,7 +5,7 @@
  * Tests the pure validation function without hitting the database.
  */
 
-import { validateMergeRequest } from "@/app/api/episodes/[id]/speakers/merge/route";
+import { validateMergeRequest } from "@/lib/validateMergeRequest";
 
 describe("speaker merge validation", () => {
   test("valid request passes", () => {
