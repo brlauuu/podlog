@@ -1,7 +1,10 @@
 """Notification events, queue estimation, and delivery handlers."""
 import logging
+import smtplib
 from dataclasses import dataclass
 from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 from sqlalchemy.orm import Session
 
@@ -236,3 +239,40 @@ def format_failed_telegram(event: EpisodeFailedEvent) -> str:
         f"`Retries:  {event.retry_count}/{event.retry_max}`\n\n"
         f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate(event.queue_estimated_secs)}"
     )
+
+
+def send_email(
+    event: Event,
+    to_addr: str,
+    from_addr: str,
+    smtp_host: str,
+    smtp_port: int,
+    smtp_user: str | None = None,
+    smtp_password: str | None = None,
+    use_tls: bool = False,
+) -> None:
+    """Send an HTML notification email for the given event."""
+    if isinstance(event, EpisodeDoneEvent):
+        subject = f"✅ Podlog: {event.episode_title} processed"
+        html = format_done_html(event)
+    elif isinstance(event, EpisodeFailedEvent):
+        subject = f"❌ Podlog: {event.episode_title} failed"
+        html = format_failed_html(event)
+    else:
+        logger.warning('"action": "email_unknown_event", "type": "%s"', type(event).__name__)
+        return
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+    msg.attach(MIMEText(html, "html"))
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        if use_tls:
+            server.starttls()
+        if smtp_user and smtp_password:
+            server.login(smtp_user, smtp_password)
+        server.send_message(msg)
+
+    logger.info('"action": "email_sent", "to": "%s", "subject": "%s"', to_addr, subject)
