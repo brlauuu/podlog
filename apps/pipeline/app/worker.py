@@ -33,6 +33,7 @@ PERIODIC_TASKS = [
     # (name, function_path, interval_seconds)
     ("poll_all_feeds", "app.tasks.ingest:poll_all_feeds", None),  # interval set from settings
     ("cleanup_zombie_jobs", "app.tasks.cleanup:cleanup_zombie_jobs", 30 * 60),
+    ("send_digest", "app.services.digest:send_digest_if_due", 15 * 60),
 ]
 
 _shutdown = False
@@ -81,36 +82,10 @@ def main() -> None:
 
     logger.info('"action": "worker_start"')
 
-    # Register notification handlers (worker runs the tasks that emit events)
-    from app.config import settings
+    # Register notification handlers
     from app.services.events import bus
-    from app.services.notifications import (
-        EpisodeDoneEvent,
-        EpisodeFailedEvent,
-        send_email,
-        send_telegram,
-    )
-
-    if settings.email_notifications_enabled:
-        def _email_handler(event):
-            send_email(
-                event,
-                to_addr=settings.notification_email_to,
-                from_addr=settings.notification_email_from,
-                smtp_host=settings.smtp_host,
-                smtp_port=settings.smtp_port,
-                smtp_user=settings.smtp_user,
-                smtp_password=settings.smtp_password,
-                use_tls=settings.smtp_use_tls,
-            )
-        bus.subscribe(EpisodeDoneEvent, _email_handler)
-        bus.subscribe(EpisodeFailedEvent, _email_handler)
-
-    if settings.telegram_notifications_enabled:
-        def _telegram_handler(event):
-            send_telegram(event, bot_token=settings.telegram_bot_token, chat_id=settings.telegram_chat_id)
-        bus.subscribe(EpisodeDoneEvent, _telegram_handler)
-        bus.subscribe(EpisodeFailedEvent, _telegram_handler)
+    from app.services.digest import register_notification_handlers
+    register_notification_handlers(bus)
 
     last_periodic_run: dict[str, datetime] = {}
 
