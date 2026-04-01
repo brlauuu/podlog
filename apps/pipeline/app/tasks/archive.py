@@ -13,6 +13,8 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment, SpeakerName
+from app.services.events import bus
+from app.services.notifications import EpisodeDoneEvent, estimate_queue_status
 from app.tasks.helpers import update_episode
 
 logger = logging.getLogger(__name__)
@@ -94,6 +96,25 @@ def archive_episode(episode_id: str) -> str:
                 f"Episode {episode_id} status update to 'done' did not persist "
                 f"(current status: {verified.status if verified else 'NOT_FOUND'})"
             )
+
+        # Emit notification event
+        remaining, estimated = estimate_queue_status(db)
+        total_secs = (
+            (verified.processed_at - episode.created_at).total_seconds()
+            if verified.processed_at else None
+        )
+        bus.emit(EpisodeDoneEvent(
+            episode_id=episode_id,
+            episode_title=episode.title or "",
+            podcast_title=episode.feed.title if episode.feed else "",
+            published_at=episode.published_at,
+            duration_secs=episode.duration_secs,
+            transcribe_duration_secs=episode.transcribe_duration_secs,
+            diarize_duration_secs=episode.diarize_duration_secs,
+            total_duration_secs=total_secs,
+            queue_remaining=remaining,
+            queue_estimated_secs=estimated,
+        ))
 
         # Safe to delete raw audio now that status is confirmed
         if raw_path and raw_path.exists():
