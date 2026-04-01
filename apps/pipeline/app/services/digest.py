@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from app.config import settings
 from app.database import SessionLocal
 from app.models import NotificationLog, SystemState
-from app.services.events import Event
+from app.services.events import Event, EventBus
 from app.services.notifications import (
     EpisodeDoneEvent,
     EpisodeFailedEvent,
@@ -337,3 +337,74 @@ def _send_digest(digest: DigestData) -> None:
             "parse_mode": "Markdown",
         })
         resp.raise_for_status()
+
+
+def register_notification_handlers(bus: EventBus) -> None:
+    """Register notification handlers on the event bus based on config.
+
+    - immediate: send directly for both done and failed events
+    - daily/weekly: log done events to DB, send failed events immediately + log them
+    """
+    if not settings.email_notifications_enabled and not settings.telegram_notifications_enabled:
+        return
+
+    if settings.notification_frequency == "immediate":
+        # Direct send for all events
+        if settings.email_notifications_enabled:
+            def _email_handler(event):
+                send_email(
+                    event,
+                    to_addr=settings.notification_email_to,
+                    from_addr=settings.notification_email_from,
+                    smtp_host=settings.smtp_host,
+                    smtp_port=settings.smtp_port,
+                    smtp_user=settings.smtp_user,
+                    smtp_password=settings.smtp_password,
+                    use_tls=settings.smtp_use_tls,
+                )
+            bus.subscribe(EpisodeDoneEvent, _email_handler)
+            bus.subscribe(EpisodeFailedEvent, _email_handler)
+
+        if settings.telegram_notifications_enabled:
+            def _telegram_handler(event):
+                send_telegram(
+                    event,
+                    bot_token=settings.telegram_bot_token,
+                    chat_id=settings.telegram_chat_id,
+                )
+            bus.subscribe(EpisodeDoneEvent, _telegram_handler)
+            bus.subscribe(EpisodeFailedEvent, _telegram_handler)
+    else:
+        # Digest mode: log done events, send+log failed events
+        def _log_done(event):
+            log_event(event, mark_sent=False)
+
+        def _log_and_send_failed(event):
+            log_event(event, mark_sent=True)
+
+        bus.subscribe(EpisodeDoneEvent, _log_done)
+        bus.subscribe(EpisodeFailedEvent, _log_and_send_failed)
+
+        # Also send failed events immediately
+        if settings.email_notifications_enabled:
+            def _email_failed(event):
+                send_email(
+                    event,
+                    to_addr=settings.notification_email_to,
+                    from_addr=settings.notification_email_from,
+                    smtp_host=settings.smtp_host,
+                    smtp_port=settings.smtp_port,
+                    smtp_user=settings.smtp_user,
+                    smtp_password=settings.smtp_password,
+                    use_tls=settings.smtp_use_tls,
+                )
+            bus.subscribe(EpisodeFailedEvent, _email_failed)
+
+        if settings.telegram_notifications_enabled:
+            def _telegram_failed(event):
+                send_telegram(
+                    event,
+                    bot_token=settings.telegram_bot_token,
+                    chat_id=settings.telegram_chat_id,
+                )
+            bus.subscribe(EpisodeFailedEvent, _telegram_failed)
