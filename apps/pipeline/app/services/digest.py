@@ -340,8 +340,7 @@ def register_notification_handlers(bus: EventBus) -> None:
         finally:
             db.close()
 
-    def _send_immediate(event: Event) -> None:
-        ns = _get_settings()
+    def _send_immediate(event: Event, ns: dict) -> None:
         if ns.get("email_configured"):
             send_email(
                 event,
@@ -364,7 +363,7 @@ def register_notification_handlers(bus: EventBus) -> None:
         ns = _get_settings()
         freq = ns.get("notification_frequency", "immediate")
         if freq == "immediate":
-            _send_immediate(event)
+            _send_immediate(event, ns)
         else:
             log_event(event, mark_sent=False)
 
@@ -372,10 +371,10 @@ def register_notification_handlers(bus: EventBus) -> None:
         ns = _get_settings()
         freq = ns.get("notification_frequency", "immediate")
         if freq == "immediate":
-            _send_immediate(event)
+            _send_immediate(event, ns)
         else:
             log_event(event, mark_sent=True)
-            _send_immediate(event)
+            _send_immediate(event, ns)
 
     bus.subscribe(EpisodeDoneEvent, _handle_done)
     bus.subscribe(EpisodeFailedEvent, _handle_failed)
