@@ -2,10 +2,11 @@
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
+from app.config import settings
 from app.database import SessionLocal
-from app.models import NotificationLog
+from app.models import NotificationLog, SystemState
 from app.services.events import Event
 from app.services.notifications import (
     EpisodeDoneEvent,
@@ -202,3 +203,137 @@ def log_event(event: Event, mark_sent: bool = False) -> None:
         )
     finally:
         db.close()
+
+
+LAST_DIGEST_KEY = "last_digest_sent_at"
+
+
+def send_digest_if_due(now: datetime | None = None) -> None:
+    """Check if a digest is due and send it if so. Called by the worker periodic task."""
+    if settings.notification_frequency == "immediate":
+        return
+
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    db = SessionLocal()
+    try:
+        # Quick time-only check before hitting the DB for last_sent
+        if not is_digest_due(settings.notification_frequency, now, last_sent=None):
+            return
+
+        # Read last_digest_sent_at from system_state
+        state_row = db.query(SystemState).filter(SystemState.key == LAST_DIGEST_KEY).first()
+        last_sent = None
+        if isinstance(state_row, SystemState):
+            last_sent = datetime.fromisoformat(state_row.value)
+
+        if not is_digest_due(settings.notification_frequency, now, last_sent):
+            return
+
+        # Query unsent events
+        unsent = (
+            db.query(NotificationLog)
+            .filter(NotificationLog.sent == False)
+            .order_by(NotificationLog.created_at)
+            .all()
+        )
+
+        if not unsent:
+            # Update last_sent even when empty — avoid re-checking every 15 min
+            _update_last_sent(db, state_row, now)
+            return
+
+        # Build digest data
+        remaining, estimated = estimate_queue_status(db)
+        items = []
+        for row in unsent:
+            payload = json.loads(row.payload)
+            items.append(DigestItem(
+                event_type=row.event_type,
+                episode_title=payload.get("episode_title", ""),
+                podcast_title=payload.get("podcast_title", ""),
+                duration_secs=payload.get("duration_secs"),
+                total_duration_secs=payload.get("total_duration_secs"),
+                error_class=payload.get("error_class"),
+                retry_count=payload.get("retry_count"),
+                retry_max=payload.get("retry_max"),
+            ))
+
+        if settings.notification_frequency == "weekly":
+            days_since_monday = now.weekday()
+            monday = now - timedelta(days=days_since_monday)
+            date_label = f"Week of {monday.strftime('%b %d, %Y')}"
+        else:
+            date_label = now.strftime("%b %d, %Y")
+
+        digest = DigestData(
+            frequency=settings.notification_frequency,
+            date_label=date_label,
+            items=items,
+            queue_remaining=remaining,
+            queue_estimated_secs=estimated,
+        )
+
+        # Send via configured channels
+        _send_digest(digest)
+
+        # Mark all as sent
+        for row in unsent:
+            row.sent = True
+        db.commit()
+
+        _update_last_sent(db, state_row, now)
+
+        logger.info(
+            '"action": "digest_sent", "frequency": "%s", "items": %d',
+            settings.notification_frequency, len(items),
+        )
+    finally:
+        db.close()
+
+
+def _update_last_sent(db, state_row, now: datetime) -> None:
+    """Update or create the last_digest_sent_at key in system_state."""
+    if state_row is not None:
+        state_row.value = now.isoformat()
+    else:
+        db.add(SystemState(key=LAST_DIGEST_KEY, value=now.isoformat()))
+    db.commit()
+
+
+def _send_digest(digest: DigestData) -> None:
+    """Send digest via all configured channels."""
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    freq_label = "Daily" if digest.frequency == "daily" else "Weekly"
+
+    if settings.email_notifications_enabled:
+        html = format_digest_html(digest)
+        subject = f"📋 Podlog {freq_label} Digest — {digest.date_label}"
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = settings.notification_email_from
+        msg["To"] = settings.notification_email_to
+        msg.attach(MIMEText(html, "html"))
+
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+            if settings.smtp_use_tls:
+                server.starttls()
+            if settings.smtp_user and settings.smtp_password:
+                server.login(settings.smtp_user, settings.smtp_password)
+            server.send_message(msg)
+
+    if settings.telegram_notifications_enabled:
+        import httpx
+        text = format_digest_telegram(digest)
+        url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+        resp = httpx.post(url, json={
+            "chat_id": settings.telegram_chat_id,
+            "text": text,
+            "parse_mode": "Markdown",
+        })
+        resp.raise_for_status()
