@@ -3,6 +3,7 @@ import json
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
+from html import escape
 
 from app.config import settings
 from app.database import SessionLocal
@@ -49,21 +50,11 @@ def is_digest_due(frequency: str, now: datetime, last_sent: datetime | None) -> 
         return False
 
     if frequency == "weekly":
-        # Monday = 0
+        # Monday = 0; only send on Mondays
         if now.weekday() != 0:
-            # Not Monday — only due if we haven't sent since last Monday
-            days_since_monday = now.weekday()
-            last_monday = (now - timedelta(days=days_since_monday)).replace(
-                hour=DIGEST_HOUR, minute=0, second=0, microsecond=0
-            )
-            if last_sent is None or last_sent < last_monday:
-                return True
             return False
-        # It is Monday
         today_digest_time = now.replace(hour=DIGEST_HOUR, minute=0, second=0, microsecond=0)
-        if last_sent is None or last_sent < today_digest_time:
-            return True
-        return False
+        return last_sent is None or last_sent < today_digest_time
 
     return False
 
@@ -106,10 +97,10 @@ def format_digest_html(data: DigestData) -> str:
         duration = _fmt_duration(item.duration_secs)
         rows += (
             f'    <tr{bg}><td style="padding: 6px 12px;">{icon}</td>'
-            f'<td style="padding: 6px 12px;">{item.episode_title}</td>'
-            f'<td style="padding: 6px 12px; color: #666;">{item.podcast_title}</td>'
+            f'<td style="padding: 6px 12px;">{escape(item.episode_title)}</td>'
+            f'<td style="padding: 6px 12px; color: #666;">{escape(item.podcast_title)}</td>'
             f'<td style="padding: 6px 12px;">{duration}</td>'
-            f'<td style="padding: 6px 12px; color: #666;">{detail}</td></tr>\n'
+            f'<td style="padding: 6px 12px; color: #666;">{escape(detail)}</td></tr>\n'
         )
 
     est = _fmt_estimate(data.queue_estimated_secs)

@@ -109,10 +109,9 @@ def test_weekly_digest_due_on_monday_after_8am():
 
 
 def test_weekly_digest_not_due_on_tuesday():
-    # March 17, 2026 is a Tuesday
+    # March 17, 2026 is a Tuesday — never fires on non-Monday even if never sent
     now = datetime(2026, 3, 17, 8, 30, tzinfo=timezone.utc)
-    last = datetime(2026, 3, 16, 8, 1, tzinfo=timezone.utc)
-    assert is_digest_due("weekly", now, last_sent=last) is False
+    assert is_digest_due("weekly", now, last_sent=None) is False
 
 
 def test_weekly_digest_not_due_on_monday_before_8am():
@@ -178,6 +177,9 @@ def test_send_digest_sends_when_due(mock_settings, mock_estimate, mock_smtp_cls,
     # Verify SMTP was used
     mock_smtp_cls.assert_called_once_with("localhost", 25)
     mock_smtp_cls.return_value.__enter__.return_value.send_message.assert_called_once()
+
+    # Verify rows were marked as sent
+    assert log_row.sent is True
 
 
 @patch("app.services.digest.SessionLocal")
