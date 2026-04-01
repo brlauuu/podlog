@@ -70,3 +70,57 @@ def test_log_event_inserts_failed_event_as_sent(mock_session_cls):
     assert log_row.episode_id == "ep2"
     assert log_row.sent is True
     db.commit.assert_called_once()
+
+
+from app.services.digest import is_digest_due
+
+
+def test_digest_not_due_in_immediate_mode():
+    now = datetime(2026, 3, 15, 8, 30, tzinfo=timezone.utc)
+    assert is_digest_due("immediate", now, last_sent=None) is False
+
+
+def test_daily_digest_due_after_8am_never_sent():
+    now = datetime(2026, 3, 15, 8, 30, tzinfo=timezone.utc)
+    assert is_digest_due("daily", now, last_sent=None) is True
+
+
+def test_daily_digest_not_due_before_8am():
+    now = datetime(2026, 3, 15, 7, 59, tzinfo=timezone.utc)
+    assert is_digest_due("daily", now, last_sent=None) is False
+
+
+def test_daily_digest_not_due_if_already_sent_today():
+    now = datetime(2026, 3, 15, 10, 0, tzinfo=timezone.utc)
+    last = datetime(2026, 3, 15, 8, 1, tzinfo=timezone.utc)
+    assert is_digest_due("daily", now, last_sent=last) is False
+
+
+def test_daily_digest_due_next_day():
+    now = datetime(2026, 3, 16, 8, 30, tzinfo=timezone.utc)
+    last = datetime(2026, 3, 15, 8, 1, tzinfo=timezone.utc)
+    assert is_digest_due("daily", now, last_sent=last) is True
+
+
+def test_weekly_digest_due_on_monday_after_8am():
+    # March 16, 2026 is a Monday
+    now = datetime(2026, 3, 16, 8, 30, tzinfo=timezone.utc)
+    assert is_digest_due("weekly", now, last_sent=None) is True
+
+
+def test_weekly_digest_not_due_on_tuesday():
+    # March 17, 2026 is a Tuesday
+    now = datetime(2026, 3, 17, 8, 30, tzinfo=timezone.utc)
+    last = datetime(2026, 3, 16, 8, 1, tzinfo=timezone.utc)
+    assert is_digest_due("weekly", now, last_sent=last) is False
+
+
+def test_weekly_digest_not_due_on_monday_before_8am():
+    now = datetime(2026, 3, 16, 7, 0, tzinfo=timezone.utc)
+    assert is_digest_due("weekly", now, last_sent=None) is False
+
+
+def test_weekly_digest_due_next_monday():
+    now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)  # next Monday
+    last = datetime(2026, 3, 16, 8, 1, tzinfo=timezone.utc)
+    assert is_digest_due("weekly", now, last_sent=last) is True

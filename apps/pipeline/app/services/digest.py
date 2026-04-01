@@ -2,7 +2,7 @@
 import json
 import logging
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.database import SessionLocal
 from app.models import NotificationLog
@@ -10,6 +10,52 @@ from app.services.events import Event
 from app.services.notifications import EpisodeDoneEvent, EpisodeFailedEvent
 
 logger = logging.getLogger(__name__)
+
+DIGEST_HOUR = 8  # 8am UTC
+
+
+def is_digest_due(frequency: str, now: datetime, last_sent: datetime | None) -> bool:
+    """Check whether a digest should be sent now.
+
+    Args:
+        frequency: "immediate", "daily", or "weekly"
+        now: Current UTC datetime
+        last_sent: When the last digest was sent (None if never)
+
+    Returns:
+        True if a digest should be sent now.
+    """
+    if frequency == "immediate":
+        return False
+
+    if now.hour < DIGEST_HOUR:
+        return False
+
+    if frequency == "daily":
+        # Due if we haven't sent one today at/after DIGEST_HOUR
+        today_digest_time = now.replace(hour=DIGEST_HOUR, minute=0, second=0, microsecond=0)
+        if last_sent is None or last_sent < today_digest_time:
+            return True
+        return False
+
+    if frequency == "weekly":
+        # Monday = 0
+        if now.weekday() != 0:
+            # Not Monday — only due if we haven't sent since last Monday
+            days_since_monday = now.weekday()
+            last_monday = (now - timedelta(days=days_since_monday)).replace(
+                hour=DIGEST_HOUR, minute=0, second=0, microsecond=0
+            )
+            if last_sent is None or last_sent < last_monday:
+                return True
+            return False
+        # It is Monday
+        today_digest_time = now.replace(hour=DIGEST_HOUR, minute=0, second=0, microsecond=0)
+        if last_sent is None or last_sent < today_digest_time:
+            return True
+        return False
+
+    return False
 
 
 def _serialize_event(event: Event) -> str:
