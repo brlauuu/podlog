@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -52,6 +54,7 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
+    notification_frequency: Literal["immediate", "daily", "weekly"] = "immediate"
 
     @property
     def email_notifications_enabled(self) -> bool:

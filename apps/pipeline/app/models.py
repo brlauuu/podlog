@@ -190,3 +190,23 @@ class SystemState(Base):
 
     key: Mapped[str] = mapped_column(Text, primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class NotificationLog(Base):
+    """Accumulated notification events for digest delivery."""
+
+    __tablename__ = "notification_log"
+    __table_args__ = (
+        Index("idx_notification_log_unsent", "sent", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    episode_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("episodes.id", ondelete="CASCADE"), nullable=False
+    )
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
