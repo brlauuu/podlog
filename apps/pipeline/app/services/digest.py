@@ -1,13 +1,22 @@
 """Notification digest — event logging, scheduling, and digest formatting/delivery."""
 import json
 import logging
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 
 from app.database import SessionLocal
 from app.models import NotificationLog
 from app.services.events import Event
-from app.services.notifications import EpisodeDoneEvent, EpisodeFailedEvent
+from app.services.notifications import (
+    EpisodeDoneEvent,
+    EpisodeFailedEvent,
+    _fmt_duration,
+    _fmt_short_duration,
+    _fmt_estimate,
+    estimate_queue_status,
+    send_email,
+    send_telegram,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +65,98 @@ def is_digest_due(frequency: str, now: datetime, last_sent: datetime | None) -> 
         return False
 
     return False
+
+
+@dataclass
+class DigestItem:
+    event_type: str  # "episode.done" or "episode.failed"
+    episode_title: str
+    podcast_title: str
+    duration_secs: int | None
+    total_duration_secs: float | None  # processing time (done events)
+    error_class: str | None  # failure events
+    retry_count: int | None
+    retry_max: int | None
+
+
+@dataclass
+class DigestData:
+    frequency: str  # "daily" or "weekly"
+    date_label: str  # e.g. "Apr 01, 2026" or "Week of Mar 30, 2026"
+    items: list[DigestItem] = field(default_factory=list)
+    queue_remaining: int = 0
+    queue_estimated_secs: float | None = None
+
+
+def format_digest_html(data: DigestData) -> str:
+    freq_label = "Daily" if data.frequency == "daily" else "Weekly"
+    done_count = sum(1 for i in data.items if i.event_type == "episode.done")
+    failed_count = sum(1 for i in data.items if i.event_type == "episode.failed")
+
+    rows = ""
+    for idx, item in enumerate(data.items):
+        bg = ' style="background: #f9f9f9;"' if idx % 2 == 1 else ""
+        if item.event_type == "episode.done":
+            icon = "&#9989;"
+            detail = f"processed in {_fmt_short_duration(item.total_duration_secs)}"
+        else:
+            detail = f"{item.error_class} after {item.retry_count}/{item.retry_max} retries"
+            icon = "&#10060;"
+        duration = _fmt_duration(item.duration_secs)
+        rows += (
+            f'    <tr{bg}><td style="padding: 6px 12px;">{icon}</td>'
+            f'<td style="padding: 6px 12px;">{item.episode_title}</td>'
+            f'<td style="padding: 6px 12px; color: #666;">{item.podcast_title}</td>'
+            f'<td style="padding: 6px 12px;">{duration}</td>'
+            f'<td style="padding: 6px 12px; color: #666;">{detail}</td></tr>\n'
+        )
+
+    est = _fmt_estimate(data.queue_estimated_secs)
+
+    return f"""\
+<html>
+<body style="font-family: -apple-system, Arial, sans-serif; color: #222; max-width: 600px; margin: 0 auto; padding: 16px;">
+  <h2 style="margin-bottom: 4px;">&#128203; Podlog {freq_label} Digest — {data.date_label}</h2>
+  <p style="color: #666;">{done_count} episodes processed, {failed_count} failed</p>
+  <table style="border-collapse: collapse; width: 100%; margin-top: 12px;">
+{rows}  </table>
+  <h3 style="margin-top: 20px; margin-bottom: 8px;">Queue Status</h3>
+  <table style="border-collapse: collapse; width: 100%;">
+    <tr><td style="padding: 4px 12px; color: #666;">Remaining</td>
+        <td style="padding: 4px 12px;">{data.queue_remaining} episodes</td></tr>
+    <tr style="background: #f9f9f9;">
+        <td style="padding: 4px 12px; color: #666;">Est. time left</td>
+        <td style="padding: 4px 12px;">{est}</td></tr>
+  </table>
+  <hr style="margin-top: 24px; border: none; border-top: 1px solid #eee;">
+  <p style="font-size: 12px; color: #999;">Sent by Podlog</p>
+</body>
+</html>"""
+
+
+def format_digest_telegram(data: DigestData) -> str:
+    freq_label = "Daily" if data.frequency == "daily" else "Weekly"
+    done_count = sum(1 for i in data.items if i.event_type == "episode.done")
+    failed_count = sum(1 for i in data.items if i.event_type == "episode.failed")
+
+    lines = [
+        f"*📋 Podlog {freq_label} Digest — {data.date_label}*\n",
+        f"{done_count} episodes processed, {failed_count} failed\n",
+    ]
+    for item in data.items:
+        duration = _fmt_duration(item.duration_secs)
+        if item.event_type == "episode.done":
+            detail = f"processed in {_fmt_short_duration(item.total_duration_secs)}"
+            lines.append(f"✅ \"{item.episode_title}\" ({item.podcast_title}) — {duration}, {detail}")
+        else:
+            lines.append(
+                f"❌ \"{item.episode_title}\" ({item.podcast_title}) — "
+                f"{item.error_class} after {item.retry_count}/{item.retry_max} retries"
+            )
+
+    est = _fmt_estimate(data.queue_estimated_secs)
+    lines.append(f"\n*Queue:* {data.queue_remaining} remaining · Est. {est}")
+    return "\n".join(lines)
 
 
 def _serialize_event(event: Event) -> str:
