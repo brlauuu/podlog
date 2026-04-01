@@ -7,7 +7,7 @@ from email.mime.text import MIMEText
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -35,7 +35,7 @@ def get_settings(db: Session = Depends(get_db)):
 
 
 @router.put("/notifications/settings")
-def put_settings(body: dict, db: Session = Depends(get_db)):
+def put_settings(body: dict = Body(...), db: Session = Depends(get_db)):
     try:
         result = save_notification_settings(db, body)
         return mask_sensitive(result)
@@ -60,7 +60,7 @@ def post_test(body: TestRequest, db: Session = Depends(get_db)):
             logger.exception('"action": "test_telegram_failed"')
             return JSONResponse(status_code=502, content={"error": str(e)})
 
-    if body.channel == "email":
+    elif body.channel == "email":
         if not s.get("email_configured"):
             return JSONResponse(
                 status_code=400,
