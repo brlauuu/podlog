@@ -190,6 +190,7 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged 
   const [mergeMode, setMergeMode] = useState(false);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
   const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
 
   if (speakers.length === 0) return null;
 
@@ -206,12 +207,14 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged 
     setMergeMode(false);
     setSelectedLabels(new Set());
     setMerging(false);
+    setMergeError(null);
   }
 
   async function handleMerge(targetLabel: string) {
     const sourceLabels = Array.from(selectedLabels).filter((l) => l !== targetLabel);
     if (sourceLabels.length === 0) return;
     setMerging(true);
+    setMergeError(null);
     try {
       const resp = await fetch(`/api/episodes/${episodeId}/speakers/merge`, {
         method: "POST",
@@ -221,9 +224,12 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged 
       if (resp.ok) {
         onMerged(sourceLabels, targetLabel);
         exitMergeMode();
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        setMergeError(data.error || "Merge failed");
       }
     } catch {
-      // silently fail — user can retry
+      setMergeError("Merge failed — check your connection");
     } finally {
       setMerging(false);
     }
@@ -264,6 +270,9 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged 
           onCancel={exitMergeMode}
           merging={merging}
         />
+      )}
+      {mergeError && (
+        <div className="mt-2 text-xs text-red-500">{mergeError}</div>
       )}
     </div>
   );

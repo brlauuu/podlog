@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface SpeakerInfo {
   speakerLabel: string;
@@ -18,9 +18,14 @@ interface Props {
 }
 
 export default function MergeBar({ selectedSpeakers, onMerge, onCancel, merging }: Props) {
-  // Default to speaker with most segments
+  // Default to speaker with most segments, reset when selection changes
   const sorted = [...selectedSpeakers].sort((a, b) => b.segmentCount - a.segmentCount);
   const [targetLabel, setTargetLabel] = useState(sorted[0]?.speakerLabel ?? "");
+
+  const selectionKey = selectedSpeakers.map((s) => s.speakerLabel).sort().join(",");
+  useEffect(() => {
+    setTargetLabel(sorted[0]?.speakerLabel ?? "");
+  }, [selectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex items-center gap-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white mt-2">
