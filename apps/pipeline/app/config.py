@@ -41,6 +41,26 @@ class Settings(BaseSettings):
     inference_enabled: bool = True
     spacy_model: str = "en_core_web_lg"
 
+    # Notifications (all optional — no env vars = no notifications)
+    notification_email_to: str | None = None
+    notification_email_from: str = "podlog@localhost"
+    smtp_host: str = "host.docker.internal"
+    smtp_port: int = 25
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = False
+
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+
+    @property
+    def email_notifications_enabled(self) -> bool:
+        return self.notification_email_to is not None
+
+    @property
+    def telegram_notifications_enabled(self) -> bool:
+        return self.telegram_bot_token is not None and self.telegram_chat_id is not None
+
     @property
     def audio_raw_dir(self) -> str:
         return f"{self.data_dir}/audio/raw"
