@@ -53,6 +53,30 @@ export default function TranscriptSection({
     );
   }
 
+  function handleMerged(sourceLabels: string[], targetLabel: string) {
+    setSegments((prev) => {
+      // Copy the target speaker's display name to reassigned segments
+      const targetSeg = prev.find(
+        (s) => s.speaker_label === targetLabel && s.display_name
+      );
+      const targetDisplayName = targetSeg?.display_name ?? null;
+      const targetInferred = targetSeg?.inferred ?? false;
+      const targetConfirmed = targetSeg?.confirmed_by_user ?? false;
+
+      return prev.map((seg) =>
+        seg.speaker_label && sourceLabels.includes(seg.speaker_label)
+          ? {
+              ...seg,
+              speaker_label: targetLabel,
+              display_name: targetDisplayName,
+              inferred: targetInferred,
+              confirmed_by_user: targetConfirmed,
+            }
+          : seg
+      );
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -79,6 +103,7 @@ export default function TranscriptSection({
           episodeId={episodeId}
           segments={segments}
           onRenamed={handleRenamed}
+          onMerged={handleMerged}
         />
       )}
 

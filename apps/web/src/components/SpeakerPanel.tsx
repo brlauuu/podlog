@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Check, X } from "lucide-react";
 import { getSpeakerColor, getSpeakerInitials, getSpeakerSlot } from "@/lib/speakerColors";
 import type { Segment } from "@/lib/types";
+import MergeBar from "@/components/MergeBar";
 
 interface SpeakerInfo {
   speakerLabel: string;
@@ -17,6 +18,7 @@ interface Props {
   episodeId: string;
   segments: Segment[];
   onRenamed: (speakerLabel: string, newName: string) => void;
+  onMerged: (sourceLabels: string[], targetLabel: string) => void;
 }
 
 function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
@@ -51,10 +53,16 @@ function SpeakerCard({
   speaker,
   episodeId,
   onRenamed,
+  mergeMode,
+  selected,
+  onToggleSelect,
 }: {
   speaker: SpeakerInfo;
   episodeId: string;
   onRenamed: (newName: string) => void;
+  mergeMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(speaker.displayName);
@@ -99,10 +107,21 @@ function SpeakerCard({
 
   return (
     <div
-      className={`rounded-lg p-3 cursor-pointer transition-colors ${editing ? "" : "hover:brightness-110"}`}
+      className={`relative rounded-lg p-3 cursor-pointer transition-colors ${editing ? "" : "hover:brightness-110"} ${mergeMode && selected ? "ring-2 ring-indigo-500" : ""}`}
       style={{ background: color.bg, border: `1px solid ${color.border}` }}
-      onClick={() => { if (!editing) setEditing(true); }}
+      onClick={() => { if (mergeMode) { onToggleSelect(); } else if (!editing) { setEditing(true); } }}
     >
+      {mergeMode && (
+        <div
+          className={`absolute top-1 left-1 w-4 h-4 rounded border-2 flex items-center justify-center text-[10px] ${
+            selected
+              ? "bg-indigo-500 border-indigo-500 text-white"
+              : "border-indigo-400 bg-transparent"
+          }`}
+        >
+          {selected && "✓"}
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <span
           className="shrink-0 rounded-full flex items-center justify-center text-white text-xs font-semibold"
@@ -166,14 +185,71 @@ function SpeakerCard({
   );
 }
 
-export default function SpeakerPanel({ episodeId, segments, onRenamed }: Props) {
+export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged }: Props) {
   const speakers = deriveSpeakers(segments);
+  const [mergeMode, setMergeMode] = useState(false);
+  const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
+  const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
 
   if (speakers.length === 0) return null;
 
+  function toggleSelection(label: string) {
+    setSelectedLabels((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
+
+  function exitMergeMode() {
+    setMergeMode(false);
+    setSelectedLabels(new Set());
+    setMerging(false);
+    setMergeError(null);
+  }
+
+  async function handleMerge(targetLabel: string) {
+    const sourceLabels = Array.from(selectedLabels).filter((l) => l !== targetLabel);
+    if (sourceLabels.length === 0) return;
+    setMerging(true);
+    setMergeError(null);
+    try {
+      const resp = await fetch(`/api/episodes/${episodeId}/speakers/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_labels: sourceLabels, target_label: targetLabel }),
+      });
+      if (resp.ok) {
+        onMerged(sourceLabels, targetLabel);
+        exitMergeMode();
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        setMergeError(data.error || "Merge failed");
+      }
+    } catch {
+      setMergeError("Merge failed — check your connection");
+    } finally {
+      setMerging(false);
+    }
+  }
+
+  const selectedSpeakers = speakers.filter((s) => selectedLabels.has(s.speakerLabel));
+
   return (
     <div className="rounded-lg p-3" style={{ background: "rgba(255,255,255,0.03)" }}>
-      <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Speakers</div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs text-muted-foreground uppercase tracking-wide">Speakers</div>
+        {speakers.length >= 2 && (
+          <button
+            onClick={() => (mergeMode ? exitMergeMode() : setMergeMode(true))}
+            className="text-xs text-indigo-500 hover:text-indigo-400 transition-colors"
+          >
+            {mergeMode ? "Cancel merge" : "Merge speakers"}
+          </button>
+        )}
+      </div>
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(speakers.length, 4)}, 1fr)` }}>
         {speakers.map((speaker) => (
           <SpeakerCard
@@ -181,9 +257,23 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed }: Props) 
             speaker={speaker}
             episodeId={episodeId}
             onRenamed={(newName) => onRenamed(speaker.speakerLabel, newName)}
+            mergeMode={mergeMode}
+            selected={selectedLabels.has(speaker.speakerLabel)}
+            onToggleSelect={() => toggleSelection(speaker.speakerLabel)}
           />
         ))}
       </div>
+      {mergeMode && selectedSpeakers.length >= 2 && (
+        <MergeBar
+          selectedSpeakers={selectedSpeakers}
+          onMerge={handleMerge}
+          onCancel={exitMergeMode}
+          merging={merging}
+        />
+      )}
+      {mergeError && (
+        <div className="mt-2 text-xs text-red-500">{mergeError}</div>
+      )}
     </div>
   );
 }
