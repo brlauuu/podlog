@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PIPELINE_API } from "@/lib/pipeline";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const resp = await fetch(`${PIPELINE_API}/api/notifications/test`, {
