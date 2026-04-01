@@ -1,4 +1,5 @@
 """Notification events, queue estimation, and delivery handlers."""
+import httpx
 import logging
 import smtplib
 from dataclasses import dataclass
@@ -276,3 +277,28 @@ def send_email(
         server.send_message(msg)
 
     logger.info('"action": "email_sent", "to": "%s", "subject": "%s"', to_addr, subject)
+
+
+def send_telegram(
+    event: Event,
+    bot_token: str,
+    chat_id: str,
+) -> None:
+    """Send a Markdown notification via Telegram Bot API."""
+    if isinstance(event, EpisodeDoneEvent):
+        text = format_done_telegram(event)
+    elif isinstance(event, EpisodeFailedEvent):
+        text = format_failed_telegram(event)
+    else:
+        logger.warning('"action": "telegram_unknown_event", "type": "%s"', type(event).__name__)
+        return
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    resp = httpx.post(url, json={
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown",
+    })
+    resp.raise_for_status()
+
+    logger.info('"action": "telegram_sent", "chat_id": "%s"', chat_id)
