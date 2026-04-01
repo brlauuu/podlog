@@ -5,8 +5,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from html import escape
 
-from app.config import settings
 from app.database import SessionLocal
+from app.services.notification_settings import get_notification_settings
 from app.models import NotificationLog, SystemState
 from app.services.events import Event, EventBus
 from app.services.notifications import (
@@ -201,28 +201,28 @@ LAST_DIGEST_KEY = "last_digest_sent_at"
 
 def send_digest_if_due(now: datetime | None = None) -> None:
     """Check if a digest is due and send it if so. Called by the worker periodic task."""
-    if settings.notification_frequency == "immediate":
-        return
-
     if now is None:
         now = datetime.now(timezone.utc)
 
     db = SessionLocal()
     try:
-        # Quick time-only check before hitting the DB for last_sent
-        if not is_digest_due(settings.notification_frequency, now, last_sent=None):
+        ns = get_notification_settings(db)
+        frequency = ns.get("notification_frequency", "immediate")
+
+        if frequency == "immediate":
             return
 
-        # Read last_digest_sent_at from system_state
+        if not is_digest_due(frequency, now, last_sent=None):
+            return
+
         state_row = db.query(SystemState).filter(SystemState.key == LAST_DIGEST_KEY).first()
         last_sent = None
         if isinstance(state_row, SystemState):
             last_sent = datetime.fromisoformat(state_row.value)
 
-        if not is_digest_due(settings.notification_frequency, now, last_sent):
+        if not is_digest_due(frequency, now, last_sent):
             return
 
-        # Query unsent events
         unsent = (
             db.query(NotificationLog)
             .filter(NotificationLog.sent == False)
@@ -231,11 +231,9 @@ def send_digest_if_due(now: datetime | None = None) -> None:
         )
 
         if not unsent:
-            # Update last_sent even when empty — avoid re-checking every 15 min
             _update_last_sent(db, state_row, now)
             return
 
-        # Build digest data
         remaining, estimated = estimate_queue_status(db)
         items = []
         for row in unsent:
@@ -251,7 +249,7 @@ def send_digest_if_due(now: datetime | None = None) -> None:
                 retry_max=payload.get("retry_max"),
             ))
 
-        if settings.notification_frequency == "weekly":
+        if frequency == "weekly":
             days_since_monday = now.weekday()
             monday = now - timedelta(days=days_since_monday)
             date_label = f"Week of {monday.strftime('%b %d, %Y')}"
@@ -259,17 +257,15 @@ def send_digest_if_due(now: datetime | None = None) -> None:
             date_label = now.strftime("%b %d, %Y")
 
         digest = DigestData(
-            frequency=settings.notification_frequency,
+            frequency=frequency,
             date_label=date_label,
             items=items,
             queue_remaining=remaining,
             queue_estimated_secs=estimated,
         )
 
-        # Send via configured channels
-        _send_digest(digest)
+        _send_digest(digest, ns)
 
-        # Mark all as sent
         for row in unsent:
             row.sent = True
         db.commit()
@@ -278,7 +274,7 @@ def send_digest_if_due(now: datetime | None = None) -> None:
 
         logger.info(
             '"action": "digest_sent", "frequency": "%s", "items": %d',
-            settings.notification_frequency, len(items),
+            frequency, len(items),
         )
     finally:
         db.close()
@@ -293,37 +289,37 @@ def _update_last_sent(db, state_row, now: datetime) -> None:
     db.commit()
 
 
-def _send_digest(digest: DigestData) -> None:
-    """Send digest via all configured channels."""
+def _send_digest(digest: DigestData, ns: dict) -> None:
+    """Send digest via all configured channels using the provided notification settings."""
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
 
     freq_label = "Daily" if digest.frequency == "daily" else "Weekly"
 
-    if settings.email_notifications_enabled:
+    if ns.get("email_configured"):
         html = format_digest_html(digest)
         subject = f"📋 Podlog {freq_label} Digest — {digest.date_label}"
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = settings.notification_email_from
-        msg["To"] = settings.notification_email_to
+        msg["From"] = ns.get("notification_email_from", "podlog@localhost")
+        msg["To"] = ns["notification_email_to"]
         msg.attach(MIMEText(html, "html"))
 
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-            if settings.smtp_use_tls:
+        with smtplib.SMTP(ns.get("smtp_host", "host.docker.internal"), ns.get("smtp_port", 25)) as server:
+            if ns.get("smtp_use_tls"):
                 server.starttls()
-            if settings.smtp_user and settings.smtp_password:
-                server.login(settings.smtp_user, settings.smtp_password)
+            if ns.get("smtp_user") and ns.get("smtp_password"):
+                server.login(ns["smtp_user"], ns["smtp_password"])
             server.send_message(msg)
 
-    if settings.telegram_notifications_enabled:
+    if ns.get("telegram_configured"):
         import httpx
         text = format_digest_telegram(digest)
-        url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+        url = f"https://api.telegram.org/bot{ns['telegram_bot_token']}/sendMessage"
         resp = httpx.post(url, json={
-            "chat_id": settings.telegram_chat_id,
+            "chat_id": ns["telegram_chat_id"],
             "text": text,
             "parse_mode": "Markdown",
         })
@@ -331,71 +327,55 @@ def _send_digest(digest: DigestData) -> None:
 
 
 def register_notification_handlers(bus: EventBus) -> None:
-    """Register notification handlers on the event bus based on config.
+    """Register notification handlers on the event bus.
 
-    - immediate: send directly for both done and failed events
-    - daily/weekly: log done events to DB, send failed events immediately + log them
+    Handlers read settings from DB at dispatch time so they always use
+    the latest configuration — even if settings were changed via the UI
+    after the pipeline started.
     """
-    if not settings.email_notifications_enabled and not settings.telegram_notifications_enabled:
-        return
+    def _get_settings() -> dict:
+        db = SessionLocal()
+        try:
+            return get_notification_settings(db)
+        finally:
+            db.close()
 
-    if settings.notification_frequency == "immediate":
-        # Direct send for all events
-        if settings.email_notifications_enabled:
-            def _email_handler(event):
-                send_email(
-                    event,
-                    to_addr=settings.notification_email_to,
-                    from_addr=settings.notification_email_from,
-                    smtp_host=settings.smtp_host,
-                    smtp_port=settings.smtp_port,
-                    smtp_user=settings.smtp_user,
-                    smtp_password=settings.smtp_password,
-                    use_tls=settings.smtp_use_tls,
-                )
-            bus.subscribe(EpisodeDoneEvent, _email_handler)
-            bus.subscribe(EpisodeFailedEvent, _email_handler)
+    def _send_immediate(event: Event) -> None:
+        ns = _get_settings()
+        if ns.get("email_configured"):
+            send_email(
+                event,
+                to_addr=ns["notification_email_to"],
+                from_addr=ns.get("notification_email_from", "podlog@localhost"),
+                smtp_host=ns.get("smtp_host", "host.docker.internal"),
+                smtp_port=ns.get("smtp_port", 25),
+                smtp_user=ns.get("smtp_user"),
+                smtp_password=ns.get("smtp_password"),
+                use_tls=ns.get("smtp_use_tls", False),
+            )
+        if ns.get("telegram_configured"):
+            send_telegram(
+                event,
+                bot_token=ns["telegram_bot_token"],
+                chat_id=ns["telegram_chat_id"],
+            )
 
-        if settings.telegram_notifications_enabled:
-            def _telegram_handler(event):
-                send_telegram(
-                    event,
-                    bot_token=settings.telegram_bot_token,
-                    chat_id=settings.telegram_chat_id,
-                )
-            bus.subscribe(EpisodeDoneEvent, _telegram_handler)
-            bus.subscribe(EpisodeFailedEvent, _telegram_handler)
-    else:
-        # Digest mode: log done events, send+log failed events
-        def _log_done(event):
+    def _handle_done(event: Event) -> None:
+        ns = _get_settings()
+        freq = ns.get("notification_frequency", "immediate")
+        if freq == "immediate":
+            _send_immediate(event)
+        else:
             log_event(event, mark_sent=False)
 
-        def _log_and_send_failed(event):
+    def _handle_failed(event: Event) -> None:
+        ns = _get_settings()
+        freq = ns.get("notification_frequency", "immediate")
+        if freq == "immediate":
+            _send_immediate(event)
+        else:
             log_event(event, mark_sent=True)
+            _send_immediate(event)
 
-        bus.subscribe(EpisodeDoneEvent, _log_done)
-        bus.subscribe(EpisodeFailedEvent, _log_and_send_failed)
-
-        # Also send failed events immediately
-        if settings.email_notifications_enabled:
-            def _email_failed(event):
-                send_email(
-                    event,
-                    to_addr=settings.notification_email_to,
-                    from_addr=settings.notification_email_from,
-                    smtp_host=settings.smtp_host,
-                    smtp_port=settings.smtp_port,
-                    smtp_user=settings.smtp_user,
-                    smtp_password=settings.smtp_password,
-                    use_tls=settings.smtp_use_tls,
-                )
-            bus.subscribe(EpisodeFailedEvent, _email_failed)
-
-        if settings.telegram_notifications_enabled:
-            def _telegram_failed(event):
-                send_telegram(
-                    event,
-                    bot_token=settings.telegram_bot_token,
-                    chat_id=settings.telegram_chat_id,
-                )
-            bus.subscribe(EpisodeFailedEvent, _telegram_failed)
+    bus.subscribe(EpisodeDoneEvent, _handle_done)
+    bus.subscribe(EpisodeFailedEvent, _handle_failed)

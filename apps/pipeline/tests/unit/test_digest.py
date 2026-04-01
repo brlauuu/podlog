@@ -131,18 +131,20 @@ from app.services.digest import send_digest_if_due, DigestItem
 @patch("app.services.digest.SessionLocal")
 @patch("smtplib.SMTP")
 @patch("app.services.digest.estimate_queue_status", return_value=(3, 900.0))
-@patch("app.services.digest.settings")
-def test_send_digest_sends_when_due(mock_settings, mock_estimate, mock_smtp_cls, mock_session_cls):
-    mock_settings.notification_frequency = "daily"
-    mock_settings.email_notifications_enabled = True
-    mock_settings.telegram_notifications_enabled = False
-    mock_settings.notification_email_to = "user@example.com"
-    mock_settings.notification_email_from = "podlog@localhost"
-    mock_settings.smtp_host = "localhost"
-    mock_settings.smtp_port = 25
-    mock_settings.smtp_user = None
-    mock_settings.smtp_password = None
-    mock_settings.smtp_use_tls = False
+@patch("app.services.digest.get_notification_settings")
+def test_send_digest_sends_when_due(mock_get_ns, mock_estimate, mock_smtp_cls, mock_session_cls):
+    mock_get_ns.return_value = {
+        "notification_frequency": "daily",
+        "email_configured": True,
+        "telegram_configured": False,
+        "notification_email_to": "user@example.com",
+        "notification_email_from": "podlog@localhost",
+        "smtp_host": "localhost",
+        "smtp_port": 25,
+        "smtp_user": None,
+        "smtp_password": None,
+        "smtp_use_tls": False,
+    }
 
     db = MagicMock()
     mock_session_cls.return_value = db
@@ -183,9 +185,9 @@ def test_send_digest_sends_when_due(mock_settings, mock_estimate, mock_smtp_cls,
 
 
 @patch("app.services.digest.SessionLocal")
-@patch("app.services.digest.settings")
-def test_send_digest_skips_when_not_due(mock_settings, mock_session_cls):
-    mock_settings.notification_frequency = "daily"
+@patch("app.services.digest.get_notification_settings")
+def test_send_digest_skips_when_not_due(mock_get_ns, mock_session_cls):
+    mock_get_ns.return_value = {"notification_frequency": "daily"}
 
     db = MagicMock()
     mock_session_cls.return_value = db
@@ -198,9 +200,9 @@ def test_send_digest_skips_when_not_due(mock_settings, mock_session_cls):
 
 
 @patch("app.services.digest.SessionLocal")
-@patch("app.services.digest.settings")
-def test_send_digest_skips_immediate_mode(mock_settings, mock_session_cls):
-    mock_settings.notification_frequency = "immediate"
+@patch("app.services.digest.get_notification_settings")
+def test_send_digest_skips_immediate_mode(mock_get_ns, mock_session_cls):
+    mock_get_ns.return_value = {"notification_frequency": "immediate"}
 
     db = MagicMock()
     mock_session_cls.return_value = db
@@ -211,9 +213,9 @@ def test_send_digest_skips_immediate_mode(mock_settings, mock_session_cls):
 
 @patch("app.services.digest.SessionLocal")
 @patch("app.services.digest.estimate_queue_status", return_value=(0, None))
-@patch("app.services.digest.settings")
-def test_send_digest_skips_when_no_unsent_events(mock_settings, mock_estimate, mock_session_cls):
-    mock_settings.notification_frequency = "daily"
+@patch("app.services.digest.get_notification_settings")
+def test_send_digest_skips_when_no_unsent_events(mock_get_ns, mock_estimate, mock_session_cls):
+    mock_get_ns.return_value = {"notification_frequency": "daily"}
 
     db = MagicMock()
     mock_session_cls.return_value = db
