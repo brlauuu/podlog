@@ -45,16 +45,17 @@ class TestRetryLogic:
 
     def test_marks_failed_at_max_retries(self):
         db = self._make_db()
+        episode = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = episode
+
         with patch("app.tasks.download.job_queue") as mock_jq:
             _handle_transient_failure(db, "ep-1", retry_max=3, retry_count=3,
                                       error_class="HTTP_ACCESS", error_msg="HTTP 403")
             mock_jq.enqueue.assert_not_called()
 
-            # Assert failed status was written
-            update_call = db.query.return_value.filter.return_value.update
-            call_kwargs = update_call.call_args[0][0]
-            assert call_kwargs["status"] == "failed"
-            assert call_kwargs["error_class"] == "HTTP_ACCESS"
+        # update_episode uses setattr on the episode object
+        assert episode.status == "failed"
+        assert episode.error_class == "HTTP_ACCESS"
 
     def test_disk_full_does_not_retry(self):
         """DISK_FULL should never be retried automatically."""

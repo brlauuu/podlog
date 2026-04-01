@@ -315,10 +315,8 @@ class TestInferSpeakersTask:
             from app.tasks.infer import infer_speakers
             infer_speakers("ep-1")
 
-        # Verify inference_error was set
-        update_calls = db.query.return_value.filter.return_value.update.call_args_list
-        error_updates = [c for c in update_calls if "inference_error" in (c[0][0] if c[0] else {})]
-        assert len(error_updates) > 0
+        # update_episode uses setattr on the episode object
+        assert episode.inference_error == "No model"
 
     def test_skipped_when_no_diarization(self):
         """PRD-04 §4.6: skip inference if has_diarization=false"""
@@ -336,7 +334,5 @@ class TestInferSpeakersTask:
             from app.tasks.infer import infer_speakers
             infer_speakers("ep-1")
 
-        # Should have set inference_skipped
-        update_calls = db.query.return_value.filter.return_value.update.call_args_list
-        skip_updates = [c for c in update_calls if "inference_skipped" in (c[0][0] if c[0] else {})]
-        assert len(skip_updates) > 0
+        # update_episode uses setattr on the episode object
+        assert episode.inference_skipped is True
