@@ -23,10 +23,12 @@ interface QueueState {
   pending_count: number;
   failed_count: number;
   done_count: number;
+  stuck_count: number;
   active_jobs: Job[];
   pending_jobs: Job[];
   failed_jobs: Job[];
   done_jobs: Job[];
+  stuck_jobs: Job[];
 }
 
 // --- Constants ---
@@ -40,10 +42,11 @@ const STAGES = [
   { key: "archiving", label: "Archiving", color: "#14b8a6", bg: "rgba(20,184,166,0.15)" },
   { key: "done", label: "Done", color: "#16a34a", bg: "rgba(22,163,74,0.15)" },
   { key: "failed", label: "Failed", color: "#dc2626", bg: "rgba(220,38,38,0.15)" },
+  { key: "stuck", label: "Stuck", color: "#a855f7", bg: "rgba(168,85,247,0.15)" },
 ] as const;
 
 const ACTIVE_STATUSES = new Set([
-  "downloading", "transcribing", "diarizing", "inferring", "archiving",
+  "downloading", "transcribing", "diarizing", "embedding", "inferring", "archiving",
 ]);
 
 const NON_RETRYABLE = new Set(["DISK_FULL", "OOM"]);
@@ -89,7 +92,10 @@ function sortByUpdated(jobs: Job[]): Job[] {
 function stageCounts(queue: QueueState): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const s of STAGES) counts[s.key] = 0;
-  const allJobs = [...queue.active_jobs, ...queue.pending_jobs, ...queue.failed_jobs];
+  const allJobs = [
+    ...queue.active_jobs, ...queue.pending_jobs,
+    ...queue.failed_jobs, ...(queue.stuck_jobs ?? []),
+  ];
   for (const j of allJobs) counts[j.status] = (counts[j.status] || 0) + 1;
   counts["done"] = queue.done_count;
   return counts;
@@ -321,9 +327,11 @@ export default function QueueStatus() {
   const activeCount = queue.active_count;
   const failedCount = queue.failed_count;
   const doneCount = queue.done_count;
+  const stuckCount = queue.stuck_count ?? 0;
 
-  // Merge and sort: failed first (by updated_at desc), then active, then pending
+  // Merge and sort: stuck first, then failed, active, pending
   const allJobs = [
+    ...sortByUpdated(queue.stuck_jobs ?? []),
     ...sortByUpdated(queue.failed_jobs),
     ...sortByUpdated(queue.active_jobs),
     ...sortByUpdated(queue.pending_jobs),
@@ -370,7 +378,7 @@ export default function QueueStatus() {
           className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {activeCount} active · {failedCount} failed · {doneCount} done
+          {activeCount} active · {failedCount} failed{stuckCount > 0 ? ` · ${stuckCount} stuck` : ""} · {doneCount} done
         </span>
       </div>
 
