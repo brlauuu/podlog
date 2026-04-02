@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: "/", label: "Search" },
   { href: "/podcasts", label: "Podcasts" },
   { href: "/queue", label: "Queue" },
+  { href: "/notifications", label: "Notifications" },
 ];
 
 export default function Navbar() {
