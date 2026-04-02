@@ -100,10 +100,14 @@ def archive_episode(episode_id: str) -> str:
         # Emit notification event
         remaining, estimated = estimate_queue_status(db)
         avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
-        total_secs = (
-            (verified.processed_at - episode.created_at).total_seconds()
-            if verified.processed_at else None
-        )
+        # Notification "Total" should reflect active speech-processing time, not
+        # queue age or pre-transcription waiting. Sum the measured stage durations.
+        measured_durations = [
+            secs
+            for secs in (episode.transcribe_duration_secs, episode.diarize_duration_secs)
+            if secs is not None
+        ]
+        total_secs = sum(measured_durations) if measured_durations else None
         bus.emit(EpisodeDoneEvent(
             episode_id=episode_id,
             episode_title=episode.title or "",
