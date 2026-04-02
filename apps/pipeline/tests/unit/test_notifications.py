@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 from app.services.notifications import (
     EpisodeDoneEvent,
     EpisodeFailedEvent,
+    compute_avg_processing_stats,
     estimate_queue_status,
 )
 
@@ -26,6 +27,29 @@ def test_episode_done_event_fields():
     assert event.queue_remaining == 5
 
 
+def test_episode_done_event_has_avg_fields():
+    """EpisodeDoneEvent should accept avg processing stat fields."""
+    event = EpisodeDoneEvent(
+        episode_id="ep1",
+        episode_title="Test",
+        podcast_title="Pod",
+        avg_transcribe_secs=120.0,
+        avg_diarize_secs=60.0,
+        avg_total_secs=200.0,
+    )
+    assert event.avg_transcribe_secs == 120.0
+    assert event.avg_diarize_secs == 60.0
+    assert event.avg_total_secs == 200.0
+
+
+def test_episode_done_event_avg_fields_default_none():
+    """Avg fields should default to None for backward compat."""
+    event = EpisodeDoneEvent(episode_id="ep1")
+    assert event.avg_transcribe_secs is None
+    assert event.avg_diarize_secs is None
+    assert event.avg_total_secs is None
+
+
 def test_episode_failed_event_fields():
     event = EpisodeFailedEvent(
         episode_id="ep1",
@@ -42,6 +66,19 @@ def test_episode_failed_event_fields():
     )
     assert event.error_class == "OOM"
     assert event.retry_count == 3
+
+
+def test_episode_failed_event_has_avg_fields():
+    """EpisodeFailedEvent should accept avg processing stat fields."""
+    event = EpisodeFailedEvent(
+        episode_id="ep1",
+        avg_transcribe_secs=100.0,
+        avg_diarize_secs=50.0,
+        avg_total_secs=180.0,
+    )
+    assert event.avg_transcribe_secs == 100.0
+    assert event.avg_diarize_secs == 50.0
+    assert event.avg_total_secs == 180.0
 
 
 def test_estimate_queue_status_with_history():
@@ -81,6 +118,70 @@ def test_estimate_queue_status_with_history():
     assert remaining == 3
     # rate = 1800 / 3600 = 0.5, queued audio = 3600, estimate = 3600 * 0.5 = 1800
     assert estimated == 1800.0
+
+
+def test_compute_avg_processing_stats_with_data():
+    """Should compute averages across all done episodes."""
+    db = MagicMock()
+
+    ep1 = MagicMock(
+        transcribe_duration_secs=100.0,
+        diarize_duration_secs=50.0,
+        created_at=datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
+        processed_at=datetime(2026, 1, 1, 0, 5, tzinfo=timezone.utc),  # 300s total
+    )
+    ep2 = MagicMock(
+        transcribe_duration_secs=200.0,
+        diarize_duration_secs=100.0,
+        created_at=datetime(2026, 1, 2, 0, 0, tzinfo=timezone.utc),
+        processed_at=datetime(2026, 1, 2, 0, 10, tzinfo=timezone.utc),  # 600s total
+    )
+
+    query_mock = MagicMock()
+    query_mock.filter.return_value = query_mock
+    query_mock.all.return_value = [ep1, ep2]
+    db.query.return_value = query_mock
+
+    avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
+    assert avg_t == 150.0   # (100 + 200) / 2
+    assert avg_d == 75.0    # (50 + 100) / 2
+    assert avg_total == 450.0  # (300 + 600) / 2
+
+
+def test_compute_avg_processing_stats_no_data():
+    """Should return (None, None, None) when no done episodes exist."""
+    db = MagicMock()
+    query_mock = MagicMock()
+    query_mock.filter.return_value = query_mock
+    query_mock.all.return_value = []
+    db.query.return_value = query_mock
+
+    avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
+    assert avg_t is None
+    assert avg_d is None
+    assert avg_total is None
+
+
+def test_compute_avg_processing_stats_partial_data():
+    """Should handle episodes with missing transcribe/diarize durations."""
+    db = MagicMock()
+
+    ep1 = MagicMock(
+        transcribe_duration_secs=100.0,
+        diarize_duration_secs=None,  # diarization failed
+        created_at=datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
+        processed_at=datetime(2026, 1, 1, 0, 5, tzinfo=timezone.utc),
+    )
+
+    query_mock = MagicMock()
+    query_mock.filter.return_value = query_mock
+    query_mock.all.return_value = [ep1]
+    db.query.return_value = query_mock
+
+    avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
+    assert avg_t == 100.0
+    assert avg_d is None  # no diarize data at all
+    assert avg_total == 300.0
 
 
 def test_estimate_queue_status_no_history():

@@ -14,7 +14,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment, SpeakerName
 from app.services.events import bus
-from app.services.notifications import EpisodeDoneEvent, estimate_queue_status
+from app.services.notifications import EpisodeDoneEvent, compute_avg_processing_stats, estimate_queue_status
 from app.tasks.helpers import update_episode
 
 logger = logging.getLogger(__name__)
@@ -99,6 +99,7 @@ def archive_episode(episode_id: str) -> str:
 
         # Emit notification event
         remaining, estimated = estimate_queue_status(db)
+        avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
         total_secs = (
             (verified.processed_at - episode.created_at).total_seconds()
             if verified.processed_at else None
@@ -114,6 +115,9 @@ def archive_episode(episode_id: str) -> str:
             total_duration_secs=total_secs,
             queue_remaining=remaining,
             queue_estimated_secs=estimated,
+            avg_transcribe_secs=avg_t,
+            avg_diarize_secs=avg_d,
+            avg_total_secs=avg_total,
         ))
 
         # Safe to delete raw audio now that status is confirmed

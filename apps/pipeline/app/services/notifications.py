@@ -27,6 +27,9 @@ class EpisodeDoneEvent(Event):
     total_duration_secs: float | None = None
     queue_remaining: int = 0
     queue_estimated_secs: float | None = None
+    avg_transcribe_secs: float | None = None
+    avg_diarize_secs: float | None = None
+    avg_total_secs: float | None = None
 
 
 @dataclass
@@ -42,6 +45,42 @@ class EpisodeFailedEvent(Event):
     retry_max: int = 3
     queue_remaining: int = 0
     queue_estimated_secs: float | None = None
+    avg_transcribe_secs: float | None = None
+    avg_diarize_secs: float | None = None
+    avg_total_secs: float | None = None
+
+
+def compute_avg_processing_stats(db: Session) -> tuple[float | None, float | None, float | None]:
+    """Compute average processing times across all completed episodes.
+
+    Returns (avg_transcribe_secs, avg_diarize_secs, avg_total_wall_secs).
+    Each value is None if no data is available for that metric.
+    """
+    done_episodes = (
+        db.query(Episode)
+        .filter(
+            Episode.status == "done",
+            Episode.processed_at.isnot(None),
+        )
+        .all()
+    )
+
+    if not done_episodes:
+        return None, None, None
+
+    transcribe_vals = [ep.transcribe_duration_secs for ep in done_episodes if ep.transcribe_duration_secs is not None]
+    diarize_vals = [ep.diarize_duration_secs for ep in done_episodes if ep.diarize_duration_secs is not None]
+    total_vals = [
+        (ep.processed_at - ep.created_at).total_seconds()
+        for ep in done_episodes
+        if ep.processed_at is not None and ep.created_at is not None
+    ]
+
+    avg_t = sum(transcribe_vals) / len(transcribe_vals) if transcribe_vals else None
+    avg_d = sum(diarize_vals) / len(diarize_vals) if diarize_vals else None
+    avg_total = sum(total_vals) / len(total_vals) if total_vals else None
+
+    return avg_t, avg_d, avg_total
 
 
 def estimate_queue_status(db: Session) -> tuple[int, float | None]:
@@ -98,24 +137,22 @@ def estimate_queue_status(db: Session) -> tuple[int, float | None]:
 
 
 def _fmt_duration(secs: float | int | None) -> str:
-    """Format seconds as h:mm:ss."""
+    """Format seconds with unit labels: 1h 30m 00s, 2m 30s, 0m 45s."""
     if secs is None:
         return "—"
     total = int(secs)
     h, remainder = divmod(total, 3600)
     m, s = divmod(remainder, 60)
-    return f"{h}:{m:02d}:{s:02d}"
+    if h > 0:
+        return f"{h}h {m:02d}m {s:02d}s"
+    return f"{m}m {s:02d}s"
 
 
 def _fmt_short_duration(secs: float | None) -> str:
-    """Format seconds as Xm Ys for shorter durations."""
+    """Format seconds as Xm Ys for shorter durations, Xh Ym Zs for longer."""
     if secs is None:
         return "—"
-    total = int(secs)
-    if total >= 3600:
-        return _fmt_duration(secs)
-    m, s = divmod(total, 60)
-    return f"{m}m {s:02d}s"
+    return _fmt_duration(secs)
 
 
 def _fmt_date(dt: datetime | None) -> str:
@@ -130,7 +167,37 @@ def _fmt_estimate(secs: float | None) -> str:
     return _fmt_duration(secs)
 
 
+def _fmt_avg_section_html(event) -> str:
+    """Render the HTML averages section if avg data is available."""
+    if event.avg_transcribe_secs is None and event.avg_diarize_secs is None and event.avg_total_secs is None:
+        return ""
+    return f"""\
+  <h3 style="margin-top: 20px; margin-bottom: 8px;">Avg Processing Time (all episodes)</h3>
+  <table style="border-collapse: collapse; width: 100%;">
+    <tr><td style="padding: 4px 12px; color: #666;">Avg transcription</td>
+        <td style="padding: 4px 12px;">{_fmt_short_duration(event.avg_transcribe_secs)}</td></tr>
+    <tr style="background: #f9f9f9;">
+        <td style="padding: 4px 12px; color: #666;">Avg diarization</td>
+        <td style="padding: 4px 12px;">{_fmt_short_duration(event.avg_diarize_secs)}</td></tr>
+    <tr><td style="padding: 4px 12px; color: #666;">Avg per episode</td>
+        <td style="padding: 4px 12px; font-weight: 600;">{_fmt_short_duration(event.avg_total_secs)}</td></tr>
+  </table>"""
+
+
+def _fmt_avg_section_telegram(event) -> str:
+    """Render the Telegram averages section if avg data is available."""
+    if event.avg_transcribe_secs is None and event.avg_diarize_secs is None and event.avg_total_secs is None:
+        return ""
+    return (
+        f"\n*Avg Processing Time (all episodes)*\n"
+        f"`Avg transcribe: {_fmt_short_duration(event.avg_transcribe_secs)}`\n"
+        f"`Avg diarize:    {_fmt_short_duration(event.avg_diarize_secs)}`\n"
+        f"`Avg per episode: {_fmt_short_duration(event.avg_total_secs)}`\n"
+    )
+
+
 def format_done_html(event: EpisodeDoneEvent) -> str:
+    avg_html = _fmt_avg_section_html(event)
     return f"""\
 <html>
 <body style="font-family: -apple-system, Arial, sans-serif; color: #222; max-width: 520px; margin: 0 auto; padding: 16px;">
@@ -157,6 +224,7 @@ def format_done_html(event: EpisodeDoneEvent) -> str:
     <tr><td style="padding: 4px 12px; color: #666;">Total</td>
         <td style="padding: 4px 12px; font-weight: 600;">{_fmt_short_duration(event.total_duration_secs)}</td></tr>
   </table>
+{avg_html}
   <h3 style="margin-top: 20px; margin-bottom: 8px;">Queue Status</h3>
   <table style="border-collapse: collapse; width: 100%;">
     <tr><td style="padding: 4px 12px; color: #666;">Remaining</td>
@@ -172,6 +240,7 @@ def format_done_html(event: EpisodeDoneEvent) -> str:
 
 
 def format_done_telegram(event: EpisodeDoneEvent) -> str:
+    avg_section = _fmt_avg_section_telegram(event)
     return (
         f"*✅ Episode Processed*\n\n"
         f"*Podcast:* {event.podcast_title}\n"
@@ -181,12 +250,14 @@ def format_done_telegram(event: EpisodeDoneEvent) -> str:
         f"*Processing Time*\n"
         f"`Transcription:  {_fmt_short_duration(event.transcribe_duration_secs)}`\n"
         f"`Diarization:    {_fmt_short_duration(event.diarize_duration_secs)}`\n"
-        f"`Total:          {_fmt_short_duration(event.total_duration_secs)}`\n\n"
+        f"`Total:          {_fmt_short_duration(event.total_duration_secs)}`\n"
+        f"{avg_section}\n"
         f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate(event.queue_estimated_secs)}"
     )
 
 
 def format_failed_html(event: EpisodeFailedEvent) -> str:
+    avg_html = _fmt_avg_section_html(event)
     return f"""\
 <html>
 <body style="font-family: -apple-system, Arial, sans-serif; color: #222; max-width: 520px; margin: 0 auto; padding: 16px;">
@@ -213,6 +284,7 @@ def format_failed_html(event: EpisodeFailedEvent) -> str:
     <tr><td style="padding: 4px 12px; color: #666;">Retries</td>
         <td style="padding: 4px 12px;">{event.retry_count}/{event.retry_max}</td></tr>
   </table>
+{avg_html}
   <h3 style="margin-top: 20px; margin-bottom: 8px;">Queue Status</h3>
   <table style="border-collapse: collapse; width: 100%;">
     <tr><td style="padding: 4px 12px; color: #666;">Remaining</td>
@@ -228,6 +300,7 @@ def format_failed_html(event: EpisodeFailedEvent) -> str:
 
 
 def format_failed_telegram(event: EpisodeFailedEvent) -> str:
+    avg_section = _fmt_avg_section_telegram(event)
     return (
         f"*❌ Episode Failed*\n\n"
         f"*Podcast:* {event.podcast_title}\n"
@@ -237,7 +310,8 @@ def format_failed_telegram(event: EpisodeFailedEvent) -> str:
         f"*Error*\n"
         f"`Class:    {event.error_class}`\n"
         f"`Details:  {event.error_message}`\n"
-        f"`Retries:  {event.retry_count}/{event.retry_max}`\n\n"
+        f"`Retries:  {event.retry_count}/{event.retry_max}`\n"
+        f"{avg_section}\n"
         f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate(event.queue_estimated_secs)}"
     )
 
