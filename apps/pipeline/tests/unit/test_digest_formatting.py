@@ -81,3 +81,40 @@ def test_format_digest_html_unknown_queue_estimate():
     data.queue_estimated_secs = None
     html = format_digest_html(data)
     assert "unknown" in html.lower()
+
+
+def test_format_digest_html_contains_averages():
+    data = _make_digest_data()
+    data.avg_transcribe_secs = 125.0
+    data.avg_diarize_secs = 70.0
+    data.avg_total_secs = 220.0
+    html = format_digest_html(data)
+    assert "Avg" in html or "Average" in html
+    assert "2m 05s" in html  # avg transcribe
+    assert "1m 10s" in html  # avg diarize
+    assert "3m 40s" in html  # avg total
+
+
+def test_format_digest_telegram_contains_averages():
+    data = _make_digest_data()
+    data.avg_transcribe_secs = 125.0
+    data.avg_diarize_secs = 70.0
+    data.avg_total_secs = 220.0
+    md = format_digest_telegram(data)
+    assert "Avg" in md or "Average" in md
+    assert "2m 05s" in md
+    assert "3m 40s" in md
+
+
+def test_format_digest_html_duration_uses_unit_labels():
+    """Episode durations in digest should use unit labels like 1h 00m 00s."""
+    data = _make_digest_data()
+    html = format_digest_html(data)
+    assert "1h 00m 00s" in html  # first item: 3600s
+
+
+def test_format_digest_telegram_duration_uses_unit_labels():
+    """Episode durations in digest should use unit labels."""
+    data = _make_digest_data()
+    md = format_digest_telegram(data)
+    assert "1h 00m 00s" in md  # first item: 3600s

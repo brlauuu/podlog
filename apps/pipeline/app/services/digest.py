@@ -15,6 +15,7 @@ from app.services.notifications import (
     _fmt_duration,
     _fmt_short_duration,
     _fmt_estimate,
+    compute_avg_processing_stats,
     estimate_queue_status,
     send_email,
     send_telegram,
@@ -78,6 +79,9 @@ class DigestData:
     items: list[DigestItem] = field(default_factory=list)
     queue_remaining: int = 0
     queue_estimated_secs: float | None = None
+    avg_transcribe_secs: float | None = None
+    avg_diarize_secs: float | None = None
+    avg_total_secs: float | None = None
 
 
 def format_digest_html(data: DigestData) -> str:
@@ -105,6 +109,21 @@ def format_digest_html(data: DigestData) -> str:
 
     est = _fmt_estimate(data.queue_estimated_secs)
 
+    avg_html = ""
+    if data.avg_transcribe_secs is not None or data.avg_diarize_secs is not None or data.avg_total_secs is not None:
+        avg_html = f"""\
+  <h3 style="margin-top: 20px; margin-bottom: 8px;">Avg Processing Time (all episodes)</h3>
+  <table style="border-collapse: collapse; width: 100%;">
+    <tr><td style="padding: 4px 12px; color: #666;">Avg transcription</td>
+        <td style="padding: 4px 12px;">{_fmt_short_duration(data.avg_transcribe_secs)}</td></tr>
+    <tr style="background: #f9f9f9;">
+        <td style="padding: 4px 12px; color: #666;">Avg diarization</td>
+        <td style="padding: 4px 12px;">{_fmt_short_duration(data.avg_diarize_secs)}</td></tr>
+    <tr><td style="padding: 4px 12px; color: #666;">Avg per episode</td>
+        <td style="padding: 4px 12px; font-weight: 600;">{_fmt_short_duration(data.avg_total_secs)}</td></tr>
+  </table>
+"""
+
     return f"""\
 <html>
 <body style="font-family: -apple-system, Arial, sans-serif; color: #222; max-width: 600px; margin: 0 auto; padding: 16px;">
@@ -112,7 +131,7 @@ def format_digest_html(data: DigestData) -> str:
   <p style="color: #666;">{done_count} episodes processed, {failed_count} failed</p>
   <table style="border-collapse: collapse; width: 100%; margin-top: 12px;">
 {rows}  </table>
-  <h3 style="margin-top: 20px; margin-bottom: 8px;">Queue Status</h3>
+{avg_html}  <h3 style="margin-top: 20px; margin-bottom: 8px;">Queue Status</h3>
   <table style="border-collapse: collapse; width: 100%;">
     <tr><td style="padding: 4px 12px; color: #666;">Remaining</td>
         <td style="padding: 4px 12px;">{data.queue_remaining} episodes</td></tr>
@@ -145,6 +164,14 @@ def format_digest_telegram(data: DigestData) -> str:
                 f"❌ \"{item.episode_title}\" ({item.podcast_title}) — "
                 f"{item.error_class} after {item.retry_count}/{item.retry_max} retries"
             )
+
+    if data.avg_transcribe_secs is not None or data.avg_diarize_secs is not None or data.avg_total_secs is not None:
+        lines.append(
+            f"\n*Avg Processing Time (all episodes)*\n"
+            f"`Avg transcribe: {_fmt_short_duration(data.avg_transcribe_secs)}`\n"
+            f"`Avg diarize:    {_fmt_short_duration(data.avg_diarize_secs)}`\n"
+            f"`Avg per episode: {_fmt_short_duration(data.avg_total_secs)}`"
+        )
 
     est = _fmt_estimate(data.queue_estimated_secs)
     lines.append(f"\n*Queue:* {data.queue_remaining} remaining · Est. {est}")
@@ -235,6 +262,7 @@ def send_digest_if_due(now: datetime | None = None) -> None:
             return
 
         remaining, estimated = estimate_queue_status(db)
+        avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
         items = []
         for row in unsent:
             payload = json.loads(row.payload)
@@ -262,6 +290,9 @@ def send_digest_if_due(now: datetime | None = None) -> None:
             items=items,
             queue_remaining=remaining,
             queue_estimated_secs=estimated,
+            avg_transcribe_secs=avg_t,
+            avg_diarize_secs=avg_d,
+            avg_total_secs=avg_total,
         )
 
         _send_digest(digest, ns)
