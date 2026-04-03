@@ -6,6 +6,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import WizardHealthCheck from "@/components/WizardHealthCheck";
 import WizardAddFeed from "@/components/WizardAddFeed";
+import WizardComplete from "@/components/WizardComplete";
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -143,5 +144,34 @@ describe("WizardAddFeed", () => {
     await waitFor(() => {
       expect(screen.getByText(/Invalid RSS feed URL/i)).toBeInTheDocument();
     });
+  });
+});
+
+describe("WizardComplete", () => {
+  it("shows 'You're All Set!' when feed was added", () => {
+    render(<WizardComplete feedAdded={true} onFinish={() => {}} onDontShowChange={() => {}} />);
+    expect(screen.getByText(/You're All Set/i)).toBeInTheDocument();
+  });
+
+  it("shows 'Ready When You Are' when feed was skipped", () => {
+    render(<WizardComplete feedAdded={false} onFinish={() => {}} onDontShowChange={() => {}} />);
+    expect(screen.getByText(/Ready When You Are/i)).toBeInTheDocument();
+  });
+
+  it("highlights 'Add Your First Feed' link when feed was skipped", () => {
+    render(<WizardComplete feedAdded={false} onFinish={() => {}} onDontShowChange={() => {}} />);
+    expect(screen.getByText(/Add Your First Feed/i)).toBeInTheDocument();
+  });
+
+  it("shows 'Don't show this wizard' checkbox", () => {
+    render(<WizardComplete feedAdded={true} onFinish={() => {}} onDontShowChange={() => {}} />);
+    expect(screen.getByLabelText(/Don't show this wizard/i)).toBeInTheDocument();
+  });
+
+  it("calls onDontShowChange when checkbox is toggled", () => {
+    const onChange = jest.fn();
+    render(<WizardComplete feedAdded={true} onFinish={() => {}} onDontShowChange={onChange} />);
+    fireEvent.click(screen.getByLabelText(/Don't show this wizard/i));
+    expect(onChange).toHaveBeenCalledWith(true);
   });
 });
