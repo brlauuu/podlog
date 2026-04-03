@@ -54,6 +54,7 @@ Open **http://localhost:3000** — that's it.
 - [Docker](https://docs.docker.com/get-docker/) with [Compose V2](https://docs.docker.com/compose/install/)
 - A free [HuggingFace](https://huggingface.co) account with an access token
 - You **must accept the pyannote license** at [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) before diarization will work
+- `postgresql-client` (optional) — needed for host-level health monitoring (`sudo apt install postgresql-client`)
 
 ## Architecture
 
@@ -122,6 +123,7 @@ make build           # Rebuild Docker images
 make logs            # Follow logs for all services
 make test-unit       # Run unit tests (155 tests, ~2 seconds)
 make shell-db        # Open psql shell
+make health-install  # Install health monitoring cron (every 15 min)
 make help            # List all available commands
 ```
 

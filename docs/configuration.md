@@ -50,6 +50,22 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `INFERENCE_ENABLED` | `true` | Whether to run spaCy NER-based speaker name inference after diarization. |
 | `SPACY_MODEL` | `en_core_web_lg` | spaCy model for named entity recognition. `en_core_web_lg` gives best results. |
 
+## Health Monitoring
+
+The host-level health check script (`scripts/healthcheck.py`) uses these settings. All are optional — defaults work for a standard Docker Compose setup.
+
+| Variable | Default | Description |
+|---|---|---|
+| `HEALTH_CHECK_PIPELINE_URL` | `http://localhost:8000` | Pipeline API URL as seen from the host. |
+| `HEALTH_CHECK_WEB_URL` | `http://localhost:3000` | Web app URL as seen from the host. |
+| `HEALTH_CHECK_DB_HOST` | `localhost` | PostgreSQL host for `pg_isready` and zombie job queries. |
+| `HEALTH_CHECK_DB_PORT` | `5432` | PostgreSQL port. |
+| `HEALTH_CHECK_DB_USER` | `postgres` | PostgreSQL user. |
+| `HEALTH_CHECK_DB_NAME` | `podlog` | Database name. |
+| `HEALTH_CHECK_ZOMBIE_THRESHOLD_MINUTES` | `60` | Minutes a `picked` job must be running before it's flagged as a zombie. |
+
+The script uses `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` from `.env` if present; otherwise falls back to the values configured in the web UI. Requires `postgresql-client` (`pg_isready`, `psql`) on the host.
+
 ## Advanced / Internal
 
 | Variable | Default | Description |
