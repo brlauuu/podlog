@@ -7,6 +7,20 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import WizardHealthCheck from "@/components/WizardHealthCheck";
 import WizardAddFeed from "@/components/WizardAddFeed";
 import WizardComplete from "@/components/WizardComplete";
+import SetupWizard from "@/components/SetupWizard";
+import { useWizard } from "@/components/WizardProvider";
+
+// Mock WizardProvider context
+jest.mock("@/components/WizardProvider", () => ({
+  useWizard: jest.fn(),
+}));
+
+const mockUseWizard = useWizard as jest.Mock;
+
+// Mock next/navigation
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: jest.fn() }),
+}));
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -173,5 +187,43 @@ describe("WizardComplete", () => {
     render(<WizardComplete feedAdded={true} onFinish={() => {}} onDontShowChange={onChange} />);
     fireEvent.click(screen.getByLabelText(/Don't show this wizard/i));
     expect(onChange).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("SetupWizard", () => {
+  beforeEach(() => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "OK",
+        services: [
+          { name: "Database", status: "OK" },
+          { name: "Pipeline API", status: "OK" },
+          { name: "Worker", status: "OK" },
+        ],
+      }),
+    });
+  });
+
+  it("renders nothing when closed", () => {
+    mockUseWizard.mockReturnValue({ open: false, setOpen: jest.fn(), markCompleted: jest.fn() });
+    const { container } = render(<SetupWizard />, { wrapper });
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("renders Screen 1 when open", async () => {
+    mockUseWizard.mockReturnValue({ open: true, setOpen: jest.fn(), markCompleted: jest.fn() });
+    render(<SetupWizard />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByText("Welcome to Podlog")).toBeInTheDocument();
+    });
+  });
+
+  it("shows step dots", async () => {
+    mockUseWizard.mockReturnValue({ open: true, setOpen: jest.fn(), markCompleted: jest.fn() });
+    render(<SetupWizard />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId("step-dots")).toBeInTheDocument();
+    });
   });
 });
