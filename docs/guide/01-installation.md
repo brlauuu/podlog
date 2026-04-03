@@ -24,6 +24,15 @@ Podlog runs entirely on CPU. For detailed benchmarks and storage estimates by li
 
 3. **Accept the pyannote license** — visit [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) and click "Agree and access repository." Without this, speaker diarization will silently fail.
 
+4. **PostgreSQL client tools** (optional, for health monitoring) — needed by the host-level health check script:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt install postgresql-client
+
+   # macOS
+   brew install libpq
+   ```
+
 ## Setup
 
 ```bash
@@ -69,13 +78,15 @@ No Redis, no Celery — the job queue is PostgreSQL-backed.
 ## Common Commands
 
 ```bash
-make up          # Start all services
-make down        # Stop all services
-make build       # Rebuild Docker images
-make logs        # Follow logs for all services
-make shell-db    # Open a psql shell
-make test-unit   # Run unit tests
-make help        # List all available commands
+make up              # Start all services
+make down            # Stop all services
+make build           # Rebuild Docker images
+make logs            # Follow logs for all services
+make shell-db        # Open a psql shell
+make test-unit       # Run unit tests
+make health-install  # Install health monitoring cron job (every 15 min)
+make health-check    # Run health check once (manual)
+make help            # List all available commands
 ```
 
 ---

@@ -131,6 +131,9 @@ make test-e2e           Run Playwright e2e tests
 make shell-db           Open psql shell
 make shell-pipeline     Open pipeline container shell
 make shell-web          Open web container shell
+make health-check       Run health check once
+make health-install     Install health check cron job (every 15 min)
+make health-uninstall   Remove health check cron job
 make help               List all available commands
 ```
 
