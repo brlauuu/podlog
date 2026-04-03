@@ -191,6 +191,80 @@ class TestSaveNotificationSettings:
         assert result["notification_email_to"] is None
         assert result["email_configured"] is False
 
+    def test_rejects_invalid_email_format(self):
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="notification_email_to"):
+            save_notification_settings(db, {"notification_email_to": "not-an-email"})
+
+    def test_accepts_comma_separated_emails(self):
+        db = _mock_db(stored_json=None)
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.telegram_bot_token = None
+            mock_settings.telegram_chat_id = None
+            mock_settings.notification_email_to = None
+            mock_settings.notification_email_from = "podlog@localhost"
+            mock_settings.smtp_host = "host.docker.internal"
+            mock_settings.smtp_port = 25
+            mock_settings.smtp_user = None
+            mock_settings.smtp_password = None
+            mock_settings.smtp_use_tls = False
+            mock_settings.notification_frequency = "immediate"
+
+            result = save_notification_settings(
+                db, {"notification_email_to": "a@example.com, b@example.com"}
+            )
+
+        assert result["notification_email_to"] == "a@example.com, b@example.com"
+        assert result["email_configured"] is True
+
+    def test_rejects_comma_list_with_invalid_email(self):
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="notification_email_to"):
+            save_notification_settings(
+                db, {"notification_email_to": "good@example.com, bad-email"}
+            )
+
+    def test_trailing_comma_is_handled(self):
+        db = _mock_db(stored_json=None)
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.telegram_bot_token = None
+            mock_settings.telegram_chat_id = None
+            mock_settings.notification_email_to = None
+            mock_settings.notification_email_from = "podlog@localhost"
+            mock_settings.smtp_host = "host.docker.internal"
+            mock_settings.smtp_port = 25
+            mock_settings.smtp_user = None
+            mock_settings.smtp_password = None
+            mock_settings.smtp_use_tls = False
+            mock_settings.notification_frequency = "immediate"
+
+            result = save_notification_settings(
+                db, {"notification_email_to": "a@example.com,"}
+            )
+
+        assert result["notification_email_to"] == "a@example.com"
+        assert result["email_configured"] is True
+
+    def test_email_whitespace_normalized(self):
+        db = _mock_db(stored_json=None)
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.telegram_bot_token = None
+            mock_settings.telegram_chat_id = None
+            mock_settings.notification_email_to = None
+            mock_settings.notification_email_from = "podlog@localhost"
+            mock_settings.smtp_host = "host.docker.internal"
+            mock_settings.smtp_port = 25
+            mock_settings.smtp_user = None
+            mock_settings.smtp_password = None
+            mock_settings.smtp_use_tls = False
+            mock_settings.notification_frequency = "immediate"
+
+            result = save_notification_settings(
+                db, {"notification_email_to": "a@example.com,   b@example.com"}
+            )
+
+        assert result["notification_email_to"] == "a@example.com, b@example.com"
+
 
 class TestMaskSensitive:
     def test_masks_bot_token(self):

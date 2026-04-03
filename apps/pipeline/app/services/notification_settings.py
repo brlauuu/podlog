@@ -6,6 +6,7 @@ the corresponding env var value from config.py.
 """
 import json
 import logging
+import re
 
 from sqlalchemy.orm import Session
 
@@ -40,6 +41,8 @@ _NULLABLE_FIELDS = {
 }
 
 _VALID_FREQUENCIES = {"immediate", "daily", "weekly"}
+
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 
 
 def _env_defaults() -> dict:
@@ -95,6 +98,18 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
     for key in list(updates.keys()):
         if key in _NULLABLE_FIELDS and isinstance(updates[key], str) and not updates[key].strip():
             updates[key] = None
+
+    if "notification_email_to" in updates and updates["notification_email_to"] is not None:
+        emails = [e.strip() for e in updates["notification_email_to"].split(",") if e.strip()]
+        if not emails:
+            updates["notification_email_to"] = None
+        else:
+            for email in emails:
+                if not _EMAIL_RE.match(email):
+                    raise ValueError(
+                        f"notification_email_to contains invalid email address: '{email}'"
+                    )
+            updates["notification_email_to"] = ", ".join(emails)
 
     row = db.query(SystemState).filter(SystemState.key == SETTINGS_KEY).first()
     if row is not None:
