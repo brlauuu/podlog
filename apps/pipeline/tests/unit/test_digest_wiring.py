@@ -83,6 +83,70 @@ def test_done_handler_logs_event_in_digest_mode():
     mock_log.assert_called_once_with(event, mark_sent=False)
 
 
+def test_email_failure_does_not_block_telegram():
+    """If send_email raises, send_telegram should still be called."""
+    bus = EventBus()
+
+    from app.services.digest import register_notification_handlers
+
+    ns_both = {
+        "notification_frequency": "immediate",
+        "email_configured": True,
+        "telegram_configured": True,
+        "notification_email_to": "test@example.com",
+        "notification_email_from": "podlog@localhost",
+        "smtp_host": "localhost",
+        "smtp_port": 25,
+        "smtp_user": None,
+        "smtp_password": None,
+        "smtp_use_tls": False,
+        "telegram_bot_token": "fake-token",
+        "telegram_chat_id": "12345",
+    }
+
+    with patch("app.services.digest.get_notification_settings", return_value=ns_both), \
+         patch("app.services.digest.SessionLocal"), \
+         patch("app.services.digest.send_email", side_effect=Exception("SMTP error")), \
+         patch("app.services.digest.send_telegram") as mock_tg:
+        register_notification_handlers(bus)
+        event = MagicMock(spec=EpisodeDoneEvent)
+        bus._handlers[EpisodeDoneEvent][0](event)
+
+    mock_tg.assert_called_once_with(event, bot_token="fake-token", chat_id="12345")
+
+
+def test_telegram_failure_does_not_block_email():
+    """If send_telegram raises, send_email should still have been called."""
+    bus = EventBus()
+
+    from app.services.digest import register_notification_handlers
+
+    ns_both = {
+        "notification_frequency": "immediate",
+        "email_configured": True,
+        "telegram_configured": True,
+        "notification_email_to": "test@example.com",
+        "notification_email_from": "podlog@localhost",
+        "smtp_host": "localhost",
+        "smtp_port": 25,
+        "smtp_user": None,
+        "smtp_password": None,
+        "smtp_use_tls": False,
+        "telegram_bot_token": "fake-token",
+        "telegram_chat_id": "12345",
+    }
+
+    with patch("app.services.digest.get_notification_settings", return_value=ns_both), \
+         patch("app.services.digest.SessionLocal"), \
+         patch("app.services.digest.send_email") as mock_email, \
+         patch("app.services.digest.send_telegram", side_effect=Exception("Telegram error")):
+        register_notification_handlers(bus)
+        event = MagicMock(spec=EpisodeDoneEvent)
+        bus._handlers[EpisodeDoneEvent][0](event)
+
+    mock_email.assert_called_once()
+
+
 def test_failed_handler_logs_and_sends_in_digest_mode():
     """_handle_failed logs event and sends immediately when frequency is 'daily'."""
     bus = EventBus()

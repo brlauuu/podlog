@@ -53,6 +53,7 @@ export async function GET() {
       JOIN episodes e ON e.id = jq.episode_id
       LEFT JOIN feeds f ON f.id = e.feed_id
       WHERE jq.status = 'pending'
+        AND e.status NOT IN ('done', 'failed')
         AND NOT EXISTS (
           SELECT 1 FROM job_queue jq2
           WHERE jq2.episode_id = e.id AND jq2.status = 'picked'

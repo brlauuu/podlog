@@ -373,22 +373,28 @@ def register_notification_handlers(bus: EventBus) -> None:
 
     def _send_immediate(event: Event, ns: dict) -> None:
         if ns.get("email_configured"):
-            send_email(
-                event,
-                to_addr=ns["notification_email_to"],
-                from_addr=ns.get("notification_email_from", "podlog@localhost"),
-                smtp_host=ns.get("smtp_host", "host.docker.internal"),
-                smtp_port=ns.get("smtp_port", 25),
-                smtp_user=ns.get("smtp_user"),
-                smtp_password=ns.get("smtp_password"),
-                use_tls=ns.get("smtp_use_tls", False),
-            )
+            try:
+                send_email(
+                    event,
+                    to_addr=ns["notification_email_to"],
+                    from_addr=ns.get("notification_email_from", "podlog@localhost"),
+                    smtp_host=ns.get("smtp_host", "host.docker.internal"),
+                    smtp_port=ns.get("smtp_port", 25),
+                    smtp_user=ns.get("smtp_user"),
+                    smtp_password=ns.get("smtp_password"),
+                    use_tls=ns.get("smtp_use_tls", False),
+                )
+            except Exception:
+                logger.exception('"action": "email_send_failed"')
         if ns.get("telegram_configured"):
-            send_telegram(
-                event,
-                bot_token=ns["telegram_bot_token"],
-                chat_id=ns["telegram_chat_id"],
-            )
+            try:
+                send_telegram(
+                    event,
+                    bot_token=ns["telegram_bot_token"],
+                    chat_id=ns["telegram_chat_id"],
+                )
+            except Exception:
+                logger.exception('"action": "telegram_send_failed"')
 
     def _handle_done(event: Event) -> None:
         ns = _get_settings()
