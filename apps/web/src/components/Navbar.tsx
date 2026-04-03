@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
 import DarkModeToggle from "@/components/DarkModeToggle";
+import HelpMenu from "@/components/HelpMenu";
 
 const NAV_LINKS = [
   { href: "/", label: "Search" },
@@ -39,7 +40,10 @@ export default function Navbar() {
           ))}
         </div>
 
-        <DarkModeToggle />
+        <div className="flex items-center gap-2">
+          <HelpMenu />
+          <DarkModeToggle />
+        </div>
       </div>
     </nav>
   );
