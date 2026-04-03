@@ -67,7 +67,7 @@ def diarize_episode(episode_id: str) -> str:
             from app.services.pyannote import unload_pipeline
             unload_pipeline()
 
-        job_queue.enqueue(db, episode_id, "embed")
+        job_queue.enqueue(db, episode_id, "chunk")
         return episode_id
     finally:
         # Clean up alignment file
