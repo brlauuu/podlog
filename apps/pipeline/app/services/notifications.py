@@ -70,10 +70,11 @@ def compute_avg_processing_stats(db: Session) -> tuple[float | None, float | Non
 
     transcribe_vals = [ep.transcribe_duration_secs for ep in done_episodes if ep.transcribe_duration_secs is not None]
     diarize_vals = [ep.diarize_duration_secs for ep in done_episodes if ep.diarize_duration_secs is not None]
+    # Total = transcribe + diarize (actual processing time, excludes queue wait)
     total_vals = [
-        (ep.processed_at - ep.created_at).total_seconds()
+        (ep.transcribe_duration_secs or 0) + (ep.diarize_duration_secs or 0)
         for ep in done_episodes
-        if ep.processed_at is not None and ep.created_at is not None
+        if ep.transcribe_duration_secs is not None or ep.diarize_duration_secs is not None
     ]
 
     avg_t = sum(transcribe_vals) / len(transcribe_vals) if transcribe_vals else None
@@ -112,18 +113,21 @@ def estimate_queue_status(db: Session) -> tuple[int, float | None]:
     if not recent:
         return remaining, None
 
-    # Compute duration-weighted processing rate
-    total_wall = 0.0
+    # Compute duration-weighted processing rate using actual processing time
+    # (transcribe + diarize), not wall clock which includes queue wait
+    total_processing = 0.0
     total_audio = 0.0
     for ep in recent:
-        wall_secs = (ep.processed_at - ep.created_at).total_seconds()
-        total_wall += wall_secs
+        processing_secs = (ep.transcribe_duration_secs or 0) + (ep.diarize_duration_secs or 0)
+        if processing_secs <= 0:
+            continue
+        total_processing += processing_secs
         total_audio += ep.duration_secs
 
     if total_audio == 0:
         return remaining, None
 
-    rate = total_wall / total_audio  # wall seconds per audio second
+    rate = total_processing / total_audio  # processing seconds per audio second
 
     # Sum duration of queued episodes
     queued_episodes = (

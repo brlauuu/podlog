@@ -86,13 +86,12 @@ def test_estimate_queue_status_with_history():
     db = MagicMock()
 
     # Mock recent completed episodes: 2 episodes, each 1800s audio, each took 900s to process
-    # Processing rate = 1800s total wall / 3600s total audio = 0.5 wall-per-audio-sec
+    # (600s transcribe + 300s diarize = 900s actual processing per episode)
+    # Processing rate = 1800s total processing / 3600s total audio = 0.5 per audio sec
     recent_done = MagicMock()
     recent_done.all.return_value = [
-        MagicMock(duration_secs=1800, created_at=datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
-                  processed_at=datetime(2026, 1, 1, 0, 15, tzinfo=timezone.utc)),  # 900s
-        MagicMock(duration_secs=1800, created_at=datetime(2026, 1, 1, 1, 0, tzinfo=timezone.utc),
-                  processed_at=datetime(2026, 1, 1, 1, 15, tzinfo=timezone.utc)),  # 900s
+        MagicMock(duration_secs=1800, transcribe_duration_secs=600.0, diarize_duration_secs=300.0),
+        MagicMock(duration_secs=1800, transcribe_duration_secs=600.0, diarize_duration_secs=300.0),
     ]
 
     # Mock queued episodes: 3 episodes, each 1200s audio = 3600s total audio
@@ -116,25 +115,24 @@ def test_estimate_queue_status_with_history():
 
     remaining, estimated = estimate_queue_status(db)
     assert remaining == 3
-    # rate = 1800 / 3600 = 0.5, queued audio = 3600, estimate = 3600 * 0.5 = 1800
+    # rate = 1800 processing / 3600 audio = 0.5, queued audio = 3600, estimate = 3600 * 0.5 = 1800
     assert estimated == 1800.0
 
 
 def test_compute_avg_processing_stats_with_data():
-    """Should compute averages across all done episodes."""
+    """Should compute averages across all done episodes.
+
+    Total per episode = transcribe + diarize (not wall clock).
+    """
     db = MagicMock()
 
     ep1 = MagicMock(
         transcribe_duration_secs=100.0,
         diarize_duration_secs=50.0,
-        created_at=datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
-        processed_at=datetime(2026, 1, 1, 0, 5, tzinfo=timezone.utc),  # 300s total
     )
     ep2 = MagicMock(
         transcribe_duration_secs=200.0,
         diarize_duration_secs=100.0,
-        created_at=datetime(2026, 1, 2, 0, 0, tzinfo=timezone.utc),
-        processed_at=datetime(2026, 1, 2, 0, 10, tzinfo=timezone.utc),  # 600s total
     )
 
     query_mock = MagicMock()
@@ -145,7 +143,7 @@ def test_compute_avg_processing_stats_with_data():
     avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
     assert avg_t == 150.0   # (100 + 200) / 2
     assert avg_d == 75.0    # (50 + 100) / 2
-    assert avg_total == 450.0  # (300 + 600) / 2
+    assert avg_total == 225.0  # ((100+50) + (200+100)) / 2
 
 
 def test_compute_avg_processing_stats_no_data():
@@ -169,8 +167,6 @@ def test_compute_avg_processing_stats_partial_data():
     ep1 = MagicMock(
         transcribe_duration_secs=100.0,
         diarize_duration_secs=None,  # diarization failed
-        created_at=datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
-        processed_at=datetime(2026, 1, 1, 0, 5, tzinfo=timezone.utc),
     )
 
     query_mock = MagicMock()
@@ -181,7 +177,7 @@ def test_compute_avg_processing_stats_partial_data():
     avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
     assert avg_t == 100.0
     assert avg_d is None  # no diarize data at all
-    assert avg_total == 300.0
+    assert avg_total == 100.0  # transcribe only (diarize treated as 0)
 
 
 def test_estimate_queue_status_no_history():
