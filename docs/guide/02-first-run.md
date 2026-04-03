@@ -1,0 +1,57 @@
+# First Run
+
+What to expect the first time you start Podlog.
+
+## Model Download
+
+On first boot, the worker downloads Whisper and pyannote model weights (~3 GB total). This happens once — models are cached in a Docker volume and persist across restarts.
+
+During this phase:
+- The worker logs will show download progress
+- Jobs are queued but won't start processing until models are ready
+- The queue dashboard at `/queue` may show a "Warming up" banner
+
+**Expected wait:** 5-15 minutes depending on your internet connection.
+
+## Checking System Health
+
+Once models are downloaded, all services should be healthy:
+
+```bash
+# Quick check from the terminal
+curl -s http://localhost:8000/api/health | python3 -m json.tool
+```
+
+You should see `"status": "OK"` for Database, Worker, and Pipeline API.
+
+In the browser, the queue page at `/queue` will show stage counts and be ready to accept work.
+
+## Adding Your First Feed
+
+1. Go to **http://localhost:3000/feeds**
+2. Click **Add Feed**
+3. Paste an RSS feed URL
+4. Choose **Test mode** — this ingests only the latest episode, so you get results fast
+5. Click **Add**
+
+**Tip:** Pick a podcast with short episodes (15-30 minutes) for your first test. A 30-minute episode takes roughly 45 minutes to fully process on an 8-core CPU.
+
+## Watching Progress
+
+After adding a feed, go to `/queue` to watch the episode move through the pipeline:
+
+1. **Pending** — waiting in queue
+2. **Downloading** — fetching audio from the RSS feed
+3. **Transcribing** — running Whisper speech-to-text
+4. **Diarizing** — running pyannote speaker separation
+5. **Inferring** — extracting speaker names via NER
+6. **Archiving** — compressing audio to MP3
+7. **Done**
+
+For more detail on each stage and error handling, see [Queue Dashboard](08-queue.md).
+
+Once the episode reaches **Done**, go to `/` and search for something from the episode — you should see results with clickable timestamps.
+
+---
+
+**Next:** [Managing Feeds](03-feeds.md) | **Back:** [Installation](01-installation.md) | **Home:** [Guide](README.md)
