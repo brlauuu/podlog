@@ -305,7 +305,6 @@ def send_telegram(bot_token: str, chat_id: str, message: str) -> bool:
     payload = json.dumps({
         "chat_id": chat_id,
         "text": message,
-        "parse_mode": "Markdown",
     }).encode()
     req = urllib.request.Request(
         url,
@@ -326,7 +325,7 @@ def format_alert(transitions: list[tuple[str, str, str, str]], timestamp: str) -
 
     Each transition is (service, old_status, new_status, detail).
     """
-    lines = [f"*Podlog Health Alert*\n_{timestamp}_\n"]
+    lines = [f"PODLOG HEALTH ALERT\n{timestamp}\n"]
 
     downs = [t for t in transitions if t[2] in ("down", "degraded", "zombies")]
     ups = [t for t in transitions if t[2] in ("up", "clear")]
@@ -334,17 +333,17 @@ def format_alert(transitions: list[tuple[str, str, str, str]], timestamp: str) -
     if downs:
         for service, old_st, new_st, detail in downs:
             if new_st == "zombies":
-                lines.append(f"  `{service}`: {detail}")
+                lines.append(f"  {service}: {detail}")
             else:
                 icon = "DEGRADED" if new_st == "degraded" else "DOWN"
-                lines.append(f"  `{service}`: *{icon}* — {detail}")
+                lines.append(f"  {service}: {icon} -- {detail}")
 
     if ups:
         for service, old_st, new_st, detail in ups:
             if service == "zombie_jobs":
-                lines.append(f"  `{service}`: cleared (was: {old_st})")
+                lines.append(f"  {service}: cleared (was: {old_st})")
             else:
-                lines.append(f"  `{service}`: recovered")
+                lines.append(f"  {service}: recovered")
 
     return "\n".join(lines)
 
