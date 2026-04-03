@@ -40,5 +40,14 @@ shell-web:      ## Open shell in web container
 web:            ## Open web app in browser
 	open http://localhost:3000
 
+health-check:   ## Run health check once (requires python3, pg_isready, docker)
+	python3 scripts/healthcheck.py
+
+health-install: ## Install health check cron job (every 15 min)
+	bash scripts/healthcheck-install.sh
+
+health-uninstall: ## Remove health check cron job
+	crontab -l 2>/dev/null | grep -vF "healthcheck.py" | crontab - && echo "Removed healthcheck cron job"
+
 help:           ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
