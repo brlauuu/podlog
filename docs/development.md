@@ -155,3 +155,59 @@ make help               List all available commands
 - **Commits:** Conventional Commits format (`feat:`, `fix:`, `perf:`)
 - **PRs:** Squash merge to main, branch names follow `{issue}-{description}` pattern
 - **Testing:** Unit tests mock DB/models, integration tests use real DB, e2e tests use Playwright
+
+## Codebase Audit
+
+Automated comprehensive audit that checks architecture, documentation freshness, test coverage, dead code, wizard completeness, CLAUDE.md accuracy, and dependency health.
+
+### On-demand (interactive)
+
+From within a Claude Code session:
+
+```
+/codebase-audit
+```
+
+### Unattended (overnight)
+
+```bash
+claude -p "/codebase-audit" \
+  --allowedTools "Read,Glob,Grep,Write,Edit,Bash,Agent" \
+  --model opus \
+  --worktree \
+  --dangerously-skip-permissions \
+  --print \
+  > /tmp/audit-$(date +%Y-%m-%d).log 2>&1
+```
+
+**Flags explained:**
+- `--allowedTools` — Read/Glob/Grep for analysis, Bash for running tests and git/gh, Write/Edit for the report, Agent for parallel subagents
+- `--model opus` — uses Opus for highest quality analysis
+- `--worktree` — runs in an isolated git worktree (safe, won't touch your working directory)
+- `--dangerously-skip-permissions` — required for unattended runs (no interactive prompts)
+- `--print` — non-interactive mode, exits when done
+
+### Nightly cron
+
+```bash
+# crontab -e
+0 2 * * * cd /path/to/podlog && claude -p "/codebase-audit" --allowedTools "Read,Glob,Grep,Write,Edit,Bash,Agent" --model opus --worktree --dangerously-skip-permissions --print > /tmp/audit-$(date +\%Y-\%m-\%d).log 2>&1
+```
+
+### Output
+
+- **Report:** `docs/audit/YYYY-MM-DD-audit.md` — committed and pushed to main
+- **Issues:** CRITICAL and WARNING findings auto-create GitHub issues with label `codebase-audit`
+- **Status:** Check the `> Status:` line at the top of the report to see if it completed (`COMPLETE 7/7`) or was interrupted (`IN PROGRESS N/7`)
+
+### What it checks
+
+| Check | What it does |
+|-------|-------------|
+| Architecture | File structure, orphan files, circular deps, large files |
+| Docs freshness | README claims, badge values, guide accuracy, PRD status |
+| Test coverage | Runs pytest --cov and jest --coverage, parses results |
+| Dead code | Files with no imports, orphaned tests, unused exports |
+| Wizard completeness | Spec compliance + feature coverage gaps |
+| CLAUDE.md accuracy | Repo structure, tech stack versions, current state |
+| Dependency health | Outdated packages, unused deps, missing deps |
