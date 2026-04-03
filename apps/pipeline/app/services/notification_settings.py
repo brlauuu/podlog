@@ -31,6 +31,14 @@ _FIELDS = [
 
 _SENSITIVE_FIELDS = {"telegram_bot_token", "smtp_password"}
 
+_NULLABLE_FIELDS = {
+    "telegram_bot_token",
+    "telegram_chat_id",
+    "notification_email_to",
+    "smtp_user",
+    "smtp_password",
+}
+
 _VALID_FREQUENCIES = {"immediate", "daily", "weekly"}
 
 
@@ -56,14 +64,14 @@ def get_notification_settings(db: Session) -> dict:
     db_settings = _read_db_settings(db)
     if db_settings is not None:
         for key, value in db_settings.items():
-            if key in merged and value is not None:
+            if key in merged and value is not None and value != "":
                 merged[key] = value
 
     merged["telegram_configured"] = (
         merged.get("telegram_bot_token") is not None
         and merged.get("telegram_chat_id") is not None
     )
-    merged["email_configured"] = merged.get("notification_email_to") is not None
+    merged["email_configured"] = bool(merged.get("notification_email_to"))
     return merged
 
 
@@ -82,6 +90,11 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
         port = updates["smtp_port"]
         if not isinstance(port, int) or port < 1 or port > 65535:
             raise ValueError(f"smtp_port must be a positive integer (1-65535), got {port!r}")
+
+    # Normalize empty/whitespace strings to None for nullable fields
+    for key in list(updates.keys()):
+        if key in _NULLABLE_FIELDS and isinstance(updates[key], str) and not updates[key].strip():
+            updates[key] = None
 
     row = db.query(SystemState).filter(SystemState.key == SETTINGS_KEY).first()
     if row is not None:
@@ -107,13 +120,13 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
     # re-querying the DB (which may return stale mock data in tests or a closed session).
     merged = _env_defaults()
     for key, value in existing.items():
-        if key in merged and value is not None:
+        if key in merged and value is not None and value != "":
             merged[key] = value
     merged["telegram_configured"] = (
         merged.get("telegram_bot_token") is not None
         and merged.get("telegram_chat_id") is not None
     )
-    merged["email_configured"] = merged.get("notification_email_to") is not None
+    merged["email_configured"] = bool(merged.get("notification_email_to"))
     return merged
 
 
