@@ -411,7 +411,7 @@ export default function QueueStatus() {
       )}
 
       {/* Episode table */}
-      {!isEmpty && filtered.length === 0 && (q || stageFilter) && (
+      {!isEmpty && filtered.length === 0 && (q || stageFilter) && stageFilter !== "done" && (
         <div className="text-center py-8 text-muted-foreground text-sm">
           No episodes match {stageFilter ? `"${stageFilter}" filter` : "your search"}.
         </div>
