@@ -17,7 +17,7 @@ The skill file (`~/.claude/skills/codebase-audit/SKILL.md`) defines the orchestr
 
 ```
 Orchestrator
-├── Create/clear report file
+├── Create report file with "Status: IN PROGRESS (0/7)"
 ├── Dispatch 7 parallel subagents (Agent tool)
 │   ├── architecture-review
 │   ├── docs-freshness
@@ -26,9 +26,10 @@ Orchestrator
 │   ├── wizard-completeness
 │   ├── claude-md-accuracy
 │   └── dependency-health
-├── As each completes: append section to report, git commit
+├── As each completes: append section to report, update status (N/7), git commit
 ├── Write summary header with severity counts
 ├── Create GitHub issues for CRITICAL and WARNING findings
+├── Update status to "COMPLETE (7/7 checks finished, N issues created)"
 └── Final commit + push
 ```
 
@@ -163,6 +164,8 @@ Each subagent's findings are appended to the report and committed as they comple
 ```markdown
 # Codebase Audit — YYYY-MM-DD
 
+> Status: COMPLETE (7/7 checks finished, N issues created)
+
 ## Summary
 - Overall health: [Good / Needs Attention / Critical]
 - Findings: N critical, M warnings, K informational
@@ -286,6 +289,25 @@ Single file. All subagent prompts are inline in the SKILL.md. No supporting file
 - **repo-cleanup:** Complementary, no overlap. repo-cleanup handles git hygiene and Docker waste. codebase-audit handles code quality and documentation accuracy.
 - **code-review:** Different scope. code-review examines individual PRs. codebase-audit examines the whole repository.
 - **issue-to-pr:** Downstream consumer. Issues created by codebase-audit can be picked up by issue-to-pr for implementation.
+
+## Completion Tracking
+
+The report includes a status line at the very top (below the title) that tracks progress:
+
+- **On start:** `> Status: IN PROGRESS (0/7)`
+- **After each subagent:** `> Status: IN PROGRESS (N/7)` — updated and committed incrementally
+- **On successful completion:** `> Status: COMPLETE (7/7 checks finished, N issues created)`
+- **If interrupted:** Status stays at whatever count was last committed, e.g., `> Status: IN PROGRESS (4/7)`
+
+An interrupted report also implicitly shows which checks are missing — only completed sections appear in the file. The status line names which checks haven't run:
+
+```markdown
+> Status: INCOMPLETE (4/7 checks finished — missing: wizard-completeness, claude-md-accuracy, dependency-health)
+```
+
+**Where to check:**
+1. **The report file on GitHub** — `docs/audit/YYYY-MM-DD-audit.md`, status line is the first thing you see
+2. **The log file** — `/tmp/audit-YYYY-MM-DD.log` captures all stdout including the final status
 
 ## Error Handling
 
