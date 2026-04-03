@@ -192,6 +192,9 @@ class TestAlertFormatting:
         assert "pipeline" in msg
         assert "DOWN" in msg
         assert "connection refused" in msg
+        # No Markdown syntax — plain text only
+        assert "*" not in msg
+        assert "`" not in msg
 
     def test_recovery_alert(self):
         transitions = [("db", "down", "up", "accepting connections")]
