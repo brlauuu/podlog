@@ -173,6 +173,99 @@ function FieldGroup({
 const inputClass =
   "w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring";
 
+const EMAIL_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+
+function EmailTagInput({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  const [input, setInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const emails = value
+    ? value.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
+    : [];
+
+  function addEmail(raw: string) {
+    const email = raw.trim().toLowerCase();
+    if (!email) return;
+
+    if (!EMAIL_RE.test(email)) {
+      setError("Invalid email address");
+      return;
+    }
+    if (emails.includes(email)) {
+      setError("Already added");
+      return;
+    }
+
+    setError(null);
+    setInput("");
+    const next = [...emails, email];
+    onChange(next.join(", "));
+  }
+
+  function removeEmail(email: string) {
+    const next = emails.filter((e) => e !== email);
+    onChange(next.length > 0 ? next.join(", ") : null);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addEmail(input);
+    }
+    if (e.key === "Backspace" && !input && emails.length > 0) {
+      removeEmail(emails[emails.length - 1]);
+    }
+  }
+
+  return (
+    <div>
+      <div
+        className={`flex flex-wrap gap-1.5 items-center min-h-[42px] w-full rounded-md border border-border bg-background px-2 py-1.5 focus-within:ring-1 focus-within:ring-ring ${
+          error ? "border-red-500" : ""
+        }`}
+      >
+        {emails.map((email) => (
+          <span
+            key={email}
+            className="inline-flex items-center gap-1 bg-indigo-500/15 text-indigo-400 text-xs px-2 py-1 rounded-md"
+          >
+            {email}
+            <button
+              type="button"
+              aria-label={`Remove ${email}`}
+              className="hover:text-red-400 text-xs leading-none"
+              onClick={() => removeEmail(email)}
+            >
+              x
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          className="flex-1 min-w-[180px] bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none py-1"
+          placeholder={emails.length === 0 ? "Add email address and press Enter" : "Add email and press Enter"}
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={handleKeyDown}
+          onBlur={() => {
+            if (input.trim()) addEmail(input);
+          }}
+        />
+      </div>
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
+  );
+}
+
 // --- Tab Content ---
 
 function TelegramTab({
@@ -252,7 +345,7 @@ function EmailTab({
   testing,
 }: {
   settings: Settings;
-  onChange: (field: keyof Settings, value: string | number | boolean) => void;
+  onChange: (field: keyof Settings, value: string | number | boolean | null) => void;
   onSave: () => void;
   onTest: () => void;
   saving: boolean;
@@ -262,17 +355,13 @@ function EmailTab({
 
   return (
     <div>
-      <StatusBadge configured={settings.email_configured} />
+      <StatusBadge configured={!!settings.notification_email_to} />
       <EmailGuide configured={settings.email_configured} />
 
-      <FieldGroup label="Send to" hint="Email address that receives notifications">
-        <input
-          id="send-to"
-          type="email"
-          className={inputClass}
-          placeholder="you@example.com"
-          value={settings.notification_email_to ?? ""}
-          onChange={(e) => onChange("notification_email_to", e.target.value)}
+      <FieldGroup label="Send to" hint="Email addresses that receive notifications">
+        <EmailTagInput
+          value={settings.notification_email_to}
+          onChange={(val) => onChange("notification_email_to", val)}
         />
       </FieldGroup>
 
@@ -373,7 +462,7 @@ function EmailTab({
         <button
           className="px-5 py-2 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-50"
           onClick={onTest}
-          disabled={!settings.email_configured || testing}
+          disabled={!settings.notification_email_to || testing}
         >
           {testing ? "Sending..." : "Send test email"}
         </button>
@@ -453,7 +542,7 @@ export default function NotificationSettings() {
     return <div className="text-muted-foreground text-sm">Loading settings...</div>;
   }
 
-  function handleChange(field: keyof Settings, value: string | number | boolean) {
+  function handleChange(field: keyof Settings, value: string | number | boolean | null) {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
     setDirty((prev) => ({ ...prev, [field]: value }));
   }

@@ -53,7 +53,7 @@ describe("NotificationSettings", () => {
     render(<NotificationSettings />);
     await waitFor(() => screen.getByRole("tab", { name: /email/i }));
     fireEvent.click(screen.getByRole("tab", { name: /email/i }));
-    expect(screen.getByLabelText(/send to/i)).toBeInTheDocument();
+    expect(screen.getByText(/send to/i)).toBeInTheDocument();
   });
 
   it("switches to general tab on click", async () => {
@@ -102,5 +102,93 @@ describe("NotificationSettings", () => {
       const testBtn = screen.getByRole("button", { name: /send test message/i });
       expect(testBtn).toBeDisabled();
     });
+  });
+});
+
+describe("Email tag input", () => {
+  beforeEach(() => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        telegram_bot_token: null,
+        telegram_chat_id: null,
+        notification_email_to: "existing@example.com",
+        notification_email_from: "podlog@localhost",
+        smtp_host: "host.docker.internal",
+        smtp_port: 25,
+        smtp_user: null,
+        smtp_password: null,
+        smtp_use_tls: false,
+        notification_frequency: "immediate",
+        telegram_configured: false,
+        email_configured: true,
+      }),
+    });
+  });
+
+  it("displays existing emails as tags", async () => {
+    render(<NotificationSettings />);
+    await waitFor(() => screen.getByRole("tab", { name: /email/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /email/i }));
+    expect(screen.getByText("existing@example.com")).toBeInTheDocument();
+  });
+
+  it("adds a valid email on Enter", async () => {
+    render(<NotificationSettings />);
+    await waitFor(() => screen.getByRole("tab", { name: /email/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /email/i }));
+
+    const input = screen.getByPlaceholderText(/add email/i);
+    fireEvent.change(input, { target: { value: "new@example.com" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(screen.getByText("new@example.com")).toBeInTheDocument();
+  });
+
+  it("rejects an invalid email with error message", async () => {
+    render(<NotificationSettings />);
+    await waitFor(() => screen.getByRole("tab", { name: /email/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /email/i }));
+
+    const input = screen.getByPlaceholderText(/add email/i);
+    fireEvent.change(input, { target: { value: "not-an-email" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(screen.getByText(/invalid email/i)).toBeInTheDocument();
+    expect(screen.queryByText("not-an-email")).not.toBeInTheDocument();
+  });
+
+  it("removes an email when X is clicked", async () => {
+    render(<NotificationSettings />);
+    await waitFor(() => screen.getByRole("tab", { name: /email/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /email/i }));
+
+    const removeBtn = screen.getByRole("button", { name: /remove existing@example.com/i });
+    fireEvent.click(removeBtn);
+
+    expect(screen.queryByText("existing@example.com")).not.toBeInTheDocument();
+  });
+
+  it("shows not configured when all emails removed", async () => {
+    render(<NotificationSettings />);
+    await waitFor(() => screen.getByRole("tab", { name: /email/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /email/i }));
+
+    const removeBtn = screen.getByRole("button", { name: /remove existing@example.com/i });
+    fireEvent.click(removeBtn);
+
+    expect(screen.getByText("Not configured")).toBeInTheDocument();
+  });
+
+  it("prevents duplicate emails", async () => {
+    render(<NotificationSettings />);
+    await waitFor(() => screen.getByRole("tab", { name: /email/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /email/i }));
+
+    const input = screen.getByPlaceholderText(/add email/i);
+    fireEvent.change(input, { target: { value: "existing@example.com" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(screen.getByText(/already added/i)).toBeInTheDocument();
   });
 });
