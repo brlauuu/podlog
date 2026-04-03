@@ -595,7 +595,7 @@ export default function NotificationSettings() {
 
   const tabs: { key: Tab; label: string; dot?: boolean; configured?: boolean }[] = [
     { key: "telegram", label: "Telegram", dot: true, configured: settings.telegram_configured },
-    { key: "email", label: "Email", dot: true, configured: settings.email_configured },
+    { key: "email", label: "Email", dot: true, configured: !!settings.notification_email_to },
     { key: "general", label: "General" },
   ];
 

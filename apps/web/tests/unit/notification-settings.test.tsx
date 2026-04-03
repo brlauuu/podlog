@@ -192,3 +192,36 @@ describe("Email tag input", () => {
     expect(screen.getByText(/already added/i)).toBeInTheDocument();
   });
 });
+
+it("tab dot reflects unconfigured state after removing all emails", async () => {
+  mockFetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      telegram_bot_token: null,
+      telegram_chat_id: null,
+      notification_email_to: "user@test.com",
+      notification_email_from: "podlog@localhost",
+      smtp_host: "host.docker.internal",
+      smtp_port: 25,
+      smtp_user: null,
+      smtp_password: null,
+      smtp_use_tls: false,
+      notification_frequency: "immediate",
+      telegram_configured: false,
+      email_configured: true,
+    }),
+  });
+
+  render(<NotificationSettings />);
+  await waitFor(() => screen.getByRole("tab", { name: /email/i }));
+  fireEvent.click(screen.getByRole("tab", { name: /email/i }));
+
+  // Remove the only email
+  const removeBtn = screen.getByRole("button", { name: /remove user@test.com/i });
+  fireEvent.click(removeBtn);
+
+  // The email tab dot should now reflect unconfigured
+  const emailTab = screen.getByRole("tab", { name: /email/i });
+  const dot = emailTab.querySelector("span.rounded-full");
+  expect(dot?.className).toContain("bg-muted-foreground");
+});
