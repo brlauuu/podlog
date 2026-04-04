@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, Info, Loader2, XCircle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Info, Loader2, XCircle, CheckCircle2 } from "lucide-react";
 import pool from "@/lib/db";
 import type { Segment } from "@/lib/types";
 import { formatTimestamp } from "@/lib/timestamp";
@@ -62,7 +62,43 @@ interface Episode {
   feed_description: string | null;
   feed_image_url: string | null;
   feed_website_url: string | null;
+  created_at: string;
   feed_url: string | null;
+}
+
+interface AdjacentEpisode {
+  id: string;
+  title: string | null;
+}
+
+async function getAdjacentEpisodes(
+  episode: Episode
+): Promise<{ prev: AdjacentEpisode | null; next: AdjacentEpisode | null }> {
+  const orderCol = episode.feed_id ? "published_at" : "created_at";
+  const orderVal = episode.feed_id ? episode.published_at ?? episode.created_at : episode.created_at;
+  const feedCondition = episode.feed_id ? "feed_id = $2" : "feed_id IS NULL";
+
+  const params = episode.feed_id ? [orderVal, episode.feed_id] : [orderVal];
+
+  const [prevResult, nextResult] = await Promise.all([
+    pool.query(
+      `SELECT id, title FROM episodes
+       WHERE ${feedCondition} AND ${orderCol} < $1
+       ORDER BY ${orderCol} DESC LIMIT 1`,
+      params
+    ),
+    pool.query(
+      `SELECT id, title FROM episodes
+       WHERE ${feedCondition} AND ${orderCol} > $1
+       ORDER BY ${orderCol} ASC LIMIT 1`,
+      params
+    ),
+  ]);
+
+  return {
+    prev: prevResult.rows[0] ?? null,
+    next: nextResult.rows[0] ?? null,
+  };
 }
 
 async function getEpisode(id: string): Promise<Episode | null> {
@@ -101,6 +137,8 @@ export default async function EpisodePage({ params }: { params: { id: string } }
   const [episode, segments] = await Promise.all([getEpisode(params.id), getSegments(params.id)]);
 
   if (!episode) notFound();
+
+  const { prev, next } = await getAdjacentEpisodes(episode);
 
   return (
     <div className="space-y-6">
@@ -243,6 +281,37 @@ export default async function EpisodePage({ params }: { params: { id: string } }
         audioUrl={episode.audio_url}
         guid={episode.guid}
       />
+
+      {/* Episode navigation */}
+      {(prev || next) && (
+        <>
+          <Separator />
+          <div className="flex items-center justify-between gap-4">
+            {prev ? (
+              <Link
+                href={`/episodes/${prev.id}`}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-w-0"
+              >
+                <ChevronLeft size={16} className="shrink-0" />
+                <span className="truncate">{prev.title ?? "Previous episode"}</span>
+              </Link>
+            ) : (
+              <span />
+            )}
+            {next ? (
+              <Link
+                href={`/episodes/${next.id}`}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-w-0 text-right"
+              >
+                <span className="truncate">{next.title ?? "Next episode"}</span>
+                <ChevronRight size={16} className="shrink-0" />
+              </Link>
+            ) : (
+              <span />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
