@@ -180,7 +180,7 @@ export async function searchSegments(
       t.end_time,
       t.speaker_label,
       COALESCE(sn.display_name, t.speaker_label) AS speaker_display,
-      ts_headline('english', t.full_text, query, 'MaxWords=25, MinWords=12') AS snippet,
+      ts_headline('english', t.full_text, query, 'MaxFragments=0, HighlightAll=true') AS snippet,
       ts_rank(to_tsvector('english', t.full_text), query) AS rank,
       e.id AS episode_id,
       e.title AS episode_title,
@@ -488,7 +488,7 @@ export async function searchMentions(
       t.full_text,
       CASE WHEN to_tsvector('english', t.full_text) @@ query THEN true ELSE false END AS is_match,
       CASE WHEN to_tsvector('english', t.full_text) @@ query
-        THEN ts_headline('english', t.full_text, query, 'MaxWords=25, MinWords=12')
+        THEN ts_headline('english', t.full_text, query, 'MaxFragments=0, HighlightAll=true')
         ELSE '' END AS snippet,
       CASE WHEN to_tsvector('english', t.full_text) @@ query
         THEN ts_rank(to_tsvector('english', t.full_text), query)
