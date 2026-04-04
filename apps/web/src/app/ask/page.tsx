@@ -247,7 +247,9 @@ export default function AskPage() {
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         setStatus("error");
-        setErrorMsg("Connection failed. Is the pipeline running?");
+        setErrorMsg((prev) =>
+          prev || "Connection failed. Is the pipeline running?"
+        );
       }
     },
     [question, model, selectedFeedIds]
