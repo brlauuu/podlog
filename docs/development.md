@@ -91,7 +91,7 @@ docker compose exec pipeline alembic upgrade head
 
 ## Running Tests
 
-### Unit Tests (321 tests — 240 pipeline + 81 web)
+### Unit Tests (383 tests — 302 pipeline + 81 web)
 
 ```bash
 cd apps/pipeline
