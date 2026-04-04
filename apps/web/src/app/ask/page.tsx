@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { MessageSquare, Send, Play, Loader2, ChevronDown } from "lucide-react";
+import { Send, Play, Loader2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -262,16 +262,10 @@ export default function AskPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <MessageSquare size={24} />
-          Ask
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Ask questions about your podcast transcripts. Answers are generated
-          from transcript excerpts and may take 15-30 seconds.
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Ask questions about your podcast transcripts. Answers are generated
+        from transcript excerpts and may take 15-30 seconds.
+      </p>
 
       {/* Controls row: model + feed filter + coverage */}
       <div className="flex flex-wrap items-center gap-4">

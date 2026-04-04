@@ -63,16 +63,14 @@ export default async function SourcesPage() {
   return (
     <div className="space-y-6">
       {/* Podcasts section */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Sources</h1>
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/feeds">Manage feeds</Link>
-        </Button>
-      </div>
-
       {feeds.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium text-muted-foreground mb-3">Podcasts</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xl font-semibold">Podcasts</h2>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/feeds">Manage feeds</Link>
+            </Button>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {feeds.map((feed) => (
               <Link key={feed.id} href={`/podcasts/${feed.id}`}>
@@ -127,10 +125,10 @@ export default async function SourcesPage() {
 
       {/* Uploads section */}
       <div>
-        <h2 className="text-sm font-medium text-muted-foreground mb-3">
+        <h2 className="text-xl font-semibold mb-3">
           Manual uploads
           {uploads.total > 0 && (
-            <span className="ml-2 font-normal">
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
               ({uploads.processed === uploads.total
                 ? `${uploads.total} file${uploads.total !== 1 ? "s" : ""}`
                 : `${uploads.processed} / ${uploads.total} processed`})

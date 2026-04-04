@@ -143,15 +143,6 @@ function HomePageContent() {
 
   return (
     <div className="space-y-6">
-      {!submittedQuery && (
-        <div className="text-center py-8 space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Podlog</h1>
-          <p className="text-muted-foreground">
-            Self-hosted podcast transcription and search
-          </p>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="relative">
           <Search

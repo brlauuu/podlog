@@ -193,7 +193,7 @@ export default function FeedsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Feeds</h1>
+        <span />
         <Dialog open={showAddModal} onOpenChange={(open) => { if (!open) resetModal(); else setShowAddModal(true); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5">
