@@ -4,7 +4,7 @@
 
 ```
 podlog/
-├── docker-compose.yml              # 5 services: db, pipeline, worker, web
+├── docker-compose.yml              # 5 services: db, pipeline, worker, ollama, web
 ├── .env.example                    # All config vars documented
 ├── Makefile                        # make up / down / build / test / etc.
 ├── apps/
@@ -91,7 +91,7 @@ docker compose exec pipeline alembic upgrade head
 
 ## Running Tests
 
-### Unit Tests (91 tests, ~1 second)
+### Unit Tests (321 tests — 240 pipeline + 81 web)
 
 ```bash
 cd apps/pipeline

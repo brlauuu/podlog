@@ -72,6 +72,7 @@ Podlog starts 5 containers:
 | **pipeline** | 8000 | FastAPI control plane — feed management, health |
 | **worker** | — | Processes episodes: download, transcribe, diarize, archive |
 | **db** | 5432 | PostgreSQL 15 with pgvector for FTS + semantic search |
+| **ollama** | 11434 | Local LLM inference for RAG-based Ask AI feature |
 
 No Redis, no Celery — the job queue is PostgreSQL-backed.
 
