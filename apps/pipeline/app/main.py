@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,9 +16,23 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+
+def _read_version() -> str:
+    """Read version from the VERSION file (repo root in dev, /app in Docker)."""
+    for candidate in (
+        Path(__file__).resolve().parent.parent.parent.parent / "VERSION",  # dev: repo root
+        Path(__file__).resolve().parent.parent / "VERSION",  # Docker: /app/VERSION via COPY . .
+    ):
+        if candidate.exists():
+            return candidate.read_text().strip()
+    return "0.0.0"
+
+
+__version__ = _read_version()
+
 register_notification_handlers(bus)
 
-app = FastAPI(title="Podlog Pipeline API", version="0.1.0")
+app = FastAPI(title="Podlog Pipeline API", version=__version__)
 
 
 @app.exception_handler(Exception)
