@@ -12,7 +12,7 @@ jest.mock("@tanstack/react-query", () => ({
 
 // Mock lucide-react icons
 jest.mock("lucide-react", () => ({
-  Github: () => <svg data-testid="github-icon" />,
+  ExternalLink: () => <svg data-testid="external-link-icon" />,
 }));
 
 import Footer from "@/components/Footer";
