@@ -10,10 +10,12 @@ States per service:
 """
 import logging
 
+import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from app.config import settings
 from app.database import SessionLocal
 from app.models import SystemState
 
@@ -57,6 +59,16 @@ def health_check() -> HealthResponse:
     finally:
         if db is not None:
             db.close()
+
+    # Ollama
+    try:
+        resp = httpx.get(f"{settings.ollama_url}/", timeout=3)
+        if resp.status_code == 200:
+            services.append(ServiceStatus(name="Ollama", status="OK"))
+        else:
+            services.append(ServiceStatus(name="Ollama", status="DEGRADED"))
+    except Exception:
+        services.append(ServiceStatus(name="Ollama", status="DEGRADED"))
 
     # Pipeline API is implicitly OK if this endpoint responds
     services.append(ServiceStatus(name="Pipeline API", status="OK"))

@@ -1,4 +1,4 @@
-.PHONY: up down build logs test test-unit test-e2e migrate shell-db shell-pipeline web
+.PHONY: up down build logs test test-unit test-e2e migrate shell-db shell-pipeline web ollama-pull
 
 up:             ## Start full stack
 	docker compose up -d
@@ -39,6 +39,9 @@ shell-web:      ## Open shell in web container
 
 web:            ## Open web app in browser
 	open http://localhost:3000
+
+ollama-pull:    ## Pull default Ollama model (Qwen2.5-3B Q4)
+	docker compose exec ollama ollama pull qwen2.5:3b
 
 health-check:   ## Run health check once (requires python3, pg_isready, docker)
 	python3 scripts/healthcheck.py

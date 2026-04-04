@@ -22,21 +22,27 @@ def _mock_prewarm_row(done: bool):
 
 
 class TestHealthEndpoint:
+    def _mock_ollama_ok(self):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        return patch("app.api.health.httpx.get", return_value=mock_resp)
+
     def test_ok_when_prewarm_done(self):
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = _mock_prewarm_row(True)
-        with patch("app.api.health.SessionLocal", return_value=mock_db):
+        with patch("app.api.health.SessionLocal", return_value=mock_db), self._mock_ollama_ok():
             resp = client.get("/api/health")
             assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "OK"
             assert isinstance(data["services"], list)
             assert any(s["name"] == "Worker" and s["status"] == "OK" for s in data["services"])
+            assert any(s["name"] == "Ollama" and s["status"] == "OK" for s in data["services"])
 
     def test_warming_up_when_prewarm_not_done(self):
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = _mock_prewarm_row(False)
-        with patch("app.api.health.SessionLocal", return_value=mock_db):
+        with patch("app.api.health.SessionLocal", return_value=mock_db), self._mock_ollama_ok():
             resp = client.get("/api/health")
             assert resp.status_code == 200
             data = resp.json()
@@ -46,10 +52,21 @@ class TestHealthEndpoint:
     def test_degraded_when_db_unreachable(self):
         mock_db = MagicMock()
         mock_db.execute.side_effect = Exception("Connection refused")
-        with patch("app.api.health.SessionLocal", return_value=mock_db):
+        with patch("app.api.health.SessionLocal", return_value=mock_db), self._mock_ollama_ok():
             resp = client.get("/api/health")
             assert resp.status_code == 200
             assert resp.json()["status"] == "DEGRADED"
+
+    def test_ollama_degraded_when_unreachable(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = _mock_prewarm_row(True)
+        with patch("app.api.health.SessionLocal", return_value=mock_db), \
+             patch("app.api.health.httpx.get", side_effect=Exception("Connection refused")):
+            resp = client.get("/api/health")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["status"] == "DEGRADED"
+            assert any(s["name"] == "Ollama" and s["status"] == "DEGRADED" for s in data["services"])
 
 
 class TestFeedsEndpoint:
