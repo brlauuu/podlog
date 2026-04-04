@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { MessageSquare, Send, Play, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAudioPlayer } from "@/components/AudioPlayerContext";
+import Link from "next/link";
 
 interface Source {
   chunk_id: number;
@@ -15,6 +15,11 @@ interface Source {
   timestamp: string;
   text: string;
   similarity: number;
+}
+
+interface Feed {
+  id: string;
+  title: string | null;
 }
 
 type StreamStatus = "idle" | "connecting" | "streaming" | "done" | "error";
@@ -36,6 +41,73 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/**
+ * Parse citation patterns like [Episode Title, 12:34] in the answer text
+ * and return React nodes with clickable links.
+ */
+function renderAnswerWithCitations(
+  text: string,
+  sources: Source[]
+): React.ReactNode[] {
+  // Match [anything, M:SS] or [anything, MM:SS]
+  const citationRegex = /\[([^\]]+?),\s*(\d{1,3}:\d{2})\]/g;
+
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = citationRegex.exec(text)) !== null) {
+    // Add text before this citation
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+
+    const citedTitle = match[1].trim();
+    const citedTimestamp = match[2];
+    const [minStr, secStr] = citedTimestamp.split(":");
+    const citedSeconds = parseInt(minStr) * 60 + parseInt(secStr);
+
+    // Find matching source by title similarity
+    const matchedSource = sources.find(
+      (s) =>
+        s.episode_title.toLowerCase().includes(citedTitle.toLowerCase()) ||
+        citedTitle.toLowerCase().includes(s.episode_title.toLowerCase())
+    );
+
+    if (matchedSource) {
+      nodes.push(
+        <Link
+          key={`cite-${match.index}`}
+          href={`/episodes/${matchedSource.episode_id}?t=${citedSeconds}`}
+          className="inline-flex items-center gap-0.5 text-primary hover:underline font-medium"
+          title={`${matchedSource.episode_title} at ${citedTimestamp}`}
+        >
+          [{citedTitle}, {citedTimestamp}]
+        </Link>
+      );
+    } else {
+      // No match found — render as styled but non-linked citation
+      nodes.push(
+        <span
+          key={`cite-${match.index}`}
+          className="text-muted-foreground font-medium"
+        >
+          [{citedTitle}, {citedTimestamp}]
+        </span>
+      );
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return nodes;
+}
+
 export default function AskPage() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
@@ -43,13 +115,29 @@ export default function AskPage() {
   const [status, setStatus] = useState<StreamStatus>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [model, setModel] = useState(getStoredModel);
+  const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [feedFilter, setFeedFilter] = useState("");
   const answerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const { playEpisode } = useAudioPlayer();
 
   useEffect(() => {
     localStorage.setItem("podlog-ask-model", model);
   }, [model]);
+
+  // Fetch feeds for filter dropdown
+  useEffect(() => {
+    fetch("/api/feeds")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setFeeds(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const renderedAnswer = useMemo(
+    () => (answer ? renderAnswerWithCitations(answer, sources) : null),
+    [answer, sources]
+  );
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -69,10 +157,13 @@ export default function AskPage() {
       abortRef.current = controller;
 
       try {
+        const body: Record<string, string> = { question: q, model };
+        if (feedFilter) body.feed_id = feedFilter;
+
         const resp = await fetch("/api/pipeline/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: q, model }),
+          body: JSON.stringify(body),
           signal: controller.signal,
         });
 
@@ -130,14 +221,14 @@ export default function AskPage() {
         setErrorMsg("Connection failed. Is the pipeline running?");
       }
     },
-    [question, model]
+    [question, model, feedFilter]
   );
 
   function handlePlaySource(source: Source) {
-    // We need the audio filename — derive from episode_id
-    // The audio player needs episodeId + filename; sources don't carry filename,
-    // so we link to the episode page with timestamp instead
-    window.open(`/episodes/${source.episode_id}?t=${Math.floor(source.start_time)}`, "_blank");
+    window.open(
+      `/episodes/${source.episode_id}?t=${Math.floor(source.start_time)}`,
+      "_blank"
+    );
   }
 
   return (
@@ -148,27 +239,57 @@ export default function AskPage() {
           Ask
         </h1>
         <p className="text-sm text-muted-foreground">
-          Ask questions about your podcast transcripts. Answers are generated from transcript excerpts and may take 15-30 seconds.
+          Ask questions about your podcast transcripts. Answers are generated
+          from transcript excerpts and may take 15-30 seconds.
         </p>
       </div>
 
-      {/* Model selector */}
-      <div className="flex items-center gap-2">
-        <label htmlFor="model-select" className="text-sm text-muted-foreground">
-          Model:
-        </label>
-        <select
-          id="model-select"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
-        >
-          {MODEL_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label} ({opt.hint})
-            </option>
-          ))}
-        </select>
+      {/* Controls row: model + feed filter */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="model-select"
+            className="text-sm text-muted-foreground"
+          >
+            Model:
+          </label>
+          <select
+            id="model-select"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+          >
+            {MODEL_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label} ({opt.hint})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {feeds.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="feed-filter"
+              className="text-sm text-muted-foreground"
+            >
+              Podcast:
+            </label>
+            <select
+              id="feed-filter"
+              value={feedFilter}
+              onChange={(e) => setFeedFilter(e.target.value)}
+              className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+            >
+              <option value="">All podcasts</option>
+              {feeds.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.title || "Untitled"}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Question input */}
@@ -184,7 +305,11 @@ export default function AskPage() {
         />
         <Button
           type="submit"
-          disabled={!question.trim() || status === "connecting" || status === "streaming"}
+          disabled={
+            !question.trim() ||
+            status === "connecting" ||
+            status === "streaming"
+          }
           className="px-4"
         >
           <Send size={18} />
@@ -206,7 +331,7 @@ export default function AskPage() {
         </div>
       )}
 
-      {/* Answer */}
+      {/* Answer with parsed citations */}
       {answer && (
         <div className="border border-border rounded-lg p-4 space-y-2">
           <h2 className="text-sm font-medium text-muted-foreground">Answer</h2>
@@ -214,7 +339,7 @@ export default function AskPage() {
             ref={answerRef}
             className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap"
           >
-            {answer}
+            {renderedAnswer}
             {status === "streaming" && (
               <span className="inline-block w-2 h-4 bg-foreground/60 animate-pulse ml-0.5" />
             )}
@@ -236,9 +361,12 @@ export default function AskPage() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-medium truncate">
+                    <Link
+                      href={`/episodes/${source.episode_id}?t=${Math.floor(source.start_time)}`}
+                      className="font-medium truncate hover:underline text-primary"
+                    >
                       {source.episode_title}
-                    </span>
+                    </Link>
                     <span className="text-muted-foreground shrink-0">
                       {source.timestamp}
                     </span>
@@ -256,7 +384,9 @@ export default function AskPage() {
                     <Play size={14} />
                   </button>
                 </div>
-                <p className="text-muted-foreground line-clamp-2">{source.text}</p>
+                <p className="text-muted-foreground line-clamp-2">
+                  {source.text}
+                </p>
                 <div className="text-xs text-muted-foreground/60">
                   {Math.round(source.similarity * 100)}% match
                 </div>
