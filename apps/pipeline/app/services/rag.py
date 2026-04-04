@@ -46,16 +46,28 @@ def retrieve_chunks(
     db: Session,
     question: str,
     top_k: int = TOP_K,
-    feed_id: str | None = None,
+    feed_ids: list[str] | None = None,
 ) -> list[ChunkResult]:
     """Retrieve top-K chunks by cosine similarity to the question embedding."""
     embedding = embed_query(question)
     embedding_str = f"[{','.join(str(x) for x in embedding)}]"
 
-    feed_filter = "AND e.feed_id = :feed_id" if feed_id else ""
+    feed_filter = ""
     params: dict = {"embedding": embedding_str, "top_k": top_k, "threshold": SIMILARITY_THRESHOLD}
-    if feed_id:
-        params["feed_id"] = feed_id
+    if feed_ids:
+        # Build feed filter supporting both feed IDs and "uploads" (feed_id IS NULL)
+        has_uploads = "__uploads__" in feed_ids
+        real_ids = [fid for fid in feed_ids if fid != "__uploads__"]
+        conditions = []
+        if real_ids:
+            placeholders = ", ".join(f":fid_{i}" for i in range(len(real_ids)))
+            conditions.append(f"e.feed_id IN ({placeholders})")
+            for i, fid in enumerate(real_ids):
+                params[f"fid_{i}"] = fid
+        if has_uploads:
+            conditions.append("e.feed_id IS NULL")
+        if conditions:
+            feed_filter = f"AND ({' OR '.join(conditions)})"
 
     query = text(f"""
         SELECT
