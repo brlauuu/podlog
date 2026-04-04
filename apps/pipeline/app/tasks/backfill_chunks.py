@@ -15,16 +15,24 @@ from app.services.chunking import merge_segments_into_chunks
 
 logger = logging.getLogger(__name__)
 
+# Progress tracking — read by the /api/backfill/status endpoint.
+progress: dict = {}
+
 
 def backfill_chunks(embed: bool = True) -> dict:
     """Chunk (and optionally embed) all done episodes that have segments.
 
+    When embed=True, this also backfills segment embeddings for any
+    segments with embedding IS NULL, not just chunks.
+
     Args:
-        embed: If True, also generate embeddings for the new chunks.
+        embed: If True, also generate embeddings for chunks and segments.
 
     Returns:
         Summary dict with counts.
     """
+    global progress
+
     if embed:
         from app.services.embed import embed_texts
 
@@ -41,8 +49,16 @@ def backfill_chunks(embed: bool = True) -> dict:
         chunked = 0
         skipped = 0
         total_chunks = 0
+        total_segments_embedded = 0
 
-        logger.info('"action": "backfill_chunks_start", "episodes": %d', total)
+        progress = {
+            "episodes_total": total,
+            "episodes_done": 0,
+            "chunks_created": 0,
+            "segments_embedded": 0,
+        }
+
+        logger.info('"action": "backfill_start", "episodes": %d', total)
 
         for i, ep in enumerate(episodes, 1):
             segments = (
@@ -54,6 +70,7 @@ def backfill_chunks(embed: bool = True) -> dict:
 
             if not segments:
                 skipped += 1
+                progress["episodes_done"] = i
                 continue
 
             # Delete existing chunks (idempotent)
@@ -88,22 +105,37 @@ def backfill_chunks(embed: bool = True) -> dict:
 
             db.flush()
 
-            # Embed the chunks
-            if embed and chunk_objs:
-                texts = [c.text for c in chunk_objs]
-                embeddings = embed_texts(texts)
-                for obj, emb in zip(chunk_objs, embeddings):
-                    obj.embedding = emb
+            if embed:
+                # Embed chunks
+                if chunk_objs:
+                    texts = [c.text for c in chunk_objs]
+                    embeddings = embed_texts(texts)
+                    for obj, emb in zip(chunk_objs, embeddings):
+                        obj.embedding = emb
+
+                # Embed segments missing embeddings
+                segs_missing = [s for s in segments if s.embedding is None]
+                if segs_missing:
+                    seg_texts = [s.text for s in segs_missing]
+                    seg_embeddings = embed_texts(seg_texts)
+                    for seg, emb in zip(segs_missing, seg_embeddings):
+                        seg.embedding = emb
+                    total_segments_embedded += len(segs_missing)
 
             db.commit()
 
             chunked += 1
             total_chunks += len(chunks)
 
+            progress["episodes_done"] = i
+            progress["chunks_created"] = total_chunks
+            progress["segments_embedded"] = total_segments_embedded
+
             if i % 10 == 0 or i == total:
                 logger.info(
-                    '"action": "backfill_chunks_progress", "done": %d, "total": %d',
-                    i, total,
+                    '"action": "backfill_progress", "done": %d, "total": %d, '
+                    '"chunks": %d, "segments_embedded": %d',
+                    i, total, total_chunks, total_segments_embedded,
                 )
 
         summary = {
@@ -111,10 +143,12 @@ def backfill_chunks(embed: bool = True) -> dict:
             "episodes_chunked": chunked,
             "episodes_skipped": skipped,
             "chunks_created": total_chunks,
+            "segments_embedded": total_segments_embedded,
         }
-        logger.info('"action": "backfill_chunks_complete", "summary": %s', summary)
+        logger.info('"action": "backfill_complete", "summary": %s', summary)
         return summary
     finally:
+        progress = {}
         db.close()
 
 

@@ -39,3 +39,17 @@ async def backfill_chunks_endpoint(embed: bool = True) -> dict:
 
     Thread(target=_run, daemon=True).start()
     return {"status": "started", "embed": embed}
+
+
+@router.get("/backfill/status")
+async def backfill_status_endpoint() -> dict:
+    """Return current backfill progress."""
+    from app.tasks.backfill_chunks import progress
+
+    with _lock:
+        running = _running
+
+    if not running:
+        return {"status": "idle"}
+
+    return {"status": "running", **progress}

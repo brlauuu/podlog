@@ -12,7 +12,7 @@ def _make_episode(id_="ep1", status="done"):
     return ep
 
 
-def _make_segment(id_=1, episode_id="ep1", speaker="SPEAKER_00", start=0.0, end=5.0, text="hi"):
+def _make_segment(id_=1, episode_id="ep1", speaker="SPEAKER_00", start=0.0, end=5.0, text="hi", embedding=None):
     seg = MagicMock()
     seg.id = id_
     seg.episode_id = episode_id
@@ -20,6 +20,7 @@ def _make_segment(id_=1, episode_id="ep1", speaker="SPEAKER_00", start=0.0, end=
     seg.start_time = start
     seg.end_time = end
     seg.text = text
+    seg.embedding = embedding
     return seg
 
 
@@ -58,6 +59,7 @@ class TestBackfillChunks:
 
         assert result["episodes_chunked"] == 1
         assert result["chunks_created"] == 1
+        assert result["segments_embedded"] == 1  # seg had no embedding
         db.commit.assert_called()
 
     @patch("app.tasks.backfill_chunks.SessionLocal")
