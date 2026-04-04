@@ -196,7 +196,7 @@ export default function WizardAddFeed({ onNext, onBack, onSkip }: Props) {
               onClick={() => setMode("test")}
               className={`flex-1 flex items-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
                 mode === "test"
-                  ? "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200 ring-1 ring-violet-300 dark:ring-violet-700"
+                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 ring-1 ring-blue-300 dark:ring-blue-700"
                   : "bg-muted text-muted-foreground hover:bg-accent"
               }`}
             >
