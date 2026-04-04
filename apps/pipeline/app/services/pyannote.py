@@ -49,19 +49,49 @@ def unload_pipeline() -> None:
     logger.info('"action": "pyannote_unloaded"')
 
 
+def _ensure_wav(audio_path: str) -> tuple[str, bool]:
+    """Convert non-WAV audio to WAV for torchaudio compatibility.
+
+    Returns (path, is_temp) — caller must clean up temp files.
+    """
+    import subprocess
+    from pathlib import Path
+
+    p = Path(audio_path)
+    if p.suffix.lower() == ".wav":
+        return audio_path, False
+
+    wav_path = p.with_suffix(".diarize.wav")
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(p), "-ar", "16000", "-ac", "1", str(wav_path)],
+        capture_output=True,
+        check=True,
+    )
+    logger.info('"action": "diarize_convert_wav", "src": "%s", "dst": "%s"', p.name, wav_path.name)
+    return str(wav_path), True
+
+
 def diarize(audio_path: str) -> list[dict]:
     """
     Run speaker diarization. Returns list of:
       {"speaker": "SPEAKER_00", "start": float, "end": float}
     """
     import torchaudio
+    from pathlib import Path
 
     load_pipeline()
 
-    # pyannote 4.x requires torchcodec for file-based audio decoding, but
-    # torchcodec has PyTorch ABI compat issues in this environment. Instead,
-    # load audio via torchaudio and pass the waveform dict directly.
-    waveform, sample_rate = torchaudio.load(audio_path)
+    # torchaudio may not have a backend for non-WAV formats (MP3, M4A, etc.)
+    # so convert to WAV first using ffmpeg.
+    wav_path, is_temp = _ensure_wav(audio_path)
+    try:
+        waveform, sample_rate = torchaudio.load(wav_path)
+    finally:
+        if is_temp:
+            try:
+                Path(wav_path).unlink()
+            except OSError:
+                pass
     audio_input = {"waveform": waveform, "sample_rate": sample_rate}
 
     result = _pipeline(audio_input)
