@@ -37,6 +37,8 @@ function ContextLine({ seg, dimmed }: { seg: ContextSegment; dimmed: boolean }) 
   );
 }
 
+const SNIPPET_COLLAPSE_THRESHOLD = 500;
+
 function MentionCard({
   mention,
   index,
@@ -57,7 +59,9 @@ function MentionCard({
   query: string;
 }) {
   const { playEpisode } = useAudioPlayer();
+  const [expanded, setExpanded] = useState(false);
   const queryParam = query ? `?q=${encodeURIComponent(query)}` : "";
+  const isLong = mention.snippet.length > SNIPPET_COLLAPSE_THRESHOLD;
 
   function handlePlay() {
     if (!audioLocalPath) return;
@@ -109,9 +113,19 @@ function MentionCard({
               </span>
             )}
             <span
-              className="text-foreground [&_b]:font-semibold [&_b]:bg-yellow-200 [&_b]:dark:bg-yellow-800 [&_b]:px-0.5 [&_b]:rounded-sm"
+              className={`text-foreground [&_b]:font-semibold [&_b]:bg-yellow-200 [&_b]:dark:bg-yellow-800 [&_b]:px-0.5 [&_b]:rounded-sm ${
+                isLong && !expanded ? "line-clamp-4" : ""
+              }`}
               dangerouslySetInnerHTML={{ __html: mention.snippet }}
             />
+            {isLong && (
+              <button
+                onClick={() => setExpanded((e) => !e)}
+                className="text-xs text-primary hover:underline mt-1 block"
+              >
+                {expanded ? "Show less" : "Show more"}
+              </button>
+            )}
           </div>
         </div>
 

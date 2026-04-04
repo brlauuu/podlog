@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ExternalLink, FileText, FlaskConical, Play } from "lucide-react";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
@@ -8,6 +9,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { SearchResult as SearchResultType } from "@/lib/search";
 import { basename } from "@/lib/utils";
+
+const SNIPPET_COLLAPSE_THRESHOLD = 500;
 
 interface Props {
   result: SearchResultType;
@@ -23,6 +26,8 @@ interface Props {
  */
 export default function SearchResult({ result, query }: Props) {
   const { playEpisode } = useAudioPlayer();
+  const [expanded, setExpanded] = useState(false);
+  const isLong = result.snippet.length > SNIPPET_COLLAPSE_THRESHOLD;
 
   const hasLocalAudio = !!result.audioLocalPath;
   const queryParam = query ? `?q=${encodeURIComponent(query)}` : "";
@@ -113,11 +118,23 @@ export default function SearchResult({ result, query }: Props) {
           </div>
         </div>
 
-        {/* Snippet — rendered HTML from ts_headline (contains <b> tags) */}
-        <p
-          className="text-sm leading-relaxed [&_b]:font-semibold [&_b]:text-foreground text-muted-foreground"
-          dangerouslySetInnerHTML={{ __html: result.snippet }}
-        />
+        {/* Full speaker turn with highlighted matches */}
+        <div className="relative">
+          <p
+            className={`text-sm leading-relaxed [&_b]:font-semibold [&_b]:text-foreground text-muted-foreground ${
+              isLong && !expanded ? "line-clamp-4" : ""
+            }`}
+            dangerouslySetInnerHTML={{ __html: result.snippet }}
+          />
+          {isLong && (
+            <button
+              onClick={() => setExpanded((e) => !e)}
+              className="text-xs text-primary hover:underline mt-1"
+            >
+              {expanded ? "Show less" : "Show more"}
+            </button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
