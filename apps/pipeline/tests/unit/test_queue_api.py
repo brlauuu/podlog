@@ -55,6 +55,12 @@ class TestRetryJob:
         result = self._call_retry(ep)
         assert result["queued"] is True
 
+    def test_retry_done_episode_succeeds(self):
+        """Done episodes (e.g. with diarization failure) should be reprocessable."""
+        ep = _make_episode("done")
+        result = self._call_retry(ep)
+        assert result["queued"] is True
+
     def test_retry_active_episode_without_error_rejected(self):
         """Active jobs without an error should not be retryable."""
         ep = _make_episode("diarizing", error_class=None)
@@ -64,5 +70,11 @@ class TestRetryJob:
     def test_retry_non_retryable_error_rejected(self):
         """Jobs with DISK_FULL or OOM should not be retryable."""
         ep = _make_episode("failed", error_class="DISK_FULL")
+        result = self._call_retry(ep)
+        assert result.status_code == 422
+
+    def test_retry_done_non_retryable_rejected(self):
+        """Done episodes with non-retryable error class should still be rejected."""
+        ep = _make_episode("done", error_class="DISK_FULL")
         result = self._call_retry(ep)
         assert result.status_code == 422
