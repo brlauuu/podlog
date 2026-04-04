@@ -8,6 +8,7 @@ import HelpMenu from "@/components/HelpMenu";
 
 const NAV_LINKS = [
   { href: "/", label: "Search" },
+  { href: "/ask", label: "Ask" },
   { href: "/podcasts", label: "Podcasts" },
   { href: "/queue", label: "Queue" },
   { href: "/notifications", label: "Notifications" },

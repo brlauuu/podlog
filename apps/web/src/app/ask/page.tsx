@@ -1,0 +1,270 @@
+"use client";
+
+import { useState, useRef, useCallback, useEffect } from "react";
+import { MessageSquare, Send, Play, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAudioPlayer } from "@/components/AudioPlayerContext";
+
+interface Source {
+  chunk_id: number;
+  episode_id: string;
+  episode_title: string;
+  speaker_label: string | null;
+  start_time: number;
+  end_time: number;
+  timestamp: string;
+  text: string;
+  similarity: number;
+}
+
+type StreamStatus = "idle" | "connecting" | "streaming" | "done" | "error";
+
+const MODEL_OPTIONS = [
+  { value: "qwen2.5:1.5b", label: "Fast", hint: "6-8 tok/s, 8-15s" },
+  { value: "qwen2.5:3b", label: "Default", hint: "3-4 tok/s, 15-25s" },
+  { value: "phi3:mini", label: "Quality", hint: "2-3 tok/s, 20-40s" },
+];
+
+function getStoredModel(): string {
+  if (typeof window === "undefined") return "qwen2.5:3b";
+  return localStorage.getItem("podlog-ask-model") || "qwen2.5:3b";
+}
+
+function formatTimestamp(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+export default function AskPage() {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [sources, setSources] = useState<Source[]>([]);
+  const [status, setStatus] = useState<StreamStatus>("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [model, setModel] = useState(getStoredModel);
+  const answerRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const { playEpisode } = useAudioPlayer();
+
+  useEffect(() => {
+    localStorage.setItem("podlog-ask-model", model);
+  }, [model]);
+
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const q = question.trim();
+      if (!q) return;
+
+      // Reset state
+      setAnswer("");
+      setSources([]);
+      setErrorMsg("");
+      setStatus("connecting");
+
+      // Abort previous request if any
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        const resp = await fetch("/api/pipeline/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q, model }),
+          signal: controller.signal,
+        });
+
+        if (!resp.ok || !resp.body) {
+          setStatus("error");
+          setErrorMsg("Failed to connect to the pipeline API.");
+          return;
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          let currentEvent = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              currentEvent = line.slice(7);
+            } else if (line.startsWith("data: ") && currentEvent) {
+              const raw = line.slice(6);
+              try {
+                const data = JSON.parse(raw);
+                if (currentEvent === "sources") {
+                  setSources(data);
+                  setStatus("streaming");
+                } else if (currentEvent === "token") {
+                  setStatus("streaming");
+                  setAnswer((prev) => prev + data.content);
+                } else if (currentEvent === "error") {
+                  setErrorMsg(data.message || "Unknown error");
+                  setStatus("error");
+                } else if (currentEvent === "done") {
+                  setStatus("done");
+                }
+              } catch {
+                // skip malformed JSON
+              }
+              currentEvent = "";
+            }
+          }
+        }
+
+        // Ensure we mark done if stream ended without done event
+        setStatus((s) => (s === "streaming" ? "done" : s));
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setStatus("error");
+        setErrorMsg("Connection failed. Is the pipeline running?");
+      }
+    },
+    [question, model]
+  );
+
+  function handlePlaySource(source: Source) {
+    // We need the audio filename — derive from episode_id
+    // The audio player needs episodeId + filename; sources don't carry filename,
+    // so we link to the episode page with timestamp instead
+    window.open(`/episodes/${source.episode_id}?t=${Math.floor(source.start_time)}`, "_blank");
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <MessageSquare size={24} />
+          Ask
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Ask questions about your podcast transcripts. Answers are generated from transcript excerpts and may take 15-30 seconds.
+        </p>
+      </div>
+
+      {/* Model selector */}
+      <div className="flex items-center gap-2">
+        <label htmlFor="model-select" className="text-sm text-muted-foreground">
+          Model:
+        </label>
+        <select
+          id="model-select"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+        >
+          {MODEL_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label} ({opt.hint})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Question input */}
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <input
+          type="text"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="What did they discuss about..."
+          className="flex-1 px-4 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base"
+          disabled={status === "connecting" || status === "streaming"}
+          autoFocus
+        />
+        <Button
+          type="submit"
+          disabled={!question.trim() || status === "connecting" || status === "streaming"}
+          className="px-4"
+        >
+          <Send size={18} />
+        </Button>
+      </form>
+
+      {/* Loading indicator */}
+      {status === "connecting" && (
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Loader2 size={16} className="animate-spin" />
+          Searching transcripts and generating answer...
+        </div>
+      )}
+
+      {/* Error */}
+      {status === "error" && errorMsg && (
+        <div className="border border-destructive/50 bg-destructive/10 rounded-lg p-4 text-sm text-destructive">
+          {errorMsg}
+        </div>
+      )}
+
+      {/* Answer */}
+      {answer && (
+        <div className="border border-border rounded-lg p-4 space-y-2">
+          <h2 className="text-sm font-medium text-muted-foreground">Answer</h2>
+          <div
+            ref={answerRef}
+            className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap"
+          >
+            {answer}
+            {status === "streaming" && (
+              <span className="inline-block w-2 h-4 bg-foreground/60 animate-pulse ml-0.5" />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Sources */}
+      {sources.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Sources ({sources.length} transcript excerpts)
+          </h2>
+          <div className="grid gap-2">
+            {sources.map((source) => (
+              <div
+                key={source.chunk_id}
+                className="border border-border rounded-lg p-3 text-sm space-y-1"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium truncate">
+                      {source.episode_title}
+                    </span>
+                    <span className="text-muted-foreground shrink-0">
+                      {source.timestamp}
+                    </span>
+                    {source.speaker_label && (
+                      <span className="text-xs text-muted-foreground bg-accent px-1.5 py-0.5 rounded shrink-0">
+                        {source.speaker_label}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handlePlaySource(source)}
+                    className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    title="Play from this point"
+                  >
+                    <Play size={14} />
+                  </button>
+                </div>
+                <p className="text-muted-foreground line-clamp-2">{source.text}</p>
+                <div className="text-xs text-muted-foreground/60">
+                  {Math.round(source.similarity * 100)}% match
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
