@@ -107,8 +107,8 @@ def resolve_telegram_credentials(env: dict[str, str]) -> tuple[str | None, str |
     return bot_token, chat_id
 
 
-def _read_telegram_from_db(env: dict[str, str]) -> tuple[str | None, str | None]:
-    """Read telegram credentials from the system_state table."""
+def _read_notification_settings_from_db(env: dict[str, str]) -> dict:
+    """Read notification_settings JSON blob from system_state table."""
     password = env.get("POSTGRES_PASSWORD", "")
     db_host = env.get("HEALTH_CHECK_DB_HOST", DEFAULT_DB_HOST)
     db_port = env.get("HEALTH_CHECK_DB_PORT", DEFAULT_DB_PORT)
@@ -132,12 +132,17 @@ def _read_telegram_from_db(env: dict[str, str]) -> tuple[str | None, str | None]
             env={**os.environ, "PGPASSWORD": password},
         )
         if result.returncode != 0 or not result.stdout.strip():
-            return None, None
-        settings = json.loads(result.stdout.strip())
-        return settings.get("telegram_bot_token"), settings.get("telegram_chat_id")
+            return {}
+        return json.loads(result.stdout.strip())
     except Exception as exc:
-        logger.debug("Could not read Telegram creds from DB: %s", exc)
-        return None, None
+        logger.debug("Could not read notification settings from DB: %s", exc)
+        return {}
+
+
+def _read_telegram_from_db(env: dict[str, str]) -> tuple[str | None, str | None]:
+    """Read telegram credentials from the system_state table."""
+    settings = _read_notification_settings_from_db(env)
+    return settings.get("telegram_bot_token"), settings.get("telegram_chat_id")
 
 
 # ---------------------------------------------------------------------------
@@ -231,10 +236,12 @@ def check_zombie_jobs(env: dict[str, str]) -> tuple[str, str]:
     threshold = int(env.get("HEALTH_CHECK_ZOMBIE_THRESHOLD_MINUTES", DEFAULT_ZOMBIE_THRESHOLD_MINUTES))
 
     query = (
-        "SELECT jq.id, jq.task, jq.picked_at, e.title AS episode_title "
+        "SELECT jq.id, jq.task, jq.picked_at, e.title AS episode_title, "
+        "EXTRACT(EPOCH FROM (NOW() - jq.picked_at)) / 60 AS stuck_minutes "
         "FROM job_queue jq "
         "LEFT JOIN episodes e ON e.id = jq.episode_id "
-        f"WHERE jq.status = 'picked' AND jq.picked_at < NOW() - INTERVAL '{threshold} minutes'"
+        f"WHERE jq.status = 'picked' AND jq.picked_at < NOW() - INTERVAL '{threshold} minutes' "
+        "ORDER BY jq.picked_at ASC"
     )
 
     try:
@@ -266,10 +273,17 @@ def check_zombie_jobs(env: dict[str, str]) -> tuple[str, str]:
             job_id = parts[0] if len(parts) > 0 else "?"
             task = parts[1] if len(parts) > 1 else "?"
             picked_at = parts[2] if len(parts) > 2 else "?"
-            episode = parts[3] if len(parts) > 3 else "?"
-            zombies.append(f"job {job_id}: {task} (picked {picked_at}, episode: {episode})")
+            episode = parts[3] if len(parts) > 3 else "unknown"
+            stuck_mins = float(parts[4]) if len(parts) > 4 else 0
+            zombies.append({
+                "job_id": job_id,
+                "task": task,
+                "picked_at": picked_at,
+                "episode": episode.strip() or "untitled",
+                "stuck_minutes": stuck_mins,
+            })
 
-        return "zombies", f"{len(zombies)} zombie job(s): " + "; ".join(zombies)
+        return "zombies", zombies
     except FileNotFoundError:
         return "unknown", "psql not found — install postgresql-client"
     except Exception as exc:
@@ -320,10 +334,47 @@ def send_telegram(bot_token: str, chat_id: str, message: str) -> bool:
         return False
 
 
-def format_alert(transitions: list[tuple[str, str, str, str]], timestamp: str) -> str:
+def _fmt_duration(minutes: float) -> str:
+    """Format a duration in minutes to a human-readable string."""
+    if minutes < 60:
+        return f"{int(minutes)}m"
+    hours = int(minutes // 60)
+    mins = int(minutes % 60)
+    return f"{hours}h {mins}m" if mins else f"{hours}h"
+
+
+def _format_zombie_section(zombies: list[dict]) -> list[str]:
+    """Format zombie job details into clear, scannable lines."""
+    lines = []
+    lines.append(f"ZOMBIE JOBS: {len(zombies)} stuck")
+    lines.append("")
+    lines.append(
+        "A zombie job has been running far longer than expected. "
+        "It is likely stuck or the worker process crashed."
+    )
+    lines.append("")
+
+    for z in zombies:
+        stuck = _fmt_duration(z["stuck_minutes"])
+        lines.append(f"  Job #{z['job_id']}  {z['task'].upper()}")
+        lines.append(f"    Episode: {z['episode']}")
+        lines.append(f"    Stuck for: {stuck} (picked at {z['picked_at']})")
+        lines.append("")
+
+    lines.append("Next steps:")
+    lines.append("  1. Check worker logs: docker compose logs worker --tail 100")
+    lines.append("  2. Check the queue page in the Podlog UI")
+    lines.append("  3. If the worker is unresponsive, restart it:")
+    lines.append("     docker compose restart worker")
+
+    return lines
+
+
+def format_alert(transitions: list[tuple[str, str, str, object]], timestamp: str) -> str:
     """Format state transitions into a Telegram message.
 
     Each transition is (service, old_status, new_status, detail).
+    detail is a string for most services, or a list of dicts for zombie_jobs.
     """
     lines = [f"PODLOG HEALTH ALERT\n{timestamp}\n"]
 
@@ -332,18 +383,23 @@ def format_alert(transitions: list[tuple[str, str, str, str]], timestamp: str) -
 
     if downs:
         for service, old_st, new_st, detail in downs:
-            if new_st == "zombies":
+            if new_st == "zombies" and isinstance(detail, list):
+                lines.extend(_format_zombie_section(detail))
+            elif new_st == "zombies":
+                # Fallback for string detail (shouldn't happen but be safe)
                 lines.append(f"  {service}: {detail}")
             else:
                 icon = "DEGRADED" if new_st == "degraded" else "DOWN"
                 lines.append(f"  {service}: {icon} -- {detail}")
 
     if ups:
+        if downs:
+            lines.append("")
         for service, old_st, new_st, detail in ups:
             if service == "zombie_jobs":
-                lines.append(f"  {service}: cleared (was: {old_st})")
+                lines.append(f"  zombie_jobs: CLEARED (all stuck jobs resolved)")
             else:
-                lines.append(f"  {service}: recovered")
+                lines.append(f"  {service}: RECOVERED")
 
     return "\n".join(lines)
 
@@ -376,8 +432,30 @@ def run_checks(env: dict[str, str]) -> dict[str, tuple[str, str]]:
     return results
 
 
+def is_health_check_enabled(env: dict[str, str]) -> bool:
+    """Check if health check notifications are enabled.
+
+    Priority: .env value > DB setting > True (default on).
+    """
+    env_val = env.get("HEALTH_CHECK_NOTIFICATIONS_ENABLED")
+    if env_val is not None:
+        return env_val.lower() not in ("false", "0", "no")
+
+    db_settings = _read_notification_settings_from_db(env)
+    db_val = db_settings.get("health_check_notifications_enabled")
+    if db_val is not None:
+        return bool(db_val)
+
+    return True  # enabled by default
+
+
 def main() -> None:
     env = parse_env_file(ENV_FILE)
+
+    if not is_health_check_enabled(env):
+        logger.info("Health check notifications disabled via settings — exiting")
+        return
+
     bot_token, chat_id = resolve_telegram_credentials(env)
 
     if not bot_token or not chat_id:

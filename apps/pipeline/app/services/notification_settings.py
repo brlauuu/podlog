@@ -28,6 +28,7 @@ _FIELDS = [
     "smtp_password",
     "smtp_use_tls",
     "notification_frequency",
+    "health_check_notifications_enabled",
 ]
 
 _SENSITIVE_FIELDS = {"telegram_bot_token", "smtp_password"}
