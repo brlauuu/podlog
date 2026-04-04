@@ -396,11 +396,15 @@ export default function AskPage() {
         </Button>
       </form>
 
-      {/* Loading indicator */}
-      {status === "connecting" && (
+      {/* Loading / generating indicator */}
+      {(status === "connecting" || status === "streaming") && (
         <div className="flex items-center gap-2 text-muted-foreground text-sm">
           <Loader2 size={16} className="animate-spin" />
-          Searching transcripts and generating answer...
+          {status === "connecting"
+            ? "Searching transcripts..."
+            : !answer
+              ? "Generating answer..."
+              : "Writing..."}
         </div>
       )}
 
@@ -420,9 +424,6 @@ export default function AskPage() {
             className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap"
           >
             {renderedAnswer}
-            {status === "streaming" && (
-              <span className="inline-block w-2 h-4 bg-foreground/60 animate-pulse ml-0.5" />
-            )}
           </div>
         </div>
       )}

@@ -74,13 +74,15 @@ def retrieve_chunks(
             c.id AS chunk_id,
             c.episode_id,
             e.title AS episode_title,
-            c.speaker_label,
+            COALESCE(sn.display_name, c.speaker_label) AS speaker_label,
             c.start_time,
             c.end_time,
             c.text,
             1 - (c.embedding <=> CAST(:embedding AS vector)) AS similarity
         FROM chunks c
         JOIN episodes e ON c.episode_id = e.id
+        LEFT JOIN speaker_names sn
+            ON sn.episode_id = c.episode_id AND sn.speaker_label = c.speaker_label
         WHERE c.embedding IS NOT NULL
             {feed_filter}
         ORDER BY c.embedding <=> CAST(:embedding AS vector)
