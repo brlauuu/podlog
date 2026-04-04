@@ -178,17 +178,18 @@ function EpisodeRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const isFailed = job.status === "failed";
+  const isStuck = job.status === "stuck";
   const canRetry =
-    isFailed &&
+    (isFailed || isStuck) &&
     !NON_RETRYABLE.has(job.error_class ?? "");
 
   return (
     <>
       <tr
         className={`border-b border-border hover:bg-muted/50 ${
-          isFailed ? "bg-destructive/5 cursor-pointer" : ""
+          isFailed ? "bg-destructive/5 cursor-pointer" : isStuck ? "bg-purple-500/5 cursor-pointer" : ""
         }`}
-        onClick={isFailed ? () => setExpanded(!expanded) : undefined}
+        onClick={isFailed || isStuck ? () => setExpanded(!expanded) : undefined}
       >
         <td className="px-3 py-2 text-sm">
           <Link

@@ -2,6 +2,7 @@
 from unittest.mock import MagicMock, patch
 
 from app.api.queue import NON_RETRYABLE, retry_job
+from app.models import Episode, Job
 
 
 def _make_episode(status, **kwargs):
@@ -32,12 +33,23 @@ class TestNonRetryable:
 class TestRetryJob:
     """Tests for the retry endpoint guard logic (issue #46)."""
 
-    def _call_retry(self, episode):
+    def _call_retry(self, episode, has_active_job=False):
         """Call retry_job with a mocked DB that returns the given episode."""
         from fastapi import HTTPException
 
         db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = episode
+
+        # db.query(Episode).filter(...).first() returns the episode
+        # db.query(Job).filter(...).first() returns None (no active job) or a mock
+        def query_side_effect(model):
+            chain = MagicMock()
+            if model is Episode:
+                chain.filter.return_value.first.return_value = episode
+            elif model is Job:
+                chain.filter.return_value.first.return_value = MagicMock() if has_active_job else None
+            return chain
+
+        db.query.side_effect = query_side_effect
         try:
             with patch("app.api.queue.ingest_episode"):
                 return retry_job("ep-1", db=db)
@@ -62,9 +74,9 @@ class TestRetryJob:
         assert result["queued"] is True
 
     def test_retry_active_episode_without_error_rejected(self):
-        """Active jobs without an error should not be retryable."""
+        """Active jobs with a queue entry should not be retryable."""
         ep = _make_episode("diarizing", error_class=None)
-        result = self._call_retry(ep)
+        result = self._call_retry(ep, has_active_job=True)
         assert result.status_code == 409
 
     def test_retry_non_retryable_error_rejected(self):
@@ -78,3 +90,15 @@ class TestRetryJob:
         ep = _make_episode("done", error_class="DISK_FULL")
         result = self._call_retry(ep)
         assert result.status_code == 422
+
+    def test_retry_stuck_episode_no_queue_entry_succeeds(self):
+        """Stuck episodes (intermediate status, no queue entry) should be retryable."""
+        ep = _make_episode("archiving")
+        result = self._call_retry(ep, has_active_job=False)
+        assert result["queued"] is True
+
+    def test_retry_active_episode_with_queue_entry_rejected(self):
+        """Episodes with an active queue entry should not be retryable."""
+        ep = _make_episode("transcribing")
+        result = self._call_retry(ep, has_active_job=True)
+        assert result.status_code == 409
