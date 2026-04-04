@@ -182,12 +182,12 @@ export async function searchSegments(
       e.episode_url,
       e.has_diarization,
       e.diarization_error,
-      f.title AS feed_title,
-      f.mode AS feed_mode,
+      COALESCE(f.title, 'Manual episode') AS feed_title,
+      COALESCE(f.mode, 'full') AS feed_mode,
       f.id AS feed_id
     FROM speaker_turns t
     JOIN episodes e ON t.episode_id = e.id
-    JOIN feeds f ON e.feed_id = f.id
+    LEFT JOIN feeds f ON e.feed_id = f.id
     LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = t.speaker_label,
       websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
@@ -216,12 +216,12 @@ export async function searchSegments(
           e.episode_url,
           e.has_diarization,
           e.diarization_error,
-          f.title AS feed_title,
-          f.mode AS feed_mode,
+          COALESCE(f.title, 'Manual episode') AS feed_title,
+          COALESCE(f.mode, 'full') AS feed_mode,
           f.id AS feed_id
         FROM segments s
         JOIN episodes e ON s.episode_id = e.id
-        JOIN feeds f ON e.feed_id = f.id
+        LEFT JOIN feeds f ON e.feed_id = f.id
         LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = s.speaker_label
         WHERE s.embedding IS NOT NULL
           AND ($2::uuid IS NULL OR f.id = $2)
@@ -239,7 +239,7 @@ export async function searchSegments(
         SELECT COUNT(*)
         FROM speaker_turns t
         JOIN episodes e ON t.episode_id = e.id
-        JOIN feeds f ON e.feed_id = f.id,
+        LEFT JOIN feeds f ON e.feed_id = f.id,
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND ($2::uuid IS NULL OR f.id = $2)`,
@@ -348,8 +348,8 @@ export async function searchGrouped(
     `WITH ${SPEAKER_TURNS_CTE}
     SELECT
       f.id AS feed_id,
-      f.title AS feed_title,
-      f.mode AS feed_mode,
+      COALESCE(f.title, 'Manual episode') AS feed_title,
+      COALESCE(f.mode, 'full') AS feed_mode,
       e.id AS episode_id,
       e.title AS episode_title,
       e.audio_url,
@@ -359,7 +359,7 @@ export async function searchGrouped(
       MAX(ts_rank(to_tsvector('english', t.full_text), query)) AS best_rank
     FROM speaker_turns t
     JOIN episodes e ON t.episode_id = e.id
-    JOIN feeds f ON e.feed_id = f.id,
+    LEFT JOIN feeds f ON e.feed_id = f.id,
       websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
       AND ($2::uuid IS NULL OR f.id = $2)
@@ -379,7 +379,7 @@ export async function searchGrouped(
           COUNT(*)::int AS total_mentions
         FROM speaker_turns t
         JOIN episodes e ON t.episode_id = e.id
-        JOIN feeds f ON e.feed_id = f.id,
+        LEFT JOIN feeds f ON e.feed_id = f.id,
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND ($2::uuid IS NULL OR f.id = $2)`,
@@ -392,7 +392,7 @@ export async function searchGrouped(
   const feedMap = new Map<string, FeedGroup>();
 
   for (const row of rowsResult.rows) {
-    const feedKey = row.feed_id;
+    const feedKey = row.feed_id ?? "__manual__";
     if (!feedMap.has(feedKey)) {
       feedMap.set(feedKey, {
         feedId: row.feed_id,
