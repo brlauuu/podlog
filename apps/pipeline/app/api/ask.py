@@ -72,7 +72,8 @@ async def _stream_ask(question: str, model: str, feed_ids: list[str] | None):
             question[:100],
             str(exc),
         )
-        yield _sse_event("error", {"message": f"Error generating answer: {type(exc).__name__}"})
+        detail = str(exc).split("\n")[0][:200] if str(exc) else type(exc).__name__
+        yield _sse_event("error", {"message": f"Error generating answer: {detail}"})
         yield _sse_event("done", {})
     finally:
         db.close()

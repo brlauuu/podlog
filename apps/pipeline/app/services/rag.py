@@ -78,12 +78,12 @@ def retrieve_chunks(
             c.start_time,
             c.end_time,
             c.text,
-            1 - (c.embedding <=> :embedding::vector) AS similarity
+            1 - (c.embedding <=> CAST(:embedding AS vector)) AS similarity
         FROM chunks c
         JOIN episodes e ON c.episode_id = e.id
         WHERE c.embedding IS NOT NULL
             {feed_filter}
-        ORDER BY c.embedding <=> :embedding::vector
+        ORDER BY c.embedding <=> CAST(:embedding AS vector)
         LIMIT :top_k
     """)
 
