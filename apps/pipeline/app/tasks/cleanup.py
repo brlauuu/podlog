@@ -22,6 +22,7 @@ def cleanup_zombie_jobs() -> dict:
     from app.config import settings
     from app.database import SessionLocal
     from app.models import Episode, Job
+    from app.tasks.helpers import mark_failed
 
     db = SessionLocal()
     try:
@@ -70,11 +71,12 @@ def cleanup_zombie_jobs() -> dict:
                     "Re-enqueue to retry."
                 )
 
-                # Mark the episode as failed
-                episode.status = "failed"
-                episode.error_class = "SYSTEM_ERROR"
-                episode.error_message = job.error
-                episode.updated_at = now
+                # Mark the episode as failed (emits notification)
+                mark_failed(
+                    db, str(episode.id),
+                    error_class="SYSTEM_ERROR",
+                    error_message=job.error,
+                )
 
                 failed_episode_ids.append(episode.id)
                 failed_job_ids.append(job.id)

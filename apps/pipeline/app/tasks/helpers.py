@@ -33,9 +33,12 @@ def mark_failed(db, episode_id: str, error_class: str, error_message: str) -> No
         episode_id, error_class, error_message,
     )
 
-    # Emit failure notification only on terminal failure (retries exhausted)
+    # Emit failure notification on terminal failure:
+    # - retries exhausted, OR
+    # - non-retryable error class (DISK_FULL, OOM, SYSTEM_ERROR from zombies)
+    _NON_RETRYABLE = {"DISK_FULL", "OOM", "SYSTEM_ERROR"}
     episode = db.query(Episode).filter(Episode.id == episode_id).first()
-    if episode and episode.retry_count >= episode.retry_max:
+    if episode and (error_class in _NON_RETRYABLE or episode.retry_count >= episode.retry_max):
         remaining, estimated = estimate_queue_status(db)
         avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
         bus.emit(EpisodeFailedEvent(

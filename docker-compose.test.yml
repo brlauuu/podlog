@@ -36,15 +36,36 @@ services:
       mock_rss:
         condition: service_started
 
-  # web_test: disabled until a pipeline_test service is added to the test stack.
-  # The Playwright tests require a running pipeline API which is not yet available
-  # in the test composition. See issue #104 finding #2.
-  # web_test:
-  #   build: ./apps/web
-  #   command: npx playwright test
-  #   environment:
-  #     DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
-  #     PIPELINE_API_URL: http://pipeline_test:8000
-  #   depends_on:
-  #     db_test:
-  #       condition: service_healthy
+  pipeline_test:
+    build:
+      context: ./apps/pipeline
+      dockerfile: Dockerfile.worker
+      args:
+        INSTALL_DEV: "true"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
+      HF_TOKEN: ${HF_TOKEN:-}
+      OLLAMA_BASE_URL: http://localhost:11434
+    depends_on:
+      db_test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web_test:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.test
+    environment:
+      DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
+      PIPELINE_API_URL: http://pipeline_test:8000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    depends_on:
+      db_test:
+        condition: service_healthy
+      pipeline_test:
+        condition: service_healthy

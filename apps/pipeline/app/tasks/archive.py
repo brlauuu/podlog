@@ -15,7 +15,7 @@ from app.database import SessionLocal
 from app.models import Episode, Segment, SpeakerName
 from app.services.events import bus
 from app.services.notifications import EpisodeDoneEvent, compute_avg_processing_stats, estimate_queue_status
-from app.tasks.helpers import update_episode
+from app.tasks.helpers import mark_failed, update_episode
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +38,10 @@ def archive_episode(episode_id: str) -> str:
                 archived_path = _compress_audio(raw_path, episode_id)
             except OSError as exc:
                 if "No space left on device" in str(exc) or getattr(exc, "errno", None) == 28:
-                    update_episode(
+                    mark_failed(
                         db, episode_id,
-                        status="failed",
                         error_class="DISK_FULL",
                         error_message="Disk full during archival. Free space and retry.",
-                    )
-                    logger.error(
-                        '"action": "archive_disk_full", "episode_id": "%s"', episode_id
                     )
                     return episode_id
                 raise
@@ -65,13 +61,11 @@ def archive_episode(episode_id: str) -> str:
         name_map = {sn.speaker_label: sn for sn in speaker_names}
 
         if not segments:
-            update_episode(
+            mark_failed(
                 db, episode_id,
-                status="failed",
                 error_class="SYSTEM_ERROR",
                 error_message="No transcript segments found at archival -- cannot mark done.",
             )
-            logger.error('"action": "archive_no_segments", "episode_id": "%s"', episode_id)
             return episode_id
 
         transcript_path = _write_transcript(episode, segments, name_map)

@@ -81,9 +81,10 @@ class TestArchiveEpisode:
         mock_update.assert_any_call(db, "ep1", status="archiving")
         mock_bus.emit.assert_called_once()
 
+    @patch("app.tasks.archive.mark_failed")
     @patch("app.tasks.archive.update_episode")
     @patch("app.tasks.archive.SessionLocal")
-    def test_no_segments_fails(self, mock_session_cls, mock_update):
+    def test_no_segments_fails(self, mock_session_cls, mock_update, mock_mark_failed):
         ep = _make_episode()
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = ep
@@ -102,13 +103,15 @@ class TestArchiveEpisode:
             result = archive_episode("ep1")
 
         assert result == "ep1"
-        # Should be marked failed due to no segments
-        calls = [str(c) for c in mock_update.call_args_list]
-        assert any("failed" in c for c in calls)
+        mock_mark_failed.assert_called_once_with(
+            db, "ep1", error_class="SYSTEM_ERROR",
+            error_message="No transcript segments found at archival -- cannot mark done.",
+        )
 
+    @patch("app.tasks.archive.mark_failed")
     @patch("app.tasks.archive.update_episode")
     @patch("app.tasks.archive.SessionLocal")
-    def test_disk_full_during_compress(self, mock_session_cls, mock_update):
+    def test_disk_full_during_compress(self, mock_session_cls, mock_update, mock_mark_failed):
         ep = _make_episode()
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = ep
@@ -127,8 +130,10 @@ class TestArchiveEpisode:
             result = archive_episode("ep1")
 
         assert result == "ep1"
-        calls = [str(c) for c in mock_update.call_args_list]
-        assert any("DISK_FULL" in c for c in calls)
+        mock_mark_failed.assert_called_once_with(
+            db, "ep1", error_class="DISK_FULL",
+            error_message="Disk full during archival. Free space and retry.",
+        )
 
     @patch("app.tasks.archive.SessionLocal")
     def test_missing_episode_raises(self, mock_session_cls):
