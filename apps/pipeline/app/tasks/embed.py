@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 def embed_episode(episode_id: str) -> str:
     db = SessionLocal()
     try:
+        update_episode(db, episode_id, status="embedding")
+
         segments = (
             db.query(Segment)
             .filter(Segment.episode_id == episode_id)
