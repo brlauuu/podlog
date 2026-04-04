@@ -28,6 +28,7 @@ export interface GroupedSearchResult {
   totalFeeds: number;
   totalEpisodes: number;
   totalMentions: number;
+  coverage: EpisodeCoverage;
 }
 
 export interface FeedGroup {
@@ -96,11 +97,17 @@ export interface SearchResult {
   feedId: string;
 }
 
+export interface EpisodeCoverage {
+  processed: number;
+  total: number;
+}
+
 export interface SearchPage {
   results: SearchResult[];
   total: number;
   page: number;
   pageSize: number;
+  coverage: EpisodeCoverage;
 }
 
 // ── Speaker turn aggregation CTE ────────────────────────────
@@ -191,6 +198,7 @@ export async function searchSegments(
     LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = t.speaker_label,
       websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
+      AND e.status = 'done'
       AND ($2::uuid IS NULL OR f.id = $2)
     ORDER BY rank DESC
     LIMIT $3`,
@@ -224,6 +232,7 @@ export async function searchSegments(
         LEFT JOIN feeds f ON e.feed_id = f.id
         LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = s.speaker_label
         WHERE s.embedding IS NOT NULL
+          AND e.status = 'done'
           AND ($2::uuid IS NULL OR f.id = $2)
         ORDER BY s.embedding <=> $1::vector
         LIMIT $3`,
@@ -242,12 +251,23 @@ export async function searchSegments(
         LEFT JOIN feeds f ON e.feed_id = f.id,
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
+          AND e.status = 'done'
           AND ($2::uuid IS NULL OR f.id = $2)`,
         [query, feedId]
       );
 
-  const [ftsResult, vecResult, countResult] = await Promise.all([
-    ftsPromise, vecPromise, countPromise,
+  // 4. Episode coverage (processed vs total)
+  const coveragePromise = skipCount
+    ? Promise.resolve(null)
+    : pool.query(
+        `SELECT
+          COUNT(*) FILTER (WHERE status = 'done')::int AS processed,
+          COUNT(*)::int AS total
+        FROM episodes`
+      );
+
+  const [ftsResult, vecResult, countResult, coverageResult] = await Promise.all([
+    ftsPromise, vecPromise, countPromise, coveragePromise,
   ]);
 
   // 4. Build result map keyed by episodeId:bucketedTime for deduplication
@@ -328,7 +348,13 @@ export async function searchSegments(
   const ftsTotal = countResult ? parseInt(countResult.rows[0].count, 10) : -1;
   const total = ftsTotal >= 0 ? Math.max(ftsTotal, sorted.length) : -1;
 
-  return { results, total, page, pageSize };
+  const cov = coverageResult?.rows[0];
+  const coverage: EpisodeCoverage = {
+    processed: cov?.processed ?? 0,
+    total: cov?.total ?? 0,
+  };
+
+  return { results, total, page, pageSize, coverage };
 }
 
 /**
@@ -362,6 +388,7 @@ export async function searchGrouped(
     LEFT JOIN feeds f ON e.feed_id = f.id,
       websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
+      AND e.status = 'done'
       AND ($2::uuid IS NULL OR f.id = $2)
     GROUP BY f.id, f.title, f.mode, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
     ORDER BY best_rank DESC, mention_count DESC
@@ -382,11 +409,21 @@ export async function searchGrouped(
         LEFT JOIN feeds f ON e.feed_id = f.id,
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
+          AND e.status = 'done'
           AND ($2::uuid IS NULL OR f.id = $2)`,
         [query, feedId]
       );
 
-  const [rowsResult, countResult] = await Promise.all([rowsPromise, countPromise]);
+  const coveragePromise = skipCount
+    ? Promise.resolve(null)
+    : pool.query(
+        `SELECT
+          COUNT(*) FILTER (WHERE status = 'done')::int AS processed,
+          COUNT(*)::int AS total
+        FROM episodes`
+      );
+
+  const [rowsResult, countResult, coverageResult] = await Promise.all([rowsPromise, countPromise, coveragePromise]);
 
   // Group episode rows by feed
   const feedMap = new Map<string, FeedGroup>();
@@ -417,12 +454,17 @@ export async function searchGrouped(
   }
 
   const counts = countResult?.rows[0];
+  const cov = coverageResult?.rows[0];
 
   return {
     feeds: Array.from(feedMap.values()),
     totalFeeds: counts?.total_feeds ?? -1,
     totalEpisodes: counts?.total_episodes ?? -1,
     totalMentions: counts?.total_mentions ?? -1,
+    coverage: {
+      processed: cov?.processed ?? 0,
+      total: cov?.total ?? 0,
+    },
   };
 }
 

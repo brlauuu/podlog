@@ -14,6 +14,7 @@ interface Feed {
   image_url: string | null;
   mode: string;
   episode_count: number;
+  processed_count: number;
   last_polled_at: string | null;
 }
 
@@ -25,7 +26,8 @@ async function getFeeds(): Promise<Feed[]> {
       f.image_url,
       f.mode,
       f.last_polled_at,
-      COUNT(e.id)::int AS episode_count
+      COUNT(e.id)::int AS episode_count,
+      COUNT(e.id) FILTER (WHERE e.status = 'done')::int AS processed_count
     FROM feeds f
     LEFT JOIN episodes e ON e.feed_id = f.id
     GROUP BY f.id
@@ -84,7 +86,11 @@ export default async function PodcastsPage() {
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">{feed.episode_count} episodes</p>
+                  <p className="text-xs text-muted-foreground">
+                    {feed.processed_count === feed.episode_count
+                      ? `${feed.episode_count} episodes`
+                      : `${feed.processed_count} / ${feed.episode_count} episodes processed`}
+                  </p>
                 </CardContent>
               </Card>
             </Link>

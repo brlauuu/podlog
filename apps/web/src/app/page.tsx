@@ -57,7 +57,7 @@ function HomePageContent() {
   const flatQuery = useQuery<SearchPage>({
     queryKey: ["search", submittedQuery, feedFilter, page],
     queryFn: async () => {
-      if (!submittedQuery) return { results: [], total: 0, page: 1, pageSize: PAGE_SIZE };
+      if (!submittedQuery) return { results: [], total: 0, page: 1, pageSize: PAGE_SIZE, coverage: { processed: 0, total: 0 } };
       const canSkipCount = page > 1 && cachedFlatTotal.current?.key === flatCacheKey;
       const params = new URLSearchParams({
         q: submittedQuery,
@@ -87,7 +87,7 @@ function HomePageContent() {
     queryKey: ["search-grouped", submittedQuery, feedFilter, page],
     queryFn: async () => {
       if (!submittedQuery)
-        return { feeds: [], totalFeeds: 0, totalEpisodes: 0, totalMentions: 0 };
+        return { feeds: [], totalFeeds: 0, totalEpisodes: 0, totalMentions: 0, coverage: { processed: 0, total: 0 } };
       const canSkipCount = page > 1 && cachedGroupedTotals.current?.key === groupedCacheKey;
       const params = new URLSearchParams({
         q: submittedQuery,
@@ -179,6 +179,13 @@ function HomePageContent() {
                 : viewMode === "flat" && flatQuery.data
                   ? `Page ${page} of ${totalPages} · ${flatQuery.data.total} results`
                   : ""}
+              {(() => {
+                const cov = viewMode === "grouped" ? groupedQuery.data?.coverage : flatQuery.data?.coverage;
+                if (cov && cov.total > 0 && cov.processed < cov.total) {
+                  return ` · Searching ${cov.processed} of ${cov.total} episodes`;
+                }
+                return null;
+              })()}
             </div>
             <div className="flex items-center gap-2">
               <DownloadReportButton

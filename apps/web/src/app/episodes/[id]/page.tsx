@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle, Info, Loader2, XCircle, CheckCircle2 } from "lucide-react";
 import pool from "@/lib/db";
 import type { Segment } from "@/lib/types";
 import { formatTimestamp } from "@/lib/timestamp";
@@ -11,8 +11,34 @@ import EpisodeDescription from "@/components/EpisodeDescription";
 import TranscriptSection from "@/components/TranscriptSection";
 import BackToSearchLink from "@/components/BackToSearchLink";
 import ReprocessButton from "@/components/ReprocessButton";
+import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === "done") return null;
+
+  const isFailed = status === "failed";
+  const label = isFailed ? "Failed" : status.charAt(0).toUpperCase() + status.slice(1);
+
+  return (
+    <Badge
+      variant="outline"
+      className={
+        isFailed
+          ? "text-red-700 border-red-300 dark:text-red-300 dark:border-red-700 gap-1"
+          : "text-blue-700 border-blue-300 dark:text-blue-300 dark:border-blue-700 gap-1"
+      }
+    >
+      {isFailed ? (
+        <XCircle size={12} />
+      ) : (
+        <Loader2 size={12} className="animate-spin" />
+      )}
+      {label}
+    </Badge>
+  );
+}
 
 interface Episode {
   id: string;
@@ -21,6 +47,8 @@ interface Episode {
   published_at: string | null;
   duration_secs: number | null;
   status: string;
+  error_class: string | null;
+  error_message: string | null;
   has_diarization: boolean;
   diarization_error: string | null;
   inference_error: string | null;
@@ -91,6 +119,7 @@ export default async function EpisodePage({ params }: { params: { id: string } }
         )}
         <div className="flex items-center gap-3 mt-2">
           <h1 className="text-xl font-semibold">{episode.title ?? "Untitled Episode"}</h1>
+          <StatusBadge status={episode.status} />
           <ReprocessButton episodeId={episode.id} status={episode.status} />
         </div>
         <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
@@ -153,6 +182,21 @@ export default async function EpisodePage({ params }: { params: { id: string } }
           episodeTitle={episode.title}
           feedTitle={episode.feed_title}
         />
+      )}
+
+      {/* Processing failure banner */}
+      {episode.status === "failed" && (
+        <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
+          <CardContent className="p-3 flex items-start gap-2">
+            <XCircle size={16} className="text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+            <div className="text-sm text-red-800 dark:text-red-200">
+              <p>Processing failed{episode.error_class ? ` (${episode.error_class})` : ""}</p>
+              {episode.error_message && (
+                <p className="mt-1 text-xs opacity-80">{episode.error_message}</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Diarization failure banner — PRD-02 §5.3 */}
