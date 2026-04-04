@@ -20,9 +20,10 @@ TASK_PRIORITY = {
     "archive": 0,
     "infer": 1,
     "embed": 2,
-    "diarize": 3,
-    "transcribe": 4,
-    "download": 5,
+    "chunk": 3,
+    "diarize": 4,
+    "transcribe": 5,
+    "download": 6,
 }
 _DEFAULT_PRIORITY = 99
 

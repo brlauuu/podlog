@@ -5,8 +5,9 @@ Diarization task -- PRD-01 S5.5
 - If word-level alignment data exists (from WhisperX), assigns speakers per word
   and rebuilds segments at speaker boundaries
 - Falls back to segment-level majority overlap if no word data available
-- Graceful failure: if diarization fails for any reason, episode is still marked
-  done (has_diarization=False, diarization_error populated)
+- Graceful failure: if diarization fails for any reason, the transcript is
+  preserved (has_diarization=False, diarization_error populated) and the
+  pipeline continues through chunk/embed/infer/archive
 """
 import json
 import logging
@@ -67,7 +68,7 @@ def diarize_episode(episode_id: str) -> str:
             from app.services.pyannote import unload_pipeline
             unload_pipeline()
 
-        job_queue.enqueue(db, episode_id, "embed")
+        job_queue.enqueue(db, episode_id, "chunk")
         return episode_id
     finally:
         # Clean up alignment file

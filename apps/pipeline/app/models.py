@@ -20,6 +20,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
@@ -108,6 +109,9 @@ class Episode(Base):
     segments: Mapped[list["Segment"]] = relationship(
         "Segment", back_populates="episode", cascade="all, delete-orphan"
     )
+    chunks: Mapped[list["Chunk"]] = relationship(
+        "Chunk", back_populates="episode", cascade="all, delete-orphan"
+    )
     speaker_names: Mapped[list["SpeakerName"]] = relationship(
         "SpeakerName", back_populates="episode", cascade="all, delete-orphan"
     )
@@ -129,6 +133,35 @@ class Segment(Base):
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
     episode: Mapped["Episode"] = relationship("Episode", back_populates="segments")
+
+
+class Chunk(Base):
+    """Merged speaker-turn segments for RAG retrieval.
+
+    Consecutive same-speaker segments are merged into chunks of ~400 tokens.
+    Speaker changes are chunk boundaries. Each chunk stores references to its
+    source segment IDs for traceability.
+    """
+
+    __tablename__ = "chunks"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    episode_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("episodes.id", ondelete="CASCADE"), nullable=False
+    )
+    speaker_label: Mapped[str | None] = mapped_column(Text)
+    start_time: Mapped[float] = mapped_column(Float, nullable=False)
+    end_time: Mapped[float] = mapped_column(Float, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    segment_ids: Mapped[list] = mapped_column(ARRAY(BigInteger), nullable=False)
+    embedding = mapped_column(Vector(384), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    episode: Mapped["Episode"] = relationship("Episode", back_populates="chunks")
 
 
 class SpeakerName(Base):
