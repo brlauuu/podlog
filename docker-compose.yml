@@ -79,7 +79,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 6g
+          memory: 10g
 
   web:
     build: ./apps/web

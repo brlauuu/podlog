@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { MessageSquare, Send, Play, Loader2 } from "lucide-react";
+import { MessageSquare, Send, Play, Loader2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -20,6 +20,11 @@ interface Source {
 interface Feed {
   id: string;
   title: string | null;
+}
+
+interface CoverageStats {
+  processed: number;
+  total: number;
 }
 
 type StreamStatus = "idle" | "connecting" | "streaming" | "done" | "error";
@@ -116,20 +121,44 @@ export default function AskPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [model, setModel] = useState(getStoredModel);
   const [feeds, setFeeds] = useState<Feed[]>([]);
-  const [feedFilter, setFeedFilter] = useState("");
+  const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(new Set());
+  const [feedDropdownOpen, setFeedDropdownOpen] = useState(false);
+  const [hasManualUploads, setHasManualUploads] = useState(false);
+  const [coverage, setCoverage] = useState<CoverageStats | null>(null);
   const answerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const feedDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem("podlog-ask-model", model);
   }, [model]);
 
-  // Fetch feeds for filter dropdown
+  // Close feed dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (feedDropdownRef.current && !feedDropdownRef.current.contains(e.target as Node)) {
+        setFeedDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  // Fetch feeds and coverage stats
   useEffect(() => {
     fetch("/api/feeds")
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setFeeds(data);
+      })
+      .catch(() => {});
+
+    // Check for manual uploads (episodes with no feed_id)
+    fetch("/api/ask/coverage")
+      .then((r) => r.json())
+      .then((data) => {
+        setCoverage({ processed: data.processed, total: data.total });
+        setHasManualUploads(data.has_manual_uploads ?? false);
       })
       .catch(() => {});
   }, []);
@@ -157,8 +186,8 @@ export default function AskPage() {
       abortRef.current = controller;
 
       try {
-        const body: Record<string, string> = { question: q, model };
-        if (feedFilter) body.feed_id = feedFilter;
+        const body: Record<string, unknown> = { question: q, model };
+        if (selectedFeedIds.size > 0) body.feed_ids = Array.from(selectedFeedIds);
 
         const resp = await fetch("/api/pipeline/ask", {
           method: "POST",
@@ -203,7 +232,7 @@ export default function AskPage() {
                   setErrorMsg(data.message || "Unknown error");
                   setStatus("error");
                 } else if (currentEvent === "done") {
-                  setStatus("done");
+                  setStatus((s) => (s === "error" ? "error" : "done"));
                 }
               } catch {
                 // skip malformed JSON
@@ -221,7 +250,7 @@ export default function AskPage() {
         setErrorMsg("Connection failed. Is the pipeline running?");
       }
     },
-    [question, model, feedFilter]
+    [question, model, selectedFeedIds]
   );
 
   function handlePlaySource(source: Source) {
@@ -244,7 +273,7 @@ export default function AskPage() {
         </p>
       </div>
 
-      {/* Controls row: model + feed filter */}
+      {/* Controls row: model + feed filter + coverage */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <label
@@ -261,34 +290,89 @@ export default function AskPage() {
           >
             {MODEL_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
-                {opt.label} ({opt.hint})
+                {opt.label} &middot; {opt.value} ({opt.hint})
               </option>
             ))}
           </select>
         </div>
 
-        {feeds.length > 0 && (
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="feed-filter"
-              className="text-sm text-muted-foreground"
+        {(feeds.length > 0 || hasManualUploads) && (
+          <div className="relative" ref={feedDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setFeedDropdownOpen((o) => !o)}
+              className="flex items-center gap-1.5 text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground hover:bg-accent/30 transition-colors"
             >
-              Podcast:
-            </label>
-            <select
-              id="feed-filter"
-              value={feedFilter}
-              onChange={(e) => setFeedFilter(e.target.value)}
-              className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
-            >
-              <option value="">All podcasts</option>
-              {feeds.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.title || "Untitled"}
-                </option>
-              ))}
-            </select>
+              <span className="text-muted-foreground">Source:</span>
+              {selectedFeedIds.size === 0
+                ? "All"
+                : `${selectedFeedIds.size} selected`}
+              <ChevronDown size={14} className="text-muted-foreground" />
+            </button>
+            {feedDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[220px] max-h-64 overflow-y-auto">
+                <button
+                  type="button"
+                  onClick={() => setSelectedFeedIds(new Set())}
+                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors ${
+                    selectedFeedIds.size === 0 ? "font-medium" : ""
+                  }`}
+                >
+                  All sources
+                </button>
+                <div className="border-t border-border my-1" />
+                {feeds.map((f) => (
+                  <label
+                    key={f.id}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedFeedIds.has(f.id)}
+                      onChange={() => {
+                        setSelectedFeedIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(f.id)) next.delete(f.id);
+                          else next.add(f.id);
+                          return next;
+                        });
+                      }}
+                      className="rounded"
+                    />
+                    <span className="truncate">{f.title || "Untitled"}</span>
+                  </label>
+                ))}
+                {hasManualUploads && (
+                  <>
+                    <div className="border-t border-border my-1" />
+                    <label className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedFeedIds.has("__uploads__")}
+                        onChange={() => {
+                          setSelectedFeedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has("__uploads__")) next.delete("__uploads__");
+                            else next.add("__uploads__");
+                            return next;
+                          });
+                        }}
+                        className="rounded"
+                      />
+                      <span>Manual uploads</span>
+                    </label>
+                  </>
+                )}
+              </div>
+            )}
           </div>
+        )}
+
+        {coverage && (
+          <span className="text-xs text-muted-foreground">
+            Searching across {coverage.processed} processed episode{coverage.processed !== 1 ? "s" : ""}
+            {coverage.total > coverage.processed && ` (${coverage.total - coverage.processed} still processing)`}
+          </span>
         )}
       </div>
 
