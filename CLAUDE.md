@@ -4,7 +4,7 @@
 
 Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Single user, local only, runs entirely in Docker.
 
-**Phase:** MVP scaffold is complete. No code has been built and tested end-to-end yet. The first Alembic migration has not been generated.
+**Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. 218+ unit tests pass. 9 Alembic migrations applied. Web UI serves search, queue dashboard, and feed management.
 
 ## Documentation
 
@@ -12,7 +12,7 @@ Detailed specifications live in `prds/`:
 
 | File | Covers |
 |---|---|
-| `prds/PRD-01-ingestion-pipeline.md` | Pipeline: RSS ingestion, Whisper, pyannote, Celery tasks, error handling, retry logic |
+| `prds/PRD-01-ingestion-pipeline.md` | Pipeline: RSS ingestion, Whisper, pyannote, task queue, error handling, retry logic |
 | `prds/PRD-02-search-web-app.md` | Web app: search UI, audio player, queue dashboard, dark mode, speaker renaming |
 | `prds/PRD-03-infrastructure.md` | Docker Compose, repo structure, Dockerfiles, CI/CD, Makefile, env vars |
 | `prds/RISKS-AND-GAPS.md` | Active risks, known gaps, hardware requirements, resolved items |
@@ -24,20 +24,20 @@ When making decisions, reference PRD sections (e.g. "per PRD-01 §5.4") rather t
 ```
 podlog/
 ├── docker-compose.yml              # Production-like local stack (7 services)
-├── docker-compose.test.yml         # Test stack with redis_test, mock_rss
+├── docker-compose.test.yml         # Test stack with db_test, mock_rss
 ├── .env.example                    # All config vars documented
 ├── Makefile                        # make up / down / build / test / etc.
 ├── apps/
-│   ├── pipeline/                   # Python 3.11 — FastAPI + Celery
+│   ├── pipeline/                   # Python 3.11 — FastAPI + DB-backed job queue
 │   │   ├── app/
 │   │   │   ├── main.py             # FastAPI app entry point
 │   │   │   ├── config.py           # pydantic-settings, all env vars
 │   │   │   ├── models.py           # SQLAlchemy ORM (feeds, episodes, segments, speaker_names)
 │   │   │   ├── database.py         # Engine + session factory
 │   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health)
-│   │   │   ├── tasks/              # Celery tasks (ingest, download, transcribe, diarize, archive, prewarm)
+│   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, diarize, chunk, embed, infer, archive)
 │   │   │   ├── services/           # Business logic (rss, whisper, pyannote, alignment)
-│   │   │   └── scheduler.py        # Celery Beat periodic feed polling
+│   │   │   └── scheduler.py        # Periodic feed polling
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # unit, integration, e2e
 │   └── web/                        # Next.js 14 (App Router)
@@ -52,8 +52,8 @@ podlog/
 
 | Layer | Technology | Notes |
 |---|---|---|
-| Pipeline API | FastAPI (Python 3.11) | Internal API consumed by web app + Celery tasks |
-| Task queue | Celery 5 + Redis 7 | Sequential processing (concurrency=1) to avoid OOM |
+| Pipeline API | FastAPI (Python 3.11) | Internal API consumed by web app |
+| Task queue | PostgreSQL-backed job queue | Sequential processing (concurrency=1) to avoid OOM |
 | Transcription | `openai/whisper-large-v3` via `transformers` | Explicit unload before diarization — mandatory |
 | Diarization | `pyannote/speaker-diarization-3.1` | Requires HF_TOKEN; graceful failure path |
 | Database | PostgreSQL 15 | FTS via `to_tsvector` + GIN index |
@@ -82,13 +82,13 @@ make test-unit         # Run unit tests
 make shell-db          # Open psql shell
 ```
 
-Services: web (:3000), pipeline API (:8000), Flower (:5555).
+Services: web (:3000), pipeline API (:8000).
 
 ## Conventions
 
 - **Python style:** Ruff for linting, 100 char line length, type hints everywhere, structured JSON logging to stdout.
 - **TypeScript style:** ESLint + Next.js config, `@/*` path alias for imports, strict mode.
-- **Naming:** Display name is "Podlog". Database name is `podlog`. Docker services use short names (db, redis, pipeline, worker, beat, flower, web).
+- **Naming:** Display name is "Podlog". Database name is `podlog`. Docker services use short names (db, pipeline, worker, web).
 - **Testing:**
   - Pipeline: `pytest` — unit tests mock DB/models, integration tests use a real test DB.
   - Web: `jest` + `@testing-library/react` for unit, `playwright` for e2e.
@@ -100,15 +100,12 @@ Services: web (:3000), pipeline API (:8000), Flower (:5555).
 **Done:**
 - Full project scaffold committed (88 files, all services defined)
 - SQLAlchemy models with all fields including `updated_at`
-- All Celery task implementations (download, transcribe, diarize, archive, prewarm)
+- All pipeline task implementations (download, transcribe, diarize, chunk, embed, infer, archive)
 - All FastAPI endpoints (feeds, episodes, queue, health)
 - All Next.js pages, API routes, and components
 - Unit test stubs with real test logic for alignment, RSS, retry, timestamp, path validation
 
 **Not yet done:**
-- First Alembic migration (`alembic revision --autogenerate`)
-- `npm install` / `poetry lock` (no lock files yet)
-- Docker build smoke test
-- Integration and e2e tests (stubs exist, bodies are `pytest.skip`)
-- `sample.mp3` test fixture not yet created
-- shadcn/ui components not yet installed (only radix primitives in package.json)
+- Integration and e2e test bodies (stubs exist, some skipped)
+- Full end-to-end pipeline smoke test in CI
+- shadcn/ui component library (using radix primitives directly)
