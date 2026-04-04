@@ -33,12 +33,13 @@ export default function SetupWizard() {
     if (dontShow) markCompleted(true);
     close();
     if (feedAdded) router.push("/queue");
+    else router.push("/");
   }
 
   if (!open) return null;
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleSkip(); }}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) close(); }}>
       <DialogContent className="max-w-xl" onPointerDownOutside={(e) => e.preventDefault()}>
         {step === 1 && (
           <WizardHealthCheck
