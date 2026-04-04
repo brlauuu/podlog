@@ -15,7 +15,7 @@ import httpx
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode
-from app.tasks.helpers import update_episode as _update_episode
+from app.tasks.helpers import mark_failed, update_episode as _update_episode
 from app import job_queue
 
 logger = logging.getLogger(__name__)
@@ -43,10 +43,9 @@ def download_episode(episode_id: str) -> str:
             usage = shutil.disk_usage(settings.data_dir)
             if usage.free < settings.disk_headroom_bytes:
                 needed_gb = settings.disk_headroom_bytes / 1024**3
-                _update_episode(
+                mark_failed(
                     db,
                     episode_id,
-                    status="failed",
                     error_class="DISK_FULL",
                     error_message=(
                         f"Insufficient disk space. Need {needed_gb:.1f} GB free before download."
@@ -93,28 +92,25 @@ def download_episode(episode_id: str) -> str:
             return episode_id
         except OSError as exc:
             if "No space left on device" in str(exc) or getattr(exc, "errno", None) == 28:
-                _update_episode(
+                mark_failed(
                     db,
                     episode_id,
-                    status="failed",
                     error_class="DISK_FULL",
                     error_message="Disk full during download. Free space and retry.",
                 )
                 return episode_id
 
-            _update_episode(
+            mark_failed(
                 db,
                 episode_id,
-                status="failed",
                 error_class="SYSTEM_ERROR",
                 error_message=str(exc),
             )
             return episode_id
         except Exception as exc:
-            _update_episode(
+            mark_failed(
                 db,
                 episode_id,
-                status="failed",
                 error_class="SYSTEM_ERROR",
                 error_message=str(exc),
             )
@@ -188,16 +184,10 @@ def _handle_transient_failure(
         retry_at = datetime.now(timezone.utc) + timedelta(seconds=backoff)
         job_queue.enqueue(db, episode_id, "download", retry_at=retry_at)
     else:
-        _update_episode(
+        _update_episode(db, episode_id, retry_count=new_count)
+        mark_failed(
             db,
             episode_id,
-            status="failed",
-            retry_count=new_count,
             error_class=error_class,
             error_message=f"Failed after {retry_max} retries: {error_msg}",
-        )
-        logger.error(
-            '"action": "permanent_failure", "episode_id": "%s", "error_class": "%s"',
-            episode_id,
-            error_class,
         )
