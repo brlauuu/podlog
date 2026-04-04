@@ -4,7 +4,7 @@
 
 Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Single user, local only, runs entirely in Docker.
 
-**Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. 240 pipeline + 81 web tests pass. 10 Alembic migrations applied. Web UI serves search, queue dashboard, feed management, and an Ask AI feature.
+**Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. 302 pipeline + 81 web tests pass. 10 Alembic migrations applied. Web UI serves search, queue dashboard, feed management, and an Ask AI feature.
 
 ## Documentation
 
@@ -102,7 +102,7 @@ Services: web (:3000), pipeline API (:8000), ollama (:11434).
 - Full pipeline: ingest, download, transcribe, diarize, chunk, embed, infer, archive
 - All FastAPI endpoints (feeds, episodes, queue, health, ask, notifications, backfill)
 - All Next.js pages, API routes, and components (search, ask, queue, feeds, episodes, notifications)
-- 240 pipeline tests + 81 web tests passing
+- 302 pipeline tests + 81 web tests passing
 - 10 Alembic migrations applied
 - 12 shadcn/ui components installed
 - Setup wizard for first-run onboarding
