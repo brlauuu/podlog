@@ -28,6 +28,7 @@ feedparser = "^6.0.11"
 
 # Audio processing
 ffmpeg-python = "^0.2.0"
+python-multipart = "^0.0.22"
 
 [tool.poetry.group.ml]
 optional = true
