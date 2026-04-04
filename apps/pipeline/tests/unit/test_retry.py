@@ -46,6 +46,9 @@ class TestRetryLogic:
     def test_marks_failed_at_max_retries(self):
         db = self._make_db()
         episode = MagicMock()
+        episode.retry_count = 3
+        episode.retry_max = 3
+        episode.feed = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = episode
 
         with patch("app.tasks.download.job_queue") as mock_jq:
@@ -53,7 +56,7 @@ class TestRetryLogic:
                                       error_class="HTTP_ACCESS", error_msg="HTTP 403")
             mock_jq.enqueue.assert_not_called()
 
-        # update_episode uses setattr on the episode object
+        # mark_failed uses setattr on the episode object
         assert episode.status == "failed"
         assert episode.error_class == "HTTP_ACCESS"
 
