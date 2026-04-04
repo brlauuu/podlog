@@ -67,12 +67,14 @@ async def _stream_ask(question: str, model: str, feed_ids: list[str] | None):
         yield _sse_event("done", {})
 
     except Exception as exc:
+        error_str = str(exc) or type(exc).__name__
         logger.error(
-            '"action": "ask_error", "question": "%s", "error": "%s"',
+            '"action": "ask_error", "question": "%s", "error": "%s (%s)"',
             question[:100],
-            str(exc),
+            error_str,
+            type(exc).__name__,
         )
-        detail = str(exc).split("\n")[0][:200] if str(exc) else type(exc).__name__
+        detail = error_str.split("\n")[0][:200]
         yield _sse_event("error", {"message": f"Error generating answer: {detail}"})
         yield _sse_event("done", {})
     finally:

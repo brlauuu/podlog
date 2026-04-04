@@ -162,19 +162,24 @@ async def stream_ollama_response(
         "stream": True,
     }
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=10)) as client:
-        async with client.stream("POST", url, json=payload) as resp:
-            if resp.status_code != 200:
-                body = await resp.aread()
-                raise RuntimeError(f"Ollama returned {resp.status_code}: {body.decode()}")
-            async for line in resp.aiter_lines():
-                if not line:
-                    continue
-                data = json.loads(line)
-                if content := data.get("message", {}).get("content"):
-                    yield content
-                if data.get("done"):
-                    return
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=10)) as client:
+            async with client.stream("POST", url, json=payload) as resp:
+                if resp.status_code != 200:
+                    body = await resp.aread()
+                    raise RuntimeError(f"Ollama returned {resp.status_code}: {body.decode()[:500]}")
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    data = json.loads(line)
+                    if data.get("error"):
+                        raise RuntimeError(f"Ollama error: {data['error']}")
+                    if content := data.get("message", {}).get("content"):
+                        yield content
+                    if data.get("done"):
+                        return
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"Ollama connection error: {type(exc).__name__}: {exc}") from exc
 
 
 async def check_model_available(model: str) -> bool:
