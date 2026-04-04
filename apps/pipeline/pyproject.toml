@@ -36,6 +36,7 @@ optional = true
 # WhisperX (CTranslate2 backend + wav2vec2 alignment)
 whisperx = "^3.8.0"
 torch = "^2.2.0"
+torchaudio = "^2.2.0"
 
 # pyannote diarization (>=4.0 required by whisperx)
 pyannote-audio = ">=3.1.0"
