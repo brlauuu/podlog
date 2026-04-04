@@ -1,4 +1,4 @@
-.PHONY: up down build logs test test-unit test-e2e migrate shell-db shell-pipeline web ollama-pull version
+.PHONY: up down build logs test test-unit test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill
 
 up:             ## Start full stack
 	docker compose up -d
@@ -54,6 +54,16 @@ health-install: ## Install health check cron job (every 15 min)
 
 health-uninstall: ## Remove health check cron job
 	crontab -l 2>/dev/null | grep -vF "healthcheck.py" | crontab - && echo "Removed healthcheck cron job"
+
+backfill:       ## Run chunk+embed backfill (stops worker, runs backfill, restarts worker)
+	@echo "Stopping worker..."
+	docker compose stop worker
+	@echo "Triggering backfill (chunks + embeddings)..."
+	@curl -s -X POST http://localhost:8000/api/backfill/chunks?embed=true | python3 -m json.tool
+	@echo "\nBackfill started. Poll progress with:"
+	@echo "  curl -s http://localhost:8000/api/backfill/status | python3 -m json.tool"
+	@echo "\nWhen done, restart the worker with:"
+	@echo "  docker compose start worker"
 
 version:        ## Show current version
 	@cat VERSION
