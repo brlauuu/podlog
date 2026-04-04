@@ -1,6 +1,6 @@
 # PRD-04: Host & Guest Inference from Episode Metadata
 
-**Project:** PodSearch — Self-hosted Podcast Transcription & Search  
+**Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-04 — Host & Guest Inference  
 **Version:** 1.1  
 **Status:** Draft  

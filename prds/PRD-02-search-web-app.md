@@ -33,7 +33,7 @@ Once podcast transcripts are stored in the database (PRD-01), users need a simpl
 
 ### Non-Goals (V1)
 - User accounts or authentication (deferred to V2)
-- Semantic / vector search (deferred to V2)
+- Semantic / vector search (implemented — see search.ts grouped search)
 - Mobile app (web-only, but responsive)
 - Public deployment (local only in V1)
 - Search result grouping by episode (deferred to V1)
@@ -493,7 +493,6 @@ const { playEpisode } = useAudioPlayer();
 
 ### V2 (Phase 3)
 - **Authentication:** NextAuth.js + JWT, invite-only
-- **Semantic search:** `pgvector` + `sentence-transformers`
 - **Public deployment support:** Caddy reverse proxy, SSL, production Docker Compose profile
 
 ---

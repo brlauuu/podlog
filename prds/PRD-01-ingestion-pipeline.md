@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.2
-**Status:** Draft
+**Version:** 1.3
+**Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.3 — Updated tech stack to reflect actual implementation: Celery+Redis replaced by PostgreSQL-backed job queue; Whisper via transformers replaced by WhisperX (CTranslate2); Celery Beat replaced by polling loop in worker.py; Flower removed. Added Ollama for RAG inference. Updated architecture diagram. Removed stale env vars (REDIS_URL, CELERY_CONCURRENCY). Moved semantic search and faster Whisper from Future to Done. Updated default model to large-v3-turbo.
 - v1.2 — Renamed project from PodSearch to Podlog. Added `updated_at` field to episodes table (prerequisite for GAP-01 zombie job detection). Added `DISK_HEADROOM_BYTES` environment variable for disk space pre-check (GAP-06). Database name changed from `podsearch` to `podlog`.
 - v1.1 — Added auto-retry logic (OQ-02 resolved), disk-full handling (OQ-03 resolved), diarization failure persistence (OQ-04 resolved), model pre-warm step, memory sequencing requirement for Whisper+pyannote, pipeline container healthcheck, path traversal mitigation for audio serving.
 
@@ -30,7 +31,6 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 
 ### Non-Goals (for this PRD)
 - Named speaker identification (deferred to post-MVP UI feature)
-- Semantic / vector search (deferred to V2)
 - Authentication or remote access (covered in PRD-02)
 - Public API surface (internal only)
 
@@ -87,11 +87,12 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 
 ### 5.4 Transcription (Speech-to-Text)
 
-- Model: `openai/whisper-large-v3` loaded via HuggingFace `transformers` library (open weights, downloadable on first run).
+- Model: WhisperX with CTranslate2 backend + wav2vec2 word-level alignment, optimized for CPU inference.
+- Default model: `large-v3-turbo` (configurable via `WHISPER_MODEL` env var: tiny|base|small|medium|large-v3|large-v3-turbo).
 - The model is downloaded once and cached in a persistent Docker volume.
-- **Memory management:** Whisper is loaded into memory for transcription and **explicitly unloaded** (removed from memory and `torch.cuda.empty_cache()` / `gc.collect()` called) before pyannote is loaded for diarization. The two models must never be resident in memory simultaneously. This is mandatory on CPU-only machines to avoid OOM.
+- **Memory management:** Whisper is loaded into memory for transcription and **explicitly unloaded** (removed from memory and `gc.collect()` called) before pyannote is loaded for diarization. The two models must never be resident in memory simultaneously. This is mandatory on CPU-only machines to avoid OOM.
 - Transcription produces: text segments, each with `start_time` (seconds), `end_time` (seconds), and `text`.
-- Word-level timestamps are stored where available (Whisper can produce these with `return_timestamps="word"`).
+- Word-level timestamps are produced via WhisperX's wav2vec2 alignment step.
 - Language detection is automatic; detected language is stored per episode.
 - Transcription progress (segment count / estimated total) is surfaced to the queue.
 
@@ -144,20 +145,9 @@ The flat file is always written on successful transcription, regardless of diari
 
 ### 5.9 Task Queue & Error Classification
 
-- Task runner: **Celery** with **Redis** as the broker and result backend.
-- Queue monitoring UI: **Flower** (accessible at `http://localhost:5555`).
+- Task runner: **PostgreSQL-backed job queue** (no external broker). Jobs are stored in the `episodes` table with status tracking.
 - Jobs are processed sequentially by default (one worker, concurrency=1) to avoid memory exhaustion on CPU-only machines running Whisper.
 - Job states: `PENDING` → `DOWNLOADING` → `TRANSCRIBING` → `DIARIZING` → `ARCHIVING` → `DONE` / `FAILED`.
-- Custom state metadata is pushed to Celery's result backend so the UI can poll it:
-  ```json
-  {
-    "stage": "DOWNLOADING",
-    "progress": 42,
-    "retry_count": 1,
-    "retry_max": 3,
-    "error_class": null
-  }
-  ```
 - **Error classification:** All failures are tagged with an `error_class` field stored in the database and surfaced in the queue UI:
 
 | `error_class`        | Meaning                               | Auto-retry?              |
@@ -174,9 +164,8 @@ The flat file is always written on successful transcription, regardless of diari
 
 ### 5.10 Scheduler
 
-- Library: **Celery Beat** (ships with Celery, no additional dependency).
-- A periodic task runs every 24 hours to poll all registered feeds for new episodes.
-- The schedule is configurable via environment variable `FEED_POLL_INTERVAL_HOURS` (default: 24).
+- A polling loop in `worker.py` runs every `FEED_POLL_INTERVAL_HOURS` (default: 24) to poll all registered feeds for new episodes.
+- No external scheduler dependency — the worker process handles both job processing and periodic polling.
 
 ### 5.11 Model Pre-Warm
 
@@ -196,7 +185,7 @@ The flat file is always written on successful transcription, regardless of diari
 | Reliability   | Failed jobs must not block the queue. Errors must be classified, logged, and surfaced.                                                              |
 | Disk space    | Compressed audio archive uses ~30 MB/hour. User is responsible for disk management.                                                                 |
 | Portability   | All services run in Docker. No host dependencies beyond Docker and Docker Compose.                                                                  |
-| Open source   | All code is MIT licensed. pyannote model requires user to accept its own license separately. HF_TOKEN is required and is the user's responsibility. |
+| Open source   | All code is O'Saasy licensed. pyannote model requires user to accept its own license separately. HF_TOKEN is required and is the user's responsibility. |
 | Idempotency   | Re-running ingestion on an already-processed episode is a no-op.                                                                                    |
 | Observability | All pipeline steps log structured JSON to stdout, captured by Docker. Error class is always included in log output.                                 |
 | Memory safety | Whisper and pyannote models must never be loaded simultaneously. Explicit unload + GC between stages is mandatory.                                  |
@@ -238,7 +227,7 @@ CREATE TABLE episodes (
     retry_max           INTEGER NOT NULL DEFAULT 3,
     has_diarization     BOOLEAN DEFAULT false,
     diarization_error   TEXT,          -- populated if diarization failed; null if succeeded or not yet attempted
-    celery_task_id      TEXT,
+    job_picked_at       TIMESTAMPTZ,   -- when the worker started processing
     created_at          TIMESTAMPTZ DEFAULT now(),
     updated_at          TIMESTAMPTZ DEFAULT now(),  -- updated on every status change; used for zombie job detection (GAP-01)
     processed_at        TIMESTAMPTZ,
@@ -281,12 +270,12 @@ CREATE TABLE speaker_names (
 | Component        | Choice                                       | Rationale                                    |
 | ---------------- | -------------------------------------------- | -------------------------------------------- |
 | Language         | Python 3.11                                  | Best ecosystem for ML/audio tooling          |
-| STT              | `openai/whisper-large-v3` via `transformers` | Best open-weight accuracy; CPU compatible    |
+| STT              | WhisperX (CTranslate2 + wav2vec2 alignment)  | Faster CPU inference; word-level timestamps  |
 | Diarization      | `pyannote/speaker-diarization-3.1`           | Industry standard; HuggingFace native        |
 | Audio processing | `ffmpeg` (via `ffmpeg-python`)               | Universal format support                     |
-| Task queue       | Celery 5 + Redis 7                           | Mature, well-documented; Beat for scheduling |
-| Queue UI         | Flower                                       | Ships with Celery; zero config               |
-| Database         | PostgreSQL 15                                | Full-text search built-in; ACID              |
+| Task queue       | PostgreSQL-backed job queue                   | No external broker needed; jobs in episodes table |
+| LLM inference    | Ollama (local)                               | RAG-based Ask AI feature; configurable model |
+| Database         | PostgreSQL 15 (pgvector)                     | Full-text search + vector embeddings; ACID   |
 | ORM              | SQLAlchemy 2.0 + Alembic                     | Migrations, async support                    |
 | Containerization | Docker + Docker Compose                      | Single `docker compose up` experience        |
 | Config           | `pydantic-settings`                          | Type-safe env var parsing                    |
@@ -299,20 +288,22 @@ CREATE TABLE speaker_names (
 ┌─────────────────────────────────────────────────────────┐
 │                    Docker Compose                        │
 │                                                         │
-│  ┌──────────┐    ┌──────────┐    ┌──────────────────┐  │
-│  │  Redis   │◄───│  Celery  │───►│   PostgreSQL     │  │
-│  │ (broker) │    │  Worker  │    │   (transcripts,  │  │
-│  └──────────┘    │          │    │    metadata)     │  │
-│                  │ pre-warm │    └──────────────────┘  │
-│  ┌──────────┐    │ download │                          │
-│  │  Flower  │    │ whisper  │    ┌──────────────────┐  │
-│  │:5555     │    │ [unload] │───►│  /data volume    │  │
-│  └──────────┘    │ pyannote │    │  audio/archive/  │  │
-│                  │ ffmpeg   │    │  transcripts/    │  │
-│  ┌──────────────┐└──────────┘    │  models/         │  │
-│  │  Celery Beat │     ▲          └──────────────────┘  │
-│  │ (scheduler)  │─────┘                                │
-│  └──────────────┘                                      │
+│                  ┌──────────┐    ┌──────────────────┐  │
+│                  │  Worker  │───►│   PostgreSQL 15   │  │
+│                  │          │    │   (pgvector)      │  │
+│                  │ pre-warm │    │   transcripts,    │  │
+│                  │ download │    │   metadata,       │  │
+│                  │ whisperx │    │   job queue       │  │
+│                  │ [unload] │    └──────────────────┘  │
+│                  │ pyannote │                           │
+│                  │ ffmpeg   │    ┌──────────────────┐  │
+│                  │ polling  │───►│  /data volume    │  │
+│                  └──────────┘    │  audio/archive/  │  │
+│                                  │  transcripts/    │  │
+│  ┌──────────┐                    │  models/         │  │
+│  │  Ollama  │                    └──────────────────┘  │
+│  │ :11434   │                                          │
+│  └──────────┘                                          │
 │                                                         │
 │  ┌──────────────────────────────────────────────────┐  │
 │  │  FastAPI (Internal API — consumed by PRD-02 UI)  │  │
@@ -323,8 +314,8 @@ CREATE TABLE speaker_names (
 ```
 
 **Data flow for a single episode:**
-1. Feed poller (Celery Beat) or user action → episode record inserted with `status=pending`
-2. Worker pre-warm complete → Celery worker picks up task
+1. Feed poller (worker polling loop) or user action → episode record inserted with `status=pending`
+2. Worker pre-warm complete → worker picks up task from PostgreSQL job queue
 3. Downloads audio → updates `status=downloading`; auto-retries on transient failures (max 3)
 4. `ffmpeg` converts to 16kHz WAV
 5. Whisper transcribes → segments written to DB → updates `status=transcribing`
@@ -358,10 +349,10 @@ GET    /api/health                   Health check — includes worker warm-up st
 
 ## 11. Feature Roadmap
 
-### MVP (Phase 1)
-- Single Celery worker processing one episode at a time
-- RSS feed addition and 24-hour polling
-- Whisper transcription with timestamps
+### MVP (Phase 1) — Done
+- Single worker processing one episode at a time (PostgreSQL-backed job queue)
+- RSS feed addition and 24-hour polling (worker polling loop)
+- WhisperX transcription with word-level timestamps (CTranslate2 backend)
 - Sequential model loading (Whisper unloaded before pyannote)
 - Model pre-warm step with `WARMING_UP` health state
 - pyannote diarization with SPEAKER_N labels; graceful failure path
@@ -369,21 +360,21 @@ GET    /api/health                   Health check — includes worker warm-up st
 - Flat .txt transcript file output (with/without speaker labels)
 - Audio archived to MP3 64kbps; disk-full handled gracefully
 - Auto-retry on transient access failures (max 3, exponential backoff)
-- Flower dashboard for queue visibility
 - FastAPI internal API
 - Docker Compose setup with single `docker compose up`
 
-### V1 (Phase 2)
-- Progress polling endpoint for live transcription progress in web UI
-- Configurable Whisper model size (tiny/base/small/medium/large-v3) via env var
-- Manual episode re-processing (force re-transcribe)
-- Feed pause/resume (stop polling without deleting)
+### V1 (Phase 2) — Done
+- Configurable Whisper model size (tiny/base/small/medium/large-v3/large-v3-turbo) via env var
+- Semantic search with embeddings (pgvector)
+- RAG-based Ask AI feature via Ollama
+- Chunking and embedding pipeline tasks
+- Notification system (email, Telegram)
+- Zombie job detection
 
 ### Future
-- Semantic search with embeddings (pgvector + sentence-transformers)
 - GPU support via Docker NVIDIA runtime flag
-- Faster Whisper inference via `faster-whisper` (CTranslate2 backend, 2-4x speedup on CPU)
 - Episode chapter detection
+- Feed pause/resume (stop polling without deleting)
 
 ---
 
@@ -434,18 +425,19 @@ GET    /api/health                   Health check — includes worker warm-up st
 
 ```env
 # Required
-DATABASE_URL=postgresql://postgres:password@db:5432/podlog
-REDIS_URL=redis://redis:6379/0
+POSTGRES_PASSWORD=changeme
 HF_TOKEN=hf_xxxxxxxxxxxx
 
 # Optional
-WHISPER_MODEL=large-v3             # tiny|base|small|medium|large-v3 (default: large-v3)
+WHISPER_MODEL=large-v3-turbo       # tiny|base|small|medium|large-v3|large-v3-turbo
+WHISPER_COMPUTE_TYPE=int8          # int8 (fast, recommended for CPU) | float32 (accurate)
+WHISPER_BATCH_SIZE=16              # WhisperX batched inference batch size
 DATA_DIR=/data
 ARCHIVE_AUDIO=true
 AUDIO_ARCHIVE_BITRATE=64k
 FEED_POLL_INTERVAL_HOURS=24
-CELERY_CONCURRENCY=1
 RETRY_MAX=3                        # Max auto-retries for transient failures (default: 3)
 RETRY_BACKOFF_BASE=30              # Base backoff seconds; actual = base * 2^(attempt-1)
 DISK_HEADROOM_BYTES=2147483648     # 2 GB minimum free space before download starts (GAP-06)
+OLLAMA_URL=http://ollama:11434     # Ollama API endpoint for LLM inference
 ```
