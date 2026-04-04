@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Github } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0";
 
@@ -97,7 +97,7 @@ export default function Footer() {
               </a>
             </p>
             <div className="flex items-center gap-1.5">
-              <Github size={13} />
+              <ExternalLink size={13} />
               <a href="https://github.com/brlauuu/podlog" className="underline hover:text-foreground" target="_blank" rel="noopener noreferrer">
                 brlauuu/podlog
               </a>
