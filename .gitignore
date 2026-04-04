@@ -15,6 +15,7 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+coverage/
 .ruff_cache/
 
 # Node / Next.js
