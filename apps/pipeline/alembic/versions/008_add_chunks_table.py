@@ -5,6 +5,8 @@ higher-quality RAG retrieval. See issue #114.
 """
 
 from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import UUID
 
 
 revision = "008"
@@ -14,25 +16,31 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("""
-        CREATE TABLE chunks (
-            id BIGSERIAL PRIMARY KEY,
-            episode_id UUID NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
-            speaker_label TEXT,
-            start_time DOUBLE PRECISION NOT NULL,
-            end_time DOUBLE PRECISION NOT NULL,
-            text TEXT NOT NULL,
-            segment_ids BIGINT[] NOT NULL,
-            embedding vector(384),
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-        )
-    """)
+    op.create_table(
+        "chunks",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column(
+            "episode_id",
+            UUID(as_uuid=False),
+            sa.ForeignKey("episodes.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("speaker_label", sa.Text()),
+        sa.Column("start_time", sa.Float(), nullable=False),
+        sa.Column("end_time", sa.Float(), nullable=False),
+        sa.Column("text", sa.Text(), nullable=False),
+        sa.Column("segment_ids", sa.ARRAY(sa.BigInteger()), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+    )
 
-    # Indexes for common access patterns
-    op.execute("CREATE INDEX idx_chunks_episode_id ON chunks (episode_id)")
-    op.execute("CREATE INDEX idx_chunks_start_time ON chunks (episode_id, start_time)")
+    # pgvector column — no Alembic typed helper available (same pattern as migration 006)
+    op.execute("ALTER TABLE chunks ADD COLUMN embedding vector(384)")
 
-    # HNSW index for fast approximate nearest neighbor search on chunk embeddings
+    op.create_index("idx_chunks_episode_id", "chunks", ["episode_id"])
+    op.create_index("idx_chunks_start_time", "chunks", ["episode_id", "start_time"])
+
+    # HNSW index requires raw SQL — pgvector operator class not available via Alembic helpers
     op.execute(
         "CREATE INDEX chunks_embedding_hnsw "
         "ON chunks USING hnsw (embedding vector_cosine_ops)"
@@ -40,4 +48,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS chunks")
+    op.drop_index("chunks_embedding_hnsw", table_name="chunks")
+    op.drop_index("idx_chunks_start_time", table_name="chunks")
+    op.drop_index("idx_chunks_episode_id", table_name="chunks")
+    op.drop_table("chunks")

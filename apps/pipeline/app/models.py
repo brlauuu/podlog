@@ -153,9 +153,13 @@ class Chunk(Base):
     start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
-    segment_ids = mapped_column(ARRAY(BigInteger), nullable=False)
+    segment_ids: Mapped[list] = mapped_column(ARRAY(BigInteger), nullable=False)
     embedding = mapped_column(Vector(384), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     episode: Mapped["Episode"] = relationship("Episode", back_populates="chunks")
 

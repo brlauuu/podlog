@@ -8,7 +8,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Target max tokens per chunk. We approximate 1 token ≈ 4 chars for English.
+# Target max tokens per chunk (issue #114).
+# 400 tokens ≈ optimal context window for embedding models (all-MiniLM-L6-v2).
+# We approximate 1 token ≈ 4 chars for English text.
 MAX_CHUNK_TOKENS = 400
 CHARS_PER_TOKEN = 4
 MAX_CHUNK_CHARS = MAX_CHUNK_TOKENS * CHARS_PER_TOKEN

@@ -25,6 +25,9 @@ def backfill_chunks(embed: bool = True) -> dict:
     Returns:
         Summary dict with counts.
     """
+    if embed:
+        from app.services.embed import embed_texts
+
     db = SessionLocal()
     try:
         episodes = (
@@ -87,8 +90,6 @@ def backfill_chunks(embed: bool = True) -> dict:
 
             # Embed the chunks
             if embed and chunk_objs:
-                from app.services.embed import embed_texts
-
                 texts = [c.text for c in chunk_objs]
                 embeddings = embed_texts(texts)
                 for obj, emb in zip(chunk_objs, embeddings):
