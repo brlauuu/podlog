@@ -64,6 +64,23 @@ services:
       pipeline:
         condition: service_healthy  # Ensures migrations are done before worker writes to DB
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 6g
+
   web:
     build: ./apps/web
     ports:
@@ -84,3 +101,4 @@ volumes:
   audio_data:
   transcript_data:
   model_cache:
+  ollama_data:

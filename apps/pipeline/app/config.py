@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     zombie_timeout_multiplier: float = 2.0  # zombie after 2× expected runtime
     zombie_min_timeout_minutes: int = 60  # floor when audio duration is unknown
 
+    # Ollama (RAG — issue #115)
+    ollama_url: str = "http://ollama:11434"
+
     # Host/guest inference (PRD-04 S9)
     inference_enabled: bool = True
     spacy_model: str = "en_core_web_lg"
