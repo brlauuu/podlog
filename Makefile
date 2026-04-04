@@ -1,4 +1,4 @@
-.PHONY: up down build logs test test-unit test-e2e migrate shell-db shell-pipeline web ollama-pull
+.PHONY: up down build logs test test-unit test-e2e migrate shell-db shell-pipeline web ollama-pull version
 
 up:             ## Start full stack
 	docker compose up -d
@@ -6,8 +6,11 @@ up:             ## Start full stack
 down:           ## Stop all services
 	docker compose down
 
-build:          ## Rebuild all images
-	docker compose build
+build:          ## Rebuild all images (reads version from VERSION file)
+	@cp VERSION apps/pipeline/VERSION
+	@cp VERSION apps/web/VERSION
+	docker compose build --build-arg APP_VERSION=$$(cat VERSION)
+	@rm -f apps/pipeline/VERSION apps/web/VERSION
 
 logs:           ## Follow logs for all services
 	docker compose logs -f
@@ -51,6 +54,9 @@ health-install: ## Install health check cron job (every 15 min)
 
 health-uninstall: ## Remove health check cron job
 	crontab -l 2>/dev/null | grep -vF "healthcheck.py" | crontab - && echo "Removed healthcheck cron job"
+
+version:        ## Show current version
+	@cat VERSION
 
 help:           ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'

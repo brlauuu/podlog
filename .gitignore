@@ -26,6 +26,10 @@ next-env.d.ts
 apps/web/.next/
 apps/web/node_modules/
 
+# Build artifacts — VERSION copies placed by `make build`
+apps/pipeline/VERSION
+apps/web/VERSION
+
 # Docker volumes (local bind mounts during dev)
 data/
 
