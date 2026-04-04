@@ -55,14 +55,16 @@ class TestCleanupZombieJobs:
         db.query.return_value.filter.return_value.first.return_value = episode
 
         with patch("app.database.SessionLocal", return_value=db), \
-             patch("app.config.settings", _make_settings()):
+             patch("app.config.settings", _make_settings()), \
+             patch("app.tasks.helpers.mark_failed") as mock_mark_failed:
             result = cleanup_zombie_jobs()
 
         assert result["marked_failed"] == 1
         assert job.status == "failed"
         assert "Zombie" in job.error
-        assert episode.status == "failed"
-        assert episode.error_class == "SYSTEM_ERROR"
+        mock_mark_failed.assert_called_once()
+        call_kwargs = mock_mark_failed.call_args
+        assert call_kwargs[1]["error_class"] == "SYSTEM_ERROR"
 
     def test_does_not_mark_picked_job_within_timeout(self):
         """A job running within expected time is NOT a zombie."""
@@ -104,7 +106,8 @@ class TestCleanupZombieJobs:
         db.query.return_value.filter.return_value.first.return_value = episode
 
         with patch("app.database.SessionLocal", return_value=db), \
-             patch("app.config.settings", _make_settings(min_timeout_minutes=60)):
+             patch("app.config.settings", _make_settings(min_timeout_minutes=60)), \
+             patch("app.tasks.helpers.mark_failed"):
             result = cleanup_zombie_jobs()
 
         assert result["marked_failed"] == 1

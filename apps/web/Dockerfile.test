@@ -1,0 +1,15 @@
+FROM mcr.microsoft.com/playwright:v1.45.0-jammy
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+COPY . .
+RUN npx playwright install --with-deps chromium
+
+# Build the Next.js app so we can run it in production mode
+RUN npm run build
+
+# Start the server and run tests
+CMD sh -c "node .next/standalone/server.js & sleep 2 && npx playwright test"
