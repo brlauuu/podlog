@@ -7,7 +7,6 @@ import { useQuery } from "@tanstack/react-query";
 import SearchResult from "@/components/SearchResult";
 import FeedGroupCard from "@/components/FeedGroupCard";
 import DownloadReportButton from "@/components/DownloadReportButton";
-import AudioUpload from "@/components/AudioUpload";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import type { SearchPage, GroupedSearchResult } from "@/lib/search";
@@ -169,13 +168,6 @@ function HomePageContent() {
           />
         </div>
       </form>
-
-      {!submittedQuery && (
-        <div className="max-w-md mx-auto">
-          <h2 className="text-sm font-medium mb-2">Upload audio</h2>
-          <AudioUpload />
-        </div>
-      )}
 
       {submittedQuery && (
         <div className="space-y-4">

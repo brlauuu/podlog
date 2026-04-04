@@ -9,7 +9,7 @@ import HelpMenu from "@/components/HelpMenu";
 const NAV_LINKS = [
   { href: "/", label: "Search" },
   { href: "/ask", label: "Ask" },
-  { href: "/podcasts", label: "Podcasts" },
+  { href: "/podcasts", label: "Sources" },
   { href: "/queue", label: "Queue" },
   { href: "/notifications", label: "Notifications" },
 ];
@@ -31,7 +31,7 @@ export default function Navbar() {
               href={link.href}
               className={clsx(
                 "px-3 py-1.5 rounded-md text-sm transition-colors",
-                pathname === link.href
+                (pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href)))
                   ? "bg-accent text-accent-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )}
