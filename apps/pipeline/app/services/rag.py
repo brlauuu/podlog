@@ -137,7 +137,7 @@ def chunks_to_sources(chunks: list[ChunkResult]) -> list[dict]:
     return [
         {
             "chunk_id": c.chunk_id,
-            "episode_id": c.episode_id,
+            "episode_id": str(c.episode_id),
             "episode_title": c.episode_title,
             "speaker_label": c.speaker_label,
             "start_time": c.start_time,

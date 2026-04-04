@@ -38,8 +38,8 @@ class AskRequest(BaseModel):
     feed_ids: list[str] | None = None
 
 
-def _sse_event(event: str, data: dict | str) -> str:
-    payload = json.dumps(data) if isinstance(data, dict) else data
+def _sse_event(event: str, data: dict | list | str) -> str:
+    payload = json.dumps(data) if isinstance(data, (dict, list)) else data
     return f"event: {event}\ndata: {payload}\n\n"
 
 
