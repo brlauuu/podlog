@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
     notification_frequency: Literal["immediate", "daily", "weekly"] = "immediate"
+    health_check_notifications_enabled: bool = True
 
     @property
     def email_notifications_enabled(self) -> bool:

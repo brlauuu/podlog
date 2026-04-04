@@ -15,6 +15,7 @@ interface Settings {
   smtp_password: string | null;
   smtp_use_tls: boolean;
   notification_frequency: string;
+  health_check_notifications_enabled: boolean;
   telegram_configured: boolean;
   email_configured: boolean;
 }
@@ -478,7 +479,7 @@ function GeneralTab({
   saving,
 }: {
   settings: Settings;
-  onChange: (field: keyof Settings, value: string) => void;
+  onChange: (field: keyof Settings, value: string | boolean) => void;
   onSave: () => void;
   saving: boolean;
 }) {
@@ -498,6 +499,22 @@ function GeneralTab({
           <option value="daily">Daily digest — summary at 8:00 AM UTC</option>
           <option value="weekly">Weekly digest — summary on Monday at 8:00 AM UTC</option>
         </select>
+      </FieldGroup>
+
+      <div className="border-t border-border my-6" />
+
+      <FieldGroup
+        label="Health Check Notifications"
+        hint="Host-level monitoring alerts (service status, zombie jobs). Runs via cron every 15 minutes."
+      >
+        <label className="flex items-center gap-2 text-sm mt-2">
+          <input
+            type="checkbox"
+            checked={settings.health_check_notifications_enabled}
+            onChange={(e) => onChange("health_check_notifications_enabled", e.target.checked)}
+          />
+          Send Telegram alerts when services go down or jobs get stuck
+        </label>
       </FieldGroup>
 
       <div className="flex gap-3 mt-6">
