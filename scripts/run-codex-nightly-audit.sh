@@ -5,14 +5,14 @@ export HOME="/home/brlauuu"
 export PATH="/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin:$HOME/bin"
 
 REPO="/home/brlauuu/repos/podlog"
-OUT_DIR="$REPO/docs/audit"
+AUDIT_BASE="$REPO/docs/audit"
 DATE_STAMP="$(date +%Y-%m-%d)"
-PARTS_DIR="$OUT_DIR/parts/$DATE_STAMP"
-FINAL_REPORT="$OUT_DIR/codex-$DATE_STAMP.log"
-STDERR_LOG="$OUT_DIR/codex-$DATE_STAMP.stderr.log"
-LOCK_DIR="$OUT_DIR/.nightly-audit.lock"
+OUT_DIR="$AUDIT_BASE/$DATE_STAMP/codex"
+FINAL_REPORT="$OUT_DIR/summary.md"
+STDERR_LOG="$OUT_DIR/stderr.log"
+LOCK_DIR="$AUDIT_BASE/.nightly-audit.lock"
 
-mkdir -p "$OUT_DIR" "$PARTS_DIR"
+mkdir -p "$OUT_DIR"
 
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   echo "nightly audit already running" >> "$STDERR_LOG"
@@ -28,7 +28,7 @@ run_section() {
   local name="$1"
   local heading="$2"
   local prompt="$3"
-  local outfile="$PARTS_DIR/$name.md"
+  local outfile="$OUT_DIR/$name.md"
 
   if codex \
     --profile nightly-audit \
@@ -73,9 +73,9 @@ run_section claude "CLAUDE.md Accuracy" \
 run_section deps "Dependency Health" \
   "Check lockfiles, missing deps, likely unused deps, and packages that are clearly outdated from local tooling output."
 
-crit_count="$(grep -Rho '\*\*\[CRITICAL\]\*\*' "$PARTS_DIR" | wc -l | tr -d ' ')"
-warn_count="$(grep -Rho '\*\*\[WARNING\]\*\*' "$PARTS_DIR" | wc -l | tr -d ' ')"
-info_count="$(grep -Rho '\*\*\[INFO\]\*\*' "$PARTS_DIR" | wc -l | tr -d ' ')"
+crit_count="$(grep -Rho '\*\*\[CRITICAL\]\*\*' "$OUT_DIR" | wc -l | tr -d ' ')"
+warn_count="$(grep -Rho '\*\*\[WARNING\]\*\*' "$OUT_DIR" | wc -l | tr -d ' ')"
+info_count="$(grep -Rho '\*\*\[INFO\]\*\*' "$OUT_DIR" | wc -l | tr -d ' ')"
 
 overall="Good"
 if [ "${crit_count:-0}" -gt 0 ]; then
@@ -91,19 +91,19 @@ fi
   echo "- Overall health: $overall"
   echo "- Findings: $crit_count critical, $warn_count warnings, $info_count informational"
   echo "- Audit scope: architecture, docs freshness, test coverage, dead code, wizard completeness, CLAUDE.md accuracy, dependency health"
-  echo "- Persistence model: sectioned run; partial reports live in docs/audit/parts/$DATE_STAMP/"
+  echo "- Persistence model: sectioned run; section reports live in docs/audit/$DATE_STAMP/codex/"
   echo
-  cat "$PARTS_DIR/architecture.md"
+  cat "$OUT_DIR/architecture.md"
   echo
-  cat "$PARTS_DIR/docs.md"
+  cat "$OUT_DIR/docs.md"
   echo
-  cat "$PARTS_DIR/tests.md"
+  cat "$OUT_DIR/tests.md"
   echo
-  cat "$PARTS_DIR/dead-code.md"
+  cat "$OUT_DIR/dead-code.md"
   echo
-  cat "$PARTS_DIR/wizard.md"
+  cat "$OUT_DIR/wizard.md"
   echo
-  cat "$PARTS_DIR/claude.md"
+  cat "$OUT_DIR/claude.md"
   echo
-  cat "$PARTS_DIR/deps.md"
+  cat "$OUT_DIR/deps.md"
 } > "$FINAL_REPORT"
