@@ -34,6 +34,10 @@ apps/web/VERSION
 # Docker volumes (local bind mounts during dev)
 data/
 
+# Audit reports (generated locally by nightly codex runs)
+docs/audit/**
+!docs/audit/.gitkeep
+
 # OS
 .DS_Store
 Thumbs.db
