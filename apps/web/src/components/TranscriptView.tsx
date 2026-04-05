@@ -14,6 +14,7 @@ interface Props {
   audioLocalPath: string | null;
   episodeTitle: string | null;
   feedTitle: string | null;
+  activeSpeaker?: string | null;
 }
 
 
@@ -21,11 +22,15 @@ export default function TranscriptView({
   episodeId,
   hasDiarization,
   status,
-  segments,
+  segments: allSegments,
   audioLocalPath,
   episodeTitle,
   feedTitle,
+  activeSpeaker,
 }: Props) {
+  const segments = activeSpeaker
+    ? allSegments.filter((s) => s.speaker_label === activeSpeaker)
+    : allSegments;
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const { playEpisode } = useAudioPlayer();
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

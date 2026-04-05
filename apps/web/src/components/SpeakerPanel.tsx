@@ -19,6 +19,8 @@ interface Props {
   segments: Segment[];
   onRenamed: (speakerLabel: string, newName: string) => void;
   onMerged: (sourceLabels: string[], targetLabel: string) => void;
+  activeSpeaker: string | null;
+  onFilterSpeaker: (speakerLabel: string | null) => void;
 }
 
 function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
@@ -56,6 +58,8 @@ function SpeakerCard({
   mergeMode,
   selected,
   onToggleSelect,
+  active,
+  onFilter,
 }: {
   speaker: SpeakerInfo;
   episodeId: string;
@@ -63,6 +67,8 @@ function SpeakerCard({
   mergeMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
+  active: boolean;
+  onFilter: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(speaker.displayName);
@@ -107,9 +113,10 @@ function SpeakerCard({
 
   return (
     <div
-      className={`relative rounded-lg p-3 cursor-pointer transition-colors ${editing ? "" : "hover:brightness-110"} ${mergeMode && selected ? "ring-2 ring-indigo-500" : ""}`}
+      className={`relative rounded-lg p-3 cursor-pointer transition-colors ${editing ? "" : "hover:brightness-110"} ${mergeMode && selected ? "ring-2 ring-indigo-500" : ""} ${active ? "ring-2 ring-primary" : ""}`}
       style={{ background: color.bg, border: `1px solid ${color.border}` }}
-      onClick={() => { if (mergeMode) { onToggleSelect(); } else if (!editing) { setEditing(true); } }}
+      onClick={() => { if (mergeMode) { onToggleSelect(); } else if (!editing) { onFilter(); } }}
+      onDoubleClick={() => { if (!mergeMode) { setEditing(true); } }}
     >
       {mergeMode && (
         <div
@@ -185,7 +192,7 @@ function SpeakerCard({
   );
 }
 
-export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged }: Props) {
+export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged, activeSpeaker, onFilterSpeaker }: Props) {
   const speakers = deriveSpeakers(segments);
   const [mergeMode, setMergeMode] = useState(false);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
@@ -240,15 +247,32 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged 
   return (
     <div className="rounded-lg p-3" style={{ background: "rgba(255,255,255,0.03)" }}>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-xs text-muted-foreground uppercase tracking-wide">Speakers</div>
-        {speakers.length >= 2 && (
-          <button
-            onClick={() => (mergeMode ? exitMergeMode() : setMergeMode(true))}
-            className="text-xs text-indigo-500 hover:text-indigo-400 transition-colors"
-          >
-            {mergeMode ? "Cancel merge" : "Merge speakers"}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Speakers</div>
+          {!mergeMode && (
+            <div className="text-[10px] text-muted-foreground/60">
+              {activeSpeaker ? "Click to filter / double-click to edit" : "Click to filter / double-click to edit"}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {activeSpeaker && !mergeMode && (
+            <button
+              onClick={() => onFilterSpeaker(null)}
+              className="text-xs text-primary hover:text-primary/80 transition-colors"
+            >
+              Show all
+            </button>
+          )}
+          {speakers.length >= 2 && (
+            <button
+              onClick={() => (mergeMode ? exitMergeMode() : setMergeMode(true))}
+              className="text-xs text-indigo-500 hover:text-indigo-400 transition-colors"
+            >
+              {mergeMode ? "Cancel merge" : "Merge speakers"}
+            </button>
+          )}
+        </div>
       </div>
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(speakers.length, 4)}, 1fr)` }}>
         {speakers.map((speaker) => (
@@ -260,6 +284,8 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged 
             mergeMode={mergeMode}
             selected={selectedLabels.has(speaker.speakerLabel)}
             onToggleSelect={() => toggleSelection(speaker.speakerLabel)}
+            active={activeSpeaker === speaker.speakerLabel}
+            onFilter={() => onFilterSpeaker(activeSpeaker === speaker.speakerLabel ? null : speaker.speakerLabel)}
           />
         ))}
       </div>
