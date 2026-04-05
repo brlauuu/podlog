@@ -16,6 +16,7 @@ jest.mock("lucide-react", () => {
     ChevronDown: () => <Icon data-testid="chevrondown-icon" />,
     SkipBack: () => <Icon data-testid="skipback-icon" />,
     SkipForward: () => <Icon data-testid="skipforward-icon" />,
+    X: () => <Icon data-testid="x-icon" />,
   };
 });
 

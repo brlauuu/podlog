@@ -23,6 +23,7 @@ interface AudioPlayerContextValue {
     feedTitle?: string
   ) => void;
   togglePlayPause: () => void;
+  closePlayer: () => void;
 }
 
 const AudioPlayerContext = createContext<AudioPlayerContextValue | null>(null);
@@ -70,8 +71,25 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     }
   }
 
+  function closePlayer() {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.src = "";
+    }
+    setState({
+      episodeId: null,
+      filename: null,
+      src: null,
+      startTime: 0,
+      title: null,
+      feedTitle: null,
+      isPlaying: false,
+    });
+  }
+
   return (
-    <AudioPlayerContext.Provider value={{ state, audioRef, playEpisode, togglePlayPause }}>
+    <AudioPlayerContext.Provider value={{ state, audioRef, playEpisode, togglePlayPause, closePlayer }}>
       {children}
     </AudioPlayerContext.Provider>
   );

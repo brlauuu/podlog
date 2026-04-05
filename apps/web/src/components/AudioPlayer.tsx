@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, Volume2, VolumeX, ChevronUp, ChevronDown, SkipBack, SkipForward } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, ChevronUp, ChevronDown, SkipBack, SkipForward, X } from "lucide-react";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { formatTimestamp } from "@/lib/timestamp";
 
@@ -10,7 +10,7 @@ import { formatTimestamp } from "@/lib/timestamp";
  * Persists across page navigation via React context (PRD-02 §5.7).
  */
 export default function AudioPlayer() {
-  const { state, audioRef, togglePlayPause } = useAudioPlayer();
+  const { state, audioRef, togglePlayPause, closePlayer } = useAudioPlayer();
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
@@ -106,8 +106,11 @@ export default function AudioPlayer() {
           </button>
           <span className="text-sm truncate flex-1">{state.title}</span>
           <span className="text-xs text-muted-foreground tabular-nums">{formatTimestamp(currentTime)}</span>
-          <button onClick={() => setCollapsed(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => setCollapsed(false)} className="text-muted-foreground hover:text-foreground transition-colors" title="Expand player">
             <ChevronUp size={16} />
+          </button>
+          <button onClick={closePlayer} className="text-muted-foreground hover:text-foreground transition-colors" title="Close player">
+            <X size={16} />
           </button>
         </div>
       ) : (
@@ -150,8 +153,16 @@ export default function AudioPlayer() {
           <button
             onClick={() => setCollapsed(true)}
             className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            title="Collapse player"
           >
             <ChevronDown size={16} />
+          </button>
+          <button
+            onClick={closePlayer}
+            className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            title="Close player"
+          >
+            <X size={16} />
           </button>
         </div>
       )}
