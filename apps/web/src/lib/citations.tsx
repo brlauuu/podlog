@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { formatTimestamp } from "@/lib/timestamp";
 
 export interface Source {
   chunk_id: number;
@@ -79,5 +78,3 @@ export function renderAnswerWithCitations(
 
   return nodes;
 }
-
-export { formatTimestamp };

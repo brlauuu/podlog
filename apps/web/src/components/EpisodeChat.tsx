@@ -151,7 +151,7 @@ export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProp
 
   // Chat panel
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col w-[calc(100vw-2rem)] sm:w-96 h-[28rem] rounded-xl border bg-background shadow-2xl">
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col w-[calc(100vw-2rem)] sm:w-96 h-[min(28rem,calc(100vh-4rem))] rounded-xl border bg-background shadow-2xl">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b shrink-0">
         <div className="flex items-center gap-2 min-w-0">
