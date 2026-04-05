@@ -11,6 +11,7 @@ import EpisodeDescription from "@/components/EpisodeDescription";
 import TranscriptSection from "@/components/TranscriptSection";
 import BackToSearchLink from "@/components/BackToSearchLink";
 import ReprocessButton from "@/components/ReprocessButton";
+import EpisodeChat from "@/components/EpisodeChat";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
@@ -155,10 +156,12 @@ export default async function EpisodePage({ params }: { params: { id: string } }
             &larr; {episode.feed_title ?? "Podcast"}
           </Link>
         )}
-        <div className="flex items-center gap-3 mt-2">
+        <div className="mt-2 space-y-2">
           <h1 className="text-xl font-semibold">{episode.title ?? "Untitled Episode"}</h1>
-          <StatusBadge status={episode.status} />
-          <ReprocessButton episodeId={episode.id} status={episode.status} />
+          <div className="flex items-center gap-3">
+            <StatusBadge status={episode.status} />
+            <ReprocessButton episodeId={episode.id} status={episode.status} />
+          </div>
         </div>
         <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
           {episode.published_at && (
@@ -311,6 +314,13 @@ export default async function EpisodePage({ params }: { params: { id: string } }
             )}
           </div>
         </>
+      )}
+
+      {episode.status === "done" && (
+        <EpisodeChat
+          episodeId={episode.id}
+          episodeTitle={episode.title ?? "Untitled Episode"}
+        />
       )}
     </div>
   );

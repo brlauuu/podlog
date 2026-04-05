@@ -36,6 +36,7 @@ class AskRequest(BaseModel):
     model: str | None = None
     feed_id: str | None = None
     feed_ids: list[str] | None = None
+    episode_id: str | None = None
 
 
 def _sse_event(event: str, data: dict | list | str) -> str:
@@ -43,11 +44,11 @@ def _sse_event(event: str, data: dict | list | str) -> str:
     return f"event: {event}\ndata: {payload}\n\n"
 
 
-async def _stream_ask(question: str, model: str, feed_ids: list[str] | None):
+async def _stream_ask(question: str, model: str, feed_ids: list[str] | None, episode_id: str | None = None):
     db = SessionLocal()
     try:
         # 1. Retrieve relevant chunks
-        chunks = retrieve_chunks(db, question, feed_ids=feed_ids)
+        chunks = retrieve_chunks(db, question, feed_ids=feed_ids, episode_id=episode_id)
 
         if not chunks:
             yield _sse_event("error", {"message": "No relevant transcript excerpts found for your question."})
@@ -100,7 +101,7 @@ async def ask_endpoint(req: AskRequest):
         feed_ids = [req.feed_id]
 
     return StreamingResponse(
-        _stream_ask(req.question, model, feed_ids),
+        _stream_ask(req.question, model, feed_ids, episode_id=req.episode_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
