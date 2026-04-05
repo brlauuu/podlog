@@ -12,6 +12,11 @@ jest.mock("@/components/WizardProvider", () => ({
   useWizard: () => ({ open: false, setOpen: mockSetOpen, markCompleted: jest.fn() }),
 }));
 
+// Mock TanStack React Query for the health check
+jest.mock("@tanstack/react-query", () => ({
+  useQuery: () => ({ data: undefined, isLoading: true }),
+}));
+
 beforeEach(() => {
   mockSetOpen.mockReset();
 });
@@ -29,6 +34,7 @@ describe("HelpMenu", () => {
     await waitFor(() => {
       expect(screen.getByText("Setup Wizard")).toBeInTheDocument();
       expect(screen.getByText("User Guide")).toBeInTheDocument();
+      expect(screen.getByText("System status")).toBeInTheDocument();
     });
   });
 
