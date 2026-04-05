@@ -16,15 +16,15 @@ podlog/
 │   │   │   ├── models.py           # SQLAlchemy ORM (feeds, episodes, segments)
 │   │   │   ├── database.py         # Engine + session factory
 │   │   │   ├── job_queue.py        # DB-backed job queue (FOR UPDATE SKIP LOCKED)
-│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, embed)
-│   │   │   ├── tasks/              # Pipeline tasks (download, transcribe, diarize, embed, infer, archive)
-│   │   │   └── services/           # Business logic (whisper, pyannote, alignment, embed)
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications)
+│   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, diarize, chunk, embed, infer, archive, cleanup, prewarm)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, notifications, digest, events)
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # Unit, integration, e2e tests
 │   └── web/                        # Next.js 14 (App Router)
-│       ├── src/app/                # Pages: /, /podcasts, /episodes/[id], /queue, /feeds
+│       ├── src/app/                # Pages: /, /podcasts, /episodes/[id], /queue, /feeds, /ask, /notifications
 │       ├── src/components/         # React components
-│       └── src/lib/                # Utilities (db, search, timestamp, types)
+│       └── src/lib/                # Utilities (db, search, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest)
 ├── docs/                           # User-facing documentation
 └── prds/                           # Internal design specs and risk register
 ```
@@ -91,7 +91,7 @@ docker compose exec pipeline alembic upgrade head
 
 ## Running Tests
 
-### Unit Tests (383 tests — 302 pipeline + 81 web)
+### Unit Tests (398 tests — 317 pipeline + 81 web)
 
 ```bash
 cd apps/pipeline
@@ -199,9 +199,9 @@ claude -p "/codebase-audit" \
 
 ### Output
 
-- **Report:** `docs/audit/YYYY-MM-DD-audit.md` — committed and pushed to main
-- **Issues:** CRITICAL and WARNING findings auto-create GitHub issues with label `codebase-audit`
-- **Status:** Check the `> Status:` line at the top of the report to see if it completed (`COMPLETE 7/7`) or was interrupted (`IN PROGRESS N/7`)
+- **Reports:** `docs/audit/YYYY-MM-DD/claude/` — one file per check section plus a `summary.md`
+- **No auto-commit or issue creation** — reports are left as local files for manual review
+- **Status:** Check the `> Status:` line in `summary.md` to see if it completed (`COMPLETE 7/7`) or was interrupted (`IN PROGRESS N/7`)
 
 ### What it checks
 
