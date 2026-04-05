@@ -30,11 +30,12 @@ run_section() {
   local prompt="$3"
   local outfile="$PARTS_DIR/$name.md"
 
-  if codex exec \
+  if codex \
     --profile nightly-audit \
+    --ask-for-approval never \
+    exec \
     --cd "$REPO" \
     --sandbox workspace-write \
-    --ask-for-approval never \
     --output-last-message "$outfile" \
     "Use \$nightly-audit. Audit focus: $heading. $prompt Output only the \"$heading\" section. Do not include the full-report summary." \
     >> "$STDERR_LOG" 2>&1
