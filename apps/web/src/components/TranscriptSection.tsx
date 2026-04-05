@@ -65,6 +65,10 @@ export default function TranscriptSection({
   }
 
   function handleMerged(sourceLabels: string[], targetLabel: string) {
+    // If the active filter is one of the merged-away speakers, switch to target
+    if (activeSpeaker && sourceLabels.includes(activeSpeaker)) {
+      setActiveSpeaker(targetLabel);
+    }
     setSegments((prev) => {
       // Copy the target speaker's display name to reassigned segments
       const targetSeg = prev.find(
@@ -134,7 +138,7 @@ export default function TranscriptSection({
       {showBackToTop && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          className="fixed bottom-6 right-6 z-40 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+          className="fixed bottom-20 right-6 z-40 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
           title="Back to top"
         >
           <ArrowUp size={18} />
