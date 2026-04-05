@@ -73,6 +73,16 @@ export default function AudioPlayer() {
     setMuted(audio.muted);
   }
 
+  // Reset local UI state when player is closed
+  useEffect(() => {
+    if (!state.src) {
+      setCurrentTime(0);
+      setDuration(0);
+      setCollapsed(false);
+      setMuted(false);
+    }
+  }, [state.src]);
+
   if (!state.src) return null;
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
