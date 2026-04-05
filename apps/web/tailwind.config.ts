@@ -52,6 +52,12 @@ const config: Config = {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.85" },
         },
+        eqBar: {
+          "0%, 100%": { height: "4px", opacity: "0.3" },
+          "25%": { height: "18px", opacity: "0.8" },
+          "50%": { height: "10px", opacity: "1" },
+          "75%": { height: "24px", opacity: "0.6" },
+        },
       },
       animation: {
         "pulse-subtle": "pulse-subtle 2s ease-in-out infinite",

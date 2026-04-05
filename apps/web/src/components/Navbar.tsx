@@ -7,7 +7,7 @@ import DarkModeToggle from "@/components/DarkModeToggle";
 import HelpMenu from "@/components/HelpMenu";
 
 const NAV_LINKS = [
-  { href: "/", label: "Search" },
+  { href: "/search", label: "Search" },
   { href: "/ask", label: "Ask" },
   { href: "/podcasts", label: "Sources" },
   { href: "/queue", label: "Queue" },
