@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { ArrowUp } from "lucide-react";
 import SpeakerPanel from "@/components/SpeakerPanel";
 import TranscriptView from "@/components/TranscriptView";
 import TranscriptExportButton from "@/components/TranscriptExportButton";
@@ -42,6 +43,16 @@ export default function TranscriptSection({
   guid,
 }: Props) {
   const [segments, setSegments] = useState(initial);
+  const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  useEffect(() => {
+    function handleScroll() {
+      setShowBackToTop(window.scrollY > 400);
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   function handleRenamed(speakerLabel: string, newName: string) {
     setSegments((prev) =>
@@ -104,6 +115,8 @@ export default function TranscriptSection({
           segments={segments}
           onRenamed={handleRenamed}
           onMerged={handleMerged}
+          activeSpeaker={activeSpeaker}
+          onFilterSpeaker={setActiveSpeaker}
         />
       )}
 
@@ -115,7 +128,18 @@ export default function TranscriptSection({
         audioLocalPath={audioLocalPath}
         episodeTitle={episodeTitle}
         feedTitle={feedTitle}
+        activeSpeaker={activeSpeaker}
       />
+
+      {showBackToTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-6 right-6 z-40 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+          title="Back to top"
+        >
+          <ArrowUp size={18} />
+        </button>
+      )}
     </div>
   );
 }
