@@ -2,14 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  Mic,
-  Search,
-  AudioWaveform,
-  Headphones,
-  Database,
-  Shield,
-} from "lucide-react";
+import { Search, Database, Shield } from "lucide-react";
 
 interface FeedStats {
   id: string;
@@ -33,24 +26,13 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center pt-12 pb-16 space-y-10">
-      {/* Hero section */}
-      <div className="text-center space-y-6">
-        {/* Icon composition */}
-        <div className="flex items-center justify-center gap-3 text-muted-foreground">
-          <Mic size={28} className="text-primary" />
-          <AudioWaveform size={36} className="text-primary/60" />
-          <Headphones size={32} className="text-primary/80" />
-          <AudioWaveform size={36} className="text-primary/60 scale-x-[-1]" />
-          <Search size={28} className="text-primary" />
-        </div>
-
-        <div className="space-y-3">
-          <h1 className="text-4xl font-bold tracking-tight">Podlog</h1>
-          <p className="text-lg text-muted-foreground max-w-md mx-auto">
-            Your self-hosted transcription database. Custom, private, offline, yours.
-          </p>
-        </div>
+    <div className="flex flex-col items-center pt-16 pb-16 space-y-8">
+      {/* Title + tagline */}
+      <div className="text-center space-y-3">
+        <h1 className="text-4xl font-bold tracking-tight">Podlog</h1>
+        <p className="text-lg text-muted-foreground max-w-md mx-auto">
+          Your self-hosted transcription database.
+        </p>
       </div>
 
       {/* Quick links */}
@@ -92,19 +74,17 @@ export default function HomePage() {
         </div>
       )}
       {!loading && feeds.length === 0 && (
-        <div className="text-center space-y-2">
-          <p className="text-sm text-muted-foreground">
-            No podcasts yet.{" "}
-            <Link href="/podcasts" className="text-primary hover:underline">
-              Add your first feed
-            </Link>{" "}
-            to get started.
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          No podcasts yet.{" "}
+          <Link href="/podcasts" className="text-primary hover:underline">
+            Add your first feed
+          </Link>{" "}
+          to get started.
+        </p>
       )}
 
       {/* Features */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-xl text-center">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-xl text-center pt-4">
         <div className="space-y-1.5">
           <Shield size={20} className="mx-auto text-muted-foreground" />
           <p className="text-xs text-muted-foreground">
