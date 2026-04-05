@@ -159,6 +159,129 @@ describe("WizardAddFeed", () => {
       expect(screen.getByText(/Invalid RSS feed URL/i)).toBeInTheDocument();
     });
   });
+
+  it("shows back button that calls onBack", () => {
+    const onBack = jest.fn();
+    render(<WizardAddFeed onNext={noop} onBack={onBack} onSkip={noop} />);
+    fireEvent.click(screen.getByRole("button", { name: /← back/i }));
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it("can switch to selective mode", () => {
+    render(<WizardAddFeed onNext={noop} onBack={noop} onSkip={noop} />);
+    const selectiveBtn = screen.getByText("Selective").closest("button")!;
+    fireEvent.click(selectiveBtn);
+    // In selective mode, the submit button says "Next" instead of "Add Feed"
+    expect(screen.getByRole("button", { name: /next/i })).toBeInTheDocument();
+  });
+
+  it("can switch to full mode", () => {
+    render(<WizardAddFeed onNext={noop} onBack={noop} onSkip={noop} />);
+    const fullBtn = screen.getByText("Full").closest("button")!;
+    fireEvent.click(fullBtn);
+    expect(screen.getByRole("button", { name: /add feed/i })).toBeInTheDocument();
+  });
+
+  it("fetches preview in selective mode before submitting", async () => {
+    // First call: preview fetch, second call: actual submit
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          title: "My Podcast",
+          episodes: [
+            { guid: "ep-1", title: "Episode 1", published_at: "2025-01-01", duration_secs: 3600 },
+            { guid: "ep-2", title: "Episode 2", published_at: "2025-01-02", duration_secs: 1800 },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "feed-1" }),
+      });
+
+    const onNext = jest.fn();
+    render(<WizardAddFeed onNext={onNext} onBack={noop} onSkip={noop} />);
+
+    // Switch to selective mode
+    fireEvent.click(screen.getByText("Selective").closest("button")!);
+
+    // Enter URL
+    const input = screen.getByPlaceholderText(/feeds\.example\.com/i);
+    fireEvent.change(input, { target: { value: "https://example.com/feed.xml" } });
+
+    // Click Next to fetch preview
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    // Episode picker should appear
+    await waitFor(() => {
+      expect(screen.getByText("Episode 1")).toBeInTheDocument();
+      expect(screen.getByText("Episode 2")).toBeInTheDocument();
+      expect(screen.getByText("My Podcast")).toBeInTheDocument();
+    });
+
+    // Select an episode
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText("1 episodes selected")).toBeInTheDocument();
+    });
+
+    // Submit
+    fireEvent.click(screen.getByRole("button", { name: /add 1 episodes/i }));
+
+    await waitFor(() => {
+      expect(onNext).toHaveBeenCalled();
+    });
+  });
+
+  it("shows error when preview fetch fails", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      json: async () => ({ detail: "Feed not found" }),
+    });
+
+    render(<WizardAddFeed onNext={noop} onBack={noop} onSkip={noop} />);
+
+    // Switch to selective mode
+    fireEvent.click(screen.getByText("Selective").closest("button")!);
+
+    const input = screen.getByPlaceholderText(/feeds\.example\.com/i);
+    fireEvent.change(input, { target: { value: "https://example.com/bad.xml" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Feed not found/i)).toBeInTheDocument();
+    });
+  });
+
+  it("submits feed in full mode", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "feed-1" }),
+    });
+
+    const onNext = jest.fn();
+    render(<WizardAddFeed onNext={onNext} onBack={noop} onSkip={noop} />);
+
+    // Switch to full mode
+    fireEvent.click(screen.getByText("Full").closest("button")!);
+
+    const input = screen.getByPlaceholderText(/feeds\.example\.com/i);
+    fireEvent.change(input, { target: { value: "https://example.com/feed.xml" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /add feed/i }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith("/api/feeds", expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"mode":"full"'),
+      }));
+      expect(onNext).toHaveBeenCalled();
+    });
+  });
 });
 
 describe("WizardComplete", () => {
