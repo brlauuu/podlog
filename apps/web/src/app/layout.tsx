@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "@/app/globals.css";
 import Navbar from "@/components/Navbar";
 import AudioPlayer from "@/components/AudioPlayer";
+import MainContent from "@/components/MainContent";
 import Footer from "@/components/Footer";
 import { AudioPlayerProvider } from "@/components/AudioPlayerContext";
 import QueryProvider from "@/components/QueryProvider";
@@ -24,9 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AudioPlayerProvider>
             <WizardProvider>
               <Navbar />
-              <main className="max-w-5xl mx-auto px-4 py-8 pb-24 flex-1 w-full">
+              <MainContent>
                 {children}
-              </main>
+              </MainContent>
               <Footer />
               {/* Global persistent player — fixed to bottom, persists across navigation */}
               <AudioPlayer />
