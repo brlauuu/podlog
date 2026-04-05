@@ -47,13 +47,18 @@ def retrieve_chunks(
     question: str,
     top_k: int = TOP_K,
     feed_ids: list[str] | None = None,
+    episode_id: str | None = None,
 ) -> list[ChunkResult]:
     """Retrieve top-K chunks by cosine similarity to the question embedding."""
     embedding = embed_query(question)
     embedding_str = f"[{','.join(str(x) for x in embedding)}]"
 
     feed_filter = ""
+    episode_filter = ""
     params: dict = {"embedding": embedding_str, "top_k": top_k, "threshold": SIMILARITY_THRESHOLD}
+    if episode_id:
+        episode_filter = "AND c.episode_id = :episode_id"
+        params["episode_id"] = episode_id
     if feed_ids:
         # Build feed filter supporting both feed IDs and "uploads" (feed_id IS NULL)
         has_uploads = "__uploads__" in feed_ids
@@ -84,6 +89,7 @@ def retrieve_chunks(
         LEFT JOIN speaker_names sn
             ON sn.episode_id = c.episode_id AND sn.speaker_label = c.speaker_label
         WHERE c.embedding IS NOT NULL
+            {episode_filter}
             {feed_filter}
         ORDER BY c.embedding <=> CAST(:embedding AS vector)
         LIMIT :top_k

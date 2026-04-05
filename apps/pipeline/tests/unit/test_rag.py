@@ -241,6 +241,21 @@ class TestRetrieveChunks:
         assert params["fid_0"] == "feed-1"
 
 
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_episode_id_filter(self, mock_embed):
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = []
+
+        from app.services.rag import retrieve_chunks
+        retrieve_chunks(mock_db, "q", episode_id="ep-42")
+
+        call_args = mock_db.execute.call_args
+        query_str = str(call_args[0][0])
+        params = call_args[0][1]
+        assert "episode_id" in query_str
+        assert params["episode_id"] == "ep-42"
+
+
 class TestCheckModelAvailable:
     def test_model_found(self):
         from app.services.rag import check_model_available
