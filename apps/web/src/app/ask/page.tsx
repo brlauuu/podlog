@@ -350,11 +350,21 @@ export default function AskPage() {
           {/* Episode count below settings */}
           {filteredEpisodeCount !== null && (
             <p className="text-center text-xs text-muted-foreground">
-              Analyzing {filteredEpisodeCount} processed episode
-              {filteredEpisodeCount !== 1 ? "s" : ""}
-              {coverage &&
-                coverage.total > coverage.processed &&
-                ` (${coverage.total - coverage.processed} still processing)`}
+              {selectedFeedIds.size === 0 ? (
+                <>
+                  Analyzing {filteredEpisodeCount} processed episode
+                  {filteredEpisodeCount !== 1 ? "s" : ""}
+                  {coverage &&
+                    coverage.total > coverage.processed &&
+                    ` (${coverage.total - coverage.processed} still processing)`}
+                </>
+              ) : (
+                <>
+                  Analyzing up to {filteredEpisodeCount} episode
+                  {filteredEpisodeCount !== 1 ? "s" : ""} from selected source
+                  {selectedFeedIds.size !== 1 ? "s" : ""}
+                </>
+              )}
             </p>
           )}
         </div>

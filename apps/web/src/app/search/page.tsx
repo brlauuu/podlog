@@ -30,7 +30,6 @@ const SEARCH_TIPS = [
   'Use quotes for exact phrases: "machine learning"',
   "Exclude words with minus: climate -politics",
   "Combine terms: AI regulation ethics",
-  "Search for a speaker: speaker:John",
 ];
 
 /**
@@ -64,18 +63,19 @@ function SearchPageContent() {
     totalMentions: number;
   } | null>(null);
 
-  // Fetch stats for the info line below search
+  // Fetch stats for the info line below search — uses coverage endpoint
+  // to include manual uploads (episodes with no feed_id)
   const statsQuery = useQuery<{ feedCount: number; episodeCount: number }>({
     queryKey: ["search-stats"],
     queryFn: async () => {
-      const resp = await fetch("/api/feeds");
-      if (!resp.ok) return { feedCount: 0, episodeCount: 0 };
-      const feeds = await resp.json();
-      const feedCount = feeds.length;
-      const episodeCount = feeds.reduce(
-        (sum: number, f: { episode_count: number }) => sum + (f.episode_count || 0),
-        0
-      );
+      const [feedsResp, coverageResp] = await Promise.all([
+        fetch("/api/feeds"),
+        fetch("/api/ask/coverage"),
+      ]);
+      const feedCount = feedsResp.ok ? (await feedsResp.json()).length : 0;
+      const episodeCount = coverageResp.ok
+        ? (await coverageResp.json()).total
+        : 0;
       return { feedCount, episodeCount };
     },
     staleTime: 60_000,
