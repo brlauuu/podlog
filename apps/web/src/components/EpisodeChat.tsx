@@ -176,7 +176,7 @@ export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProp
         )}
 
         {messages.map((msg, i) => (
-          <MessageBubble key={i} message={msg} isStreaming={isStreaming && i === messages.length - 1} />
+          <MessageBubble key={i} message={msg} episodeId={episodeId} isStreaming={isStreaming && i === messages.length - 1} />
         ))}
 
         {status === "error" && errorMsg && (
@@ -207,7 +207,13 @@ export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProp
   );
 }
 
-function MessageBubble({ message, isStreaming }: { message: Message; isStreaming: boolean }) {
+function scrollToTime(secs: number) {
+  window.dispatchEvent(
+    new CustomEvent("podlog:scroll-to-time", { detail: { secs } }),
+  );
+}
+
+function MessageBubble({ message, episodeId, isStreaming }: { message: Message; episodeId: string; isStreaming: boolean }) {
   const rendered = useMemo(
     () =>
       message.role === "assistant" && message.content
@@ -245,13 +251,14 @@ function MessageBubble({ message, isStreaming }: { message: Message; isStreaming
             </p>
             <div className="space-y-0.5">
               {message.sources.slice(0, 3).map((s) => (
-                <a
+                <button
                   key={s.chunk_id}
-                  href={`/episodes/${s.episode_id}?t=${Math.floor(s.start_time)}`}
-                  className="block text-xs text-primary hover:underline truncate"
+                  type="button"
+                  onClick={() => scrollToTime(Math.floor(s.start_time))}
+                  className="block w-full text-left text-xs text-primary hover:underline truncate"
                 >
                   {s.timestamp} {s.speaker_label ? `(${s.speaker_label})` : ""} — {s.text.slice(0, 80)}...
-                </a>
+                </button>
               ))}
             </div>
           </div>

@@ -318,6 +318,7 @@ export default async function EpisodePage({ params }: { params: { id: string } }
 
       {episode.status === "done" && (
         <EpisodeChat
+          key={episode.id}
           episodeId={episode.id}
           episodeTitle={episode.title ?? "Untitled Episode"}
         />
