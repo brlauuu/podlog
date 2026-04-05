@@ -19,19 +19,18 @@ interface FeedStats {
 
 export default function HomePage() {
   const [feeds, setFeeds] = useState<FeedStats[]>([]);
+  const [totalEpisodes, setTotalEpisodes] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/feeds")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setFeeds(data);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch("/api/feeds").then((r) => r.json()).catch(() => []),
+      fetch("/api/ask/coverage").then((r) => r.json()).catch(() => ({ total: 0 })),
+    ]).then(([feedsData, coverageData]) => {
+      if (Array.isArray(feedsData)) setFeeds(feedsData);
+      setTotalEpisodes(coverageData.total || 0);
+    }).finally(() => setLoading(false));
   }, []);
-
-  const totalEpisodes = feeds.reduce((sum, f) => sum + (f.episode_count || 0), 0);
 
   return (
     <div className="flex flex-col items-center pt-12 pb-16 space-y-10">

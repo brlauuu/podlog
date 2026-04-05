@@ -74,7 +74,7 @@ function SearchPageContent() {
       ]);
       const feedCount = feedsResp.ok ? (await feedsResp.json()).length : 0;
       const episodeCount = coverageResp.ok
-        ? (await coverageResp.json()).total
+        ? (await coverageResp.json()).processed
         : 0;
       return { feedCount, episodeCount };
     },

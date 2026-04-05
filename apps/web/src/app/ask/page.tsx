@@ -215,8 +215,8 @@ export default function AskPage() {
             </div>
             <p className="text-sm text-muted-foreground">
               Retrieval-augmented analysis across your transcripts. Finds the 8
-              most relevant episodes and generates an answer grounded in their
-              content.
+              most relevant transcript excerpts and generates an answer grounded
+              in their content.
             </p>
           </div>
 
