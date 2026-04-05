@@ -1,28 +1,44 @@
-# RAG Search (Coming Soon)
+# Ask AI (RAG Search)
 
-A future feature that will let you ask natural language questions and get answers drawn from your transcript library.
+Ask natural language questions and get answers drawn from your transcript library, powered by a local LLM.
 
-## What It Will Do
+## How It Works
 
-Instead of searching for keywords, you'll be able to ask questions like:
+Instead of searching for keywords, you can ask questions like:
 
 - "What arguments were made about carbon pricing across all episodes?"
 - "Did anyone discuss the impact of remote work on team culture?"
 - "Summarize what guests have said about AI regulation"
 
-The system will retrieve relevant transcript excerpts, feed them to a local LLM, and return a citation-backed answer with clickable timestamps linking to the source audio.
+The system retrieves relevant transcript chunks via semantic search (pgvector), feeds them to a local LLM as context, and streams back a citation-backed answer with clickable timestamps linking to the source audio.
 
-## How It Will Work
+## Using Ask AI
 
-- **Fully local** — powered by [Ollama](https://ollama.ai) running on your machine
-- **No external API calls** — your data never leaves your computer
-- **Streaming responses** — answers appear word-by-word instead of waiting 20-30 seconds for a full response
-- **Model selection** — choose between faster (Qwen2.5-1.5B) and higher quality (Qwen2.5-3B) models
+1. Navigate to the **Ask** page from the navbar
+2. Type your question in the input box
+3. The answer streams in word-by-word with source citations
+4. Click any citation timestamp to jump to that point in the audio
+
+## Architecture
+
+- **Fully local** — powered by [Ollama](https://ollama.ai) running in a Docker container
+- **No external API calls** — your data never leaves your machine
+- **Streaming responses** — answers appear word-by-word via server-sent events
+- **Model selection** — configurable via `OLLAMA_MODEL` env var (default: see `.env.example`)
 - **Additional RAM:** ~2 GB when the LLM is active (auto-unloaded when idle)
 
-## Status
+## Prerequisites
 
-This feature is being planned in [issue #90](https://github.com/brlauuu/podlog/issues/90). The embedding pipeline (a prerequisite) is already in place — all transcript segments are embedded with all-MiniLM-L6-v2 vectors stored in pgvector.
+The Ask AI feature requires:
+- The Ollama service running (included in `docker-compose.yml`)
+- At least one episode fully processed through the embed stage (segments need vector embeddings)
+- A pulled Ollama model (`make ollama-pull` or the worker pulls it automatically)
+
+## Troubleshooting
+
+- **"Ollama not available"** — Check that the ollama container is running: `docker compose ps ollama`
+- **Slow first response** — The model loads into memory on first query; subsequent queries are faster
+- **Poor answer quality** — Try a larger model via `OLLAMA_MODEL` in `.env`, or ensure more episodes are processed so the retrieval pool is larger
 
 ---
 

@@ -209,18 +209,18 @@ Everything from FTS, plus:
 ---
 
 ### RAG Search ("Ask" Page)
-**Status:** Not yet implemented (#114, #115, #116, #117)
+**Status:** Working
 
 Everything from Hybrid Search, plus:
 
 | Requirement | Source | Notes |
 |-------------|--------|-------|
-| `chunks` table | **#114 — NEW** | Merged speaker-turn text (~400 tokens) with embeddings |
-| `chunks.embedding` | **#114 — NEW** | 384-dim vector on the merged chunk (better quality than per-segment) |
-| HNSW index on `chunks.embedding` | **#114 — NEW** | For fast retrieval |
-| Ollama service | **#115 — NEW** | Local LLM for answer generation |
-| RAG endpoint (`POST /api/ask`) | **#116 — NEW** | Retrieval + prompt + streaming |
-| Ask page UI | **#117 — NEW** | Frontend for streaming answers with citations |
+| `chunks` table | Chunk task | Merged speaker-turn text (~400 tokens) with embeddings |
+| `chunks.embedding` | Chunk task | 384-dim vector on the merged chunk (better quality than per-segment) |
+| HNSW index on `chunks.embedding` | Migration | For fast retrieval |
+| Ollama service | docker-compose.yml | Local LLM for answer generation |
+| RAG endpoint (`POST /api/ask`) | Pipeline API | Retrieval + prompt + streaming |
+| Ask page UI | `/ask` page | Frontend for streaming answers with citations |
 
 **Minimum viable:** Chunks table populated + Ollama running + RAG endpoint + Ask page.
 
@@ -237,8 +237,8 @@ A fully processed episode ready for all current and planned features:
 | Diarized | `has_diarization = true` | Speaker labels assigned (non-fatal if false) |
 | Embedded | All segments have `embedding IS NOT NULL` | 100% coverage |
 | Speaker names | `speaker_names` rows exist | At least host identified (non-fatal if missing) |
-| Chunked | `chunks` rows exist for episode | **Not yet implemented (#114)** |
-| Chunk embeddings | All chunks have `embedding IS NOT NULL` | **Not yet implemented (#114)** |
+| Chunked | `chunks` rows exist for episode | Produced by chunk task |
+| Chunk embeddings | All chunks have `embedding IS NOT NULL` | Produced by chunk task |
 | Archived | `status = 'done'` AND `processed_at IS NOT NULL` | Episode fully processed |
 | Transcript file | `transcript_path IS NOT NULL` | Flat `.txt` file written |
 

@@ -4,7 +4,7 @@
 
 Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Single user, local only, runs entirely in Docker.
 
-**Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. 302 pipeline + 81 web tests pass. 10 Alembic migrations applied. Web UI serves search, queue dashboard, feed management, and an Ask AI feature.
+**Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. 317 pipeline + 81 web tests pass. 10 Alembic migrations applied. Web UI serves search, queue dashboard, feed management, and an Ask AI feature.
 
 ## Documentation
 
@@ -15,6 +15,7 @@ Detailed specifications live in `prds/`:
 | `prds/PRD-01-ingestion-pipeline.md` | Pipeline: RSS ingestion, Whisper, pyannote, task queue, error handling, retry logic |
 | `prds/PRD-02-search-web-app.md` | Web app: search UI, audio player, queue dashboard, dark mode, speaker renaming |
 | `prds/PRD-03-infrastructure.md` | Docker Compose, repo structure, Dockerfiles, CI/CD, Makefile, env vars |
+| `prds/PRD-04-host-guest-inference.md` | Host/guest speaker name inference via NER |
 | `prds/RISKS-AND-GAPS.md` | Active risks, known gaps, hardware requirements, resolved items |
 
 When making decisions, reference PRD sections (e.g. "per PRD-01 §5.4") rather than re-deriving. The PRDs are the source of truth for requirements.
@@ -27,6 +28,9 @@ podlog/
 ├── docker-compose.test.yml         # Test stack with db_test, mock_rss, test runner
 ├── .env.example                    # All config vars documented
 ├── Makefile                        # make up / down / build / test / etc.
+├── README.md
+├── VERSION
+├── LICENSE
 ├── apps/
 │   ├── pipeline/                   # Python 3.11 — FastAPI + DB-backed job queue
 │   │   ├── app/
@@ -34,17 +38,19 @@ podlog/
 │   │   │   ├── config.py           # pydantic-settings, all env vars
 │   │   │   ├── models.py           # SQLAlchemy ORM (feeds, episodes, segments, speaker_names)
 │   │   │   ├── database.py         # Engine + session factory
-│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, notifications)
-│   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, diarize, chunk, embed, infer, archive)
-│   │   │   ├── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, notifications)
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications)
+│   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, diarize, chunk, embed, infer, archive, cleanup, prewarm)
+│   │   │   ├── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, notifications, digest, events)
 │   │   │   └── worker.py           # Background job worker
 │   │   ├── alembic/                # Database migrations (10 applied)
 │   │   └── tests/                  # unit, integration, e2e
 │   └── web/                        # Next.js 14 (App Router)
-│       ├── src/app/                # Pages: /, /podcasts, /episodes/[id], /queue, /feeds, /ask, /search, /notifications
-│       ├── src/app/api/            # API routes: search, feeds, queue, audio, speaker rename, wizard, notifications
+│       ├── src/app/                # Pages: /, /podcasts, /episodes/[id], /queue, /feeds, /ask, /notifications
+│       ├── src/app/api/            # API routes: search, feeds, queue, audio, ask, speaker rename, wizard, notifications, pipeline proxy
 │       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, SetupWizard, etc.
-│       └── src/lib/                # db.ts (pg pool), search.ts (FTS query), timestamp.ts, pipeline.ts
+│       └── src/lib/                # db.ts, search.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts
+├── docs/                           # User-facing documentation and guides
+├── scripts/                        # Operational scripts (nightly audit, health check)
 └── prds/                           # Specifications and risk register
 ```
 
@@ -54,10 +60,10 @@ podlog/
 |---|---|---|
 | Pipeline API | FastAPI (Python 3.11) | Internal API consumed by web app |
 | Task queue | PostgreSQL-backed job queue | Sequential processing (concurrency=1) to avoid OOM |
-| Transcription | `openai/whisper-large-v3` via `transformers` | Explicit unload before diarization — mandatory |
+| Transcription | WhisperX (CTranslate2 backend), default `large-v3-turbo` | Explicit unload before diarization — mandatory |
 | Diarization | `pyannote/speaker-diarization-3.1` | Requires HF_TOKEN; graceful failure path |
 | LLM inference | Ollama (local) | RAG-based Ask AI feature; default model configurable via `OLLAMA_MODEL` |
-| Database | PostgreSQL 15 | FTS via `to_tsvector` + GIN index |
+| Database | PostgreSQL 15 (pgvector/pgvector:pg15) | FTS via `to_tsvector` + GIN index, vector HNSW index |
 | ORM | SQLAlchemy 2.0 + Alembic | Migrations auto-run on pipeline startup |
 | Web app | Next.js 14 (App Router) | `output: 'standalone'` for Docker |
 | Styling | Tailwind CSS + shadcn/ui | Dark mode via `class` strategy; 12 shadcn/ui components installed |
@@ -102,7 +108,7 @@ Services: web (:3000), pipeline API (:8000), ollama (:11434).
 - Full pipeline: ingest, download, transcribe, diarize, chunk, embed, infer, archive
 - All FastAPI endpoints (feeds, episodes, queue, health, ask, notifications, backfill)
 - All Next.js pages, API routes, and components (search, ask, queue, feeds, episodes, notifications)
-- 302 pipeline tests + 81 web tests passing
+- 317 pipeline tests + 81 web tests passing
 - 10 Alembic migrations applied
 - 12 shadcn/ui components installed
 - Setup wizard for first-run onboarding
@@ -111,5 +117,5 @@ Services: web (:3000), pipeline API (:8000), ollama (:11434).
 - Notification settings
 
 **Not yet done:**
-- Integration and e2e test bodies (stubs exist, some skipped)
+- Some integration and e2e test bodies still stubbed or skipped
 - Full end-to-end pipeline smoke test in CI

@@ -147,7 +147,7 @@ The flat file is always written on successful transcription, regardless of diari
 
 - Task runner: **PostgreSQL-backed job queue** (no external broker). Jobs are stored in the `episodes` table with status tracking.
 - Jobs are processed sequentially by default (one worker, concurrency=1) to avoid memory exhaustion on CPU-only machines running Whisper.
-- Job states: `PENDING` → `DOWNLOADING` → `TRANSCRIBING` → `DIARIZING` → `ARCHIVING` → `DONE` / `FAILED`.
+- Job states: `PENDING` → `DOWNLOADING` → `TRANSCRIBING` → `DIARIZING` → `EMBEDDING` → `CHUNKING` → `INFERRING` → `ARCHIVING` → `DONE` / `FAILED`.
 - **Error classification:** All failures are tagged with an `error_class` field stored in the database and surfaced in the queue UI:
 
 | `error_class`        | Meaning                               | Auto-retry?              |

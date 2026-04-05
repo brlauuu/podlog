@@ -117,10 +117,10 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 **Component:** PRD-01 — Worker  
 **Description:** Whisper large-v3 requires ~3.5 GB RAM. On machines with 8 GB total, OS overhead + Docker + PostgreSQL + the worker can push total usage to the limit. If the OS kills the worker process mid-transcription, the episode stays in `TRANSCRIBING` state indefinitely (zombie job).  
 **Mitigation:**
-1. Per PRD-01 §5.9, `OOM` is an error class — if Celery catches the OOM exception, it marks the job `FAILED` with `error_class=OOM`.
+1. Per PRD-01 §5.9, `OOM` is an error class — if the worker catches the OOM exception, it marks the job `FAILED` with `error_class=OOM`.
 2. Document the hardware recommendations (above) prominently in the README.
 3. Recommend `WHISPER_MODEL=medium` or `small` for machines with <16 GB RAM.
-4. Known gap: if the OS kills the process with SIGKILL (rather than Python raising an exception), Celery cannot catch it. The job stalls. Add a periodic "zombie job" cleanup task in V1 that marks jobs stuck in non-terminal states for >2 hours as failed.
+4. Known gap: if the OS kills the process with SIGKILL (rather than Python raising an exception), the worker cannot catch it. The job stalls. A periodic zombie job cleanup task marks jobs stuck in non-terminal states for >2 hours as failed.
 
 **Status:** Fully mitigated in v1.3. Zombie job cleanup task implemented (see GAP-01 resolved).
 
@@ -188,16 +188,9 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
-### RISK-07: Celery Beat Single Point of Failure
+### ~~RISK-07: Celery Beat Single Point of Failure~~ → Resolved in v1.3
 
-**Severity:** Low  
-**Component:** PRD-01 — Scheduler  
-**Description:** Celery Beat runs as a separate container and stores its schedule state in-memory (or in a local file). If the beat container restarts, it may re-enqueue tasks that already ran, or miss scheduled runs during downtime. For a 24-hour feed poll this is low-impact (a missed poll is caught on the next cycle), but it is worth documenting.  
-**Mitigation:**
-1. Use Celery Beat's database scheduler (`django-celery-beat` or the SQLAlchemy equivalent) to persist the schedule state to PostgreSQL in V1. This makes beat restarts safe.
-2. For MVP, the in-memory scheduler is acceptable given the 24-hour interval and single-user context.
-
-**Status:** Accepted for MVP. Database scheduler is a V1 candidate.
+*Moved to Part 4: Resolved Items.*
 
 ---
 
@@ -215,12 +208,9 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
-### GAP-03: No Episode Re-Processing in MVP
+### ~~GAP-03: No Episode Re-Processing in MVP~~ → Resolved in v1.3
 
-**Component:** PRD-01  
-**Description:** If a user wants to re-transcribe an episode (e.g. after changing `WHISPER_MODEL`), there is no mechanism in MVP. The episode is already marked `done` and is idempotency-blocked from re-ingestion.  
-**Proposed fix:** Add a `POST /api/episodes/{id}/reprocess` endpoint that resets the episode's status to `pending`, clears segments, and re-enqueues the task. This is already listed in the V1 roadmap (PRD-01 §11).  
-**Target phase:** V1
+*Moved to Part 4: Resolved Items.*
 
 ---
 
@@ -259,8 +249,8 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 | GAP-N/A | Pagination count missing | Companion `COUNT(*)` query added to search API route | v1.1 |
 | GAP-02 | No RSS feed validation on add | `validate_and_parse_feed()` in `rss.py` fetches + parses before persisting; 422 on failure | v1.2 |
 | GAP-06 | No disk space pre-check before download | `shutil.disk_usage()` check against `DISK_HEADROOM_BYTES` (default 2 GB) before download | v1.2 |
-| GAP-N/A | `redis_test` service missing from test compose | Added `redis_test` service with healthcheck to `docker-compose.test.yml` | v1.2 |
 | GAP-N/A | `updated_at` missing from episodes table | Added `updated_at` to episodes model (prerequisite for GAP-01 zombie detection) | v1.2 |
-| GAP-N/A | `beat` container startup ordering | Changed `beat` dependency from `- worker` to `pipeline: service_healthy` | v1.2 |
 | GAP-N/A | Next.js standalone output missing | Added `output: 'standalone'` to `next.config.ts` (required for Docker build) | v1.2 |
-| GAP-01 | Zombie job cleanup | Periodic Celery Beat task every 30 min — queries episodes stuck in non-terminal status for >2 h and marks them `failed` with `error_class=SYSTEM_ERROR` (`app/tasks/cleanup.py`) | v1.3 |
+| GAP-01 | Zombie job cleanup | Periodic task every 30 min — queries episodes stuck in non-terminal status for >2 h and marks them `failed` with `error_class=SYSTEM_ERROR` (`app/tasks/cleanup.py`) | v1.3 |
+| GAP-03 | No episode re-processing | Episode reprocessing implemented — resets status to `pending`, clears segments, re-enqueues through the pipeline | v1.3 |
+| RISK-07 | Celery Beat single point of failure | No longer applicable — Celery/Redis replaced by PostgreSQL-backed job queue with polling loop in `worker.py` | v1.3 |
