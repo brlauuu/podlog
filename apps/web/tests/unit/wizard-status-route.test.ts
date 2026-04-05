@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { GET, PUT } from "@/app/api/wizard/status/route";
+import { NextRequest } from "next/server";
 
 // Mock the pg pool
 const mockQuery = jest.fn();
@@ -44,7 +45,7 @@ describe("GET /api/wizard/status", () => {
 describe("PUT /api/wizard/status", () => {
   it("upserts wizard_completed when completed is true", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
-    const req = new Request("http://localhost/api/wizard/status", {
+    const req = new NextRequest("http://localhost/api/wizard/status", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ completed: true }),
@@ -60,7 +61,7 @@ describe("PUT /api/wizard/status", () => {
 
   it("deletes wizard_completed when completed is false", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
-    const req = new Request("http://localhost/api/wizard/status", {
+    const req = new NextRequest("http://localhost/api/wizard/status", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ completed: false }),
