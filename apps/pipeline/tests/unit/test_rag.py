@@ -1,4 +1,5 @@
 """Unit tests for RAG retrieval, prompt construction, and SSE streaming."""
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -132,6 +133,178 @@ class TestAskEndpoint:
             assert any(e["event"] == "error" for e in events)
             error_data = next(e for e in events if e["event"] == "error")
             assert "nonexistent" in error_data["data"]["message"]
+
+
+class TestRetrieveChunks:
+    """Tests for retrieve_chunks — the DB query builder."""
+
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_basic_retrieval(self, mock_embed):
+        mock_row = MagicMock()
+        mock_row.chunk_id = 1
+        mock_row.episode_id = "ep-1"
+        mock_row.episode_title = "Test Ep"
+        mock_row.speaker_label = "SPEAKER_00"
+        mock_row.start_time = 10.0
+        mock_row.end_time = 20.0
+        mock_row.text = "Hello world"
+        mock_row.similarity = 0.8
+
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = [mock_row]
+
+        from app.services.rag import retrieve_chunks
+        results = retrieve_chunks(mock_db, "test question")
+
+        assert len(results) == 1
+        assert results[0].episode_title == "Test Ep"
+        assert results[0].similarity == 0.8
+        mock_embed.assert_called_once_with("test question")
+
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_filters_below_threshold(self, mock_embed):
+        low_row = MagicMock()
+        low_row.chunk_id = 1
+        low_row.episode_id = "ep-1"
+        low_row.episode_title = "Low"
+        low_row.speaker_label = None
+        low_row.start_time = 0.0
+        low_row.end_time = 5.0
+        low_row.text = "Low sim"
+        low_row.similarity = 0.1  # Below SIMILARITY_THRESHOLD (0.3)
+
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = [low_row]
+
+        from app.services.rag import retrieve_chunks
+        results = retrieve_chunks(mock_db, "test")
+        assert len(results) == 0
+
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_uses_untitled_for_null_title(self, mock_embed):
+        mock_row = MagicMock()
+        mock_row.chunk_id = 1
+        mock_row.episode_id = "ep-1"
+        mock_row.episode_title = None
+        mock_row.speaker_label = None
+        mock_row.start_time = 0.0
+        mock_row.end_time = 5.0
+        mock_row.text = "text"
+        mock_row.similarity = 0.9
+
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = [mock_row]
+
+        from app.services.rag import retrieve_chunks
+        results = retrieve_chunks(mock_db, "q")
+        assert results[0].episode_title == "Untitled Episode"
+
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_feed_ids_filter(self, mock_embed):
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = []
+
+        from app.services.rag import retrieve_chunks
+        retrieve_chunks(mock_db, "q", feed_ids=["feed-1", "feed-2"])
+
+        # Check the SQL includes feed filter params
+        call_args = mock_db.execute.call_args
+        params = call_args[0][1]
+        assert params["fid_0"] == "feed-1"
+        assert params["fid_1"] == "feed-2"
+
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_uploads_filter(self, mock_embed):
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = []
+
+        from app.services.rag import retrieve_chunks
+        retrieve_chunks(mock_db, "q", feed_ids=["__uploads__"])
+
+        # SQL should include IS NULL condition for uploads
+        call_args = mock_db.execute.call_args
+        query_str = str(call_args[0][0])
+        assert "IS NULL" in query_str
+
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_mixed_feed_ids_and_uploads(self, mock_embed):
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = []
+
+        from app.services.rag import retrieve_chunks
+        retrieve_chunks(mock_db, "q", feed_ids=["feed-1", "__uploads__"])
+
+        call_args = mock_db.execute.call_args
+        query_str = str(call_args[0][0])
+        params = call_args[0][1]
+        assert "IS NULL" in query_str
+        assert params["fid_0"] == "feed-1"
+
+
+class TestCheckModelAvailable:
+    def test_model_found(self):
+        from app.services.rag import check_model_available
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "models": [{"name": "qwen2.5:3b"}, {"name": "llama3:8b"}]
+        }
+
+        with patch("app.services.rag.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get.return_value = mock_resp
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            result = asyncio.run(check_model_available("qwen2.5:3b"))
+            assert result is True
+
+    def test_model_not_found(self):
+        from app.services.rag import check_model_available
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "models": [{"name": "llama3:8b"}]
+        }
+
+        with patch("app.services.rag.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get.return_value = mock_resp
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            result = asyncio.run(check_model_available("qwen2.5:3b"))
+            assert result is False
+
+    def test_ollama_unreachable(self):
+        from app.services.rag import check_model_available
+
+        with patch("app.services.rag.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get.side_effect = Exception("Connection refused")
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            result = asyncio.run(check_model_available("qwen2.5:3b"))
+            assert result is False
+
+    def test_ollama_non_200(self):
+        from app.services.rag import check_model_available
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+
+        with patch("app.services.rag.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get.return_value = mock_resp
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            result = asyncio.run(check_model_available("qwen2.5:3b"))
+            assert result is False
 
 
 def _parse_sse(text: str) -> list[dict]:
