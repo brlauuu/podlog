@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { MessageSquare, Send, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { renderAnswerWithCitations, type Source } from "@/lib/citations";
+import { renderAnswerWithCitations, type Source, type OnCitationClick } from "@/lib/citations";
 
 type StreamStatus = "idle" | "connecting" | "streaming" | "done" | "error";
 
@@ -213,11 +213,15 @@ function scrollToTime(secs: number) {
   );
 }
 
+function handleCitationClick(_episodeId: string, seconds: number) {
+  scrollToTime(seconds);
+}
+
 function MessageBubble({ message, episodeId, isStreaming }: { message: Message; episodeId: string; isStreaming: boolean }) {
   const rendered = useMemo(
     () =>
       message.role === "assistant" && message.content
-        ? renderAnswerWithCitations(message.content, message.sources ?? [])
+        ? renderAnswerWithCitations(message.content, message.sources ?? [], handleCitationClick)
         : null,
     [message.content, message.sources, message.role]
   );

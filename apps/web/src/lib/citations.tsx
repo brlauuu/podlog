@@ -13,12 +13,19 @@ export interface Source {
 }
 
 /**
+ * Callback for handling citation clicks in-place (e.g. scroll transcript)
+ * instead of navigating. When provided, citations render as buttons.
+ */
+export type OnCitationClick = (episodeId: string, seconds: number) => void;
+
+/**
  * Parse citation patterns like [Episode Title, 12:34] in the answer text
- * and return React nodes with clickable links.
+ * and return React nodes with clickable links (or buttons if onCitationClick is provided).
  */
 export function renderAnswerWithCitations(
   text: string,
-  sources: Source[]
+  sources: Source[],
+  onCitationClick?: OnCitationClick,
 ): React.ReactNode[] {
   // Match [anything, M:SS] or [anything, MM:SS]
   const citationRegex = /\[([^\]]+?),\s*(\d{1,3}:\d{2})\]/g;
@@ -46,16 +53,30 @@ export function renderAnswerWithCitations(
     );
 
     if (matchedSource) {
-      nodes.push(
-        <Link
-          key={`cite-${match.index}`}
-          href={`/episodes/${matchedSource.episode_id}?t=${citedSeconds}`}
-          className="inline-flex items-center gap-0.5 text-primary hover:underline font-medium"
-          title={`${matchedSource.episode_title} at ${citedTimestamp}`}
-        >
-          [{citedTitle}, {citedTimestamp}]
-        </Link>
-      );
+      if (onCitationClick) {
+        nodes.push(
+          <button
+            key={`cite-${match.index}`}
+            type="button"
+            onClick={() => onCitationClick(matchedSource.episode_id, citedSeconds)}
+            className="inline-flex items-center gap-0.5 text-primary hover:underline font-medium"
+            title={`${matchedSource.episode_title} at ${citedTimestamp}`}
+          >
+            [{citedTitle}, {citedTimestamp}]
+          </button>
+        );
+      } else {
+        nodes.push(
+          <Link
+            key={`cite-${match.index}`}
+            href={`/episodes/${matchedSource.episode_id}?t=${citedSeconds}`}
+            className="inline-flex items-center gap-0.5 text-primary hover:underline font-medium"
+            title={`${matchedSource.episode_title} at ${citedTimestamp}`}
+          >
+            [{citedTitle}, {citedTimestamp}]
+          </Link>
+        );
+      }
     } else {
       // No match found — render as styled but non-linked citation
       nodes.push(
