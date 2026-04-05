@@ -16,7 +16,7 @@ export default function BackToSearchLink() {
 
   return (
     <Link
-      href={`/?q=${encodeURIComponent(query)}`}
+      href={`/search?q=${encodeURIComponent(query)}`}
       className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
     >
       <ArrowLeft size={14} />

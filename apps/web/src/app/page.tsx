@@ -1,294 +1,129 @@
 "use client";
 
-import { Suspense, useState, useEffect, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { Search, List, Layers } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import SearchResult from "@/components/SearchResult";
-import FeedGroupCard from "@/components/FeedGroupCard";
-import DownloadReportButton from "@/components/DownloadReportButton";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import type { SearchPage, GroupedSearchResult } from "@/lib/search";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  Mic,
+  Search,
+  AudioWaveform,
+  Headphones,
+  Database,
+  Shield,
+} from "lucide-react";
 
-const PAGE_SIZE = 20;
-
-type ViewMode = "grouped" | "flat";
-
-/**
- * Wrapper that provides the required Suspense boundary for useSearchParams().
- * See https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
- */
-export default function HomePage() {
-  return (
-    <Suspense fallback={null}>
-      <HomePageContent />
-    </Suspense>
-  );
+interface FeedStats {
+  id: string;
+  title: string | null;
+  episode_count: number;
 }
 
-function HomePageContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const initialQuery = searchParams.get("q") ?? "";
+export default function HomePage() {
+  const [feeds, setFeeds] = useState<FeedStats[]>([]);
+  const [totalEpisodes, setTotalEpisodes] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const [query, setQuery] = useState(initialQuery);
-  const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
-  const [feedFilter, setFeedFilter] = useState<string>("");
-  const [page, setPage] = useState(1);
-  const [viewMode, setViewMode] = useState<ViewMode>("grouped");
-
-  // Cache totals from page 1 to skip COUNT(*) on subsequent pages
-  const cachedFlatTotal = useRef<{ key: string; total: number } | null>(null);
-  const cachedGroupedTotals = useRef<{ key: string; totalFeeds: number; totalEpisodes: number; totalMentions: number } | null>(null);
-
-  // Sync state when URL ?q= param changes (e.g. browser back/forward)
   useEffect(() => {
-    const urlQuery = searchParams.get("q") ?? "";
-    if (urlQuery !== submittedQuery) {
-      setQuery(urlQuery);
-      setSubmittedQuery(urlQuery);
-      setPage(1);
-    }
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Flat search query — skip COUNT(*) on page 2+ using cached total
-  const flatCacheKey = `${submittedQuery}:${feedFilter}`;
-  const flatQuery = useQuery<SearchPage>({
-    queryKey: ["search", submittedQuery, feedFilter, page],
-    queryFn: async () => {
-      if (!submittedQuery) return { results: [], total: 0, page: 1, pageSize: PAGE_SIZE, coverage: { processed: 0, total: 0 } };
-      const canSkipCount = page > 1 && cachedFlatTotal.current?.key === flatCacheKey;
-      const params = new URLSearchParams({
-        q: submittedQuery,
-        page: String(page),
-        pageSize: String(PAGE_SIZE),
-      });
-      if (feedFilter) params.set("feedId", feedFilter);
-      if (canSkipCount) params.set("skipCount", "true");
-      const resp = await fetch(`/api/search?${params}`);
-      if (!resp.ok) throw new Error("Search failed");
-      const data: SearchPage = await resp.json();
-      // Cache total from page 1, or restore from cache on page 2+
-      if (data.total >= 0) {
-        cachedFlatTotal.current = { key: flatCacheKey, total: data.total };
-      } else if (cachedFlatTotal.current?.key === flatCacheKey) {
-        data.total = cachedFlatTotal.current.total;
-      }
-      return data;
-    },
-    enabled: Boolean(submittedQuery) && viewMode === "flat",
-    staleTime: 30_000,
-  });
-
-  // Grouped search query — skip COUNT(*) on page 2+ using cached totals
-  const groupedCacheKey = `${submittedQuery}:${feedFilter}`;
-  const groupedQuery = useQuery<GroupedSearchResult>({
-    queryKey: ["search-grouped", submittedQuery, feedFilter, page],
-    queryFn: async () => {
-      if (!submittedQuery)
-        return { feeds: [], totalFeeds: 0, totalEpisodes: 0, totalMentions: 0, coverage: { processed: 0, total: 0 } };
-      const canSkipCount = page > 1 && cachedGroupedTotals.current?.key === groupedCacheKey;
-      const params = new URLSearchParams({
-        q: submittedQuery,
-        page: String(page),
-        pageSize: String(PAGE_SIZE),
-      });
-      if (feedFilter) params.set("feedId", feedFilter);
-      if (canSkipCount) params.set("skipCount", "true");
-      const resp = await fetch(`/api/search/grouped?${params}`);
-      if (!resp.ok) throw new Error("Search failed");
-      const data: GroupedSearchResult = await resp.json();
-      // Cache totals from page 1, or restore from cache on page 2+
-      if (data.totalMentions >= 0) {
-        cachedGroupedTotals.current = {
-          key: groupedCacheKey,
-          totalFeeds: data.totalFeeds,
-          totalEpisodes: data.totalEpisodes,
-          totalMentions: data.totalMentions,
-        };
-      } else if (cachedGroupedTotals.current?.key === groupedCacheKey) {
-        data.totalFeeds = cachedGroupedTotals.current.totalFeeds;
-        data.totalEpisodes = cachedGroupedTotals.current.totalEpisodes;
-        data.totalMentions = cachedGroupedTotals.current.totalMentions;
-      }
-      return data;
-    },
-    enabled: Boolean(submittedQuery) && viewMode === "grouped",
-    staleTime: 30_000,
-  });
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = query.trim();
-    setPage(1);
-    setSubmittedQuery(trimmed);
-    // Update URL so the search query is bookmarkable and restorable via back-navigation
-    if (trimmed) {
-      router.replace(`/?q=${encodeURIComponent(trimmed)}`, { scroll: false });
-    } else {
-      router.replace("/", { scroll: false });
-    }
-  }
-
-  const isLoading =
-    viewMode === "flat"
-      ? flatQuery.isLoading || flatQuery.isFetching
-      : groupedQuery.isLoading || groupedQuery.isFetching;
-
-  const totalPages =
-    viewMode === "flat" && flatQuery.data
-      ? Math.ceil(flatQuery.data.total / PAGE_SIZE)
-      : 0;
+    Promise.all([
+      fetch("/api/feeds").then((r) => r.json()).catch(() => []),
+      fetch("/api/ask/coverage").then((r) => r.json()).catch(() => ({ total: 0 })),
+    ]).then(([feedsData, coverageData]) => {
+      if (Array.isArray(feedsData)) setFeeds(feedsData);
+      setTotalEpisodes(coverageData.total || 0);
+    }).finally(() => setLoading(false));
+  }, []);
 
   return (
-    <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="relative">
-          <Search
-            size={18}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search transcripts..."
-            className="w-full pl-10 pr-4 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base transition-shadow"
-            autoFocus
-          />
+    <div className="flex flex-col items-center pt-12 pb-16 space-y-10">
+      {/* Hero section */}
+      <div className="text-center space-y-6">
+        {/* Icon composition */}
+        <div className="flex items-center justify-center gap-3 text-muted-foreground">
+          <Mic size={28} className="text-primary" />
+          <AudioWaveform size={36} className="text-primary/60" />
+          <Headphones size={32} className="text-primary/80" />
+          <AudioWaveform size={36} className="text-primary/60 scale-x-[-1]" />
+          <Search size={28} className="text-primary" />
         </div>
-      </form>
 
-      {submittedQuery && (
-        <div className="space-y-4">
-          {/* View mode toggle */}
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              {viewMode === "grouped" && groupedQuery.data
-                ? `Found in ${groupedQuery.data.totalFeeds} podcast${groupedQuery.data.totalFeeds !== 1 ? "s" : ""}, ${groupedQuery.data.totalEpisodes} episode${groupedQuery.data.totalEpisodes !== 1 ? "s" : ""} (${groupedQuery.data.totalMentions} mention${groupedQuery.data.totalMentions !== 1 ? "s" : ""})`
-                : viewMode === "flat" && flatQuery.data
-                  ? `Page ${page} of ${totalPages} · ${flatQuery.data.total} results`
-                  : ""}
-              {(() => {
-                const cov = viewMode === "grouped" ? groupedQuery.data?.coverage : flatQuery.data?.coverage;
-                if (cov && cov.total > 0 && cov.processed < cov.total) {
-                  return ` · Searching ${cov.processed} of ${cov.total} episodes`;
-                }
-                return null;
-              })()}
-            </div>
-            <div className="flex items-center gap-2">
-              <DownloadReportButton
-                query={submittedQuery}
-                viewMode={viewMode}
-                flatResults={viewMode === "flat" ? flatQuery.data?.results : undefined}
-                groupedResults={viewMode === "grouped" ? groupedQuery.data : undefined}
-              />
-              <div className="flex items-center border border-border rounded-lg overflow-hidden">
-                <button
-                  onClick={() => { setViewMode("grouped"); setPage(1); }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
-                    viewMode === "grouped"
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-accent/30"
-                  }`}
-                  title="Grouped view"
-                >
-                  <Layers size={13} />
-                  Grouped
-                </button>
-                <button
-                  onClick={() => { setViewMode("flat"); setPage(1); }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
-                    viewMode === "flat"
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-accent/30"
-                  }`}
-                  title="Flat view"
-                >
-                  <List size={13} />
-                  Flat
-                </button>
-              </div>
-            </div>
+        <div className="space-y-3">
+          <h1 className="text-4xl font-bold tracking-tight">Podlog</h1>
+          <p className="text-lg text-muted-foreground max-w-md mx-auto">
+            Your self-hosted transcription database. Custom, private, offline, yours.
+          </p>
+        </div>
+      </div>
+
+      {/* Quick links */}
+      <div className="flex gap-4">
+        <Link
+          href="/search"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors"
+        >
+          <Search size={16} />
+          Search
+        </Link>
+        <Link
+          href="/ask"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors"
+        >
+          <Database size={16} />
+          Ask AI
+        </Link>
+      </div>
+
+      {/* Stats */}
+      {!loading && feeds.length > 0 && (
+        <div className="text-center space-y-2 max-w-lg">
+          <p className="text-sm text-muted-foreground">
+            This database contains {feeds.length} podcast
+            {feeds.length !== 1 ? "s" : ""} with {totalEpisodes} episode
+            {totalEpisodes !== 1 ? "s" : ""}:
+          </p>
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+            {feeds.map((feed) => (
+              <span key={feed.id} className="text-foreground">
+                {feed.title || "Untitled"}{" "}
+                <span className="text-muted-foreground">
+                  ({feed.episode_count} ep{feed.episode_count !== 1 ? "s" : ""})
+                </span>
+              </span>
+            ))}
           </div>
-
-          {isLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="border border-border rounded-lg p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-4 w-48" />
-                  </div>
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-3 w-5/6" />
-                </div>
-              ))}
-            </div>
-          ) : viewMode === "grouped" ? (
-            // Grouped view
-            groupedQuery.data && groupedQuery.data.feeds.length > 0 ? (
-              <div className="space-y-3">
-                {groupedQuery.data.feeds.map((feed) => (
-                  <FeedGroupCard key={feed.feedId} feed={feed} query={submittedQuery} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16 space-y-2">
-                <p className="text-muted-foreground">No results for &ldquo;{submittedQuery}&rdquo;</p>
-                <p className="text-sm text-muted-foreground">
-                  Try checking your spelling, or use broader search terms.
-                </p>
-              </div>
-            )
-          ) : (
-            // Flat view
-            flatQuery.data && flatQuery.data.results.length > 0 ? (
-              <>
-                <div className="space-y-3">
-                  {flatQuery.data.results.map((result) => (
-                    <SearchResult key={result.id} result={result} query={submittedQuery} />
-                  ))}
-                </div>
-
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                    >
-                      &larr; Previous
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      Page {page} of {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                    >
-                      Next &rarr;
-                    </Button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center py-16 space-y-2">
-                <p className="text-muted-foreground">No results for &ldquo;{submittedQuery}&rdquo;</p>
-                <p className="text-sm text-muted-foreground">
-                  Try checking your spelling, or use broader search terms.
-                </p>
-              </div>
-            )
-          )}
         </div>
       )}
+      {!loading && feeds.length === 0 && (
+        <div className="text-center space-y-2">
+          <p className="text-sm text-muted-foreground">
+            No podcasts yet.{" "}
+            <Link href="/podcasts" className="text-primary hover:underline">
+              Add your first feed
+            </Link>{" "}
+            to get started.
+          </p>
+        </div>
+      )}
+
+      {/* Features */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-xl text-center">
+        <div className="space-y-1.5">
+          <Shield size={20} className="mx-auto text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">
+            Fully self-hosted. Your data never leaves your machine.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Search size={20} className="mx-auto text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">
+            Full-text and semantic search across every transcript.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Database size={20} className="mx-auto text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">
+            RAG-powered AI answers grounded in your episodes.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

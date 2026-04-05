@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Send, Play, Loader2, ChevronDown } from "lucide-react";
+import { Play, ChevronDown, BrainCircuit, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { renderAnswerWithCitations, type Source } from "@/lib/citations";
@@ -9,6 +9,7 @@ import { renderAnswerWithCitations, type Source } from "@/lib/citations";
 interface Feed {
   id: string;
   title: string | null;
+  episode_count: number;
 }
 
 interface CoverageStats {
@@ -37,7 +38,9 @@ export default function AskPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [model, setModel] = useState(getStoredModel);
   const [feeds, setFeeds] = useState<Feed[]>([]);
-  const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(new Set());
+  const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(
+    new Set()
+  );
   const [feedDropdownOpen, setFeedDropdownOpen] = useState(false);
   const [hasManualUploads, setHasManualUploads] = useState(false);
   const [coverage, setCoverage] = useState<CoverageStats | null>(null);
@@ -52,7 +55,10 @@ export default function AskPage() {
   // Close feed dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (feedDropdownRef.current && !feedDropdownRef.current.contains(e.target as Node)) {
+      if (
+        feedDropdownRef.current &&
+        !feedDropdownRef.current.contains(e.target as Node)
+      ) {
         setFeedDropdownOpen(false);
       }
     }
@@ -69,7 +75,6 @@ export default function AskPage() {
       })
       .catch(() => {});
 
-    // Check for manual uploads (episodes with no feed_id)
     fetch("/api/ask/coverage")
       .then((r) => r.json())
       .then((data) => {
@@ -78,6 +83,26 @@ export default function AskPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Compute filtered episode count based on selected feeds
+  const filteredEpisodeCount = useMemo(() => {
+    if (!coverage) return null;
+    if (selectedFeedIds.size === 0) return coverage.processed;
+    // Sum episode_count for selected feeds
+    let count = 0;
+    for (const feed of feeds) {
+      if (selectedFeedIds.has(feed.id)) {
+        count += feed.episode_count || 0;
+      }
+    }
+    // If manual uploads are selected, we don't have an exact count, so just note it
+    if (selectedFeedIds.has("__uploads__")) {
+      // We can't know the exact count without a query, approximate with total - feed sum
+      const feedTotal = feeds.reduce((s, f) => s + (f.episode_count || 0), 0);
+      count += Math.max(0, coverage.total - feedTotal);
+    }
+    return Math.min(count, coverage.processed);
+  }, [coverage, selectedFeedIds, feeds]);
 
   const renderedAnswer = useMemo(
     () => (answer ? renderAnswerWithCitations(answer, sources) : null),
@@ -90,20 +115,19 @@ export default function AskPage() {
       const q = question.trim();
       if (!q) return;
 
-      // Reset state
       setAnswer("");
       setSources([]);
       setErrorMsg("");
       setStatus("connecting");
 
-      // Abort previous request if any
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
 
       try {
         const body: Record<string, unknown> = { question: q, model };
-        if (selectedFeedIds.size > 0) body.feed_ids = Array.from(selectedFeedIds);
+        if (selectedFeedIds.size > 0)
+          body.feed_ids = Array.from(selectedFeedIds);
 
         const resp = await fetch("/api/pipeline/ask", {
           method: "POST",
@@ -158,7 +182,6 @@ export default function AskPage() {
           }
         }
 
-        // Ensure we mark done if stream ended without done event
         setStatus((s) => (s === "streaming" ? "done" : s));
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -178,149 +201,194 @@ export default function AskPage() {
     );
   }
 
+  const isProcessing = status === "connecting" || status === "streaming";
+
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        Ask questions about your podcast transcripts. Answers are generated
-        from transcript excerpts and may take 15-30 seconds.
-      </p>
+      {/* Centered header + input */}
+      <div className={`flex flex-col items-center ${answer || sources.length > 0 ? "pt-2" : "pt-16"} transition-all`}>
+        <div className="w-full max-w-2xl space-y-3">
+          {/* Title + description */}
+          <div className="text-center space-y-1">
+            <div className="flex items-center justify-center gap-2">
+              <h1 className="text-xl font-semibold">Ask</h1>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Retrieval-augmented analysis across your transcripts. Finds the 8
+              most relevant transcript excerpts and generates an answer grounded
+              in their content.
+            </p>
+          </div>
 
-      {/* Controls row: model + feed filter + coverage */}
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2">
-          <label
-            htmlFor="model-select"
-            className="text-sm text-muted-foreground"
-          >
-            Model:
-          </label>
-          <select
-            id="model-select"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
-          >
-            {MODEL_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label} &middot; {opt.value} ({opt.hint})
-              </option>
-            ))}
-          </select>
-        </div>
+          {/* Ask input */}
+          <form onSubmit={handleSubmit}>
+            <div className="relative">
+              <BrainCircuit
+                size={18}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                type="text"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Ask about your transcripts..."
+                className="w-full pl-10 pr-12 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base transition-shadow"
+                disabled={isProcessing}
+                autoFocus
+              />
+              <button
+                type="submit"
+                disabled={!question.trim() || isProcessing}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+              >
+                <ArrowRight size={18} />
+              </button>
+            </div>
+          </form>
 
-        {(feeds.length > 0 || hasManualUploads) && (
-          <div className="relative" ref={feedDropdownRef}>
-            <button
-              type="button"
-              onClick={() => setFeedDropdownOpen((o) => !o)}
-              className="flex items-center gap-1.5 text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground hover:bg-accent/30 transition-colors"
-            >
-              <span className="text-muted-foreground">Source:</span>
-              {selectedFeedIds.size === 0
-                ? "All"
-                : `${selectedFeedIds.size} selected`}
-              <ChevronDown size={14} className="text-muted-foreground" />
-            </button>
-            {feedDropdownOpen && (
-              <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[220px] max-h-64 overflow-y-auto">
+          {/* Settings row below input */}
+          <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+            {/* Model selector */}
+            <div className="flex items-center gap-1.5">
+              <label
+                htmlFor="model-select"
+                className="text-muted-foreground"
+              >
+                Model:
+              </label>
+              <select
+                id="model-select"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+              >
+                {MODEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label} &middot; {opt.value} ({opt.hint})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Source filter */}
+            {(feeds.length > 0 || hasManualUploads) && (
+              <div className="relative" ref={feedDropdownRef}>
                 <button
                   type="button"
-                  onClick={() => setSelectedFeedIds(new Set())}
-                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors ${
-                    selectedFeedIds.size === 0 ? "font-medium" : ""
-                  }`}
+                  onClick={() => setFeedDropdownOpen((o) => !o)}
+                  className="flex items-center gap-1.5 text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground hover:bg-accent/30 transition-colors"
                 >
-                  All sources
+                  <span className="text-muted-foreground">Source:</span>
+                  {selectedFeedIds.size === 0
+                    ? "All"
+                    : `${selectedFeedIds.size} selected`}
+                  <ChevronDown size={14} className="text-muted-foreground" />
                 </button>
-                <div className="border-t border-border my-1" />
-                {feeds.map((f) => (
-                  <label
-                    key={f.id}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedFeedIds.has(f.id)}
-                      onChange={() => {
-                        setSelectedFeedIds((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(f.id)) next.delete(f.id);
-                          else next.add(f.id);
-                          return next;
-                        });
-                      }}
-                      className="rounded"
-                    />
-                    <span className="truncate">{f.title || "Untitled"}</span>
-                  </label>
-                ))}
-                {hasManualUploads && (
-                  <>
+                {feedDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[220px] max-h-64 overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFeedIds(new Set())}
+                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors ${
+                        selectedFeedIds.size === 0 ? "font-medium" : ""
+                      }`}
+                    >
+                      All sources
+                    </button>
                     <div className="border-t border-border my-1" />
-                    <label className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedFeedIds.has("__uploads__")}
-                        onChange={() => {
-                          setSelectedFeedIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has("__uploads__")) next.delete("__uploads__");
-                            else next.add("__uploads__");
-                            return next;
-                          });
-                        }}
-                        className="rounded"
-                      />
-                      <span>Manual uploads</span>
-                    </label>
-                  </>
+                    {feeds.map((f) => (
+                      <label
+                        key={f.id}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedFeedIds.has(f.id)}
+                          onChange={() => {
+                            setSelectedFeedIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(f.id)) next.delete(f.id);
+                              else next.add(f.id);
+                              return next;
+                            });
+                          }}
+                          className="rounded"
+                        />
+                        <span className="truncate">
+                          {f.title || "Untitled"}
+                        </span>
+                      </label>
+                    ))}
+                    {hasManualUploads && (
+                      <>
+                        <div className="border-t border-border my-1" />
+                        <label className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedFeedIds.has("__uploads__")}
+                            onChange={() => {
+                              setSelectedFeedIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has("__uploads__"))
+                                  next.delete("__uploads__");
+                                else next.add("__uploads__");
+                                return next;
+                              });
+                            }}
+                            className="rounded"
+                          />
+                          <span>Manual uploads</span>
+                        </label>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             )}
           </div>
-        )}
 
-        {coverage && (
-          <span className="text-xs text-muted-foreground">
-            Searching across {coverage.processed} processed episode{coverage.processed !== 1 ? "s" : ""}
-            {coverage.total > coverage.processed && ` (${coverage.total - coverage.processed} still processing)`}
-          </span>
-        )}
+          {/* Episode count below settings */}
+          {filteredEpisodeCount !== null && (
+            <p className="text-center text-xs text-muted-foreground">
+              {selectedFeedIds.size === 0 ? (
+                <>
+                  Analyzing {filteredEpisodeCount} processed episode
+                  {filteredEpisodeCount !== 1 ? "s" : ""}
+                  {coverage &&
+                    coverage.total > coverage.processed &&
+                    ` (${coverage.total - coverage.processed} still processing)`}
+                </>
+              ) : (
+                <>
+                  Analyzing up to {filteredEpisodeCount} episode
+                  {filteredEpisodeCount !== 1 ? "s" : ""} from selected source
+                  {selectedFeedIds.size !== 1 ? "s" : ""}
+                </>
+              )}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Question input */}
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="What did they discuss about..."
-          className="flex-1 px-4 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base"
-          disabled={status === "connecting" || status === "streaming"}
-          autoFocus
-        />
-        <Button
-          type="submit"
-          disabled={
-            !question.trim() ||
-            status === "connecting" ||
-            status === "streaming"
-          }
-          className="px-4"
-        >
-          <Send size={18} />
-        </Button>
-      </form>
-
-      {/* Loading / generating indicator */}
-      {(status === "connecting" || status === "streaming") && (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Loader2 size={16} className="animate-spin" />
-          {status === "connecting"
-            ? "Searching transcripts..."
-            : !answer
-              ? "Generating answer..."
-              : "Writing..."}
+      {/* Loading / generating indicator — equalizer style */}
+      {isProcessing && (
+        <div className="flex flex-col items-center gap-2 py-4">
+          <div className="flex items-center gap-0.5">
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <span
+                key={i}
+                className="w-1 rounded-full bg-primary animate-[eqBar_1.4s_ease-in-out_infinite]"
+                style={{ animationDelay: `${i * 0.1}s` }}
+              />
+            ))}
+          </div>
+          <span className="text-sm text-muted-foreground">
+            {status === "connecting"
+              ? "Searching transcripts..."
+              : !answer
+                ? "Generating answer..."
+                : "Writing..."}
+          </span>
         </div>
       )}
 
@@ -331,10 +399,12 @@ export default function AskPage() {
         </div>
       )}
 
-      {/* Answer with parsed citations */}
+      {/* Answer */}
       {answer && (
         <div className="border border-border rounded-lg p-4 space-y-2">
-          <h2 className="text-sm font-medium text-muted-foreground">Answer</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Analysis
+          </h2>
           <div
             ref={answerRef}
             className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap"
