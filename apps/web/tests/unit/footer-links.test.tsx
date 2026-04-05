@@ -1,19 +1,15 @@
 /**
- * Unit test for Footer component — verifies brlauuu links point to
- * the personal blog (GitHub Pages) per issue #25.
+ * Unit test for Footer component — verifies links point to the correct URLs.
  */
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
-// Mock TanStack React Query so Footer renders without a QueryClient
-jest.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: undefined, isLoading: true }),
-}));
-
-// Mock lucide-react icons
-jest.mock("lucide-react", () => ({
-  ExternalLink: () => <svg data-testid="external-link-icon" />,
-}));
+// Mock next/link to render a plain anchor
+jest.mock("next/link", () => {
+  return ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...props}>{children}</a>
+  );
+});
 
 import Footer from "@/components/Footer";
 
@@ -24,21 +20,18 @@ describe("Footer brlauuu links", () => {
     render(<Footer />);
   });
 
-  test("@brlauuu credits link points to GitHub Pages blog", () => {
-    const link = screen.getByRole("link", { name: "@brlauuu" });
-    expect(link).toHaveAttribute("href", BLOG_URL);
-  });
-
   test("copyright brlauuu link points to GitHub Pages blog", () => {
     const copyrightLink = screen.getByRole("link", { name: "brlauuu" });
     expect(copyrightLink).toHaveAttribute("href", BLOG_URL);
   });
 
-  test("brlauuu/podlog repo link still points to GitHub", () => {
-    const repoLink = screen.getByRole("link", { name: "brlauuu/podlog" });
-    expect(repoLink).toHaveAttribute(
-      "href",
-      "https://github.com/brlauuu/podlog"
-    );
+  test("O'Saasy License link points to osaasy.dev", () => {
+    const licenseLink = screen.getByRole("link", { name: "O'Saasy License" });
+    expect(licenseLink).toHaveAttribute("href", "https://osaasy.dev");
+  });
+
+  test("About link points to /about", () => {
+    const aboutLink = screen.getByRole("link", { name: "About" });
+    expect(aboutLink).toHaveAttribute("href", "/about");
   });
 });
