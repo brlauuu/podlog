@@ -42,6 +42,12 @@ docs/audit/**
 .DS_Store
 Thumbs.db
 
+# Claude Code
+.claude/
+
+# Test results
+apps/web/test-results/
+
 # IDE
 .idea/
 .vscode/
