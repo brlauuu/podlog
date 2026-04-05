@@ -41,17 +41,24 @@ interface Props {
   onSkip: () => void;
 }
 
+const FALLBACK_SERVICES: ServiceStatus[] = [
+  { name: "Database", status: "UNKNOWN" },
+  { name: "Pipeline API", status: "UNKNOWN" },
+  { name: "Worker", status: "UNKNOWN" },
+];
+
 export default function WizardHealthCheck({ onNext, onSkip }: Props) {
-  const { data } = useQuery<HealthResponse>({
+  const { data, isError } = useQuery<HealthResponse>({
     queryKey: ["wizard-health"],
     queryFn: async () => {
       const resp = await fetch("/api/pipeline/health");
+      if (!resp.ok) throw new Error("Health check failed");
       return resp.json();
     },
     refetchInterval: 3000,
   });
 
-  const services = data?.services ?? [];
+  const services = isError ? FALLBACK_SERVICES : (data?.services ?? []);
   const allReady = data?.status === "OK";
 
   return (
