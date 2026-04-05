@@ -32,6 +32,13 @@ describe("GET /api/wizard/status", () => {
     const data = await resp.json();
     expect(data).toEqual({ completed: true });
   });
+
+  it("returns completed: false when DB query throws (fail-open)", async () => {
+    mockQuery.mockRejectedValue(new Error("connection refused"));
+    const resp = await GET();
+    const data = await resp.json();
+    expect(data).toEqual({ completed: false });
+  });
 });
 
 describe("PUT /api/wizard/status", () => {

@@ -30,10 +30,15 @@ export default function SetupWizard() {
   }
 
   function handleFinish() {
-    if (dontShow) markCompleted(true);
+    markCompleted(dontShow);
     close();
     if (feedAdded) router.push("/queue");
     else router.push("/");
+  }
+
+  function goToStep(s: Step) {
+    // Only allow navigating to steps already visited (at or before current)
+    if (s <= step) setStep(s);
   }
 
   if (!open) return null;
@@ -65,9 +70,19 @@ export default function SetupWizard() {
         {/* Step dots */}
         <div className="flex justify-center gap-1.5 pt-2" data-testid="step-dots">
           {([1, 2, 3] as Step[]).map((s) => (
-            <span
+            <button
               key={s}
-              className={`h-2 w-2 rounded-full ${s === step ? "bg-primary" : "bg-muted"}`}
+              type="button"
+              aria-label={`Go to step ${s}`}
+              disabled={s > step}
+              onClick={() => goToStep(s)}
+              className={`h-2 w-2 rounded-full transition-colors ${
+                s === step
+                  ? "bg-primary"
+                  : s < step
+                  ? "bg-primary/50 cursor-pointer hover:bg-primary/70"
+                  : "bg-muted cursor-default"
+              }`}
             />
           ))}
         </div>

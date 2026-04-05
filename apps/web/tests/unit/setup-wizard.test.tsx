@@ -190,6 +190,31 @@ describe("WizardComplete", () => {
   });
 });
 
+describe("WizardHealthCheck — fallback on error", () => {
+  it("shows Unknown badges when health check fails", async () => {
+    mockFetch.mockRejectedValue(new Error("Network error"));
+
+    render(<WizardHealthCheck onNext={() => {}} onSkip={() => {}} />, { wrapper });
+
+    await waitFor(() => {
+      const unknowns = screen.getAllByText("UNKNOWN");
+      expect(unknowns).toHaveLength(3);
+    });
+  });
+});
+
+describe("WizardComplete — Ask AI link", () => {
+  it("shows Ask AI link when feed was added", () => {
+    render(<WizardComplete feedAdded={true} onFinish={() => {}} onDontShowChange={() => {}} />);
+    expect(screen.getByText("Ask AI")).toBeInTheDocument();
+  });
+
+  it("shows Ask AI link when feed was skipped", () => {
+    render(<WizardComplete feedAdded={false} onFinish={() => {}} onDontShowChange={() => {}} />);
+    expect(screen.getByText("Ask AI")).toBeInTheDocument();
+  });
+});
+
 describe("SetupWizard", () => {
   beforeEach(() => {
     mockFetch.mockResolvedValue({
@@ -219,11 +244,43 @@ describe("SetupWizard", () => {
     });
   });
 
-  it("shows step dots", async () => {
+  it("shows clickable step dots", async () => {
     mockUseWizard.mockReturnValue({ open: true, setOpen: jest.fn(), markCompleted: jest.fn() });
     render(<SetupWizard />, { wrapper });
     await waitFor(() => {
       expect(screen.getByTestId("step-dots")).toBeInTheDocument();
     });
+    const dots = screen.getByTestId("step-dots").querySelectorAll("button");
+    expect(dots).toHaveLength(3);
+    // Step 1 is current, steps 2 and 3 are disabled (not yet visited)
+    expect(dots[1]).toBeDisabled();
+    expect(dots[2]).toBeDisabled();
+  });
+
+  it("calls markCompleted(false) on finish when checkbox unchecked", async () => {
+    const mockMarkCompleted = jest.fn();
+    const mockSetOpen = jest.fn();
+    mockUseWizard.mockReturnValue({ open: true, setOpen: mockSetOpen, markCompleted: mockMarkCompleted });
+    render(<SetupWizard />, { wrapper });
+
+    // Navigate to screen 2
+    await waitFor(() => {
+      expect(screen.getByText("Welcome to Podlog")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    // Skip to screen 3
+    await waitFor(() => {
+      expect(screen.getByText(/Add Your First Podcast/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /skip/i }));
+
+    // On screen 3, click "Get Started" without checking the box
+    await waitFor(() => {
+      expect(screen.getByText(/Ready When You Are/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /get started/i }));
+
+    expect(mockMarkCompleted).toHaveBeenCalledWith(false);
   });
 });

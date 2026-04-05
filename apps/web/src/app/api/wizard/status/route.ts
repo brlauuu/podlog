@@ -6,11 +6,16 @@ export const dynamic = "force-dynamic";
 const KEY = "wizard_completed";
 
 export async function GET() {
-  const { rows } = await pool.query(
-    "SELECT value FROM system_state WHERE key = $1",
-    [KEY]
-  );
-  return NextResponse.json({ completed: rows.length > 0 && rows[0].value === "1" });
+  try {
+    const { rows } = await pool.query(
+      "SELECT value FROM system_state WHERE key = $1",
+      [KEY]
+    );
+    return NextResponse.json({ completed: rows.length > 0 && rows[0].value === "1" });
+  } catch {
+    // Fail-open: if DB is unavailable, report not completed so wizard shows
+    return NextResponse.json({ completed: false });
+  }
 }
 
 export async function PUT(req: NextRequest) {
