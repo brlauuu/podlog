@@ -62,17 +62,17 @@ export default function WizardComplete({ feedAdded, onFinish, onDontShowChange }
               onClick={onFinish}
               className={`flex items-center gap-3 p-2.5 rounded-md transition-colors ${
                 link.highlight
-                  ? "border-2 border-primary bg-primary/5"
+                  ? "border-2 border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/30"
                   : "border border-border hover:bg-accent/40"
               }`}
             >
               <div className="min-w-0 flex-1">
-                <p className={`text-sm font-semibold ${link.highlight ? "text-primary" : ""}`}>
+                <p className={`text-sm font-semibold ${link.highlight ? "text-blue-700 dark:text-blue-300" : ""}`}>
                   {link.title}
                 </p>
                 <p className="text-xs text-muted-foreground">{link.description}</p>
               </div>
-              <ChevronRight className={`h-4 w-4 shrink-0 ${link.highlight ? "text-primary" : "text-muted-foreground"}`} />
+              <ChevronRight className={`h-4 w-4 shrink-0 ${link.highlight ? "text-blue-700 dark:text-blue-300" : "text-muted-foreground"}`} />
             </Link>
           ))}
         </div>

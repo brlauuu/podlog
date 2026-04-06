@@ -213,6 +213,17 @@ describe("WizardAddFeed", () => {
     // Click Next to fetch preview
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
 
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/feeds/preview",
+        expect.objectContaining({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: "https://example.com/feed.xml" }),
+        })
+      );
+    });
+
     // Episode picker should appear
     await waitFor(() => {
       expect(screen.getByText("Episode 1")).toBeInTheDocument();
@@ -297,7 +308,9 @@ describe("WizardComplete", () => {
 
   it("highlights 'Add Your First Feed' link when feed was skipped", () => {
     render(<WizardComplete feedAdded={false} onFinish={() => {}} onDontShowChange={() => {}} />);
-    expect(screen.getByText(/Add Your First Feed/i)).toBeInTheDocument();
+    const cta = screen.getByText(/Add Your First Feed/i).closest("a");
+    expect(cta).toBeInTheDocument();
+    expect(cta).toHaveClass("border-blue-500");
   });
 
   it("shows 'Don't show this wizard' checkbox", () => {
@@ -378,6 +391,19 @@ describe("SetupWizard", () => {
     // Step 1 is current, steps 2 and 3 are disabled (not yet visited)
     expect(dots[1]).toBeDisabled();
     expect(dots[2]).toBeDisabled();
+  });
+
+  it("renders accessible dialog title/description and fullscreen sizing", async () => {
+    mockUseWizard.mockReturnValue({ open: true, setOpen: jest.fn(), markCompleted: jest.fn() });
+    render(<SetupWizard />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByText("Setup Wizard")).toBeInTheDocument();
+      expect(screen.getByText("First-run onboarding for health checks, feed setup, and next steps.")).toBeInTheDocument();
+    });
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("h-[calc(100vh-2rem)]");
   });
 
   it("calls markCompleted(false) on finish when checkbox unchecked", async () => {

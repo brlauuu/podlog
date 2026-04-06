@@ -19,16 +19,23 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const { completed } = await req.json();
+  try {
+    const { completed } = await req.json();
 
-  if (completed) {
-    await pool.query(
-      "INSERT INTO system_state (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2",
-      [KEY, "1"]
+    if (completed) {
+      await pool.query(
+        "INSERT INTO system_state (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2",
+        [KEY, "1"]
+      );
+    } else {
+      await pool.query("DELETE FROM system_state WHERE key = $1", [KEY]);
+    }
+
+    return NextResponse.json({ completed: !!completed });
+  } catch {
+    return NextResponse.json(
+      { completed: false, error: "Failed to update wizard status" },
+      { status: 503 }
     );
-  } else {
-    await pool.query("DELETE FROM system_state WHERE key = $1", [KEY]);
   }
-
-  return NextResponse.json({ completed: !!completed });
 }
