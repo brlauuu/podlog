@@ -14,7 +14,7 @@ interface PlayerState {
 
 interface AudioPlayerContextValue {
   state: PlayerState;
-  audioRef: React.RefObject<HTMLAudioElement>;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
   playEpisode: (
     episodeId: string,
     filename: string,

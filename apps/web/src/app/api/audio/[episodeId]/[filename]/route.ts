@@ -34,9 +34,9 @@ function getContentType(filename: string): string {
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { episodeId: string; filename: string } }
+  { params }: { params: Promise<{ episodeId: string; filename: string }> }
 ) {
-  const { episodeId } = params;
+  const { episodeId, filename } = await params;
 
   // Validate episode exists and the file belongs to it
   const epResult = await pool.query(
@@ -48,7 +48,7 @@ export async function GET(
   }
 
   // Strip any path separators — treat filename as basename only
-  const safeName = path.basename(params.filename);
+  const safeName = path.basename(filename);
 
   // Verify the requested filename matches the episode's audio file
   const episodePath = epResult.rows[0].audio_local_path;

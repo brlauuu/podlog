@@ -46,8 +46,9 @@ async function getEpisodes(feedId: string): Promise<EnrichedEpisode[]> {
   return result.rows;
 }
 
-export default async function PodcastPage({ params }: { params: { id: string } }) {
-  const [feed, episodes] = await Promise.all([getFeed(params.id), getEpisodes(params.id)]);
+export default async function PodcastPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const [feed, episodes] = await Promise.all([getFeed(id), getEpisodes(id)]);
 
   if (!feed) notFound();
 

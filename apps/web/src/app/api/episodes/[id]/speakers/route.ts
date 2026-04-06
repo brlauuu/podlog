@@ -5,8 +5,9 @@ import pool from "@/lib/db";
  * Speaker name management — PRD-02 §5.4
  * PUT /api/episodes/{id}/speakers — upsert a display name for a speaker label
  */
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { speaker_label, display_name } = await req.json();
 
     if (!speaker_label || !display_name?.trim()) {
@@ -21,7 +22,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
        DO UPDATE SET display_name = EXCLUDED.display_name,
                      inferred = false,
                      confirmed_by_user = true`,
-      [params.id, speaker_label, display_name.trim()]
+      [id, speaker_label, display_name.trim()]
     );
 
     return NextResponse.json({ ok: true });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { validateMergeRequest } from "@/lib/validateMergeRequest";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let body: unknown;
   try {
     body = await req.json();
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     source_labels: string[];
     target_label: string;
   };
-  const episodeId = params.id;
+  const { id: episodeId } = await params;
   const allLabels = [target_label, ...source_labels];
 
   const client = await pool.connect();
