@@ -25,7 +25,7 @@ export default function Navbar() {
           Podlog
         </Link>
 
-        <div className="flex items-center gap-1 flex-1">
+        <div className="flex items-center gap-1 flex-1 overflow-x-auto scrollbar-none">
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
