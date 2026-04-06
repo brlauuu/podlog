@@ -130,9 +130,10 @@ from app.services.digest import send_digest_if_due, DigestItem
 
 @patch("app.services.digest.SessionLocal")
 @patch("smtplib.SMTP")
-@patch("app.services.digest.estimate_queue_status", return_value=(3, 900.0))
+@patch("app.services.digest.compute_avg_duration", return_value=1800.0)
+@patch("app.services.digest.estimate_queue_status", return_value=(3, 900.0, 0.5))
 @patch("app.services.digest.get_notification_settings")
-def test_send_digest_sends_when_due(mock_get_ns, mock_estimate, mock_smtp_cls, mock_session_cls):
+def test_send_digest_sends_when_due(mock_get_ns, mock_estimate, mock_avg_dur, mock_smtp_cls, mock_session_cls):
     mock_get_ns.return_value = {
         "notification_frequency": "daily",
         "email_configured": True,
@@ -212,7 +213,7 @@ def test_send_digest_skips_immediate_mode(mock_get_ns, mock_session_cls):
 
 
 @patch("app.services.digest.SessionLocal")
-@patch("app.services.digest.estimate_queue_status", return_value=(0, None))
+@patch("app.services.digest.estimate_queue_status", return_value=(0, None, None))
 @patch("app.services.digest.get_notification_settings")
 def test_send_digest_skips_when_no_unsent_events(mock_get_ns, mock_estimate, mock_session_cls):
     mock_get_ns.return_value = {"notification_frequency": "daily"}
@@ -227,3 +228,44 @@ def test_send_digest_skips_when_no_unsent_events(mock_get_ns, mock_estimate, moc
 
     now = datetime(2026, 3, 15, 8, 30, tzinfo=timezone.utc)
     send_digest_if_due(now=now)
+
+
+from app.services.digest import format_digest_html, format_digest_telegram, DigestData
+
+
+def test_digest_html_shows_new_metrics_when_legacy_absent():
+    """avg_duration_secs and processing_factor render in digest even without legacy avg fields."""
+    data = DigestData(
+        frequency="daily",
+        date_label="Apr 06, 2026",
+        items=[],
+        avg_transcribe_secs=None,
+        avg_diarize_secs=None,
+        avg_total_secs=None,
+        avg_duration_secs=2400.0,
+        processing_factor=1.5,
+    )
+    html = format_digest_html(data)
+    assert "Avg episode length" in html
+    assert "40m 00s" in html
+    assert "Processing factor" in html
+    assert "1.5x" in html
+
+
+def test_digest_telegram_shows_new_metrics_when_legacy_absent():
+    """avg_duration_secs and processing_factor render in digest telegram even without legacy avg fields."""
+    data = DigestData(
+        frequency="daily",
+        date_label="Apr 06, 2026",
+        items=[],
+        avg_transcribe_secs=None,
+        avg_diarize_secs=None,
+        avg_total_secs=None,
+        avg_duration_secs=2400.0,
+        processing_factor=1.5,
+    )
+    md = format_digest_telegram(data)
+    assert "Avg ep. length" in md
+    assert "40m 00s" in md
+    assert "Processing factor" in md
+    assert "1.5x" in md

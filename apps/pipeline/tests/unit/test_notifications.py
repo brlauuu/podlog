@@ -113,10 +113,11 @@ def test_estimate_queue_status_with_history():
 
     db.query = mock_query
 
-    remaining, estimated = estimate_queue_status(db)
+    remaining, estimated, factor = estimate_queue_status(db)
     assert remaining == 3
     # rate = 1800 processing / 3600 audio = 0.5, queued audio = 3600, estimate = 3600 * 0.5 = 1800
     assert estimated == 1800.0
+    assert factor == 0.5
 
 
 def test_compute_avg_processing_stats_with_data():
@@ -198,6 +199,7 @@ def test_estimate_queue_status_no_history():
 
     db.query = mock_query
 
-    remaining, estimated = estimate_queue_status(db)
+    remaining, estimated, factor = estimate_queue_status(db)
     assert remaining == 2
     assert estimated is None
+    assert factor is None

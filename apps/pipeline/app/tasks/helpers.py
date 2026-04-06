@@ -4,7 +4,7 @@ import logging
 
 from app.models import Episode
 from app.services.events import bus
-from app.services.notifications import EpisodeFailedEvent, compute_avg_processing_stats, estimate_queue_status
+from app.services.notifications import EpisodeFailedEvent, compute_avg_duration, compute_avg_processing_stats, estimate_queue_status
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +39,9 @@ def mark_failed(db, episode_id: str, error_class: str, error_message: str) -> No
     _NON_RETRYABLE = {"DISK_FULL", "OOM", "SYSTEM_ERROR"}
     episode = db.query(Episode).filter(Episode.id == episode_id).first()
     if episode and (error_class in _NON_RETRYABLE or episode.retry_count >= episode.retry_max):
-        remaining, estimated = estimate_queue_status(db)
+        remaining, estimated, factor = estimate_queue_status(db)
         avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
+        avg_dur = compute_avg_duration(db)
         bus.emit(EpisodeFailedEvent(
             episode_id=episode_id,
             episode_title=episode.title or "",
@@ -56,4 +57,6 @@ def mark_failed(db, episode_id: str, error_class: str, error_message: str) -> No
             avg_transcribe_secs=avg_t,
             avg_diarize_secs=avg_d,
             avg_total_secs=avg_total,
+            avg_duration_secs=avg_dur,
+            processing_factor=factor,
         ))

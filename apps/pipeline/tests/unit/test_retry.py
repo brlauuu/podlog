@@ -43,7 +43,9 @@ class TestRetryLogic:
                                       error_class="HTTP_ACCESS", error_msg="HTTP 403")
             mock_jq.enqueue.assert_called_once()
 
-    def test_marks_failed_at_max_retries(self):
+    @patch("app.tasks.helpers.compute_avg_duration", return_value=1800.0)
+    @patch("app.tasks.helpers.estimate_queue_status", return_value=(0, None, None))
+    def test_marks_failed_at_max_retries(self, mock_estimate, mock_avg_dur):
         db = self._make_db()
         episode = MagicMock()
         episode.retry_count = 3
