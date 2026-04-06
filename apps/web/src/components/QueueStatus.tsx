@@ -376,7 +376,7 @@ export default function QueueStatus() {
           placeholder="Search episodes..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
         />
         <span className="text-xs text-muted-foreground whitespace-nowrap">
           {activeCount} active · {failedCount} failed{stuckCount > 0 ? ` · ${stuckCount} stuck` : ""} · {doneCount} done

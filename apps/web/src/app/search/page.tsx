@@ -212,7 +212,7 @@ function SearchPageContent() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search transcripts..."
-                className="w-full pl-10 pr-4 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base transition-shadow"
+                className="w-full pl-10 pr-4 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-ring text-base transition-shadow"
                 autoFocus
               />
             </div>
