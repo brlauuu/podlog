@@ -2,9 +2,9 @@
 
 ## What This Is
 
-Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Single user, local only, runs entirely in Docker.
+Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Single user, local only. Production runs in Docker Compose; development can run services natively (see `docs/development.md`).
 
-**Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. 317 pipeline + 81 web tests pass. 10 Alembic migrations applied. Web UI serves search, queue dashboard, feed management, and an Ask AI feature.
+**Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. 332 pipeline + 101 web tests pass. 10 Alembic migrations applied. Web UI serves search, queue dashboard, feed management, and an Ask AI feature.
 
 ## Documentation
 
@@ -28,6 +28,7 @@ podlog/
 ├── docker-compose.test.yml         # Test stack with db_test, mock_rss, test runner
 ├── .env.example                    # All config vars documented
 ├── Makefile                        # make up / down / build / test / etc.
+├── AGENTS.md
 ├── README.md
 ├── VERSION
 ├── LICENSE
@@ -44,11 +45,11 @@ podlog/
 │   │   │   └── worker.py           # Background job worker
 │   │   ├── alembic/                # Database migrations (10 applied)
 │   │   └── tests/                  # unit, integration, e2e
-│   └── web/                        # Next.js 14 (App Router)
-│       ├── src/app/                # Pages: /, /podcasts, /episodes/[id], /queue, /feeds, /ask, /notifications
-│       ├── src/app/api/            # API routes: search, feeds, queue, audio, ask, speaker rename, wizard, notifications, pipeline proxy
+│   └── web/                        # Next.js 16 (App Router)
+│       ├── src/app/                # Pages: /, /about, /podcasts, /episodes/[id], /queue, /feeds, /ask, /search, /notifications
+│       ├── src/app/api/            # API routes: search, search/grouped, search/mentions, feeds, queue, audio, ask, ask/coverage, episodes (ingest, upload, retry, speakers, merge), wizard, notifications, pipeline proxy
 │       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, SetupWizard, etc.
-│       └── src/lib/                # db.ts, search.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts
+│       └── src/lib/                # db.ts, search.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx
 ├── docs/                           # User-facing documentation and guides
 ├── scripts/                        # Operational scripts (nightly audit, health check)
 └── prds/                           # Specifications and risk register
@@ -65,7 +66,7 @@ podlog/
 | LLM inference | Ollama (local) | RAG-based Ask AI feature; default model configurable via `OLLAMA_MODEL` |
 | Database | PostgreSQL 15 (pgvector/pgvector:pg15) | FTS via `to_tsvector` + GIN index, vector HNSW index |
 | ORM | SQLAlchemy 2.0 + Alembic | Migrations auto-run on pipeline startup |
-| Web app | Next.js 14 (App Router) | `output: 'standalone'` for Docker |
+| Web app | Next.js 16 (App Router) | `output: 'standalone'` for Docker |
 | Styling | Tailwind CSS + shadcn/ui | Dark mode via `class` strategy; 12 shadcn/ui components installed |
 | Data fetching | TanStack React Query | Polling for queue status |
 | DB client (web) | `pg` (node-postgres) raw SQL | Direct PostgreSQL queries for search |
@@ -100,7 +101,7 @@ Services: web (:3000), pipeline API (:8000), ollama (:11434).
   - Pipeline: `pytest` — unit tests mock DB/models, integration tests use a real test DB.
   - Web: `jest` + `@testing-library/react` for unit, `playwright` for e2e.
 - **PRD references:** When implementing a feature, cite the PRD section (e.g. "per PRD-02 §5.6") in code comments only where the requirement is non-obvious.
-- **When modifying the design:** Update the relevant PRD and RISKS-AND-GAPS.md. Bump the version number and add a changelog entry.
+- **When modifying the design:** Update the relevant PRD and RISKS-AND-GAPS.md. Bump the version number.
 
 ## Current State & What's Next
 
@@ -108,7 +109,7 @@ Services: web (:3000), pipeline API (:8000), ollama (:11434).
 - Full pipeline: ingest, download, transcribe, diarize, chunk, embed, infer, archive
 - All FastAPI endpoints (feeds, episodes, queue, health, ask, notifications, backfill)
 - All Next.js pages, API routes, and components (search, ask, queue, feeds, episodes, notifications)
-- 317 pipeline tests + 81 web tests passing
+- 332 pipeline tests + 101 web tests passing
 - 10 Alembic migrations applied
 - 12 shadcn/ui components installed
 - Setup wizard for first-run onboarding
