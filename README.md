@@ -117,7 +117,7 @@ See [docs/configuration.md](docs/configuration.md) for the full list of all envi
 | [User Guide](docs/guide/) | Step-by-step guide for new users: setup, features, configuration |
 | [Configuration](docs/configuration.md) | All environment variables with defaults and explanations |
 | [Hardware Guide](docs/hardware.md) | System requirements, processing benchmarks, tested machine specs |
-| [Development](docs/development.md) | Local development setup, running tests, project structure |
+| [Development](docs/development.md) | Local development setup, running tests, architecture notes, and Codex/Claude audit workflows |
 
 ## Common Commands
 

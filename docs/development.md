@@ -159,11 +159,76 @@ make help               List all available commands
 - **PRs:** Squash merge to main, branch names follow `{issue}-{description}` pattern
 - **Testing:** Unit tests mock DB/models, integration tests use real DB, e2e tests use Playwright
 
-## Codebase Audit
+## Audit Workflows
 
-Automated comprehensive audit that checks architecture, documentation freshness, test coverage, dead code, wizard completeness, CLAUDE.md accuracy, and dependency health.
+Podlog currently uses two distinct audit paths:
 
-### On-demand (interactive)
+1. Codex audit workflow (`nightly-audit` skill)
+2. Claude audit workflow (`/codebase-audit`)
+
+Both workflows target the same core quality concerns: correctness bugs, regressions, stale docs, dead code, test gaps, and dependency health.
+
+### Codex Audit Workflow
+
+The Codex path is driven by the repo-local `nightly-audit` skill:
+
+- Skill location: `.agents/skills/nightly-audit/SKILL.md`
+- Repo policy source: `AGENTS.md`
+- Typical use: unattended or broad whole-repo review from a Codex session
+
+#### How to run (Codex)
+
+In a Codex session, explicitly request the skill, for example:
+
+```
+Use $nightly-audit and run a full repository audit.
+```
+
+Or section mode:
+
+```
+Use $nightly-audit. Audit focus: Dependency Health. Output only that section.
+```
+
+#### Output format (Codex)
+
+The `nightly-audit` skill defines structured outputs:
+
+- Full-report mode:
+  - `# Codebase Audit — YYYY-MM-DD`
+  - `## Summary`
+  - `## Architecture Review`
+  - `## Docs Freshness`
+  - `## Test Coverage`
+  - `## Dead Code Detection`
+  - `## Wizard Completeness`
+  - `## CLAUDE.md Accuracy`
+  - `## Dependency Health`
+  - `## Suggested Next Steps`
+- Section mode: exactly one requested section
+- Findings format:
+  - `- **[SEVERITY]** One-line description`
+  - `  - File: path/to/file.ext:line`
+  - `  - Evidence: what was checked and what was found`
+
+Allowed severities are `CRITICAL`, `WARNING`, and `INFO`.
+
+#### Safety constraints (Codex unattended audits)
+
+Per `AGENTS.md` and the `nightly-audit` skill:
+
+- Do not modify source files.
+- Do not commit or push.
+- Do not create GitHub issues unless explicitly requested.
+- Include concrete file-path evidence for findings.
+
+Codex audit results are typically report/chat output unless a caller explicitly requests writing a report file.
+
+### Claude Audit Workflow
+
+The Claude path uses `/codebase-audit`, documented and runnable via Claude CLI.
+
+#### On-demand (interactive)
 
 From within a Claude Code session:
 
@@ -171,7 +236,7 @@ From within a Claude Code session:
 /codebase-audit
 ```
 
-### Unattended (overnight)
+#### Unattended (overnight)
 
 ```bash
 claude -p "/codebase-audit" \
@@ -190,27 +255,33 @@ claude -p "/codebase-audit" \
 - `--dangerously-skip-permissions` — required for unattended runs (no interactive prompts)
 - `--print` — non-interactive mode, exits when done
 
-### Nightly cron
+#### Nightly cron
 
 ```bash
 # crontab -e
 0 2 * * * cd /path/to/podlog && claude -p "/codebase-audit" --allowedTools "Read,Glob,Grep,Write,Edit,Bash,Agent" --model opus --worktree --dangerously-skip-permissions --print > /tmp/audit-$(date +\%Y-\%m-\%d).log 2>&1
 ```
 
-### Output
+#### Output (Claude)
 
-- **Reports:** `docs/audit/YYYY-MM-DD/claude/` — one file per check section plus a `summary.md`
-- **No auto-commit or issue creation** — reports are left as local files for manual review
-- **Status:** Check the `> Status:` line in `summary.md` to see if it completed (`COMPLETE 7/7`) or was interrupted (`IN PROGRESS N/7`)
+- Reports are written to `docs/audit/YYYY-MM-DD/claude/` (one file per check plus `summary.md`)
+- No auto-commit or issue creation; reports are left for manual review
+- Completion state is visible in `summary.md` (`COMPLETE 7/7` or `IN PROGRESS N/7`)
 
-### What it checks
+### Codex vs Claude: Intended Difference
 
-| Check | What it does |
-|-------|-------------|
-| Architecture | File structure, orphan files, circular deps, large files |
-| Docs freshness | README claims, badge values, guide accuracy, PRD status |
-| Test coverage | Runs pytest --cov and jest --coverage, parses results |
-| Dead code | Files with no imports, orphaned tests, unused exports |
-| Wizard completeness | Spec compliance + feature coverage gaps |
-| CLAUDE.md accuracy | Repo structure, tech stack versions, current state |
-| Dependency health | Outdated packages, unused deps, missing deps |
+| Topic | Codex (`nightly-audit`) | Claude (`/codebase-audit`) |
+|-------|--------------------------|----------------------------|
+| Primary entrypoint | Skill invoked in Codex chat/session | Slash workflow in Claude session/CLI |
+| Typical use | Unattended or broad read-heavy audits with strict evidence formatting | Interactive or scheduled sectioned reports written to `docs/audit/` |
+| Output shape | Structured finding blocks in full-report or section mode | Section files + `summary.md` artifact set |
+| Artifact default | Usually chat/report output unless explicitly asked to write files | Explicit local files under `docs/audit/` |
+| Auto issue creation | Not allowed unless explicitly requested | Not automatic; manual review artifact flow |
+| Commit/push behavior | Not allowed in unattended mode unless explicitly requested | Not part of normal audit flow |
+
+### Safety Expectations (Both Paths)
+
+- Prefer isolated worktrees for unattended runs.
+- Audits should be non-destructive and analysis-first.
+- No commit/push as part of a standard audit run.
+- No automatic issue creation unless explicitly requested.
