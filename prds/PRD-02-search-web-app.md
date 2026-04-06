@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-02 — Search Web Application  
-**Version:** 1.4
-**Status:** Draft
+**Version:** 1.5
+**Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.5 — Marked document status as Active and removed stale non-goal note claiming semantic/vector search was out of scope.
 - v1.4 — Added Ask AI (RAG) documentation (§5.10): retrieval pipeline, key parameters (TOP_K, SIMILARITY_THRESHOLD), model options, source filtering, speaker attribution, citation rendering, error handling.
 - v1.3 — Queue dashboard (§5.6) redesigned: replaced kanban/grouping modes with a Summary + Table hybrid layout. Worker warm-up banner removed (brief warm-up does not warrant persistent UI). Retry countdown timer removed; retry count shown as N/M instead. Stage progress bar added (horizontal bar showing per-stage episode counts). Search/filter input added (debounced, filters by episode title or podcast name). Done episodes collapsed by default in an expandable section. Responsiveness: Podcast and Retries columns hidden on screens narrower than 640 px. ASCII diagram in §9.3 updated to match new layout.
 - v1.2 — Renamed project from PodSearch to Podlog. localStorage key changed to `podlog-theme`. Added `/feeds` page separate from `/podcasts` for feed management. Added `QueryProvider` wrapper in root layout for React Query. Web API routes proxy to pipeline API for feed management, queue retries, and health checks. Database name changed to `podlog`.
@@ -34,7 +35,6 @@ Once podcast transcripts are stored in the database (PRD-01), users need a simpl
 
 ### Non-Goals (V1)
 - User accounts or authentication (deferred to V2)
-- Semantic / vector search (implemented — see search.ts grouped search)
 - Mobile app (web-only, but responsive)
 - Public deployment (local only in V1)
 - Search result grouping by episode (deferred to V1)
