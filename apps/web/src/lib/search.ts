@@ -1,6 +1,5 @@
 import pool from "@/lib/db";
-
-const PIPELINE_API = process.env.PIPELINE_API ?? "http://pipeline:8000";
+import { PIPELINE_API } from "@/lib/pipeline";
 
 /**
  * Get embedding for a search query from the pipeline's embed API.

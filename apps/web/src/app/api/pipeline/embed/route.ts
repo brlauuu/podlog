@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const PIPELINE_API = process.env.PIPELINE_API ?? "http://pipeline:8000";
+import { PIPELINE_API } from "@/lib/pipeline";
 
 export async function POST(req: NextRequest) {
   try {
