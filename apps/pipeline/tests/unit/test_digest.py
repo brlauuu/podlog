@@ -228,3 +228,44 @@ def test_send_digest_skips_when_no_unsent_events(mock_get_ns, mock_estimate, moc
 
     now = datetime(2026, 3, 15, 8, 30, tzinfo=timezone.utc)
     send_digest_if_due(now=now)
+
+
+from app.services.digest import format_digest_html, format_digest_telegram, DigestData
+
+
+def test_digest_html_shows_new_metrics_when_legacy_absent():
+    """avg_duration_secs and processing_factor render in digest even without legacy avg fields."""
+    data = DigestData(
+        frequency="daily",
+        date_label="Apr 06, 2026",
+        items=[],
+        avg_transcribe_secs=None,
+        avg_diarize_secs=None,
+        avg_total_secs=None,
+        avg_duration_secs=2400.0,
+        processing_factor=1.5,
+    )
+    html = format_digest_html(data)
+    assert "Avg episode length" in html
+    assert "40m 00s" in html
+    assert "Processing factor" in html
+    assert "1.5x" in html
+
+
+def test_digest_telegram_shows_new_metrics_when_legacy_absent():
+    """avg_duration_secs and processing_factor render in digest telegram even without legacy avg fields."""
+    data = DigestData(
+        frequency="daily",
+        date_label="Apr 06, 2026",
+        items=[],
+        avg_transcribe_secs=None,
+        avg_diarize_secs=None,
+        avg_total_secs=None,
+        avg_duration_secs=2400.0,
+        processing_factor=1.5,
+    )
+    md = format_digest_telegram(data)
+    assert "Avg ep. length" in md
+    assert "40m 00s" in md
+    assert "Processing factor" in md
+    assert "1.5x" in md

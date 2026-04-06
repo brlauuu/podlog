@@ -203,7 +203,9 @@ def _fmt_factor(factor: float | None) -> str:
 
 def _fmt_avg_section_html(event) -> str:
     """Render the HTML averages section if avg data is available."""
-    if event.avg_transcribe_secs is None and event.avg_diarize_secs is None and event.avg_total_secs is None:
+    if (event.avg_transcribe_secs is None and event.avg_diarize_secs is None
+            and event.avg_total_secs is None and event.avg_duration_secs is None
+            and event.processing_factor is None):
         return ""
     avg_duration_row = ""
     if event.avg_duration_secs is not None:
@@ -233,7 +235,9 @@ def _fmt_avg_section_html(event) -> str:
 
 def _fmt_avg_section_telegram(event) -> str:
     """Render the Telegram averages section if avg data is available."""
-    if event.avg_transcribe_secs is None and event.avg_diarize_secs is None and event.avg_total_secs is None:
+    if (event.avg_transcribe_secs is None and event.avg_diarize_secs is None
+            and event.avg_total_secs is None and event.avg_duration_secs is None
+            and event.processing_factor is None):
         return ""
     lines = (
         f"\n*Avg Processing Time (all episodes)*\n"

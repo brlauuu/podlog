@@ -114,7 +114,10 @@ def format_digest_html(data: DigestData) -> str:
     est = _fmt_estimate(data.queue_estimated_secs)
 
     avg_html = ""
-    if data.avg_transcribe_secs is not None or data.avg_diarize_secs is not None or data.avg_total_secs is not None:
+    has_any_avg = (data.avg_transcribe_secs is not None or data.avg_diarize_secs is not None
+                   or data.avg_total_secs is not None or data.avg_duration_secs is not None
+                   or data.processing_factor is not None)
+    if has_any_avg:
         avg_duration_row = ""
         if data.avg_duration_secs is not None:
             avg_duration_row = f"""\
@@ -182,7 +185,10 @@ def format_digest_telegram(data: DigestData) -> str:
                 f"{item.error_class} after {item.retry_count}/{item.retry_max} retries"
             )
 
-    if data.avg_transcribe_secs is not None or data.avg_diarize_secs is not None or data.avg_total_secs is not None:
+    has_any_avg_tg = (data.avg_transcribe_secs is not None or data.avg_diarize_secs is not None
+                      or data.avg_total_secs is not None or data.avg_duration_secs is not None
+                      or data.processing_factor is not None)
+    if has_any_avg_tg:
         avg_block = (
             f"\n*Avg Processing Time (all episodes)*\n"
             f"`Avg transcribe:  {_fmt_short_duration(data.avg_transcribe_secs)}`\n"

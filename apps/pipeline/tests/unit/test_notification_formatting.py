@@ -175,3 +175,33 @@ def test_format_failed_telegram_contains_averages():
     event.avg_total_secs = 210.0
     md = format_failed_telegram(event)
     assert "Avg" in md or "Average" in md
+
+
+def test_format_done_html_shows_new_metrics_when_legacy_absent():
+    """avg_duration_secs and processing_factor render even when legacy avg fields are None."""
+    event = _make_done_event()
+    event.avg_transcribe_secs = None
+    event.avg_diarize_secs = None
+    event.avg_total_secs = None
+    event.avg_duration_secs = 2400.0
+    event.processing_factor = 1.5
+    html = format_done_html(event)
+    assert "Avg episode length" in html
+    assert "40m 00s" in html  # 2400s
+    assert "Processing factor" in html
+    assert "1.5x" in html
+
+
+def test_format_done_telegram_shows_new_metrics_when_legacy_absent():
+    """avg_duration_secs and processing_factor render even when legacy avg fields are None."""
+    event = _make_done_event()
+    event.avg_transcribe_secs = None
+    event.avg_diarize_secs = None
+    event.avg_total_secs = None
+    event.avg_duration_secs = 2400.0
+    event.processing_factor = 1.5
+    md = format_done_telegram(event)
+    assert "Avg ep. length" in md
+    assert "40m 00s" in md
+    assert "Processing factor" in md
+    assert "1.5x" in md
