@@ -75,23 +75,33 @@ interface AdjacentEpisode {
 async function getAdjacentEpisodes(
   episode: Episode
 ): Promise<{ prev: AdjacentEpisode | null; next: AdjacentEpisode | null }> {
-  const orderCol = episode.feed_id ? "published_at" : "created_at";
-  const orderVal = episode.feed_id ? episode.published_at ?? episode.created_at : episode.created_at;
+  const orderExpr = "COALESCE(published_at, created_at)";
+  const orderVal = episode.published_at ?? episode.created_at;
   const feedCondition = episode.feed_id ? "feed_id = $2" : "feed_id IS NULL";
-
-  const params = episode.feed_id ? [orderVal, episode.feed_id] : [orderVal];
+  const idParam = episode.feed_id ? "$3" : "$2";
+  const params = episode.feed_id
+    ? [orderVal, episode.feed_id, episode.id]
+    : [orderVal, episode.id];
 
   const [prevResult, nextResult] = await Promise.all([
     pool.query(
       `SELECT id, title FROM episodes
-       WHERE ${feedCondition} AND ${orderCol} < $1
-       ORDER BY ${orderCol} DESC LIMIT 1`,
+       WHERE ${feedCondition}
+         AND status = 'done'
+         AND id <> ${idParam}
+         AND (${orderExpr} < $1 OR (${orderExpr} = $1 AND id < ${idParam}))
+       ORDER BY ${orderExpr} DESC, id DESC
+       LIMIT 1`,
       params
     ),
     pool.query(
       `SELECT id, title FROM episodes
-       WHERE ${feedCondition} AND ${orderCol} > $1
-       ORDER BY ${orderCol} ASC LIMIT 1`,
+       WHERE ${feedCondition}
+         AND status = 'done'
+         AND id <> ${idParam}
+         AND (${orderExpr} > $1 OR (${orderExpr} = $1 AND id > ${idParam}))
+       ORDER BY ${orderExpr} ASC, id ASC
+       LIMIT 1`,
       params
     ),
   ]);
