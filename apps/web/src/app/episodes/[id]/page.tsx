@@ -134,8 +134,9 @@ async function getSegments(episodeId: string): Promise<Segment[]> {
 }
 
 
-export default async function EpisodePage({ params }: { params: { id: string } }) {
-  const [episode, segments] = await Promise.all([getEpisode(params.id), getSegments(params.id)]);
+export default async function EpisodePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const [episode, segments] = await Promise.all([getEpisode(id), getSegments(id)]);
 
   if (!episode) notFound();
 
