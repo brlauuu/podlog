@@ -76,7 +76,17 @@ describe("Episode page navigation", () => {
 
     expect(mockQuery).toHaveBeenNthCalledWith(
       3,
+      expect.stringContaining("status = 'done'"),
+      ["2026-04-01T10:00:00.000Z", "feed-1", "ep-current"]
+    );
+    expect(mockQuery).toHaveBeenNthCalledWith(
+      3,
       expect.stringContaining("COALESCE(published_at, created_at)"),
+      ["2026-04-01T10:00:00.000Z", "feed-1", "ep-current"]
+    );
+    expect(mockQuery).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining("status = 'done'"),
       ["2026-04-01T10:00:00.000Z", "feed-1", "ep-current"]
     );
     expect(mockQuery).toHaveBeenNthCalledWith(

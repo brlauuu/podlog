@@ -87,6 +87,7 @@ async function getAdjacentEpisodes(
     pool.query(
       `SELECT id, title FROM episodes
        WHERE ${feedCondition}
+         AND status = 'done'
          AND id <> ${idParam}
          AND (${orderExpr} < $1 OR (${orderExpr} = $1 AND id < ${idParam}))
        ORDER BY ${orderExpr} DESC, id DESC
@@ -96,6 +97,7 @@ async function getAdjacentEpisodes(
     pool.query(
       `SELECT id, title FROM episodes
        WHERE ${feedCondition}
+         AND status = 'done'
          AND id <> ${idParam}
          AND (${orderExpr} > $1 OR (${orderExpr} = $1 AND id > ${idParam}))
        ORDER BY ${orderExpr} ASC, id ASC
