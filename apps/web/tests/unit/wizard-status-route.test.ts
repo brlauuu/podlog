@@ -74,4 +74,22 @@ describe("PUT /api/wizard/status", () => {
       ["wizard_completed"]
     );
   });
+
+  it("returns 503 when DB write fails", async () => {
+    mockQuery.mockRejectedValue(new Error("db down"));
+    const req = new NextRequest("http://localhost/api/wizard/status", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completed: true }),
+    });
+
+    const resp = await PUT(req);
+    const data = await resp.json();
+
+    expect(resp.status).toBe(503);
+    expect(data).toEqual({
+      completed: false,
+      error: "Failed to update wizard status",
+    });
+  });
 });

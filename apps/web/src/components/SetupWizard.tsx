@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useWizard } from "@/components/WizardProvider";
 import WizardHealthCheck from "@/components/WizardHealthCheck";
 import WizardAddFeed from "@/components/WizardAddFeed";
@@ -45,7 +45,14 @@ export default function SetupWizard() {
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) close(); }}>
-      <DialogContent className="max-w-xl" onPointerDownOutside={(e) => e.preventDefault()}>
+      <DialogContent
+        className="max-w-[calc(100vw-2rem)] w-[calc(100vw-2rem)] h-[calc(100vh-2rem)] overflow-y-auto"
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
+        <DialogTitle className="sr-only">Setup Wizard</DialogTitle>
+        <DialogDescription className="sr-only">
+          First-run onboarding for health checks, feed setup, and next steps.
+        </DialogDescription>
         {step === 1 && (
           <WizardHealthCheck
             onNext={() => setStep(2)}

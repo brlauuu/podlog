@@ -60,7 +60,11 @@ export default function WizardAddFeed({ onNext, onBack, onSkip }: Props) {
     if (mode === "selective" && !previewStep) {
       setPreviewLoading(true);
       try {
-        const resp = await fetch(`/api/feeds/preview?url=${encodeURIComponent(url.trim())}`);
+        const resp = await fetch("/api/feeds/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: url.trim() }),
+        });
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
           throw new Error(err.detail ?? "Couldn't fetch episodes — check the URL and try again");
