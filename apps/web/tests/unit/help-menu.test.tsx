@@ -38,6 +38,14 @@ describe("HelpMenu", () => {
     });
   });
 
+  it("uses an opaque dropdown surface for readability", async () => {
+    const user = userEvent.setup();
+    render(<HelpMenu />);
+    await user.click(screen.getByRole("button", { name: /help/i }));
+    const menu = await screen.findByRole("menu");
+    expect(menu.className).toContain("bg-background");
+  });
+
   it("opens wizard when Setup Wizard is clicked", async () => {
     const user = userEvent.setup();
     render(<HelpMenu />);

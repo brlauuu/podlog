@@ -192,6 +192,34 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
+      {/* Episode navigation */}
+      {(prev || next) && (
+        <div className="flex items-center justify-between gap-4">
+          {prev ? (
+            <Link
+              href={`/episodes/${prev.id}`}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-w-0"
+            >
+              <ChevronLeft size={16} className="shrink-0" />
+              <span className="truncate">{prev.title ?? "Previous episode"}</span>
+            </Link>
+          ) : (
+            <span />
+          )}
+          {next ? (
+            <Link
+              href={`/episodes/${next.id}`}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-w-0 text-right"
+            >
+              <span className="truncate">{next.title ?? "Next episode"}</span>
+              <ChevronRight size={16} className="shrink-0" />
+            </Link>
+          ) : (
+            <span />
+          )}
+        </div>
+      )}
+
       {/* Podcast context card */}
       {episode.feed_id && (
         <Card>
@@ -295,37 +323,6 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         audioUrl={episode.audio_url}
         guid={episode.guid}
       />
-
-      {/* Episode navigation */}
-      {(prev || next) && (
-        <>
-          <Separator />
-          <div className="flex items-center justify-between gap-4">
-            {prev ? (
-              <Link
-                href={`/episodes/${prev.id}`}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-w-0"
-              >
-                <ChevronLeft size={16} className="shrink-0" />
-                <span className="truncate">{prev.title ?? "Previous episode"}</span>
-              </Link>
-            ) : (
-              <span />
-            )}
-            {next ? (
-              <Link
-                href={`/episodes/${next.id}`}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-w-0 text-right"
-              >
-                <span className="truncate">{next.title ?? "Next episode"}</span>
-                <ChevronRight size={16} className="shrink-0" />
-              </Link>
-            ) : (
-              <span />
-            )}
-          </div>
-        </>
-      )}
 
       {episode.status === "done" && (
         <EpisodeChat
