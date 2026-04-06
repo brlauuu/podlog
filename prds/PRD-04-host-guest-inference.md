@@ -122,7 +122,7 @@ DOWNLOADING → TRANSCRIBING → DIARIZING → INFERRING → ARCHIVING → DONE
 The flat `.txt` file written after processing (per PRD-01 §5.7) uses inferred display names where available:
 
 ```
-# PodSearch Transcript
+# Podlog Transcript
 # Episode: Ep. 712: Andrew Huberman on Sleep
 # Host: Tim Ferriss (inferred)
 # Guests: Andrew Huberman (inferred)
