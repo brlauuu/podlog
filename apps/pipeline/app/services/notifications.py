@@ -30,6 +30,8 @@ class EpisodeDoneEvent(Event):
     avg_transcribe_secs: float | None = None
     avg_diarize_secs: float | None = None
     avg_total_secs: float | None = None
+    avg_duration_secs: float | None = None
+    processing_factor: float | None = None
 
 
 @dataclass
@@ -48,6 +50,8 @@ class EpisodeFailedEvent(Event):
     avg_transcribe_secs: float | None = None
     avg_diarize_secs: float | None = None
     avg_total_secs: float | None = None
+    avg_duration_secs: float | None = None
+    processing_factor: float | None = None
 
 
 def compute_avg_processing_stats(db: Session) -> tuple[float | None, float | None, float | None]:
@@ -84,11 +88,31 @@ def compute_avg_processing_stats(db: Session) -> tuple[float | None, float | Non
     return avg_t, avg_d, avg_total
 
 
-def estimate_queue_status(db: Session) -> tuple[int, float | None]:
-    """Return (remaining_count, estimated_seconds_to_complete).
+def compute_avg_duration(db: Session) -> float | None:
+    """Compute average episode audio duration across all completed episodes.
+
+    Returns the average duration in seconds, or None if no data is available.
+    """
+    done_episodes = (
+        db.query(Episode)
+        .filter(
+            Episode.status == "done",
+            Episode.duration_secs.isnot(None),
+        )
+        .all()
+    )
+    if not done_episodes:
+        return None
+    return sum(ep.duration_secs for ep in done_episodes) / len(done_episodes)
+
+
+def estimate_queue_status(db: Session) -> tuple[int, float | None, float | None]:
+    """Return (remaining_count, estimated_seconds_to_complete, processing_factor).
 
     The estimate uses a duration-weighted processing rate from the last 10
-    completed episodes. Returns None for estimate if no history is available.
+    completed episodes. The processing factor is the ratio of processing time
+    to audio duration (e.g. 1.5 means 1 min of audio takes 1.5 min to process).
+    Returns None for estimate/factor if no history is available.
     """
     # Count pending/in-progress episodes
     remaining = (
@@ -111,7 +135,7 @@ def estimate_queue_status(db: Session) -> tuple[int, float | None]:
     )
 
     if not recent:
-        return remaining, None
+        return remaining, None, None
 
     # Compute duration-weighted processing rate using actual processing time
     # (transcribe + diarize), not wall clock which includes queue wait
@@ -125,7 +149,7 @@ def estimate_queue_status(db: Session) -> tuple[int, float | None]:
         total_audio += ep.duration_secs
 
     if total_audio == 0:
-        return remaining, None
+        return remaining, None, None
 
     rate = total_processing / total_audio  # processing seconds per audio second
 
@@ -137,7 +161,7 @@ def estimate_queue_status(db: Session) -> tuple[int, float | None]:
     )
     queued_audio = sum(ep.duration_secs or 0 for ep in queued_episodes)
 
-    return remaining, queued_audio * rate
+    return remaining, queued_audio * rate, rate
 
 
 def _fmt_duration(secs: float | int | None) -> str:
@@ -171,10 +195,27 @@ def _fmt_estimate(secs: float | None) -> str:
     return _fmt_duration(secs)
 
 
+def _fmt_factor(factor: float | None) -> str:
+    if factor is None:
+        return "—"
+    return f"{factor:.1f}x"
+
+
 def _fmt_avg_section_html(event) -> str:
     """Render the HTML averages section if avg data is available."""
     if event.avg_transcribe_secs is None and event.avg_diarize_secs is None and event.avg_total_secs is None:
         return ""
+    avg_duration_row = ""
+    if event.avg_duration_secs is not None:
+        avg_duration_row = f"""\
+    <tr><td style="padding: 4px 12px; color: #666;">Avg episode length</td>
+        <td style="padding: 4px 12px;">{_fmt_short_duration(event.avg_duration_secs)}</td></tr>"""
+    factor_row = ""
+    if event.processing_factor is not None:
+        factor_row = f"""\
+    <tr style="background: #f9f9f9;">
+        <td style="padding: 4px 12px; color: #666;">Processing factor</td>
+        <td style="padding: 4px 12px; font-weight: 600;">{_fmt_factor(event.processing_factor)}</td></tr>"""
     return f"""\
   <h3 style="margin-top: 20px; margin-bottom: 8px;">Avg Processing Time (all episodes)</h3>
   <table style="border-collapse: collapse; width: 100%;">
@@ -185,6 +226,8 @@ def _fmt_avg_section_html(event) -> str:
         <td style="padding: 4px 12px;">{_fmt_short_duration(event.avg_diarize_secs)}</td></tr>
     <tr><td style="padding: 4px 12px; color: #666;">Avg per episode</td>
         <td style="padding: 4px 12px; font-weight: 600;">{_fmt_short_duration(event.avg_total_secs)}</td></tr>
+{avg_duration_row}
+{factor_row}
   </table>"""
 
 
@@ -192,12 +235,17 @@ def _fmt_avg_section_telegram(event) -> str:
     """Render the Telegram averages section if avg data is available."""
     if event.avg_transcribe_secs is None and event.avg_diarize_secs is None and event.avg_total_secs is None:
         return ""
-    return (
+    lines = (
         f"\n*Avg Processing Time (all episodes)*\n"
-        f"`Avg transcribe: {_fmt_short_duration(event.avg_transcribe_secs)}`\n"
-        f"`Avg diarize:    {_fmt_short_duration(event.avg_diarize_secs)}`\n"
+        f"`Avg transcribe:  {_fmt_short_duration(event.avg_transcribe_secs)}`\n"
+        f"`Avg diarize:     {_fmt_short_duration(event.avg_diarize_secs)}`\n"
         f"`Avg per episode: {_fmt_short_duration(event.avg_total_secs)}`\n"
     )
+    if event.avg_duration_secs is not None:
+        lines += f"`Avg ep. length:  {_fmt_short_duration(event.avg_duration_secs)}`\n"
+    if event.processing_factor is not None:
+        lines += f"`Processing factor: {_fmt_factor(event.processing_factor)}`\n"
+    return lines
 
 
 def format_done_html(event: EpisodeDoneEvent) -> str:

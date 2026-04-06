@@ -7,11 +7,12 @@ from app.services.notifications import EpisodeDoneEvent, EpisodeFailedEvent
 
 
 @patch("app.tasks.archive.bus")
-@patch("app.tasks.archive.estimate_queue_status", return_value=(3, 900.0))
+@patch("app.tasks.archive.compute_avg_duration", return_value=1800.0)
+@patch("app.tasks.archive.estimate_queue_status", return_value=(3, 900.0, 0.5))
 @patch("app.tasks.archive._write_transcript", return_value="/data/transcripts/ep1.txt")
 @patch("app.tasks.archive.update_episode")
 @patch("app.tasks.archive.SessionLocal")
-def test_archive_emits_done_event(mock_session_cls, mock_update, mock_write, mock_estimate, mock_bus):
+def test_archive_emits_done_event(mock_session_cls, mock_update, mock_write, mock_estimate, mock_avg_dur, mock_bus):
     """archive_episode emits EpisodeDoneEvent on success."""
     db = MagicMock()
     mock_session_cls.return_value = db
@@ -51,12 +52,13 @@ def test_archive_emits_done_event(mock_session_cls, mock_update, mock_write, moc
 
 
 @patch("app.tasks.archive.bus")
-@patch("app.tasks.archive.estimate_queue_status", return_value=(0, None))
+@patch("app.tasks.archive.compute_avg_duration", return_value=1800.0)
+@patch("app.tasks.archive.estimate_queue_status", return_value=(0, None, None))
 @patch("app.tasks.archive._write_transcript", return_value="/data/transcripts/ep1.txt")
 @patch("app.tasks.archive.update_episode")
 @patch("app.tasks.archive.SessionLocal")
 def test_archive_done_event_total_excludes_pre_transcription_wait(
-    mock_session_cls, mock_update, mock_write, mock_estimate, mock_bus
+    mock_session_cls, mock_update, mock_write, mock_estimate, mock_avg_dur, mock_bus
 ):
     """Notification total should reflect active speech-processing time, not queue age."""
     db = MagicMock()
@@ -93,8 +95,9 @@ def test_archive_done_event_total_excludes_pre_transcription_wait(
 
 
 @patch("app.tasks.helpers.bus")
-@patch("app.tasks.helpers.estimate_queue_status", return_value=(2, None))
-def test_worker_emits_failed_event_on_terminal_failure(mock_estimate, mock_bus):
+@patch("app.tasks.helpers.compute_avg_duration", return_value=1800.0)
+@patch("app.tasks.helpers.estimate_queue_status", return_value=(2, None, None))
+def test_worker_emits_failed_event_on_terminal_failure(mock_estimate, mock_avg_dur, mock_bus):
     """mark_failed emits EpisodeFailedEvent when episode reaches terminal failure."""
     db = MagicMock()
     episode = MagicMock()
@@ -119,7 +122,7 @@ def test_worker_emits_failed_event_on_terminal_failure(mock_estimate, mock_bus):
 
 
 @patch("app.tasks.helpers.bus")
-@patch("app.tasks.helpers.estimate_queue_status", return_value=(2, None))
+@patch("app.tasks.helpers.estimate_queue_status", return_value=(2, None, None))
 def test_no_failed_event_on_retryable_failure(mock_estimate, mock_bus):
     """mark_failed does NOT emit when retries remain."""
     db = MagicMock()

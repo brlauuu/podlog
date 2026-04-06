@@ -130,9 +130,10 @@ from app.services.digest import send_digest_if_due, DigestItem
 
 @patch("app.services.digest.SessionLocal")
 @patch("smtplib.SMTP")
-@patch("app.services.digest.estimate_queue_status", return_value=(3, 900.0))
+@patch("app.services.digest.compute_avg_duration", return_value=1800.0)
+@patch("app.services.digest.estimate_queue_status", return_value=(3, 900.0, 0.5))
 @patch("app.services.digest.get_notification_settings")
-def test_send_digest_sends_when_due(mock_get_ns, mock_estimate, mock_smtp_cls, mock_session_cls):
+def test_send_digest_sends_when_due(mock_get_ns, mock_estimate, mock_avg_dur, mock_smtp_cls, mock_session_cls):
     mock_get_ns.return_value = {
         "notification_frequency": "daily",
         "email_configured": True,
@@ -212,7 +213,7 @@ def test_send_digest_skips_immediate_mode(mock_get_ns, mock_session_cls):
 
 
 @patch("app.services.digest.SessionLocal")
-@patch("app.services.digest.estimate_queue_status", return_value=(0, None))
+@patch("app.services.digest.estimate_queue_status", return_value=(0, None, None))
 @patch("app.services.digest.get_notification_settings")
 def test_send_digest_skips_when_no_unsent_events(mock_get_ns, mock_estimate, mock_session_cls):
     mock_get_ns.return_value = {"notification_frequency": "daily"}

@@ -15,6 +15,8 @@ from app.services.notifications import (
     _fmt_duration,
     _fmt_short_duration,
     _fmt_estimate,
+    _fmt_factor,
+    compute_avg_duration,
     compute_avg_processing_stats,
     estimate_queue_status,
     send_email,
@@ -82,6 +84,8 @@ class DigestData:
     avg_transcribe_secs: float | None = None
     avg_diarize_secs: float | None = None
     avg_total_secs: float | None = None
+    avg_duration_secs: float | None = None
+    processing_factor: float | None = None
 
 
 def format_digest_html(data: DigestData) -> str:
@@ -111,6 +115,17 @@ def format_digest_html(data: DigestData) -> str:
 
     avg_html = ""
     if data.avg_transcribe_secs is not None or data.avg_diarize_secs is not None or data.avg_total_secs is not None:
+        avg_duration_row = ""
+        if data.avg_duration_secs is not None:
+            avg_duration_row = f"""\
+    <tr><td style="padding: 4px 12px; color: #666;">Avg episode length</td>
+        <td style="padding: 4px 12px;">{_fmt_short_duration(data.avg_duration_secs)}</td></tr>"""
+        factor_row = ""
+        if data.processing_factor is not None:
+            factor_row = f"""\
+    <tr style="background: #f9f9f9;">
+        <td style="padding: 4px 12px; color: #666;">Processing factor</td>
+        <td style="padding: 4px 12px; font-weight: 600;">{_fmt_factor(data.processing_factor)}</td></tr>"""
         avg_html = f"""\
   <h3 style="margin-top: 20px; margin-bottom: 8px;">Avg Processing Time (all episodes)</h3>
   <table style="border-collapse: collapse; width: 100%;">
@@ -121,6 +136,8 @@ def format_digest_html(data: DigestData) -> str:
         <td style="padding: 4px 12px;">{_fmt_short_duration(data.avg_diarize_secs)}</td></tr>
     <tr><td style="padding: 4px 12px; color: #666;">Avg per episode</td>
         <td style="padding: 4px 12px; font-weight: 600;">{_fmt_short_duration(data.avg_total_secs)}</td></tr>
+{avg_duration_row}
+{factor_row}
   </table>
 """
 
@@ -166,12 +183,17 @@ def format_digest_telegram(data: DigestData) -> str:
             )
 
     if data.avg_transcribe_secs is not None or data.avg_diarize_secs is not None or data.avg_total_secs is not None:
-        lines.append(
+        avg_block = (
             f"\n*Avg Processing Time (all episodes)*\n"
-            f"`Avg transcribe: {_fmt_short_duration(data.avg_transcribe_secs)}`\n"
-            f"`Avg diarize:    {_fmt_short_duration(data.avg_diarize_secs)}`\n"
+            f"`Avg transcribe:  {_fmt_short_duration(data.avg_transcribe_secs)}`\n"
+            f"`Avg diarize:     {_fmt_short_duration(data.avg_diarize_secs)}`\n"
             f"`Avg per episode: {_fmt_short_duration(data.avg_total_secs)}`"
         )
+        if data.avg_duration_secs is not None:
+            avg_block += f"\n`Avg ep. length:  {_fmt_short_duration(data.avg_duration_secs)}`"
+        if data.processing_factor is not None:
+            avg_block += f"\n`Processing factor: {_fmt_factor(data.processing_factor)}`"
+        lines.append(avg_block)
 
     est = _fmt_estimate(data.queue_estimated_secs)
     lines.append(f"\n*Queue:* {data.queue_remaining} remaining · Est. {est}")
@@ -261,8 +283,9 @@ def send_digest_if_due(now: datetime | None = None) -> None:
             _update_last_sent(db, state_row, now)
             return
 
-        remaining, estimated = estimate_queue_status(db)
+        remaining, estimated, factor = estimate_queue_status(db)
         avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
+        avg_dur = compute_avg_duration(db)
         items = []
         for row in unsent:
             payload = json.loads(row.payload)
@@ -293,6 +316,8 @@ def send_digest_if_due(now: datetime | None = None) -> None:
             avg_transcribe_secs=avg_t,
             avg_diarize_secs=avg_d,
             avg_total_secs=avg_total,
+            avg_duration_secs=avg_dur,
+            processing_factor=factor,
         )
 
         _send_digest(digest, ns)
