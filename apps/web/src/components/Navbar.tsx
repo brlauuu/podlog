@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { href: "/podcasts", label: "Sources" },
   { href: "/queue", label: "Queue" },
   { href: "/notifications", label: "Notifications" },
+  { href: "/about", label: "About" },
 ];
 
 export default function Navbar() {
@@ -19,12 +20,12 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur">
-      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-6">
+      <div className="max-w-5xl mx-auto px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-1">
         <Link href="/" className="font-semibold text-lg tracking-tight">
           Podlog
         </Link>
 
-        <div className="flex items-center gap-1 flex-1">
+        <div className="flex flex-wrap items-center gap-1 flex-1">
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}

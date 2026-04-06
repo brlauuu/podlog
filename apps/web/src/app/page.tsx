@@ -29,7 +29,7 @@ export default function HomePage() {
     <div className="flex flex-col items-center pt-16 pb-16 space-y-8">
       {/* Title + tagline */}
       <div className="text-center space-y-3">
-        <h1 className="text-4xl font-bold tracking-tight">Podlog</h1>
+        <h1 className="text-6xl sm:text-7xl font-bold tracking-tight">Podlog</h1>
         <p className="text-lg text-muted-foreground max-w-md mx-auto">
           Your self-hosted transcription database.
         </p>

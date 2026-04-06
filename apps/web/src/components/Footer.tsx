@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0";
 
 export default function Footer() {
@@ -25,10 +23,6 @@ export default function Footer() {
           >
             O&apos;Saasy License
           </a>
-          {" · "}
-          <Link href="/about" className="underline hover:text-foreground">
-            About
-          </Link>
         </p>
         <p>v{APP_VERSION}</p>
       </div>

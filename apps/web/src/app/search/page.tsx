@@ -6,7 +6,6 @@ import {
   Search,
   List,
   Layers,
-  HelpCircle,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import SearchResult from "@/components/SearchResult";
@@ -14,12 +13,6 @@ import FeedGroupCard from "@/components/FeedGroupCard";
 import DownloadReportButton from "@/components/DownloadReportButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import type { SearchPage as SearchPageType, GroupedSearchResult } from "@/lib/search";
 
 const PAGE_SIZE = 20;
@@ -201,26 +194,7 @@ function SearchPageContent() {
         <div className="w-full max-w-2xl space-y-3">
           {/* Title + description */}
           <div className="text-center space-y-1">
-            <div className="flex items-center justify-center gap-2">
-              <h1 className="text-xl font-semibold">Search</h1>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button className="text-muted-foreground hover:text-foreground transition-colors">
-                      <HelpCircle size={16} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-xs">
-                    <p className="font-medium mb-1">Search tips</p>
-                    <ul className="text-xs space-y-1">
-                      {SEARCH_TIPS.map((tip) => (
-                        <li key={tip}>{tip}</li>
-                      ))}
-                    </ul>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
+            <h1 className="text-3xl font-bold">Search</h1>
             <p className="text-sm text-muted-foreground">
               Full-text search across all transcribed episodes
             </p>
@@ -252,6 +226,18 @@ function SearchPageContent() {
               {statsQuery.data.episodeCount} episode
               {statsQuery.data.episodeCount !== 1 ? "s" : ""}
             </p>
+          )}
+
+          {/* Search tips */}
+          {!submittedQuery && (
+            <div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">Search tips</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                {SEARCH_TIPS.map((tip) => (
+                  <li key={tip}>{tip}</li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       </div>
