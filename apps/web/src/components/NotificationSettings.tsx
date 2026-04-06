@@ -172,7 +172,7 @@ function FieldGroup({
 }
 
 const inputClass =
-  "w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring";
+  "w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 
@@ -249,7 +249,7 @@ function EmailTagInput({
         ))}
         <input
           type="text"
-          className="flex-1 min-w-[180px] bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none py-1"
+          className="flex-1 min-w-[180px] bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-hidden py-1"
           placeholder={emails.length === 0 ? "Add email address and press Enter" : "Add email and press Enter"}
           value={input}
           onChange={(e) => {

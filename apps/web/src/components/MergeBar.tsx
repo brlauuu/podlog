@@ -36,7 +36,7 @@ export default function MergeBar({ selectedSpeakers, onMerge, onCancel, merging 
         role="combobox"
         value={targetLabel}
         onChange={(e) => setTargetLabel(e.target.value)}
-        className="rounded px-2 py-1 text-sm bg-indigo-700 text-white border border-indigo-500 focus:outline-none focus:ring-1 focus:ring-white"
+        className="rounded px-2 py-1 text-sm bg-indigo-700 text-white border border-indigo-500 focus:outline-hidden focus:ring-1 focus:ring-white"
       >
         {sorted.map((s) => (
           <option key={s.speakerLabel} value={s.speakerLabel}>

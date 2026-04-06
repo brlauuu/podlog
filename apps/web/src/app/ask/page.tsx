@@ -230,7 +230,7 @@ export default function AskPage() {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="Ask about your transcripts..."
-                className="w-full pl-10 pr-12 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base transition-shadow"
+                className="w-full pl-10 pr-12 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-ring text-base transition-shadow"
                 disabled={isProcessing}
                 autoFocus
               />

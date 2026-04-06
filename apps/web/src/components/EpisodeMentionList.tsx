@@ -113,7 +113,7 @@ function MentionCard({
               </span>
             )}
             <span
-              className={`text-foreground [&_b]:font-semibold [&_b]:bg-yellow-200 [&_b]:dark:bg-yellow-800 [&_b]:px-0.5 [&_b]:rounded-sm ${
+              className={`text-foreground [&_b]:font-semibold [&_b]:bg-yellow-200 dark:[&_b]:bg-yellow-800 [&_b]:px-0.5 [&_b]:rounded-sm ${
                 isLong && !expanded ? "line-clamp-4" : ""
               }`}
               dangerouslySetInnerHTML={{ __html: mention.snippet }}

@@ -159,7 +159,7 @@ export default function AudioUpload({ onUploaded }: AudioUploadProps) {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Episode title"
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
               />
             </div>
 
@@ -170,7 +170,7 @@ export default function AudioUpload({ onUploaded }: AudioUploadProps) {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Notes about this audio file..."
                 rows={3}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-hidden focus:ring-2 focus:ring-ring resize-none"
               />
             </div>
 

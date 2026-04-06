@@ -195,7 +195,7 @@ export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProp
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about this episode..."
-          className="flex-1 px-3 py-2 text-sm border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="flex-1 px-3 py-2 text-sm border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
           disabled={isStreaming}
           autoFocus
         />
