@@ -210,9 +210,7 @@ export default function AskPage() {
         <div className="w-full max-w-2xl space-y-3">
           {/* Title + description */}
           <div className="text-center space-y-1">
-            <div className="flex items-center justify-center gap-2">
-              <h1 className="text-xl font-semibold">Ask</h1>
-            </div>
+            <h1 className="text-3xl font-bold">Ask</h1>
             <p className="text-sm text-muted-foreground">
               Retrieval-augmented analysis across your transcripts. Finds the 8
               most relevant transcript excerpts and generates an answer grounded

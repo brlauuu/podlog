@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { href: "/podcasts", label: "Sources" },
   { href: "/queue", label: "Queue" },
   { href: "/notifications", label: "Notifications" },
+  { href: "/about", label: "About" },
 ];
 
 export default function Navbar() {
