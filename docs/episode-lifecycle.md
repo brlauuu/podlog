@@ -24,7 +24,7 @@ pending → download → transcribe → diarize → embed → infer → archive 
 |-------|-------|-------------|
 | `audio_local_path` | episodes | Path to raw downloaded audio file |
 
-**Failure mode:** Retries transient errors (5xx, network) up to `retry_max`. Fails immediately on `DISK_FULL`, `HTTP_ACCESS` (403/404).
+**Failure mode:** Retries transient errors (`TRANSIENT_NETWORK`, `HTTP_ACCESS`) up to `retry_max` with exponential backoff. Fails immediately on `DISK_FULL`.
 
 ---
 

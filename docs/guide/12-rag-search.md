@@ -24,7 +24,7 @@ The system retrieves relevant transcript chunks via semantic search (pgvector), 
 - **Fully local** — powered by [Ollama](https://ollama.ai) running in a Docker container
 - **No external API calls** — your data never leaves your machine
 - **Streaming responses** — answers appear word-by-word via server-sent events
-- **Model selection** — configurable via `OLLAMA_MODEL` env var (default: see `.env.example`)
+- **Model selection** — chosen in the Ask page model selector and sent per request (default: `qwen2.5:3b`)
 - **Additional RAM:** ~2 GB when the LLM is active (auto-unloaded when idle)
 
 ## Prerequisites
@@ -32,13 +32,14 @@ The system retrieves relevant transcript chunks via semantic search (pgvector), 
 The Ask AI feature requires:
 - The Ollama service running (included in `docker-compose.yml`)
 - At least one episode fully processed through the embed stage (segments need vector embeddings)
-- A pulled Ollama model (`make ollama-pull` or the worker pulls it automatically)
+- A pulled Ollama model (for example: `make ollama-pull`)
 
 ## Troubleshooting
 
 - **"Ollama not available"** — Check that the ollama container is running: `docker compose ps ollama`
 - **Slow first response** — The model loads into memory on first query; subsequent queries are faster
-- **Poor answer quality** — Try a larger model via `OLLAMA_MODEL` in `.env`, or ensure more episodes are processed so the retrieval pool is larger
+- **Model not available** — Pull the model first (`make ollama-pull`) or select one that already exists in Ollama
+- **Poor answer quality** — Try a larger model in the Ask page model selector, or ensure more episodes are processed so the retrieval pool is larger
 
 ---
 
