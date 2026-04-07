@@ -114,11 +114,13 @@ def transcribe_episode(episode_id: str) -> str:
                 transcribe_secs = round(time.monotonic() - t0, 1)
                 audio_secs = _estimate_fireworks_usage(segments_data, episode.duration_secs)
                 audio_minutes = round(audio_secs / 60.0, 3) if audio_secs > 0 else 0.0
-                stt_rate = float(
-                    runtime.get("fireworks_stt_cost_per_minute_usd")
-                    or settings.fireworks_stt_cost_per_minute_usd
-                    or 0.0
+                runtime_rate = runtime.get("fireworks_stt_cost_per_minute_usd")
+                configured_rate = (
+                    runtime_rate
+                    if runtime_rate is not None
+                    else settings.fireworks_stt_cost_per_minute_usd
                 )
+                stt_rate = float(configured_rate if configured_rate is not None else 0.0)
                 stt_cost_usd = round(audio_minutes * stt_rate, 4)
 
                 update_episode(
