@@ -1,9 +1,5 @@
-import NotificationSettings from "@/components/NotificationSettings";
+import { redirect } from "next/navigation";
 
 export default function NotificationsPage() {
-  return (
-    <div className="space-y-6">
-      <NotificationSettings />
-    </div>
-  );
+  redirect("/settings");
 }

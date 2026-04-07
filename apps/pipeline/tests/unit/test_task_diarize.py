@@ -133,3 +133,43 @@ class TestDiarizeEpisode:
 
             with pytest.raises(RuntimeError, match="missing"):
                 diarize_episode("ep1")
+
+    @patch("app.tasks.diarize.job_queue")
+    @patch("app.tasks.diarize.update_episode")
+    @patch("app.tasks.diarize.SessionLocal")
+    def test_fireworks_provider_uses_saved_artifact(self, mock_session_cls, mock_update, mock_jq):
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        segs = [_make_segment()]
+        db.query.return_value.filter.return_value.order_by.return_value.all.return_value = segs
+        mock_session_cls.return_value = db
+
+        fireworks_raw = {
+            "words": [
+                {"speaker_id": "0", "start": 0.0, "end": 1.0},
+                {"speaker_id": "0", "start": 1.0, "end": 2.0},
+            ]
+        }
+
+        with (
+            patch("app.tasks.diarize.settings") as mock_settings,
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.unlink"),
+            patch("builtins.open", mock_open(read_data=json.dumps(fireworks_raw))),
+            patch("app.services.alignment.assign_speakers", return_value={1: "SPEAKER_00"}),
+        ):
+            mock_settings.inference_provider = "fireworks"
+            mock_settings.fireworks_stt_diarize = True
+            mock_settings.transcript_dir = "/data/transcripts"
+
+            from app.tasks.diarize import diarize_episode
+
+            result = diarize_episode("ep1")
+
+        assert result == "ep1"
+        mock_update.assert_any_call(
+            db, "ep1", has_diarization=True, diarization_error=None,
+            diarize_duration_secs=pytest.approx(0.0, abs=5),
+        )
+        mock_jq.enqueue.assert_called_once_with(db, "ep1", "chunk")

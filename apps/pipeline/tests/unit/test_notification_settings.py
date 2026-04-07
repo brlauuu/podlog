@@ -151,6 +151,11 @@ class TestSaveNotificationSettings:
         with pytest.raises(ValueError, match="smtp_port"):
             save_notification_settings(db, {"smtp_port": -1})
 
+    def test_rejects_invalid_inference_provider(self):
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="inference_provider"):
+            save_notification_settings(db, {"inference_provider": "cloud"})
+
     def test_empty_string_normalized_to_none(self):
         stored = json.dumps({"notification_email_to": "user@example.com"})
         db = _mock_db(stored_json=stored)
@@ -285,3 +290,9 @@ class TestMaskSensitive:
         result = mask_sensitive(s)
         assert result["telegram_bot_token"] is None
         assert result["smtp_password"] is None
+
+    def test_masks_fireworks_api_key(self):
+        s = {"fireworks_api_key": "fw_test_1234567890"}
+        result = mask_sensitive(s)
+        assert result["fireworks_api_key"] != "fw_test_1234567890"
+        assert "***" in result["fireworks_api_key"]

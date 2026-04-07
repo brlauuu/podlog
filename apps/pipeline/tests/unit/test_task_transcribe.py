@@ -124,3 +124,41 @@ class TestTranscribeEpisode:
 
         with pytest.raises(RuntimeError, match="not found"):
             transcribe_episode("ep1")
+
+    @patch("app.tasks.transcribe.job_queue")
+    @patch("app.tasks.transcribe.update_episode")
+    @patch("app.tasks.transcribe._convert_to_wav")
+    @patch("app.tasks.transcribe.SessionLocal")
+    def test_fireworks_provider_path(self, mock_session_cls, mock_convert, mock_update, mock_jq):
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        db.query.return_value.filter.return_value.delete.return_value = 0
+        mock_session_cls.return_value = db
+
+        segments_data = [{"start": 0.0, "end": 5.0, "text": "hello"}]
+        fireworks_raw = {"segments": segments_data, "words": []}
+
+        with (
+            patch(
+                "app.services.fireworks_audio.transcribe",
+                return_value=(segments_data, "en", fireworks_raw),
+            ),
+            patch("app.tasks.transcribe.settings") as mock_settings,
+            patch("builtins.open", MagicMock()),
+            patch("app.tasks.transcribe.json"),
+        ):
+            mock_settings.inference_provider = "fireworks"
+            mock_settings.fireworks_stt_model = "whisper-v3-large"
+            mock_settings.fireworks_stt_diarize = True
+            mock_settings.transcript_dir = "/data/transcripts"
+
+            from app.tasks.transcribe import transcribe_episode
+
+            result = transcribe_episode("ep1")
+
+        assert result == "ep1"
+        mock_convert.assert_not_called()
+        mock_update.assert_any_call(db, "ep1", status="transcribing")
+        mock_update.assert_any_call(db, "ep1", language="en", status="diarizing")
+        mock_jq.enqueue.assert_called_once_with(db, "ep1", "diarize")

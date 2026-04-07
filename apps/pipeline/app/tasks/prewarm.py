@@ -53,6 +53,11 @@ def main() -> None:
 
     from app.config import settings
 
+    if settings.inference_provider == "fireworks":
+        logger.info('"action": "prewarm_skipped", "reason": "fireworks_provider"')
+        _set_prewarm_done()
+        return
+
     # Check if models are already cached
     whisper_cache = Path(settings.model_cache_dir) / "hub"
     if whisper_cache.exists() and _is_prewarm_done():

@@ -40,44 +40,73 @@ def transcribe_episode(episode_id: str) -> str:
         update_episode(db, episode_id, status="transcribing")
 
         audio_path = Path(episode.audio_local_path)
+        transcribe_secs = 0.0
+        segments_data: list[dict] = []
+        language = "unknown"
+        aligned_result: dict | None = None
+        fireworks_result: dict | None = None
 
-        # Step 1: convert to 16kHz mono WAV
-        wav_path = audio_path.with_suffix(".wav")
+        provider = settings.inference_provider
+        if provider == "fireworks":
+            try:
+                from app.services.fireworks_audio import transcribe as fw_transcribe
+
+                t0 = time.monotonic()
+                segments_data, language, fireworks_result = fw_transcribe(
+                    str(audio_path),
+                    model_name=settings.fireworks_stt_model,
+                    diarize=settings.fireworks_stt_diarize,
+                )
+                transcribe_secs = round(time.monotonic() - t0, 1)
+                update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
+            except Exception as exc:
+                _mark_failed(db, episode_id, "SYSTEM_ERROR", str(exc))
+                logger.exception('"action": "transcribe_failed", "episode_id": "%s"', episode_id)
+                return episode_id
+        else:
+            # Step 1: convert to 16kHz mono WAV
+            wav_path = audio_path.with_suffix(".wav")
+            try:
+                _convert_to_wav(audio_path, wav_path)
+            except Exception as exc:
+                _mark_failed(db, episode_id, "SYSTEM_ERROR", f"ffmpeg conversion failed: {exc}")
+                return episode_id
+
+            # Step 2: transcribe (local WhisperX)
+            try:
+                from app.services.whisper import transcribe
+
+                t0 = time.monotonic()
+                segments_data, language, aligned_result = transcribe(
+                    str(wav_path), model_name=settings.whisper_model
+                )
+                transcribe_secs = round(time.monotonic() - t0, 1)
+                update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
+            except MemoryError as exc:
+                _mark_failed(db, episode_id, "OOM", str(exc))
+                return episode_id
+            except Exception as exc:
+                _mark_failed(db, episode_id, "SYSTEM_ERROR", str(exc))
+                logger.exception('"action": "transcribe_failed", "episode_id": "%s"', episode_id)
+                return episode_id
+            finally:
+                # MANDATORY: unload Whisper before pyannote can be loaded (PRD-01 S5.4)
+                _unload_whisper()
+                if wav_path.exists():
+                    wav_path.unlink()
+
+        # Step 2b: save alignment/transcript data for diarization
         try:
-            _convert_to_wav(audio_path, wav_path)
-        except Exception as exc:
-            _mark_failed(db, episode_id, "SYSTEM_ERROR", f"ffmpeg conversion failed: {exc}")
-            return episode_id
-
-        # Step 2: transcribe
-        try:
-            from app.services.whisper import transcribe
-
-            t0 = time.monotonic()
-            segments_data, language, aligned_result = transcribe(
-                str(wav_path), model_name=settings.whisper_model
-            )
-            transcribe_secs = round(time.monotonic() - t0, 1)
-            update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
-        except MemoryError as exc:
-            _mark_failed(db, episode_id, "OOM", str(exc))
-            return episode_id
-        except Exception as exc:
-            _mark_failed(db, episode_id, "SYSTEM_ERROR", str(exc))
-            logger.exception('"action": "transcribe_failed", "episode_id": "%s"', episode_id)
-            return episode_id
-        finally:
-            # MANDATORY: unload Whisper before pyannote can be loaded (PRD-01 S5.4)
-            _unload_whisper()
-            if wav_path.exists():
-                wav_path.unlink()
-
-        # Step 2b: save word-level alignment data for diarization
-        alignment_path = Path(settings.transcript_dir) / f"{episode_id}.whisperx.json"
-        try:
-            alignment_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(alignment_path, "w") as f:
-                json.dump(aligned_result, f)
+            out_dir = Path(settings.transcript_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            if aligned_result is not None:
+                alignment_path = out_dir / f"{episode_id}.whisperx.json"
+                with open(alignment_path, "w") as f:
+                    json.dump(aligned_result, f)
+            if fireworks_result is not None:
+                fireworks_path = out_dir / f"{episode_id}.fireworks.json"
+                with open(fireworks_path, "w") as f:
+                    json.dump(fireworks_result, f)
         except Exception as exc:
             logger.warning(
                 '"action": "alignment_save_failed", "episode_id": "%s", "error": "%s"',

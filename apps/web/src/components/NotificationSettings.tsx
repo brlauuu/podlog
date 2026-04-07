@@ -16,11 +16,18 @@ interface Settings {
   smtp_use_tls: boolean;
   notification_frequency: string;
   health_check_notifications_enabled: boolean;
+  inference_provider: "local" | "fireworks";
+  fireworks_api_key: string | null;
+  fireworks_base_url: string;
+  fireworks_audio_base_url: string;
+  fireworks_stt_model: string;
+  fireworks_stt_diarize: boolean;
   telegram_configured: boolean;
   email_configured: boolean;
+  fireworks_configured: boolean;
 }
 
-type Tab = "telegram" | "email" | "general";
+type Tab = "telegram" | "email" | "general" | "fireworks";
 
 // --- Setup Guides ---
 
@@ -111,6 +118,45 @@ function EmailGuide({ configured }: { configured: boolean }) {
             port <code className="bg-muted px-1 rounded text-xs">587</code> with TLS enabled
           </li>
           <li>For other providers, check their SMTP documentation for host/port/TLS settings</li>
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function FireworksGuide({ configured }: { configured: boolean }) {
+  const [open, setOpen] = useState(!configured);
+
+  useEffect(() => {
+    setOpen(!configured);
+  }, [configured]);
+
+  return (
+    <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-4 mb-6">
+      <button
+        className="flex w-full items-center justify-between text-left"
+        onClick={() => setOpen(!open)}
+      >
+        <h3 className="text-sm font-medium text-indigo-400">
+          How to enable Fireworks AI processing
+        </h3>
+        <span className="text-xs text-indigo-400">{open ? "Hide" : "Show"}</span>
+      </button>
+      {open && (
+        <ol className="mt-3 ml-5 list-decimal space-y-2 text-sm text-muted-foreground">
+          <li>Create a Fireworks API key from your Fireworks account.</li>
+          <li>
+            Option A (UI): paste the key below, set provider to <strong>Fireworks AI</strong>, and
+            save settings.
+          </li>
+          <li>
+            Option B (env vars): set <code className="bg-muted px-1 rounded text-xs">INFERENCE_PROVIDER=fireworks</code>{" "}
+            and <code className="bg-muted px-1 rounded text-xs">FIREWORKS_API_KEY=...</code>.
+          </li>
+          <li>Queue or retry episodes to process them through the Fireworks pipeline.</li>
+          <li>
+            Keep provider as <strong>Local</strong> anytime you want fully local processing again.
+          </li>
         </ol>
       )}
     </div>
@@ -530,6 +576,116 @@ function GeneralTab({
   );
 }
 
+function FireworksTab({
+  settings,
+  onChange,
+  onSave,
+  saving,
+}: {
+  settings: Settings;
+  onChange: (field: keyof Settings, value: string | boolean | null) => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  return (
+    <div>
+      <StatusBadge configured={settings.fireworks_configured} />
+      <FireworksGuide configured={settings.fireworks_configured} />
+
+      <FieldGroup
+        label="Inference Provider"
+        hint="Use local for current behavior, or fireworks to enable remote inference."
+      >
+        <select
+          id="inference-provider"
+          className={inputClass}
+          value={settings.inference_provider}
+          onChange={(e) => onChange("inference_provider", e.target.value)}
+        >
+          <option value="local">Local</option>
+          <option value="fireworks">Fireworks AI</option>
+        </select>
+      </FieldGroup>
+
+      <FieldGroup label="Fireworks API Key" hint="Stored in Podlog settings and masked on read.">
+        <input
+          id="fireworks-api-key"
+          type="password"
+          className={inputClass}
+          placeholder="fw_..."
+          value={settings.fireworks_api_key ?? ""}
+          onChange={(e) => onChange("fireworks_api_key", e.target.value)}
+        />
+      </FieldGroup>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FieldGroup
+          label="STT Model"
+          hint="Fireworks speech model. Example: whisper-v3-large."
+        >
+          <input
+            id="fireworks-stt-model"
+            type="text"
+            className={inputClass}
+            value={settings.fireworks_stt_model}
+            onChange={(e) => onChange("fireworks_stt_model", e.target.value)}
+          />
+        </FieldGroup>
+
+        <FieldGroup
+          label="Inference Base URL"
+          hint="OpenAI-compatible endpoint for Fireworks."
+        >
+          <input
+            id="fireworks-base-url"
+            type="text"
+            className={inputClass}
+            value={settings.fireworks_base_url}
+            onChange={(e) => onChange("fireworks_base_url", e.target.value)}
+          />
+        </FieldGroup>
+      </div>
+
+      <FieldGroup
+        label="Audio Base URL"
+        hint="Speech endpoint base. Keep default unless you have a custom route."
+      >
+        <input
+          id="fireworks-audio-base-url"
+          type="text"
+          className={inputClass}
+          value={settings.fireworks_audio_base_url}
+          onChange={(e) => onChange("fireworks_audio_base_url", e.target.value)}
+        />
+      </FieldGroup>
+
+      <FieldGroup
+        label="Diarization"
+        hint="Enable speaker diarization for Fireworks transcription requests."
+      >
+        <label className="flex items-center gap-2 text-sm mt-2">
+          <input
+            type="checkbox"
+            checked={settings.fireworks_stt_diarize}
+            onChange={(e) => onChange("fireworks_stt_diarize", e.target.checked)}
+          />
+          Enable diarization
+        </label>
+      </FieldGroup>
+
+      <div className="flex gap-3 mt-6">
+        <button
+          className="px-5 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
+          onClick={onSave}
+          disabled={saving}
+        >
+          {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // --- Main Component ---
 
 export default function NotificationSettings() {
@@ -614,10 +770,17 @@ export default function NotificationSettings() {
     { key: "telegram", label: "Telegram", dot: true, configured: settings.telegram_configured },
     { key: "email", label: "Email", dot: true, configured: !!settings.notification_email_to },
     { key: "general", label: "General" },
+    { key: "fireworks", label: "Fireworks AI", dot: true, configured: settings.fireworks_configured },
   ];
 
   return (
     <div>
+      <div className="mb-5">
+        <h1 className="text-xl font-semibold">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Configure notifications and optional advanced provider settings.
+        </p>
+      </div>
       {/* Tabs */}
       <div className="flex border-b border-border mb-6" role="tablist">
         {tabs.map((tab) => (
@@ -667,6 +830,14 @@ export default function NotificationSettings() {
       )}
       {activeTab === "general" && (
         <GeneralTab
+          settings={settings}
+          onChange={handleChange}
+          onSave={handleSave}
+          saving={saving}
+        />
+      )}
+      {activeTab === "fireworks" && (
+        <FireworksTab
           settings={settings}
           onChange={handleChange}
           onSave={handleSave}

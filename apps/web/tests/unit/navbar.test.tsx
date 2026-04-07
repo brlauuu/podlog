@@ -34,7 +34,7 @@ describe("Navbar", () => {
   });
 
   test("renders all expected nav links", () => {
-    const expectedLinks = ["Search", "Ask", "Sources", "Queue", "Notifications", "About"];
+    const expectedLinks = ["Search", "Ask", "Sources", "Queue", "Settings", "About"];
     for (const label of expectedLinks) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
