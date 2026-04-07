@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch, call
 from pathlib import Path
 
 import pytest
+from app.services.fireworks_audio import FireworksTranscriptionError
 
 
 def _make_episode(id_="ep1", audio_path="/data/audio/raw/ep1.mp3", status="downloading"):
@@ -171,3 +172,110 @@ class TestTranscribeEpisode:
         mock_update.assert_any_call(db, "ep1", status="transcribing")
         mock_update.assert_any_call(db, "ep1", language="en", status="diarizing")
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "diarize")
+
+    @patch("app.tasks.transcribe.job_queue")
+    @patch("app.tasks.transcribe._mark_failed")
+    @patch("app.tasks.transcribe.update_episode")
+    @patch("app.tasks.transcribe._convert_to_wav")
+    @patch("app.tasks.transcribe.SessionLocal")
+    def test_fireworks_transient_error_schedules_retry(
+        self, mock_session_cls, mock_convert, mock_update, mock_fail, mock_jq
+    ):
+        ep = _make_episode()
+        ep.retry_count = 0
+        ep.retry_max = 3
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        mock_session_cls.return_value = db
+
+        with (
+            patch(
+                "app.services.fireworks_audio.transcribe",
+                side_effect=FireworksTranscriptionError(
+                    "Fireworks API HTTP 429",
+                    error_class="TRANSIENT_NETWORK",
+                    retryable=True,
+                    status_code=429,
+                ),
+            ),
+            patch(
+                "app.tasks.transcribe.get_runtime_inference_settings",
+                return_value={
+                    "inference_provider": "fireworks",
+                    "fireworks_api_key": "fw_test",
+                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
+                    "fireworks_stt_model": "whisper-v3-large",
+                    "fireworks_stt_diarize": True,
+                },
+            ),
+            patch("app.tasks.transcribe.settings") as mock_settings,
+        ):
+            mock_settings.retry_backoff_base = 30
+            mock_settings.retry_max = 3
+            mock_settings.fireworks_stt_model = "whisper-v3-large"
+            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+
+            from app.tasks.transcribe import transcribe_episode
+
+            result = transcribe_episode("ep1")
+
+        assert result == "ep1"
+        mock_convert.assert_not_called()
+        mock_fail.assert_not_called()
+        # status="transcribing" then retry state update
+        assert mock_update.call_count >= 2
+        mock_jq.enqueue.assert_called_once()
+        _, enqueue_kwargs = mock_jq.enqueue.call_args
+        assert enqueue_kwargs["retry_at"] is not None
+
+    @patch("app.tasks.transcribe.job_queue")
+    @patch("app.tasks.transcribe._mark_failed")
+    @patch("app.tasks.transcribe.update_episode")
+    @patch("app.tasks.transcribe._convert_to_wav")
+    @patch("app.tasks.transcribe.SessionLocal")
+    def test_fireworks_transient_error_marks_failed_after_max_retries(
+        self, mock_session_cls, mock_convert, mock_update, mock_fail, mock_jq
+    ):
+        ep = _make_episode()
+        ep.retry_count = 3
+        ep.retry_max = 3
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        mock_session_cls.return_value = db
+
+        with (
+            patch(
+                "app.services.fireworks_audio.transcribe",
+                side_effect=FireworksTranscriptionError(
+                    "Fireworks API HTTP 503",
+                    error_class="TRANSIENT_NETWORK",
+                    retryable=True,
+                    status_code=503,
+                ),
+            ),
+            patch(
+                "app.tasks.transcribe.get_runtime_inference_settings",
+                return_value={
+                    "inference_provider": "fireworks",
+                    "fireworks_api_key": "fw_test",
+                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
+                    "fireworks_stt_model": "whisper-v3-large",
+                    "fireworks_stt_diarize": True,
+                },
+            ),
+            patch("app.tasks.transcribe.settings") as mock_settings,
+        ):
+            mock_settings.retry_backoff_base = 30
+            mock_settings.retry_max = 3
+            mock_settings.fireworks_stt_model = "whisper-v3-large"
+            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+
+            from app.tasks.transcribe import transcribe_episode
+
+            result = transcribe_episode("ep1")
+
+        assert result == "ep1"
+        mock_convert.assert_not_called()
+        mock_jq.enqueue.assert_not_called()
+        mock_fail.assert_called_once()
+        assert mock_fail.call_args[0][2] == "TRANSIENT_NETWORK"

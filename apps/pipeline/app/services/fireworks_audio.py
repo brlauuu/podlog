@@ -15,8 +15,38 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+class FireworksTranscriptionError(RuntimeError):
+    """Typed Fireworks transcription error with retryability metadata."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_class: str,
+        retryable: bool,
+        status_code: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.error_class = error_class
+        self.retryable = retryable
+        self.status_code = status_code
+
+
 def _audio_url(base_url: str) -> str:
     return base_url.rstrip("/") + "/v1/audio/transcriptions"
+
+
+def _classify_http_error(status_code: int) -> tuple[str, bool]:
+    """
+    Classify Fireworks API HTTP errors into Podlog error classes.
+
+    Returns `(error_class, retryable)`:
+    - 429 and 5xx are transient and retryable.
+    - other 4xx are access/config failures and non-retryable.
+    """
+    if status_code == 429 or 500 <= status_code <= 599:
+        return "TRANSIENT_NETWORK", True
+    return "HTTP_ACCESS", False
 
 
 def transcribe(
@@ -50,10 +80,34 @@ def transcribe(
 
     with path.open("rb") as audio_fh:
         files = {"file": (path.name, audio_fh, "application/octet-stream")}
-        with httpx.Client(timeout=timeout) as client:
-            resp = client.post(_audio_url(audio_base_url), headers=headers, data=data, files=files)
-            resp.raise_for_status()
-            result = resp.json()
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                resp = client.post(
+                    _audio_url(audio_base_url), headers=headers, data=data, files=files
+                )
+                resp.raise_for_status()
+                result = resp.json()
+        except httpx.TimeoutException as exc:
+            raise FireworksTranscriptionError(
+                f"Fireworks transcription timeout: {exc}",
+                error_class="TRANSIENT_NETWORK",
+                retryable=True,
+            ) from exc
+        except httpx.NetworkError as exc:
+            raise FireworksTranscriptionError(
+                f"Fireworks network error: {exc}",
+                error_class="TRANSIENT_NETWORK",
+                retryable=True,
+            ) from exc
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            error_class, retryable = _classify_http_error(status)
+            raise FireworksTranscriptionError(
+                f"Fireworks API HTTP {status}",
+                error_class=error_class,
+                retryable=retryable,
+                status_code=status,
+            ) from exc
 
     raw_segments = result.get("segments", []) or []
     segments: list[dict] = []
