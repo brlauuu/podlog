@@ -60,7 +60,7 @@ export default function HelpMenu() {
           <HelpCircle className="h-4 w-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
+      <DropdownMenuContent align="end" className="w-52 bg-background">
         <DropdownMenuItem onClick={() => setOpen(true)} className="cursor-pointer gap-2">
           <Wand2 className="h-4 w-4" />
           Setup Wizard

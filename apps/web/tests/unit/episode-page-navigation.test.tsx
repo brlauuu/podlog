@@ -112,4 +112,19 @@ describe("Episode page navigation", () => {
       "/episodes/ep-next"
     );
   });
+
+  it("renders episode navigation above transcript content", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [currentEpisode] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: "ep-prev", title: "Previous episode" }] })
+      .mockResolvedValueOnce({ rows: [{ id: "ep-next", title: "Next episode" }] });
+
+    render(await EpisodePage({ params: Promise.resolve({ id: "ep-current" }) }));
+
+    const prevLink = screen.getByRole("link", { name: /previous episode/i });
+    const transcript = screen.getByTestId("transcript-section");
+
+    expect(prevLink.compareDocumentPosition(transcript) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
