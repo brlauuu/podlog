@@ -1,4 +1,4 @@
-.PHONY: up down build logs test test-unit test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill
+.PHONY: up down build logs test test-unit test-healthcheck test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill
 
 up:             ## Start full stack
 	docker compose up -d
@@ -21,9 +21,14 @@ migrate:        ## Run database migrations manually (also runs on pipeline start
 test:           ## Run all tests (unit + e2e)
 	docker compose -f docker-compose.test.yml run --rm test
 	docker compose -f docker-compose.test.yml run --rm web_test
+	python3 -m pytest scripts/test_healthcheck.py -v
 
 test-unit:      ## Run unit tests only (fast, no Docker required for ML models)
 	docker compose -f docker-compose.test.yml run --rm test pytest tests/unit/ -v
+	python3 -m pytest scripts/test_healthcheck.py -v
+
+test-healthcheck: ## Run host healthcheck script tests
+	python3 -m pytest scripts/test_healthcheck.py -v
 
 test-integration: ## Run integration tests (requires HF_TOKEN for pyannote)
 	docker compose -f docker-compose.test.yml run --rm test pytest tests/integration/ -v
