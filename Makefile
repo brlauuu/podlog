@@ -1,10 +1,16 @@
-.PHONY: up down build logs test test-unit test-healthcheck test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill
+.PHONY: up up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill
 
 up:             ## Start full stack
 	docker compose up -d
 
+up-remote:      ## Start remote-inference profile (Fireworks providers, no Ollama)
+	docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d
+
 down:           ## Stop all services
 	docker compose down
+
+down-remote:    ## Stop remote-inference profile stack
+	docker compose -f docker-compose.yml -f docker-compose.remote.yml down
 
 build:          ## Rebuild all images (reads version from VERSION file)
 	@cp VERSION apps/pipeline/VERSION
@@ -14,6 +20,9 @@ build:          ## Rebuild all images (reads version from VERSION file)
 
 logs:           ## Follow logs for all services
 	docker compose logs -f
+
+logs-remote:    ## Follow logs for remote-inference profile stack
+	docker compose -f docker-compose.yml -f docker-compose.remote.yml logs -f
 
 migrate:        ## Run database migrations manually (also runs on pipeline startup)
 	docker compose exec pipeline alembic upgrade head

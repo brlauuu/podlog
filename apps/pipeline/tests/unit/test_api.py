@@ -68,6 +68,20 @@ class TestHealthEndpoint:
             assert data["status"] == "DEGRADED"
             assert any(s["name"] == "Ollama" and s["status"] == "DEGRADED" for s in data["services"])
 
+    def test_ollama_marked_ok_in_fireworks_mode(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = _mock_prewarm_row(True)
+        with (
+            patch("app.api.health.SessionLocal", return_value=mock_db),
+            patch("app.api.health.settings.inference_provider", "fireworks"),
+            patch("app.api.health.httpx.get", side_effect=Exception("should not be called")) as mock_http,
+        ):
+            resp = client.get("/api/health")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert any(s["name"] == "Ollama" and s["status"] == "OK" for s in data["services"])
+            mock_http.assert_not_called()
+
 
 class TestFeedsEndpoint:
     def test_add_feed_invalid_rss_returns_422(self):

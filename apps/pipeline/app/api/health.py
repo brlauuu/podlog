@@ -60,15 +60,18 @@ def health_check() -> HealthResponse:
         if db is not None:
             db.close()
 
-    # Ollama
-    try:
-        resp = httpx.get(f"{settings.ollama_url}/", timeout=3)
-        if resp.status_code == 200:
-            services.append(ServiceStatus(name="Ollama", status="OK"))
-        else:
+    # Ollama (optional when Fireworks provider mode is enabled)
+    if settings.inference_provider == "fireworks":
+        services.append(ServiceStatus(name="Ollama", status="OK"))
+    else:
+        try:
+            resp = httpx.get(f"{settings.ollama_url}/", timeout=3)
+            if resp.status_code == 200:
+                services.append(ServiceStatus(name="Ollama", status="OK"))
+            else:
+                services.append(ServiceStatus(name="Ollama", status="DEGRADED"))
+        except Exception:
             services.append(ServiceStatus(name="Ollama", status="DEGRADED"))
-    except Exception:
-        services.append(ServiceStatus(name="Ollama", status="DEGRADED"))
 
     # Pipeline API is implicitly OK if this endpoint responds
     services.append(ServiceStatus(name="Pipeline API", status="OK"))

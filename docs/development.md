@@ -4,7 +4,8 @@
 
 ```
 podlog/
-├── docker-compose.yml              # 5 services: db, pipeline, worker, ollama, web
+├── docker-compose.yml              # default profile: db, pipeline, worker, ollama, web
+├── docker-compose.remote.yml       # remote-inference override (no ollama)
 ├── .env.example                    # All config vars documented
 ├── Makefile                        # make up / down / build / test / etc.
 ├── apps/
