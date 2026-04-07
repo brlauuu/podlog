@@ -200,7 +200,7 @@ class TestAlertFormatting:
         transitions = [("db", "down", "up", "accepting connections")]
         msg = healthcheck.format_alert(transitions, "2026-04-03 12:00:00 UTC")
         assert "db" in msg
-        assert "recovered" in msg
+        assert "RECOVERED" in msg
 
     def test_zombie_alert(self):
         transitions = [("zombie_jobs", "clear", "zombies", "2 zombie job(s): details")]
