@@ -50,6 +50,25 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `INFERENCE_ENABLED` | `true` | Whether to run spaCy NER-based speaker name inference after diarization. |
 | `SPACY_MODEL` | `en_core_web_lg` | spaCy model for named entity recognition. `en_core_web_lg` gives best results. |
 
+## Fireworks Provider
+
+| Variable | Default | Description |
+|---|---|---|
+| `INFERENCE_PROVIDER` | `local` | Runtime provider for transcription/diarization stages. `local` keeps current behavior. `fireworks` uses remote Fireworks audio inference. |
+| `FIREWORKS_API_KEY` | (unset) | Required when `INFERENCE_PROVIDER=fireworks`. |
+| `FIREWORKS_AUDIO_BASE_URL` | `https://audio-turbo.api.fireworks.ai` | Base URL for Fireworks audio API. |
+| `FIREWORKS_STT_MODEL` | `whisper-v3-large` | Fireworks speech-to-text model ID. |
+| `FIREWORKS_STT_DIARIZE` | `true` | Request speaker diarization metadata from Fireworks transcription API. |
+
+### Fireworks retry policy
+
+When Fireworks mode is enabled, Podlog applies automatic retries for transient transcription failures:
+
+- Retryable: network/connect/timeouts, HTTP `429`, and HTTP `5xx`
+- HTTP access errors: HTTP `4xx` map to `HTTP_ACCESS` and follow retry policy
+- Backoff: `RETRY_BACKOFF_BASE * 2^(attempt-1)` (for example `30s`, `60s`, `120s` with defaults)
+- Attempts: capped by `RETRY_MAX`
+
 ## Health Monitoring
 
 The host-level health check script (`scripts/healthcheck.py`) uses these settings. All are optional — defaults work for a standard Docker Compose setup.

@@ -14,6 +14,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from app.models import Episode, Segment
+from app.services.fireworks_audio import FireworksTranscriptionError
 
 FIXTURE_AUDIO = Path(__file__).parent.parent / "fixtures" / "sample.mp3"
 
@@ -87,6 +88,92 @@ class TestTranscription:
         db_session.refresh(sample_episode)
         assert sample_episode.status == "failed"
         assert sample_episode.error_class == "OOM"
+
+    def test_fireworks_transient_failure_then_recovery_is_idempotent(
+        self, db_session, sample_episode, tmp_path
+    ):
+        """Transient Fireworks failure retries, then successful rerun writes a clean segment set."""
+        audio_dest = tmp_path / f"{sample_episode.id}.mp3"
+        shutil.copy(FIXTURE_AUDIO, audio_dest)
+        sample_episode.audio_local_path = str(audio_dest)
+        sample_episode.status = "transcribing"
+        sample_episode.retry_count = 0
+        sample_episode.retry_max = 3
+        db_session.flush()
+
+        ok_segments = [
+            {"start": 0.0, "end": 2.0, "text": "One"},
+            {"start": 2.0, "end": 4.0, "text": "Two"},
+        ]
+
+        with (
+            patch(
+                "app.services.fireworks_audio.transcribe",
+                side_effect=[
+                    FireworksTranscriptionError(
+                        "Fireworks API HTTP 429",
+                        error_class="TRANSIENT_NETWORK",
+                        retryable=True,
+                        status_code=429,
+                    ),
+                    (ok_segments, "en", {"segments": ok_segments, "words": []}),
+                ],
+            ),
+            patch(
+                "app.tasks.transcribe.get_runtime_inference_settings",
+                return_value={
+                    "inference_provider": "fireworks",
+                    "fireworks_api_key": "fw_test",
+                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
+                    "fireworks_stt_model": "whisper-v3-large",
+                    "fireworks_stt_diarize": True,
+                },
+            ),
+            patch("app.tasks.transcribe.SessionLocal", return_value=db_session),
+            patch("app.tasks.transcribe.settings") as mock_settings,
+            patch("app.tasks.transcribe.job_queue.enqueue") as mock_enqueue,
+        ):
+            mock_settings.retry_backoff_base = 30
+            mock_settings.retry_max = 3
+            mock_settings.transcript_dir = str(tmp_path / "transcripts")
+            mock_settings.fireworks_stt_model = "whisper-v3-large"
+            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+
+            from app.tasks.transcribe import transcribe_episode
+
+            # First attempt -> retry scheduled, no segments persisted.
+            transcribe_episode(sample_episode.id)
+            db_session.refresh(sample_episode)
+            assert sample_episode.status == "pending"
+            assert sample_episode.retry_count == 1
+            assert sample_episode.error_class == "TRANSIENT_NETWORK"
+            assert (
+                db_session.query(Segment)
+                .filter(Segment.episode_id == sample_episode.id)
+                .count()
+                == 0
+            )
+
+            # Second attempt -> success, clean final state.
+            transcribe_episode(sample_episode.id)
+            db_session.refresh(sample_episode)
+            assert sample_episode.status == "diarizing"
+            assert sample_episode.language == "en"
+            segments = (
+                db_session.query(Segment)
+                .filter(Segment.episode_id == sample_episode.id)
+                .order_by(Segment.start_time)
+                .all()
+            )
+            assert len(segments) == 2
+            assert [s.text for s in segments] == ["One", "Two"]
+
+            assert mock_enqueue.call_count == 2
+            first_call = mock_enqueue.call_args_list[0]
+            second_call = mock_enqueue.call_args_list[1]
+            assert first_call.args[2] == "transcribe"
+            assert first_call.kwargs["retry_at"] is not None
+            assert second_call.args[2] == "diarize"
 
 
 class TestDiarization:

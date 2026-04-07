@@ -13,6 +13,7 @@ import gc
 import json
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.config import settings
@@ -23,6 +24,13 @@ from app.tasks.helpers import mark_failed as _mark_failed, update_episode
 from app import job_queue
 
 logger = logging.getLogger(__name__)
+
+
+def _load_fireworks_service():
+    """Import Fireworks service lazily so local mode has no dependency edge."""
+    from app.services import fireworks_audio
+
+    return fireworks_audio
 
 
 def transcribe_episode(episode_id: str) -> str:
@@ -64,15 +72,20 @@ def transcribe_episode(episode_id: str) -> str:
         provider = runtime.get("inference_provider") or "local"
         if provider == "fireworks":
             try:
-                from app.services.fireworks_audio import transcribe as fw_transcribe
+                fireworks_audio = _load_fireworks_service()
+            except Exception as exc:
+                _mark_failed(db, episode_id, "SYSTEM_ERROR", f"Fireworks service import failed: {exc}")
+                logger.exception('"action": "transcribe_failed", "episode_id": "%s"', episode_id)
+                return episode_id
 
+            try:
                 api_key = runtime.get("fireworks_api_key")
                 if not api_key:
                     raise RuntimeError(
                         "Fireworks inference provider selected but FIREWORKS_API_KEY is missing"
                     )
                 t0 = time.monotonic()
-                segments_data, language, fireworks_result = fw_transcribe(
+                segments_data, language, fireworks_result = fireworks_audio.transcribe(
                     str(audio_path),
                     api_key=api_key,
                     audio_base_url=runtime.get("fireworks_audio_base_url")
@@ -82,6 +95,29 @@ def transcribe_episode(episode_id: str) -> str:
                 )
                 transcribe_secs = round(time.monotonic() - t0, 1)
                 update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
+            except fireworks_audio.FireworksTranscriptionError as exc:
+                retry_count = int(getattr(episode, "retry_count", 0) or 0)
+                retry_max = int(getattr(episode, "retry_max", settings.retry_max) or settings.retry_max)
+                if exc.retryable:
+                    _handle_transient_failure(
+                        db,
+                        episode_id,
+                        retry_max=retry_max,
+                        retry_count=retry_count,
+                        error_class=exc.error_class,
+                        error_msg=str(exc),
+                    )
+                else:
+                    _mark_failed(db, episode_id, exc.error_class, str(exc))
+                logger.warning(
+                    '"action": "fireworks_transcribe_error", "episode_id": "%s", '
+                    '"error_class": "%s", "retryable": %s, "error": "%s"',
+                    episode_id,
+                    exc.error_class,
+                    str(exc.retryable).lower(),
+                    str(exc),
+                )
+                return episode_id
             except Exception as exc:
                 _mark_failed(db, episode_id, "SYSTEM_ERROR", str(exc))
                 logger.exception('"action": "transcribe_failed", "episode_id": "%s"', episode_id)
@@ -170,6 +206,43 @@ def transcribe_episode(episode_id: str) -> str:
                     except Exception:
                         pass
         db.close()
+
+
+def _handle_transient_failure(
+    db, episode_id: str, *, retry_max: int, retry_count: int, error_class: str, error_msg: str
+) -> None:
+    """Schedule transcribe retry with exponential backoff, else mark terminal failure."""
+    new_count = retry_count + 1
+    if new_count <= retry_max:
+        backoff = settings.retry_backoff_base * (2 ** (new_count - 1))
+        update_episode(
+            db,
+            episode_id,
+            status="pending",
+            retry_count=new_count,
+            error_class=error_class,
+            error_message=f"Retrying ({new_count}/{retry_max}) -- {error_msg}. Next in {backoff}s",
+        )
+        retry_at = datetime.now(timezone.utc) + timedelta(seconds=backoff)
+        job_queue.enqueue(db, episode_id, "transcribe", retry_at=retry_at)
+        logger.warning(
+            '"action": "transcribe_retry_scheduled", "episode_id": "%s", "attempt": %d, '
+            '"retry_max": %d, "backoff_secs": %d, "error_class": "%s"',
+            episode_id,
+            new_count,
+            retry_max,
+            backoff,
+            error_class,
+        )
+        return
+
+    update_episode(db, episode_id, retry_count=new_count)
+    _mark_failed(
+        db,
+        episode_id,
+        error_class,
+        f"Failed after {retry_max} retries: {error_msg}",
+    )
 
 
 def _convert_to_wav(src: Path, dest: Path) -> None:
