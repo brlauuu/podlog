@@ -59,6 +59,8 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `FIREWORKS_AUDIO_BASE_URL` | `https://audio-turbo.api.fireworks.ai` | Base URL for Fireworks audio API. |
 | `FIREWORKS_STT_MODEL` | `whisper-v3-large` | Fireworks speech-to-text model ID. |
 | `FIREWORKS_STT_DIARIZE` | `true` | Request speaker diarization metadata from Fireworks transcription API. |
+| `FIREWORKS_CHAT_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks OpenAI-compatible chat completions used by Ask generation. |
+| `FIREWORKS_CHAT_MODEL` | `accounts/fireworks/models/llama-v3p1-8b-instruct` | Fireworks chat model used when `INFERENCE_PROVIDER=fireworks` for Ask generation. |
 | `FIREWORKS_STT_COST_PER_MINUTE_USD` | `0.006` | Cost estimate assumption used for per-episode observability (`estimated_cost_usd = billed_minutes * rate`). |
 | `EMBEDDING_PROVIDER` | `local` | Runtime provider for query + segment/chunk embeddings (`local` or `fireworks`). |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local sentence-transformers model used when `EMBEDDING_PROVIDER=local`. |
