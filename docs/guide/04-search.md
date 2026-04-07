@@ -4,7 +4,7 @@ Podlog provides hybrid search combining full-text keyword matching with semantic
 
 ## Full-Text Search
 
-Type keywords into the search bar on the home page (`/`). Podlog supports these operators:
+Type keywords into the search bar on the search page (`/search`). Podlog supports these operators:
 
 | Operator | Example | Matches |
 |---|---|---|

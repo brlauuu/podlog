@@ -50,7 +50,7 @@ After adding a feed, go to `/queue` to watch the episode move through the pipeli
 
 For more detail on each stage and error handling, see [Queue Dashboard](08-queue.md).
 
-Once the episode reaches **Done**, go to `/` and search for something from the episode — you should see results with clickable timestamps.
+Once the episode reaches **Done**, go to `/search` and search for something from the episode — you should see results with clickable timestamps.
 
 ---
 
