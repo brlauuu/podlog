@@ -18,6 +18,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.database import SessionLocal
 from app.models import SystemState
+from app.services.notification_settings import get_runtime_inference_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -36,6 +37,7 @@ class HealthResponse(BaseModel):
 @router.get("/health", response_model=HealthResponse)
 def health_check() -> HealthResponse:
     services: list[ServiceStatus] = []
+    provider = settings.inference_provider
 
     # Database + Worker (both need a DB session)
     db = None
@@ -43,6 +45,14 @@ def health_check() -> HealthResponse:
         db = SessionLocal()
         db.execute(text("SELECT 1"))
         services.append(ServiceStatus(name="Database", status="OK"))
+        try:
+            runtime = get_runtime_inference_settings(db)
+            runtime_provider = runtime.get("inference_provider")
+            if runtime_provider in ("local", "fireworks"):
+                provider = runtime_provider
+        except Exception:
+            # Fallback to env-backed default when runtime settings row is malformed.
+            pass
 
         # Worker (via prewarm flag in DB — shared across containers)
         row = db.query(SystemState).filter(SystemState.key == "prewarm_done").first()
@@ -61,7 +71,7 @@ def health_check() -> HealthResponse:
             db.close()
 
     # Ollama (optional when Fireworks provider mode is enabled)
-    if settings.inference_provider == "fireworks":
+    if provider == "fireworks":
         services.append(ServiceStatus(name="Ollama", status="OK"))
     else:
         try:
