@@ -29,9 +29,14 @@ _FIELDS = [
     "smtp_use_tls",
     "notification_frequency",
     "health_check_notifications_enabled",
+    "inference_provider",
+    "fireworks_api_key",
+    "fireworks_audio_base_url",
+    "fireworks_stt_model",
+    "fireworks_stt_diarize",
 ]
 
-_SENSITIVE_FIELDS = {"telegram_bot_token", "smtp_password"}
+_SENSITIVE_FIELDS = {"telegram_bot_token", "smtp_password", "fireworks_api_key"}
 
 _NULLABLE_FIELDS = {
     "telegram_bot_token",
@@ -39,9 +44,18 @@ _NULLABLE_FIELDS = {
     "notification_email_to",
     "smtp_user",
     "smtp_password",
+    "fireworks_api_key",
 }
 
 _VALID_FREQUENCIES = {"immediate", "daily", "weekly"}
+_VALID_INFERENCE_PROVIDERS = {"local", "fireworks"}
+_INFERENCE_FIELDS = {
+    "inference_provider",
+    "fireworks_api_key",
+    "fireworks_audio_base_url",
+    "fireworks_stt_model",
+    "fireworks_stt_diarize",
+}
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 
@@ -56,7 +70,10 @@ def _read_db_settings(db: Session) -> dict | None:
     row = db.query(SystemState).filter(SystemState.key == SETTINGS_KEY).first()
     if row is None:
         return None
-    return json.loads(row.value)
+    try:
+        return json.loads(row.value)
+    except Exception:
+        return None
 
 
 def get_notification_settings(db: Session) -> dict:
@@ -76,6 +93,7 @@ def get_notification_settings(db: Session) -> dict:
         and merged.get("telegram_chat_id") is not None
     )
     merged["email_configured"] = bool(merged.get("notification_email_to"))
+    merged["fireworks_configured"] = bool(merged.get("fireworks_api_key"))
     return merged
 
 
@@ -94,6 +112,12 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
         port = updates["smtp_port"]
         if not isinstance(port, int) or port < 1 or port > 65535:
             raise ValueError(f"smtp_port must be a positive integer (1-65535), got {port!r}")
+    if "inference_provider" in updates:
+        if updates["inference_provider"] not in _VALID_INFERENCE_PROVIDERS:
+            raise ValueError(
+                f"inference_provider must be one of {_VALID_INFERENCE_PROVIDERS}, "
+                f"got '{updates['inference_provider']}'"
+            )
 
     # Normalize empty/whitespace strings to None for nullable fields
     for key in list(updates.keys()):
@@ -143,6 +167,7 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
         and merged.get("telegram_chat_id") is not None
     )
     merged["email_configured"] = bool(merged.get("notification_email_to"))
+    merged["fireworks_configured"] = bool(merged.get("fireworks_api_key"))
     return merged
 
 
@@ -156,3 +181,12 @@ def mask_sensitive(settings_dict: dict) -> dict:
         elif value is not None and isinstance(value, str):
             result[field] = "***"
     return result
+
+
+def get_runtime_inference_settings(db: Session | None = None) -> dict:
+    """Resolve inference settings for task execution (DB overrides env vars)."""
+    if db is None:
+        base = _env_defaults()
+    else:
+        base = get_notification_settings(db)
+    return {key: base.get(key) for key in _INFERENCE_FIELDS}

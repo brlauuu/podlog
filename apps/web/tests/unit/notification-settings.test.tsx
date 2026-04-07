@@ -25,19 +25,26 @@ beforeEach(() => {
       smtp_password: null,
       smtp_use_tls: false,
       notification_frequency: "immediate",
+      inference_provider: "local",
+      fireworks_api_key: null,
+      fireworks_audio_base_url: "https://audio-turbo.api.fireworks.ai",
+      fireworks_stt_model: "whisper-v3-large",
+      fireworks_stt_diarize: true,
       telegram_configured: false,
       email_configured: false,
+      fireworks_configured: false,
     }),
   });
 });
 
 describe("NotificationSettings", () => {
-  it("renders three tabs", async () => {
+  it("renders four tabs", async () => {
     render(<NotificationSettings />);
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: /telegram/i })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /email/i })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /general/i })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /fireworks ai/i })).toBeInTheDocument();
     });
   });
 
@@ -103,6 +110,14 @@ describe("NotificationSettings", () => {
       expect(testBtn).toBeDisabled();
     });
   });
+
+  it("switches to fireworks tab on click", async () => {
+    render(<NotificationSettings />);
+    await waitFor(() => screen.getByRole("tab", { name: /fireworks ai/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /fireworks ai/i }));
+    expect(screen.getByLabelText(/inference provider/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/fireworks api key/i)).toBeInTheDocument();
+  });
 });
 
 describe("Email tag input", () => {
@@ -120,8 +135,14 @@ describe("Email tag input", () => {
         smtp_password: null,
         smtp_use_tls: false,
         notification_frequency: "immediate",
+        inference_provider: "local",
+        fireworks_api_key: null,
+        fireworks_audio_base_url: "https://audio-turbo.api.fireworks.ai",
+        fireworks_stt_model: "whisper-v3-large",
+        fireworks_stt_diarize: true,
         telegram_configured: false,
         email_configured: true,
+        fireworks_configured: false,
       }),
     });
   });
@@ -207,8 +228,14 @@ it("tab dot reflects unconfigured state after removing all emails", async () => 
       smtp_password: null,
       smtp_use_tls: false,
       notification_frequency: "immediate",
+      inference_provider: "local",
+      fireworks_api_key: null,
+      fireworks_audio_base_url: "https://audio-turbo.api.fireworks.ai",
+      fireworks_stt_model: "whisper-v3-large",
+      fireworks_stt_diarize: true,
       telegram_configured: false,
       email_configured: true,
+      fireworks_configured: false,
     }),
   });
 

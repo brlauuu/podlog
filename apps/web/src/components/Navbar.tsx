@@ -11,7 +11,7 @@ const NAV_LINKS = [
   { href: "/ask", label: "Ask" },
   { href: "/podcasts", label: "Sources" },
   { href: "/queue", label: "Queue" },
-  { href: "/notifications", label: "Notifications" },
+  { href: "/settings", label: "Settings" },
   { href: "/about", label: "About" },
 ];
 

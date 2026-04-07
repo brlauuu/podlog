@@ -7,6 +7,7 @@ import pytest
 from app.models import SystemState
 from app.services.notification_settings import (
     get_notification_settings,
+    get_runtime_inference_settings,
     save_notification_settings,
     mask_sensitive,
     SETTINGS_KEY,
@@ -151,6 +152,11 @@ class TestSaveNotificationSettings:
         with pytest.raises(ValueError, match="smtp_port"):
             save_notification_settings(db, {"smtp_port": -1})
 
+    def test_rejects_invalid_inference_provider(self):
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="inference_provider"):
+            save_notification_settings(db, {"inference_provider": "cloud"})
+
     def test_empty_string_normalized_to_none(self):
         stored = json.dumps({"notification_email_to": "user@example.com"})
         db = _mock_db(stored_json=stored)
@@ -285,3 +291,34 @@ class TestMaskSensitive:
         result = mask_sensitive(s)
         assert result["telegram_bot_token"] is None
         assert result["smtp_password"] is None
+
+    def test_masks_fireworks_api_key(self):
+        s = {"fireworks_api_key": "fw_test_1234567890"}
+        result = mask_sensitive(s)
+        assert result["fireworks_api_key"] != "fw_test_1234567890"
+        assert "***" in result["fireworks_api_key"]
+
+
+class TestRuntimeInferenceSettings:
+    def test_uses_db_override_when_present(self):
+        stored = json.dumps({"inference_provider": "fireworks", "fireworks_api_key": "fw_abc"})
+        db = _mock_db(stored_json=stored)
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.inference_provider = "local"
+            mock_settings.fireworks_api_key = None
+            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+            mock_settings.fireworks_stt_model = "whisper-v3-large"
+            mock_settings.fireworks_stt_diarize = True
+            result = get_runtime_inference_settings(db)
+        assert result["inference_provider"] == "fireworks"
+        assert result["fireworks_api_key"] == "fw_abc"
+
+    def test_uses_env_defaults_without_db(self):
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.inference_provider = "local"
+            mock_settings.fireworks_api_key = None
+            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+            mock_settings.fireworks_stt_model = "whisper-v3-large"
+            mock_settings.fireworks_stt_diarize = True
+            result = get_runtime_inference_settings(None)
+        assert result["inference_provider"] == "local"

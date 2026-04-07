@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.3
+**Version:** 1.4
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.4 — Added optional remote inference provider mode (Fireworks) for transcription and diarization while keeping local-first defaults. Runtime provider settings can be sourced from DB-backed Settings UI (env fallback remains). Added Fireworks configuration vars.
 - v1.3 — Updated tech stack to reflect actual implementation: Celery+Redis replaced by PostgreSQL-backed job queue; Whisper via transformers replaced by WhisperX (CTranslate2); Celery Beat replaced by polling loop in worker.py; Flower removed. Added Ollama for RAG inference. Updated architecture diagram. Removed stale env vars (REDIS_URL, CELERY_CONCURRENCY). Moved semantic search and faster Whisper from Future to Done. Updated default model to large-v3-turbo.
 - v1.2 — Renamed project from PodSearch to Podlog. Added `updated_at` field to episodes table (prerequisite for GAP-01 zombie job detection). Added `DISK_HEADROOM_BYTES` environment variable for disk space pre-check (GAP-06). Database name changed from `podsearch` to `podlog`.
 - v1.1 — Added auto-retry logic (OQ-02 resolved), disk-full handling (OQ-03 resolved), diarization failure persistence (OQ-04 resolved), model pre-warm step, memory sequencing requirement for Whisper+pyannote, pipeline container healthcheck, path traversal mitigation for audio serving.
@@ -14,7 +15,7 @@
 
 ## 1. Problem Statement
 
-Podcast listeners who want to search, reference, or revisit specific moments in long-form audio have no reliable way to do so. Published transcripts are rare, inaccurate, or not searchable. This pipeline solves the upstream half of the problem: automatically fetching podcast episodes from RSS feeds, transcribing them with a state-of-the-art open-weight speech-to-text model, labeling speakers, and storing timestamped transcripts in a queryable database — all running locally on a single machine with no cloud dependencies.
+Podcast listeners who want to search, reference, or revisit specific moments in long-form audio have no reliable way to do so. Published transcripts are rare, inaccurate, or not searchable. This pipeline solves the upstream half of the problem: automatically fetching podcast episodes from RSS feeds, transcribing them with a state-of-the-art speech-to-text model, labeling speakers, and storing timestamped transcripts in a queryable database — local-first by default, with optional remote inference provider support.
 
 ---
 
@@ -27,7 +28,7 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 - Store transcripts with word-level timestamps in a searchable database
 - Archive compressed audio files locally as backup
 - Provide visibility into queue progress and errors
-- Run entirely in Docker with no external paid services
+- Run entirely in Docker in local-first mode; allow optional remote inference provider configuration
 
 ### Non-Goals (for this PRD)
 - Named speaker identification (deferred to post-MVP UI feature)
@@ -87,7 +88,9 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 
 ### 5.4 Transcription (Speech-to-Text)
 
-- Model: WhisperX with CTranslate2 backend + wav2vec2 word-level alignment, optimized for CPU inference.
+- Provider modes:
+  - `local` (default): WhisperX with CTranslate2 backend + wav2vec2 word-level alignment, optimized for CPU inference.
+  - `fireworks` (optional): Fireworks `/v1/audio/transcriptions` API with `verbose_json` response.
 - Default model: `large-v3-turbo` (configurable via `WHISPER_MODEL` env var: tiny|base|small|medium|large-v3|large-v3-turbo).
 - The model is downloaded once and cached in a persistent Docker volume.
 - **Memory management:** Whisper is loaded into memory for transcription and **explicitly unloaded** (removed from memory and `gc.collect()` called) before pyannote is loaded for diarization. The two models must never be resident in memory simultaneously. This is mandatory on CPU-only machines to avoid OOM.
@@ -98,10 +101,11 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 
 ### 5.5 Speaker Diarization
 
-- Library: `pyannote/speaker-diarization-3.1` from HuggingFace.
-- Requires a HuggingFace access token set via environment variable `HF_TOKEN`. The user must accept the pyannote model license on HuggingFace.com independently.
+- Local mode library: `pyannote/speaker-diarization-3.1` from HuggingFace.
+- Requires a HuggingFace access token set via environment variable `HF_TOKEN` for local mode. The user must accept the pyannote model license on HuggingFace.com independently.
+- Fireworks mode uses diarization metadata returned by Fireworks transcription responses when enabled.
 - Diarization produces speaker-labeled time segments: `{ speaker: "SPEAKER_00", start: 12.4, end: 18.1 }`.
-- **Alignment strategy:** Whisper transcript segments and pyannote diarization segments are aligned by majority overlap. For each Whisper segment, the pyannote speaker whose time range overlaps the most with that segment's duration is assigned as the speaker label. In the event of an exact tie, the speaker label from the earlier-starting pyannote segment is used.
+- **Alignment strategy:** Transcript segments and diarization segments are aligned by majority overlap. For each transcript segment, the speaker whose time range overlaps the most with that segment's duration is assigned as the speaker label. In the event of an exact tie, the speaker label from the earlier-starting segment is used.
 - Speaker labels are stored as `SPEAKER_00`, `SPEAKER_01`, etc. Renaming to human names is handled in the web UI (PRD-02).
 - **Diarization failure handling:** If diarization fails for any reason, the transcript segments are still written to the database with `speaker_label = NULL`. The episode is marked `done` but with `has_diarization = false` and a `diarization_error` field populated with the failure reason. This state is visible in the database and surfaced in the UI at three locations: the episode list badge, the episode transcript page header, and inline on search result cards (see PRD-02 §5.4, §5.1).
 

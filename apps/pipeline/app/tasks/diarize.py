@@ -17,6 +17,7 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
+from app.services.notification_settings import get_runtime_inference_settings
 from app.tasks.helpers import update_episode
 from app import job_queue
 
@@ -26,55 +27,125 @@ logger = logging.getLogger(__name__)
 def diarize_episode(episode_id: str) -> str:
     db = SessionLocal()
     alignment_path = Path(settings.transcript_dir) / f"{episode_id}.whisperx.json"
+    fireworks_path = Path(settings.transcript_dir) / f"{episode_id}.fireworks.json"
     try:
         episode = db.query(Episode).filter(Episode.id == episode_id).first()
         if not episode or not episode.audio_local_path:
             raise RuntimeError(f"Episode {episode_id} missing for diarization")
 
-        audio_path = episode.audio_local_path
+        runtime = get_runtime_inference_settings(db)
+        provider = runtime.get("inference_provider") or "local"
 
-        try:
-            from app.services.pyannote import diarize
+        if provider == "fireworks":
+            # Fireworks mode uses remote diarization metadata and never loads pyannote locally.
+            try:
+                t0 = time.monotonic()
+                if not bool(runtime.get("fireworks_stt_diarize", True)):
+                    # Provider is remote and diarization is intentionally disabled.
+                    update_episode(db, episode_id, has_diarization=False, diarization_error=None)
+                    job_queue.enqueue(db, episode_id, "chunk")
+                    return episode_id
+                if not fireworks_path.exists():
+                    raise RuntimeError("Missing Fireworks transcript artifact for diarization")
 
-            t0 = time.monotonic()
-            diarization_segments = diarize(audio_path)
+                with open(fireworks_path) as f:
+                    raw = json.load(f)
 
-            # Try word-level alignment first (preferred)
-            if alignment_path.exists():
-                _diarize_wordlevel(db, episode_id, alignment_path, diarization_segments)
-            else:
-                _diarize_segment_level(db, episode_id, diarization_segments)
+                from app.services.fireworks_audio import (
+                    diarization_segments_from_transcription,
+                    assign_segment_speakers_from_words,
+                )
 
-            diarize_secs = round(time.monotonic() - t0, 1)
-            update_episode(
-                db, episode_id,
-                has_diarization=True, diarization_error=None, diarize_duration_secs=diarize_secs,
-            )
+                diarization_segments = diarization_segments_from_transcription(raw)
+                if diarization_segments:
+                    _diarize_segment_level(db, episode_id, diarization_segments)
+                else:
+                    transcript_segments = (
+                        db.query(Segment)
+                        .filter(Segment.episode_id == episode_id)
+                        .order_by(Segment.start_time)
+                        .all()
+                    )
+                    assignments = assign_segment_speakers_from_words(
+                        transcript_segments=[
+                            {"id": s.id, "start": s.start_time, "end": s.end_time}
+                            for s in transcript_segments
+                        ],
+                        raw=raw,
+                    )
+                    if not assignments:
+                        raise RuntimeError("No speaker labels found in Fireworks transcript words")
+                    for seg_id, speaker in assignments.items():
+                        db.query(Segment).filter(Segment.id == seg_id).update(
+                            {"speaker_label": speaker}
+                        )
+                    db.flush()
+                diarize_secs = round(time.monotonic() - t0, 1)
+                update_episode(
+                    db, episode_id,
+                    has_diarization=True, diarization_error=None, diarize_duration_secs=diarize_secs,
+                )
+            except Exception as exc:
+                update_episode(
+                    db, episode_id,
+                    has_diarization=False,
+                    diarization_error=str(exc),
+                )
+                logger.warning(
+                    '"action": "diarize_failed_graceful", "episode_id": "%s", "error": "%s"',
+                    episode_id,
+                    str(exc),
+                )
+        else:
+            audio_path = episode.audio_local_path
 
-        except Exception as exc:
-            # Diarization failure is non-fatal -- transcript is preserved (PRD-01 S5.5)
-            update_episode(
-                db, episode_id,
-                has_diarization=False,
-                diarization_error=str(exc),
-            )
-            logger.warning(
-                '"action": "diarize_failed_graceful", "episode_id": "%s", "error": "%s"',
-                episode_id,
-                str(exc),
-            )
-        finally:
-            # MANDATORY: unload pyannote before next episode's Whisper can load (PRD-01 S5.4)
-            from app.services.pyannote import unload_pipeline
-            unload_pipeline()
+            try:
+                from app.services.pyannote import diarize
+
+                t0 = time.monotonic()
+                diarization_segments = diarize(audio_path)
+
+                # Try word-level alignment first (preferred)
+                if alignment_path.exists():
+                    _diarize_wordlevel(db, episode_id, alignment_path, diarization_segments)
+                else:
+                    _diarize_segment_level(db, episode_id, diarization_segments)
+
+                diarize_secs = round(time.monotonic() - t0, 1)
+                update_episode(
+                    db, episode_id,
+                    has_diarization=True, diarization_error=None, diarize_duration_secs=diarize_secs,
+                )
+
+            except Exception as exc:
+                # Diarization failure is non-fatal -- transcript is preserved (PRD-01 S5.5)
+                update_episode(
+                    db, episode_id,
+                    has_diarization=False,
+                    diarization_error=str(exc),
+                )
+                logger.warning(
+                    '"action": "diarize_failed_graceful", "episode_id": "%s", "error": "%s"',
+                    episode_id,
+                    str(exc),
+                )
+            finally:
+                # MANDATORY: unload pyannote before next episode's Whisper can load (PRD-01 S5.4)
+                from app.services.pyannote import unload_pipeline
+                unload_pipeline()
 
         job_queue.enqueue(db, episode_id, "chunk")
         return episode_id
     finally:
-        # Clean up alignment file
+        # Clean up intermediate alignment artifacts
         if alignment_path.exists():
             try:
                 alignment_path.unlink()
+            except Exception:
+                pass
+        if fireworks_path.exists():
+            try:
+                fireworks_path.unlink()
             except Exception:
                 pass
         db.close()

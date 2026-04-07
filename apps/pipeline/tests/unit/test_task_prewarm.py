@@ -36,9 +36,31 @@ class TestIsPrewarmDone:
 
 class TestMain:
     @patch("app.tasks.prewarm._set_prewarm_done")
+    @patch("app.tasks.prewarm._runtime_inference_provider", return_value="fireworks")
+    @patch("app.config.settings")
+    def test_skips_local_model_downloads_when_fireworks_provider(
+        self, mock_settings, _mock_provider, mock_set
+    ):
+        mock_settings.model_cache_dir = "/tmp/models"
+        mock_settings.whisper_model = "large-v3-turbo"
+
+        with (
+            patch("app.services.whisper.load_model") as mock_whisper_load,
+            patch("app.services.pyannote.load_pipeline") as mock_pyannote_load,
+        ):
+            from app.tasks.prewarm import main
+
+            main()
+
+        mock_whisper_load.assert_not_called()
+        mock_pyannote_load.assert_not_called()
+        mock_set.assert_called_once()
+
+    @patch("app.tasks.prewarm._set_prewarm_done")
+    @patch("app.tasks.prewarm._runtime_inference_provider", return_value="local")
     @patch("app.tasks.prewarm._is_prewarm_done", return_value=True)
     @patch("app.config.settings")
-    def test_skips_when_already_done(self, mock_settings, mock_check, mock_set):
+    def test_skips_when_already_done(self, mock_settings, mock_check, _mock_provider, mock_set):
         mock_settings.model_cache_dir = "/tmp/models"
 
         with patch("pathlib.Path.exists", return_value=True):
@@ -49,9 +71,10 @@ class TestMain:
         mock_set.assert_not_called()
 
     @patch("app.tasks.prewarm._set_prewarm_done")
+    @patch("app.tasks.prewarm._runtime_inference_provider", return_value="local")
     @patch("app.tasks.prewarm._is_prewarm_done", return_value=False)
     @patch("app.config.settings")
-    def test_loads_and_unloads_models(self, mock_settings, mock_check, mock_set):
+    def test_loads_and_unloads_models(self, mock_settings, mock_check, _mock_provider, mock_set):
         mock_settings.model_cache_dir = "/tmp/models"
         mock_settings.whisper_model = "large-v3-turbo"
 
@@ -68,9 +91,10 @@ class TestMain:
 
         mock_set.assert_called_once()
 
+    @patch("app.tasks.prewarm._runtime_inference_provider", return_value="local")
     @patch("app.tasks.prewarm._is_prewarm_done", return_value=False)
     @patch("app.config.settings")
-    def test_whisper_failure_exits(self, mock_settings, mock_check):
+    def test_whisper_failure_exits(self, mock_settings, mock_check, _mock_provider):
         mock_settings.model_cache_dir = "/tmp/models"
         mock_settings.whisper_model = "large-v3-turbo"
 
@@ -84,9 +108,10 @@ class TestMain:
             main()
 
     @patch("app.tasks.prewarm._set_prewarm_done")
+    @patch("app.tasks.prewarm._runtime_inference_provider", return_value="local")
     @patch("app.tasks.prewarm._is_prewarm_done", return_value=False)
     @patch("app.config.settings")
-    def test_pyannote_failure_is_non_fatal(self, mock_settings, mock_check, mock_set):
+    def test_pyannote_failure_is_non_fatal(self, mock_settings, mock_check, _mock_provider, mock_set):
         mock_settings.model_cache_dir = "/tmp/models"
         mock_settings.whisper_model = "large-v3-turbo"
 

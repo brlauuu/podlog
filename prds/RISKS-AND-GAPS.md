@@ -2,7 +2,7 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** RISKS-AND-GAPS
-**Version:** 1.3
+**Version:** 1.4
 **Status:** Living document — update as risks are resolved or new ones are identified  
 **How to use:** When a risk is mitigated or a gap is closed, move it to the Resolved section at the bottom with a note on how it was addressed. Add new entries as they are discovered during development.
 
@@ -185,6 +185,21 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 3. As a further optimisation, PostgreSQL's `reltuples` estimate (from `pg_class`) can provide a fast approximate count for the unfiltered case.
 
 **Status:** Accepted for MVP. Cache optimisation is a V1 candidate.
+
+---
+
+### RISK-08: Remote Inference Provider Availability / Rate Limits
+
+**Severity:** Medium  
+**Component:** PRD-01 — Inference provider mode (`fireworks`)  
+**Description:** When `INFERENCE_PROVIDER=fireworks`, transcription/diarization depends on external API availability, quotas, and rate limits. Bursty backfills may hit provider-side throttling and transient failures.  
+**Mitigation:**
+1. Keep `local` as the default provider and documented fallback mode.
+2. Surface provider errors through existing episode failure/error-class paths.
+3. Prefer gradual ramp-up for large backfills; avoid assuming infinite throughput.
+4. Keep provider settings editable via DB-backed Settings UI and env vars for quick rollback to local mode.
+
+**Status:** Active risk accepted in v1.4.
 
 ---
 
