@@ -118,6 +118,7 @@ See [docs/configuration.md](docs/configuration.md) for the full list of all envi
 | [Configuration](docs/configuration.md) | All environment variables with defaults and explanations |
 | [Hardware Guide](docs/hardware.md) | System requirements, processing benchmarks, tested machine specs |
 | [Development](docs/development.md) | Local development setup, running tests, architecture notes, and Codex/Claude audit workflows |
+| [Audit Workflows](docs/development.md#audit-workflows) | How Codex (`nightly-audit`) and Claude (`/codebase-audit`) audits are run, what they produce, and safety constraints |
 
 ## Common Commands
 
