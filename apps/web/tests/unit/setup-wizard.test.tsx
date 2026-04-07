@@ -418,18 +418,42 @@ describe("SetupWizard", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
 
-    // Skip to screen 3
+    // Add a feed to advance to screen 3
+    await waitFor(() => {
+      expect(screen.getByText(/Add Your First Podcast/i)).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByPlaceholderText(/feeds\.example\.com/i), {
+      target: { value: "https://example.com/feed.xml" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add feed/i }));
+
+    // On screen 3, click "Get Started" without checking the box
+    await waitFor(() => {
+      expect(screen.getByText(/You're All Set!/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /get started/i }));
+
+    expect(mockMarkCompleted).toHaveBeenCalledWith(false);
+  });
+
+  it("dismisses wizard from screen 2 when Skip is clicked", async () => {
+    const mockMarkCompleted = jest.fn();
+    const mockSetOpen = jest.fn();
+    mockUseWizard.mockReturnValue({ open: true, setOpen: mockSetOpen, markCompleted: mockMarkCompleted });
+    render(<SetupWizard />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByText("Welcome to Podlog")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
     await waitFor(() => {
       expect(screen.getByText(/Add Your First Podcast/i)).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole("button", { name: /skip/i }));
 
-    // On screen 3, click "Get Started" without checking the box
-    await waitFor(() => {
-      expect(screen.getByText(/Ready When You Are/i)).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole("button", { name: /get started/i }));
-
-    expect(mockMarkCompleted).toHaveBeenCalledWith(false);
+    expect(mockMarkCompleted).toHaveBeenCalledWith(true);
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
+    expect(screen.queryByText(/Ready When You Are/i)).not.toBeInTheDocument();
   });
 });
