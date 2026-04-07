@@ -33,6 +33,23 @@ def _load_fireworks_service():
     return fireworks_audio
 
 
+def _estimate_fireworks_usage(segments_data: list[dict], fallback_duration_secs: int | None) -> float:
+    """
+    Estimate billed audio seconds for Fireworks STT.
+
+    Prefer transcript segment bounds; fall back to episode metadata.
+    """
+    max_end = 0.0
+    for seg in segments_data:
+        try:
+            max_end = max(max_end, float(seg.get("end", 0.0) or 0.0))
+        except Exception:
+            continue
+    if max_end > 0:
+        return max_end
+    return float(fallback_duration_secs or 0)
+
+
 def transcribe_episode(episode_id: str) -> str:
     db = SessionLocal()
     queued_next = False
@@ -70,6 +87,7 @@ def transcribe_episode(episode_id: str) -> str:
 
         runtime = get_runtime_inference_settings(db)
         provider = runtime.get("inference_provider") or "local"
+        update_episode(db, episode_id, inference_provider_used=provider)
         if provider == "fireworks":
             try:
                 fireworks_audio = _load_fireworks_service()
@@ -94,7 +112,34 @@ def transcribe_episode(episode_id: str) -> str:
                     diarize=bool(runtime.get("fireworks_stt_diarize", True)),
                 )
                 transcribe_secs = round(time.monotonic() - t0, 1)
-                update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
+                audio_secs = _estimate_fireworks_usage(segments_data, episode.duration_secs)
+                audio_minutes = round(audio_secs / 60.0, 3) if audio_secs > 0 else 0.0
+                stt_rate = float(
+                    runtime.get("fireworks_stt_cost_per_minute_usd")
+                    or settings.fireworks_stt_cost_per_minute_usd
+                    or 0.0
+                )
+                stt_cost_usd = round(audio_minutes * stt_rate, 4)
+
+                update_episode(
+                    db,
+                    episode_id,
+                    transcribe_duration_secs=transcribe_secs,
+                    fireworks_audio_secs=round(audio_secs, 1),
+                    fireworks_audio_minutes=audio_minutes,
+                    fireworks_stt_cost_per_minute_usd=stt_rate,
+                    fireworks_stt_cost_usd=stt_cost_usd,
+                )
+                logger.info(
+                    '"action": "fireworks_transcribe_observability", "episode_id": "%s", '
+                    '"audio_secs": %.1f, "audio_minutes": %.3f, "stt_rate_usd_per_min": %.6f, '
+                    '"stt_cost_usd": %.4f',
+                    episode_id,
+                    audio_secs,
+                    audio_minutes,
+                    stt_rate,
+                    stt_cost_usd,
+                )
             except fireworks_audio.FireworksTranscriptionError as exc:
                 retry_count = int(getattr(episode, "retry_count", 0) or 0)
                 retry_max = int(getattr(episode, "retry_max", settings.retry_max) or settings.retry_max)
@@ -140,7 +185,15 @@ def transcribe_episode(episode_id: str) -> str:
                     str(wav_path), model_name=settings.whisper_model
                 )
                 transcribe_secs = round(time.monotonic() - t0, 1)
-                update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
+                update_episode(
+                    db,
+                    episode_id,
+                    transcribe_duration_secs=transcribe_secs,
+                    fireworks_audio_secs=None,
+                    fireworks_audio_minutes=None,
+                    fireworks_stt_cost_per_minute_usd=None,
+                    fireworks_stt_cost_usd=None,
+                )
             except MemoryError as exc:
                 _mark_failed(db, episode_id, "OOM", str(exc))
                 return episode_id

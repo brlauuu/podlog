@@ -157,6 +157,11 @@ class TestSaveNotificationSettings:
         with pytest.raises(ValueError, match="inference_provider"):
             save_notification_settings(db, {"inference_provider": "cloud"})
 
+    def test_rejects_negative_fireworks_cost_rate(self):
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="fireworks_stt_cost_per_minute_usd"):
+            save_notification_settings(db, {"fireworks_stt_cost_per_minute_usd": -0.1})
+
     def test_empty_string_normalized_to_none(self):
         stored = json.dumps({"notification_email_to": "user@example.com"})
         db = _mock_db(stored_json=stored)
@@ -309,6 +314,7 @@ class TestRuntimeInferenceSettings:
             mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_stt_diarize = True
+            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
             result = get_runtime_inference_settings(db)
         assert result["inference_provider"] == "fireworks"
         assert result["fireworks_api_key"] == "fw_abc"
@@ -320,5 +326,6 @@ class TestRuntimeInferenceSettings:
             mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_stt_diarize = True
+            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
             result = get_runtime_inference_settings(None)
         assert result["inference_provider"] == "local"

@@ -59,6 +59,7 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `FIREWORKS_AUDIO_BASE_URL` | `https://audio-turbo.api.fireworks.ai` | Base URL for Fireworks audio API. |
 | `FIREWORKS_STT_MODEL` | `whisper-v3-large` | Fireworks speech-to-text model ID. |
 | `FIREWORKS_STT_DIARIZE` | `true` | Request speaker diarization metadata from Fireworks transcription API. |
+| `FIREWORKS_STT_COST_PER_MINUTE_USD` | `0.006` | Cost estimate assumption used for per-episode observability (`estimated_cost_usd = billed_minutes * rate`). |
 
 ### Fireworks retry policy
 
@@ -68,6 +69,12 @@ When Fireworks mode is enabled, Podlog applies automatic retries for transient t
 - HTTP access errors: HTTP `4xx` map to `HTTP_ACCESS` and follow retry policy
 - Backoff: `RETRY_BACKOFF_BASE * 2^(attempt-1)` (for example `30s`, `60s`, `120s` with defaults)
 - Attempts: capped by `RETRY_MAX`
+
+### Fireworks observability assumptions
+
+- Per-episode Fireworks usage/cost is persisted on the episode row after successful remote transcription.
+- Billed audio seconds are estimated from transcript segment end-times (fallback: episode duration).
+- Cost is estimated (not reconciled billing): `fireworks_audio_minutes * FIREWORKS_STT_COST_PER_MINUTE_USD`.
 
 ## Health Monitoring
 

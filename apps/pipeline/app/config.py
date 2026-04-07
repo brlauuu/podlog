@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     fireworks_audio_base_url: str = "https://audio-turbo.api.fireworks.ai"
     fireworks_stt_model: str = "whisper-v3-large"
     fireworks_stt_diarize: bool = True
+    # Cost estimate input for observability (Issue #261).
+    # Keep this explicit because provider pricing can change.
+    fireworks_stt_cost_per_minute_usd: float = 0.006
 
     # Notifications (all optional — no env vars = no notifications)
     notification_email_to: str | None = None

@@ -127,6 +127,7 @@ class TestTranscription:
                     "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
                     "fireworks_stt_model": "whisper-v3-large",
                     "fireworks_stt_diarize": True,
+                    "fireworks_stt_cost_per_minute_usd": 0.006,
                 },
             ),
             patch("app.tasks.transcribe.SessionLocal", return_value=db_session),
@@ -138,6 +139,7 @@ class TestTranscription:
             mock_settings.transcript_dir = str(tmp_path / "transcripts")
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
 
             from app.tasks.transcribe import transcribe_episode
 

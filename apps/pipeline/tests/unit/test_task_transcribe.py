@@ -153,6 +153,7 @@ class TestTranscribeEpisode:
                     "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
                     "fireworks_stt_model": "whisper-v3-large",
                     "fireworks_stt_diarize": True,
+                    "fireworks_stt_cost_per_minute_usd": 0.01,
                 },
             ),
             patch("app.tasks.transcribe.settings") as mock_settings,
@@ -161,6 +162,7 @@ class TestTranscribeEpisode:
         ):
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
             mock_settings.transcript_dir = "/data/transcripts"
 
             from app.tasks.transcribe import transcribe_episode
@@ -170,6 +172,18 @@ class TestTranscribeEpisode:
         assert result == "ep1"
         mock_convert.assert_not_called()
         mock_update.assert_any_call(db, "ep1", status="transcribing")
+        mock_update.assert_any_call(db, "ep1", inference_provider_used="fireworks")
+        observability_calls = [
+            c for c in mock_update.call_args_list
+            if "fireworks_audio_secs" in c.kwargs
+        ]
+        assert len(observability_calls) == 1
+        obs_kwargs = observability_calls[0].kwargs
+        assert obs_kwargs["fireworks_audio_secs"] == 5.0
+        assert obs_kwargs["fireworks_audio_minutes"] == 0.083
+        assert obs_kwargs["fireworks_stt_cost_per_minute_usd"] == 0.01
+        assert obs_kwargs["fireworks_stt_cost_usd"] == 0.0008
+        assert obs_kwargs["transcribe_duration_secs"] >= 0.0
         mock_update.assert_any_call(db, "ep1", language="en", status="diarizing")
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "diarize")
 
@@ -206,6 +220,7 @@ class TestTranscribeEpisode:
                     "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
                     "fireworks_stt_model": "whisper-v3-large",
                     "fireworks_stt_diarize": True,
+                    "fireworks_stt_cost_per_minute_usd": 0.006,
                 },
             ),
             patch("app.tasks.transcribe.settings") as mock_settings,
@@ -214,6 +229,7 @@ class TestTranscribeEpisode:
             mock_settings.retry_max = 3
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
 
             from app.tasks.transcribe import transcribe_episode
 
@@ -261,6 +277,7 @@ class TestTranscribeEpisode:
                     "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
                     "fireworks_stt_model": "whisper-v3-large",
                     "fireworks_stt_diarize": True,
+                    "fireworks_stt_cost_per_minute_usd": 0.006,
                 },
             ),
             patch("app.tasks.transcribe.settings") as mock_settings,
@@ -269,6 +286,7 @@ class TestTranscribeEpisode:
             mock_settings.retry_max = 3
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
 
             from app.tasks.transcribe import transcribe_episode
 
@@ -302,6 +320,7 @@ class TestTranscribeEpisode:
                     "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
                     "fireworks_stt_model": "whisper-v3-large",
                     "fireworks_stt_diarize": True,
+                    "fireworks_stt_cost_per_minute_usd": 0.006,
                 },
             ),
             patch("app.tasks.transcribe._load_fireworks_service", side_effect=ImportError("boom")),
@@ -311,6 +330,7 @@ class TestTranscribeEpisode:
             mock_settings.retry_max = 3
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
 
             from app.tasks.transcribe import transcribe_episode
 

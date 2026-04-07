@@ -99,6 +99,13 @@ class Episode(Base):
     transcribe_duration_secs: Mapped[float | None] = mapped_column(Float)
     diarize_duration_secs: Mapped[float | None] = mapped_column(Float)
 
+    # Remote inference observability (Issue #261)
+    inference_provider_used: Mapped[str | None] = mapped_column(Text)
+    fireworks_audio_secs: Mapped[float | None] = mapped_column(Float)
+    fireworks_audio_minutes: Mapped[float | None] = mapped_column(Float)
+    fireworks_stt_cost_per_minute_usd: Mapped[float | None] = mapped_column(Float)
+    fireworks_stt_cost_usd: Mapped[float | None] = mapped_column(Float)
+
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc),
