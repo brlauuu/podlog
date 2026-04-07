@@ -11,7 +11,7 @@ Add RSS feeds, transcribe episodes with Whisper, label speakers with pyannote, a
 ![PostgreSQL](https://img.shields.io/badge/postgresql-15-4169e1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-compose-2496ed?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-O'Saasy-green)
-![Tests](https://img.shields.io/badge/tests-398%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
 
 </div>
 
@@ -126,7 +126,7 @@ make up              # Start all services
 make down            # Stop all services
 make build           # Rebuild Docker images
 make logs            # Follow logs for all services
-make test-unit       # Run unit tests (398 tests)
+make test-unit       # Run unit tests
 make shell-db        # Open psql shell
 make health-install  # Install health monitoring cron (every 15 min)
 make help            # List all available commands
