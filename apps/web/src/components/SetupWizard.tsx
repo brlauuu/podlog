@@ -63,7 +63,7 @@ export default function SetupWizard() {
           <WizardAddFeed
             onNext={() => { setFeedAdded(true); setStep(3); }}
             onBack={() => setStep(1)}
-            onSkip={() => { setFeedAdded(false); setStep(3); }}
+            onSkip={handleSkip}
           />
         )}
         {step === 3 && (
