@@ -67,6 +67,18 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `FIREWORKS_EMBEDDING_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks embeddings API. |
 | `FIREWORKS_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Fireworks embedding model used when `EMBEDDING_PROVIDER=fireworks`. |
 
+### Deployment profiles
+
+- Local-first profile (default): `docker compose up -d` or `make up`
+  - Starts `db`, `pipeline`, `worker`, `web`, and `ollama`.
+- Remote-inference profile: `docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d` or `make up-remote`
+  - Starts `db`, `pipeline`, `worker`, and `web`.
+  - Applies `INFERENCE_PROVIDER=fireworks` and `EMBEDDING_PROVIDER=fireworks` to pipeline + worker.
+  - Does not start `ollama` unless explicitly requested with profile `local-ask`.
+
+Health behavior:
+- In Fireworks mode, `/api/health` does not require live Ollama reachability for overall `OK` status.
+
 ### Fireworks retry policy
 
 When Fireworks mode is enabled, Podlog applies automatic retries for transient transcription failures:

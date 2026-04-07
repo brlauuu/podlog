@@ -53,6 +53,12 @@ HF_TOKEN=hf_your_token_here
 
 Everything else has sensible defaults. See [Configuration](10-configuration.md) for tuning options.
 
+If you want remote Fireworks inference mode, also set:
+
+```bash
+FIREWORKS_API_KEY=fw_your_key_here
+```
+
 ## Build and Start
 
 ```bash
@@ -62,9 +68,26 @@ make up       # Start all services in the background
 
 Open **http://localhost:3000** — you should see the Podlog search page.
 
+### Optional: Remote-Inference Profile
+
+Use this when you want Fireworks-backed inference and no local Ollama container:
+
+```bash
+make up-remote
+```
+
+This runs `docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d`.
+
 ## What's Running
 
-Podlog starts 5 containers:
+Podlog starts these containers by profile:
+
+| Profile | Services |
+|---|---|
+| **Local-first (`make up`)** | `web`, `pipeline`, `worker`, `db`, `ollama` |
+| **Remote-inference (`make up-remote`)** | `web`, `pipeline`, `worker`, `db` (no `ollama`) |
+
+Service details:
 
 | Service | Port | Role |
 |---|---|---|
@@ -72,7 +95,7 @@ Podlog starts 5 containers:
 | **pipeline** | 8000 | FastAPI control plane — feed management, health |
 | **worker** | — | Processes episodes: download, transcribe, diarize, archive |
 | **db** | 5432 | PostgreSQL 15 with pgvector for FTS + semantic search |
-| **ollama** | 11434 | Local LLM inference for RAG-based Ask AI feature |
+| **ollama** | 11434 | Local Ask AI generation provider (local-first profile) |
 
 No Redis, no Celery — the job queue is PostgreSQL-backed.
 
@@ -80,9 +103,12 @@ No Redis, no Celery — the job queue is PostgreSQL-backed.
 
 ```bash
 make up              # Start all services
+make up-remote       # Start Fireworks remote-inference profile
 make down            # Stop all services
+make down-remote     # Stop Fireworks remote-inference profile
 make build           # Rebuild Docker images
 make logs            # Follow logs for all services
+make logs-remote     # Follow logs for remote-inference profile
 make shell-db        # Open a psql shell
 make test-unit       # Run unit tests
 make health-install  # Install health monitoring cron job (every 15 min)

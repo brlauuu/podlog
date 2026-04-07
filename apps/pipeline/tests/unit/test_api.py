@@ -68,6 +68,36 @@ class TestHealthEndpoint:
             assert data["status"] == "DEGRADED"
             assert any(s["name"] == "Ollama" and s["status"] == "DEGRADED" for s in data["services"])
 
+    def test_ollama_marked_ok_when_runtime_provider_fireworks_overrides_env_local(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = _mock_prewarm_row(True)
+        with (
+            patch("app.api.health.SessionLocal", return_value=mock_db),
+            patch("app.api.health.settings.inference_provider", "local"),
+            patch("app.api.health.get_runtime_inference_settings", return_value={"inference_provider": "fireworks"}),
+            patch("app.api.health.httpx.get", side_effect=Exception("should not be called")) as mock_http,
+        ):
+            resp = client.get("/api/health")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert any(s["name"] == "Ollama" and s["status"] == "OK" for s in data["services"])
+            mock_http.assert_not_called()
+
+    def test_ollama_checked_when_runtime_provider_local_overrides_env_fireworks(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = _mock_prewarm_row(True)
+        with (
+            patch("app.api.health.SessionLocal", return_value=mock_db),
+            patch("app.api.health.settings.inference_provider", "fireworks"),
+            patch("app.api.health.get_runtime_inference_settings", return_value={"inference_provider": "local"}),
+            patch("app.api.health.httpx.get", side_effect=Exception("Connection refused")),
+        ):
+            resp = client.get("/api/health")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["status"] == "DEGRADED"
+            assert any(s["name"] == "Ollama" and s["status"] == "DEGRADED" for s in data["services"])
+
 
 class TestFeedsEndpoint:
     def test_add_feed_invalid_rss_returns_422(self):

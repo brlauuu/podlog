@@ -4,7 +4,7 @@
 
 **Self-hosted podcast transcription and search**
 
-Add RSS feeds, transcribe episodes with Whisper, label speakers with pyannote, and search across all your transcripts — everything runs locally in Docker.
+Add RSS feeds, transcribe episodes with Whisper, label speakers with pyannote, and search across all your transcripts — local-first in Docker, with an optional Fireworks remote-inference profile.
 
 ![Python](https://img.shields.io/badge/python-3.11-3776ab?logo=python&logoColor=white)
 ![Node.js](https://img.shields.io/badge/node-20-339933?logo=node.js&logoColor=white)
@@ -48,6 +48,17 @@ make up
 Open **http://localhost:3000** — that's it.
 
 > **First run:** The worker downloads Whisper and pyannote model weights (~3 GB). Jobs are queued during this phase and start processing once models are cached.
+
+### Remote-Inference Profile (Optional)
+
+If you want Fireworks-backed inference and no local `ollama` container:
+
+```bash
+# ensure FIREWORKS_API_KEY is set in .env
+make up-remote
+```
+
+This uses `docker-compose.remote.yml` on top of the default compose file.
 
 ### Prerequisites
 
@@ -93,7 +104,8 @@ Open **http://localhost:3000** — that's it.
                         └──────────────────────────────────────────────┘
 ```
 
-5 containers. No Redis, no Celery — the job queue is PostgreSQL-backed.
+Default profile: 5 containers. Remote-inference profile: 4 containers (no `ollama`).
+No Redis, no Celery — the job queue is PostgreSQL-backed.
 
 ## Configuration
 
@@ -124,9 +136,12 @@ See [docs/configuration.md](docs/configuration.md) for the full list of all envi
 
 ```bash
 make up              # Start all services
+make up-remote       # Start Fireworks remote-inference profile
 make down            # Stop all services
+make down-remote     # Stop Fireworks remote-inference profile
 make build           # Rebuild Docker images
 make logs            # Follow logs for all services
+make logs-remote     # Follow logs for remote-inference profile
 make test-unit       # Run unit tests
 make shell-db        # Open psql shell
 make health-install  # Install health monitoring cron (every 15 min)

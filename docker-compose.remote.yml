@@ -1,0 +1,17 @@
+services:
+  pipeline:
+    environment:
+      INFERENCE_PROVIDER: fireworks
+      EMBEDDING_PROVIDER: fireworks
+
+  worker:
+    environment:
+      INFERENCE_PROVIDER: fireworks
+      EMBEDDING_PROVIDER: fireworks
+
+  # Disable local Ollama by default in remote profile.
+  # You can still start it explicitly with:
+  # docker compose -f docker-compose.yml -f docker-compose.remote.yml --profile local-ask up -d ollama
+  ollama:
+    profiles:
+      - local-ask
