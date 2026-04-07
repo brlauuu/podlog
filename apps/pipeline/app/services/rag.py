@@ -236,8 +236,9 @@ async def stream_fireworks_response(
                     if not line:
                         continue
 
-                    if line.startswith("data: "):
-                        line = line[6:]
+                    if not line.startswith("data: "):
+                        continue
+                    line = line[6:]
 
                     if line == "[DONE]":
                         return

@@ -407,6 +407,55 @@ class TestFireworksStreaming:
         tokens = asyncio.run(collect())
         assert tokens == ["Hello", " world"]
 
+    def test_stream_fireworks_response_ignores_sse_metadata_lines(self):
+        from app.services.rag import stream_fireworks_response
+
+        class _Resp:
+            status_code = 200
+
+            async def aread(self):
+                return b""
+
+            async def aiter_lines(self):
+                yield "event: message"
+                yield "id: 42"
+                yield 'data: {"choices":[{"delta":{"content":"Hello"}}]}'
+                yield "data: [DONE]"
+
+        class _StreamCtx:
+            async def __aenter__(self):
+                return _Resp()
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class _Client:
+            def stream(self, *args, **kwargs):
+                return _StreamCtx()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        async def collect():
+            out = []
+            with patch("app.services.rag.httpx.AsyncClient", return_value=_Client()):
+                async for token in stream_fireworks_response(
+                    messages=[{"role": "user", "content": "test"}],
+                    runtime={
+                        "fireworks_api_key": "fw_test",
+                        "fireworks_chat_base_url": "https://api.fireworks.ai/inference/v1",
+                    },
+                    model="accounts/fireworks/models/llama-v3p1-8b-instruct",
+                ):
+                    out.append(token)
+            return out
+
+        tokens = asyncio.run(collect())
+        assert tokens == ["Hello"]
+
 
 def _parse_sse(text: str) -> list[dict]:
     """Parse SSE text into a list of {event, data} dicts."""
