@@ -31,7 +31,6 @@ _FIELDS = [
     "health_check_notifications_enabled",
     "inference_provider",
     "fireworks_api_key",
-    "fireworks_base_url",
     "fireworks_audio_base_url",
     "fireworks_stt_model",
     "fireworks_stt_diarize",
@@ -50,6 +49,13 @@ _NULLABLE_FIELDS = {
 
 _VALID_FREQUENCIES = {"immediate", "daily", "weekly"}
 _VALID_INFERENCE_PROVIDERS = {"local", "fireworks"}
+_INFERENCE_FIELDS = {
+    "inference_provider",
+    "fireworks_api_key",
+    "fireworks_audio_base_url",
+    "fireworks_stt_model",
+    "fireworks_stt_diarize",
+}
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 
@@ -64,7 +70,10 @@ def _read_db_settings(db: Session) -> dict | None:
     row = db.query(SystemState).filter(SystemState.key == SETTINGS_KEY).first()
     if row is None:
         return None
-    return json.loads(row.value)
+    try:
+        return json.loads(row.value)
+    except Exception:
+        return None
 
 
 def get_notification_settings(db: Session) -> dict:
@@ -172,3 +181,12 @@ def mask_sensitive(settings_dict: dict) -> dict:
         elif value is not None and isinstance(value, str):
             result[field] = "***"
     return result
+
+
+def get_runtime_inference_settings(db: Session | None = None) -> dict:
+    """Resolve inference settings for task execution (DB overrides env vars)."""
+    if db is None:
+        base = _env_defaults()
+    else:
+        base = get_notification_settings(db)
+    return {key: base.get(key) for key in _INFERENCE_FIELDS}

@@ -12,27 +12,27 @@ from pathlib import Path
 
 import httpx
 
-from app.config import settings
-
 logger = logging.getLogger(__name__)
 
 
-def _audio_url() -> str:
-    return settings.fireworks_audio_base_url.rstrip("/") + "/v1/audio/transcriptions"
+def _audio_url(base_url: str) -> str:
+    return base_url.rstrip("/") + "/v1/audio/transcriptions"
 
 
-def transcribe(audio_path: str, model_name: str, diarize: bool) -> tuple[list[dict], str, dict]:
+def transcribe(
+    audio_path: str,
+    *,
+    api_key: str,
+    audio_base_url: str,
+    model_name: str,
+    diarize: bool,
+) -> tuple[list[dict], str, dict]:
     """
     Transcribe audio with Fireworks.
 
     Returns `(segments, language, raw_response)` where segments follow Podlog's
     existing format: `{"start": float, "end": float, "text": str}`.
     """
-    if not settings.fireworks_api_key:
-        raise RuntimeError(
-            "Fireworks inference provider selected but FIREWORKS_API_KEY is missing"
-        )
-
     path = Path(audio_path)
     if not path.exists():
         raise RuntimeError(f"Audio file missing for Fireworks transcription: {audio_path}")
@@ -45,13 +45,13 @@ def transcribe(audio_path: str, model_name: str, diarize: bool) -> tuple[list[di
     # Request both levels when available so downstream diarization can map cleanly.
     data["timestamp_granularities[]"] = ["segment", "word"]
 
-    headers = {"Authorization": f"Bearer {settings.fireworks_api_key}"}
+    headers = {"Authorization": f"Bearer {api_key}"}
     timeout = httpx.Timeout(connect=30.0, read=600.0, write=600.0, pool=60.0)
 
     with path.open("rb") as audio_fh:
         files = {"file": (path.name, audio_fh, "application/octet-stream")}
         with httpx.Client(timeout=timeout) as client:
-            resp = client.post(_audio_url(), headers=headers, data=data, files=files)
+            resp = client.post(_audio_url(audio_base_url), headers=headers, data=data, files=files)
             resp.raise_for_status()
             result = resp.json()
 

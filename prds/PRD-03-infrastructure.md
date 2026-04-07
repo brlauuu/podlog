@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-03 — Infrastructure & DevOps  
-**Version:** 1.3
+**Version:** 1.4
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.4 — Added optional Fireworks inference provider configuration (env + DB-backed Settings UI overrides). Updated `.env.example` with inference-provider variables. Updated web navigation from Notifications page to broader Settings page.
 - v1.3 — Major update to match actual implementation: Celery/Redis/Flower/Beat removed; PostgreSQL-backed job queue with worker.py. Redis service and volumes removed from docker-compose. Single Dockerfile replaced by Dockerfile.control and Dockerfile.worker. Repo structure updated with actual files (removed scheduler.py, celery_app.py, SearchBar.tsx, SpeakerLabel.tsx; added worker.py and current component list). Test stack updated (no redis_test). License corrected to O'Saasy. Makefile updated with all current targets. Ollama service added. .env.example updated to match actual vars.
 - v1.2 — Renamed project from PodSearch to Podlog. Database name changed to `podlog`. Added `redis_test` service to `docker-compose.test.yml`. Changed `beat` dependency from `- worker` to `pipeline: service_healthy`. Added `CELERY_CONCURRENCY` env var interpolation in worker command. Added `DISK_HEADROOM_BYTES` to `.env.example`. Repository root directory renamed from `podsearch/` to `podlog/`.
 - v1.1 — Pipeline service healthcheck added; `web` dependency changed from `service_started` to `service_healthy` to close migration race condition; `docker-compose.yml` updated to reflect new `error_class`, `retry_count`, `diarization_error` schema fields; model pre-warm documented in worker startup.
@@ -98,7 +99,7 @@ podlog/
 │       │   │   ├── feeds/
 │       │   │   ├── ask/
 │       │   │   ├── search/
-│       │   │   ├── notifications/
+│       │   │   ├── settings/
 │       │   │   └── api/
 │       │   │       ├── search/     # grouped + mentions routes
 │       │   │       ├── feeds/
@@ -345,6 +346,13 @@ DISK_HEADROOM_BYTES=2147483648     # 2 GB minimum free space before download sta
 
 # ── Ollama (RAG) ─────────────────────────────────────────
 OLLAMA_URL=http://ollama:11434     # Ollama API endpoint for LLM inference
+
+# ── Inference provider (optional) ───────────────────────
+# INFERENCE_PROVIDER=local          # local | fireworks
+# FIREWORKS_API_KEY=
+# FIREWORKS_AUDIO_BASE_URL=https://audio-turbo.api.fireworks.ai
+# FIREWORKS_STT_MODEL=whisper-v3-large
+# FIREWORKS_STT_DIARIZE=true
 
 # ── Optional overrides ────────────────────────────────────
 # DATABASE_URL=postgresql://postgres:changeme@db:5432/podlog

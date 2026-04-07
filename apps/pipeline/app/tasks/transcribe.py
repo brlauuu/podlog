@@ -1,11 +1,13 @@
 """
-Transcription task -- PRD-01 S5.3, S5.4
+Transcription task -- PRD-01 S5.3, S5.4, Issue #222
 
-- Converts audio to 16kHz mono WAV (ffmpeg)
-- Transcribes with Whisper large-v3 (or configured model)
-- Writes segments to database
-- EXPLICITLY unloads Whisper from memory before returning
-  (mandatory -- Whisper + pyannote must never be resident simultaneously)
+- Local provider path:
+  - Converts audio to 16kHz mono WAV (ffmpeg)
+  - Transcribes with Whisper model from config
+  - Explicitly unloads Whisper before returning
+- Fireworks provider path:
+  - Sends source audio directly to Fireworks transcription API
+- Both paths persist segments and queue diarization.
 """
 import gc
 import json
@@ -16,6 +18,7 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
+from app.services.notification_settings import get_runtime_inference_settings
 from app.tasks.helpers import mark_failed as _mark_failed, update_episode
 from app import job_queue
 
@@ -24,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 def transcribe_episode(episode_id: str) -> str:
     db = SessionLocal()
+    queued_next = False
+    alignment_path = Path(settings.transcript_dir) / f"{episode_id}.whisperx.json"
+    fireworks_path = Path(settings.transcript_dir) / f"{episode_id}.fireworks.json"
     try:
         episode = db.query(Episode).filter(Episode.id == episode_id).first()
         if not episode or not episode.audio_local_path:
@@ -46,16 +52,33 @@ def transcribe_episode(episode_id: str) -> str:
         aligned_result: dict | None = None
         fireworks_result: dict | None = None
 
-        provider = settings.inference_provider
+        # Defensive cleanup of stale artifacts from previous failed attempts.
+        for artifact in (alignment_path, fireworks_path):
+            if artifact.exists():
+                try:
+                    artifact.unlink()
+                except Exception:
+                    pass
+
+        runtime = get_runtime_inference_settings(db)
+        provider = runtime.get("inference_provider") or "local"
         if provider == "fireworks":
             try:
                 from app.services.fireworks_audio import transcribe as fw_transcribe
 
+                api_key = runtime.get("fireworks_api_key")
+                if not api_key:
+                    raise RuntimeError(
+                        "Fireworks inference provider selected but FIREWORKS_API_KEY is missing"
+                    )
                 t0 = time.monotonic()
                 segments_data, language, fireworks_result = fw_transcribe(
                     str(audio_path),
-                    model_name=settings.fireworks_stt_model,
-                    diarize=settings.fireworks_stt_diarize,
+                    api_key=api_key,
+                    audio_base_url=runtime.get("fireworks_audio_base_url")
+                    or settings.fireworks_audio_base_url,
+                    model_name=runtime.get("fireworks_stt_model") or settings.fireworks_stt_model,
+                    diarize=bool(runtime.get("fireworks_stt_diarize", True)),
                 )
                 transcribe_secs = round(time.monotonic() - t0, 1)
                 update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
@@ -100,11 +123,9 @@ def transcribe_episode(episode_id: str) -> str:
             out_dir = Path(settings.transcript_dir)
             out_dir.mkdir(parents=True, exist_ok=True)
             if aligned_result is not None:
-                alignment_path = out_dir / f"{episode_id}.whisperx.json"
                 with open(alignment_path, "w") as f:
                     json.dump(aligned_result, f)
             if fireworks_result is not None:
-                fireworks_path = out_dir / f"{episode_id}.fireworks.json"
                 with open(fireworks_path, "w") as f:
                     json.dump(fireworks_result, f)
         except Exception as exc:
@@ -137,8 +158,17 @@ def transcribe_episode(episode_id: str) -> str:
         )
 
         job_queue.enqueue(db, episode_id, "diarize")
+        queued_next = True
         return episode_id
     finally:
+        if not queued_next:
+            # If we failed before enqueueing diarize, remove intermediate artifacts.
+            for artifact in (alignment_path, fireworks_path):
+                if artifact.exists():
+                    try:
+                        artifact.unlink()
+                    except Exception:
+                        pass
         db.close()
 
 

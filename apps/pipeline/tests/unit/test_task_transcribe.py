@@ -144,13 +144,22 @@ class TestTranscribeEpisode:
                 "app.services.fireworks_audio.transcribe",
                 return_value=(segments_data, "en", fireworks_raw),
             ),
+            patch(
+                "app.tasks.transcribe.get_runtime_inference_settings",
+                return_value={
+                    "inference_provider": "fireworks",
+                    "fireworks_api_key": "fw_test",
+                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
+                    "fireworks_stt_model": "whisper-v3-large",
+                    "fireworks_stt_diarize": True,
+                },
+            ),
             patch("app.tasks.transcribe.settings") as mock_settings,
             patch("builtins.open", MagicMock()),
             patch("app.tasks.transcribe.json"),
         ):
-            mock_settings.inference_provider = "fireworks"
             mock_settings.fireworks_stt_model = "whisper-v3-large"
-            mock_settings.fireworks_stt_diarize = True
+            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
             mock_settings.transcript_dir = "/data/transcripts"
 
             from app.tasks.transcribe import transcribe_episode

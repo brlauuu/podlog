@@ -18,6 +18,27 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def _runtime_inference_provider() -> str:
+    """Resolve provider from DB-backed settings when available, else env fallback."""
+    try:
+        from app.database import SessionLocal
+        from app.services.notification_settings import get_runtime_inference_settings
+
+        db = SessionLocal()
+        try:
+            runtime = get_runtime_inference_settings(db)
+            provider = runtime.get("inference_provider")
+            if provider in ("local", "fireworks"):
+                return provider
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    from app.config import settings
+    return settings.inference_provider
+
+
 def _is_prewarm_done() -> bool:
     """Check if prewarm has already completed (via DB flag)."""
     try:
@@ -53,7 +74,7 @@ def main() -> None:
 
     from app.config import settings
 
-    if settings.inference_provider == "fireworks":
+    if _runtime_inference_provider() == "fireworks":
         logger.info('"action": "prewarm_skipped", "reason": "fireworks_provider"')
         _set_prewarm_done()
         return

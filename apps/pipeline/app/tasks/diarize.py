@@ -17,6 +17,7 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
+from app.services.notification_settings import get_runtime_inference_settings
 from app.tasks.helpers import update_episode
 from app import job_queue
 
@@ -32,13 +33,18 @@ def diarize_episode(episode_id: str) -> str:
         if not episode or not episode.audio_local_path:
             raise RuntimeError(f"Episode {episode_id} missing for diarization")
 
-        provider = settings.inference_provider
+        runtime = get_runtime_inference_settings(db)
+        provider = runtime.get("inference_provider") or "local"
 
         if provider == "fireworks":
+            # Fireworks mode uses remote diarization metadata and never loads pyannote locally.
             try:
                 t0 = time.monotonic()
-                if not settings.fireworks_stt_diarize:
-                    raise RuntimeError("Fireworks diarization is disabled in settings")
+                if not bool(runtime.get("fireworks_stt_diarize", True)):
+                    # Provider is remote and diarization is intentionally disabled.
+                    update_episode(db, episode_id, has_diarization=False, diarization_error=None)
+                    job_queue.enqueue(db, episode_id, "chunk")
+                    return episode_id
                 if not fireworks_path.exists():
                     raise RuntimeError("Missing Fireworks transcript artifact for diarization")
 

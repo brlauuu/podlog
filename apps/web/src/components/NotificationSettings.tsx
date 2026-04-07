@@ -18,7 +18,6 @@ interface Settings {
   health_check_notifications_enabled: boolean;
   inference_provider: "local" | "fireworks";
   fireworks_api_key: string | null;
-  fireworks_base_url: string;
   fireworks_audio_base_url: string;
   fireworks_stt_model: string;
   fireworks_stt_diarize: boolean;
@@ -154,6 +153,7 @@ function FireworksGuide({ configured }: { configured: boolean }) {
             and <code className="bg-muted px-1 rounded text-xs">FIREWORKS_API_KEY=...</code>.
           </li>
           <li>Queue or retry episodes to process them through the Fireworks pipeline.</li>
+          <li>Provider changes are applied at task runtime (no restart required).</li>
           <li>
             Keep provider as <strong>Local</strong> anytime you want fully local processing again.
           </li>
@@ -618,33 +618,18 @@ function FireworksTab({
         />
       </FieldGroup>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FieldGroup
-          label="STT Model"
-          hint="Fireworks speech model. Example: whisper-v3-large."
-        >
-          <input
-            id="fireworks-stt-model"
-            type="text"
-            className={inputClass}
-            value={settings.fireworks_stt_model}
-            onChange={(e) => onChange("fireworks_stt_model", e.target.value)}
-          />
-        </FieldGroup>
-
-        <FieldGroup
-          label="Inference Base URL"
-          hint="OpenAI-compatible endpoint for Fireworks."
-        >
-          <input
-            id="fireworks-base-url"
-            type="text"
-            className={inputClass}
-            value={settings.fireworks_base_url}
-            onChange={(e) => onChange("fireworks_base_url", e.target.value)}
-          />
-        </FieldGroup>
-      </div>
+      <FieldGroup
+        label="STT Model"
+        hint="Fireworks speech model. Example: whisper-v3-large."
+      >
+        <input
+          id="fireworks-stt-model"
+          type="text"
+          className={inputClass}
+          value={settings.fireworks_stt_model}
+          onChange={(e) => onChange("fireworks_stt_model", e.target.value)}
+        />
+      </FieldGroup>
 
       <FieldGroup
         label="Audio Base URL"
