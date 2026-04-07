@@ -56,6 +56,7 @@ The host-level health check script (`scripts/healthcheck.py`) uses these setting
 
 | Variable | Default | Description |
 |---|---|---|
+| `HEALTH_CHECK_NOTIFICATIONS_ENABLED` | `true` | Enable/disable health-check Telegram notifications. Priority: `.env` value overrides DB/UI value. |
 | `HEALTH_CHECK_PIPELINE_URL` | `http://localhost:8000` | Pipeline API URL as seen from the host. |
 | `HEALTH_CHECK_WEB_URL` | `http://localhost:3000` | Web app URL as seen from the host. |
 | `HEALTH_CHECK_DB_HOST` | `localhost` | PostgreSQL host for `pg_isready` and zombie job queries. |
