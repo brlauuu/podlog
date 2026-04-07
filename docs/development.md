@@ -285,3 +285,14 @@ claude -p "/codebase-audit" \
 - Audits should be non-destructive and analysis-first.
 - No commit/push as part of a standard audit run.
 - No automatic issue creation unless explicitly requested.
+
+### Findings Lifecycle (How Audits Improve the Repo)
+
+In this project, audit output is used as an input to normal issue/PR development:
+
+1. Run an audit (Codex or Claude path).
+2. Review findings and create or update focused GitHub issues (often labeled `codebase-audit`).
+3. Implement fixes in regular branches/PRs with tests and validation.
+4. Merge fixes and close the related audit issues.
+
+This keeps audits visible to contributors while preserving normal review and merge controls.
