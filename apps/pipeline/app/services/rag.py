@@ -192,8 +192,95 @@ async def stream_ollama_response(
         raise RuntimeError(f"Ollama connection error: {type(exc).__name__}: {exc}") from exc
 
 
-async def check_model_available(model: str) -> bool:
-    """Check if a model is available in Ollama."""
+def _runtime_inference_value(runtime: dict | None, key: str, default):
+    if runtime is not None and runtime.get(key) is not None:
+        return runtime.get(key)
+    return default
+
+
+async def stream_fireworks_response(
+    messages: list[dict],
+    runtime: dict | None = None,
+    model: str | None = None,
+):
+    """Stream chat completion from Fireworks OpenAI-compatible endpoint."""
+    api_key = _runtime_inference_value(runtime, "fireworks_api_key", settings.fireworks_api_key)
+    if not api_key:
+        raise RuntimeError("Fireworks provider selected but FIREWORKS_API_KEY is missing")
+
+    base_url = _runtime_inference_value(
+        runtime, "fireworks_chat_base_url", settings.fireworks_chat_base_url
+    ).rstrip("/")
+    chat_model = model or _runtime_inference_value(
+        runtime, "fireworks_chat_model", settings.fireworks_chat_model
+    )
+
+    payload = {
+        "model": chat_model,
+        "messages": messages,
+        "stream": True,
+    }
+    headers = {"Authorization": f"Bearer {api_key}"}
+    url = f"{base_url}/chat/completions"
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=10)) as client:
+            async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                if resp.status_code != 200:
+                    body = await resp.aread()
+                    raise RuntimeError(
+                        f"Fireworks returned {resp.status_code}: {body.decode(errors='ignore')[:500]}"
+                    )
+
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+
+                    if line.startswith("data: "):
+                        line = line[6:]
+
+                    if line == "[DONE]":
+                        return
+
+                    data = json.loads(line)
+                    if data.get("error"):
+                        raise RuntimeError(f"Fireworks error: {data['error']}")
+
+                    choices = data.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    content = delta.get("content")
+                    if content:
+                        yield content
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"Fireworks connection error: {type(exc).__name__}: {exc}") from exc
+
+
+async def stream_response(messages: list[dict], model: str, runtime: dict | None = None):
+    """Provider-routed streaming for Ask generation."""
+    provider = _runtime_inference_value(runtime, "inference_provider", settings.inference_provider)
+    if provider == "fireworks":
+        fireworks_model = model
+        if model == DEFAULT_MODEL:
+            fireworks_model = _runtime_inference_value(
+                runtime, "fireworks_chat_model", settings.fireworks_chat_model
+            )
+        async for token in stream_fireworks_response(messages, runtime=runtime, model=fireworks_model):
+            yield token
+        return
+
+    async for token in stream_ollama_response(messages, model=model):
+        yield token
+
+
+async def check_model_available(model: str, runtime: dict | None = None) -> bool:
+    """Check if a model is available for the configured generation provider."""
+    provider = _runtime_inference_value(runtime, "inference_provider", settings.inference_provider)
+    if provider == "fireworks":
+        return bool(_runtime_inference_value(runtime, "fireworks_api_key", settings.fireworks_api_key))
+
+    # Local provider: check Ollama tags.
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             resp = await client.get(f"{settings.ollama_url}/api/tags")

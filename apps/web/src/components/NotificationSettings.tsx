@@ -21,6 +21,8 @@ interface Settings {
   fireworks_audio_base_url: string;
   fireworks_stt_model: string;
   fireworks_stt_diarize: boolean;
+  fireworks_chat_base_url: string;
+  fireworks_chat_model: string;
   fireworks_stt_cost_per_minute_usd: number;
   embedding_provider: "local" | "fireworks";
   embedding_model: string;
@@ -674,6 +676,32 @@ function FireworksTab({
           className={inputClass}
           value={settings.fireworks_audio_base_url}
           onChange={(e) => onChange("fireworks_audio_base_url", e.target.value)}
+        />
+      </FieldGroup>
+
+      <FieldGroup
+        label="Chat Base URL"
+        hint="Generation endpoint base used by Ask when Inference Provider is fireworks."
+      >
+        <input
+          id="fireworks-chat-base-url"
+          type="text"
+          className={inputClass}
+          value={settings.fireworks_chat_base_url}
+          onChange={(e) => onChange("fireworks_chat_base_url", e.target.value)}
+        />
+      </FieldGroup>
+
+      <FieldGroup
+        label="Fireworks Chat Model"
+        hint="Remote chat model used for Ask generation in fireworks mode."
+      >
+        <input
+          id="fireworks-chat-model"
+          type="text"
+          className={inputClass}
+          value={settings.fireworks_chat_model}
+          onChange={(e) => onChange("fireworks_chat_model", e.target.value)}
         />
       </FieldGroup>
 

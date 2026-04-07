@@ -312,7 +312,11 @@ class TestMaskSensitive:
 
 class TestRuntimeInferenceSettings:
     def test_uses_db_override_when_present(self):
-        stored = json.dumps({"inference_provider": "fireworks", "fireworks_api_key": "fw_abc"})
+        stored = json.dumps({
+            "inference_provider": "fireworks",
+            "fireworks_api_key": "fw_abc",
+            "fireworks_chat_model": "accounts/fireworks/models/llama-v3p1-8b-instruct",
+        })
         db = _mock_db(stored_json=stored)
         with patch("app.services.notification_settings.settings") as mock_settings:
             mock_settings.inference_provider = "local"
@@ -321,9 +325,12 @@ class TestRuntimeInferenceSettings:
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_stt_diarize = True
             mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
+            mock_settings.fireworks_chat_base_url = "https://api.fireworks.ai/inference/v1"
+            mock_settings.fireworks_chat_model = "accounts/fireworks/models/llama-v3p1-8b-instruct"
             result = get_runtime_inference_settings(db)
         assert result["inference_provider"] == "fireworks"
         assert result["fireworks_api_key"] == "fw_abc"
+        assert result["fireworks_chat_model"] == "accounts/fireworks/models/llama-v3p1-8b-instruct"
 
     def test_uses_env_defaults_without_db(self):
         with patch("app.services.notification_settings.settings") as mock_settings:
@@ -333,6 +340,8 @@ class TestRuntimeInferenceSettings:
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_stt_diarize = True
             mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
+            mock_settings.fireworks_chat_base_url = "https://api.fireworks.ai/inference/v1"
+            mock_settings.fireworks_chat_model = "accounts/fireworks/models/llama-v3p1-8b-instruct"
             result = get_runtime_inference_settings(None)
         assert result["inference_provider"] == "local"
 

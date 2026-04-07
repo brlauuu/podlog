@@ -35,6 +35,8 @@ _FIELDS = [
     "fireworks_audio_base_url",
     "fireworks_stt_model",
     "fireworks_stt_diarize",
+    "fireworks_chat_base_url",
+    "fireworks_chat_model",
     "fireworks_stt_cost_per_minute_usd",
     "embedding_provider",
     "embedding_model",
@@ -62,6 +64,8 @@ _INFERENCE_FIELDS = {
     "fireworks_audio_base_url",
     "fireworks_stt_model",
     "fireworks_stt_diarize",
+    "fireworks_chat_base_url",
+    "fireworks_chat_model",
     "fireworks_stt_cost_per_minute_usd",
 }
 _EMBEDDING_FIELDS = {

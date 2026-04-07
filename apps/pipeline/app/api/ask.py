@@ -18,13 +18,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.database import SessionLocal
+from app.services.notification_settings import get_runtime_inference_settings
 from app.services.rag import (
     DEFAULT_MODEL,
     build_prompt,
     check_model_available,
     chunks_to_sources,
     retrieve_chunks,
-    stream_ollama_response,
+    stream_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,27 @@ def _sse_event(event: str, data: dict | list | str) -> str:
 async def _stream_ask(question: str, model: str, feed_ids: list[str] | None, episode_id: str | None = None):
     db = SessionLocal()
     try:
+        runtime = get_runtime_inference_settings(db)
+        provider = runtime.get("inference_provider") or "local"
+        resolved_model = model
+        if provider == "fireworks" and model == DEFAULT_MODEL:
+            resolved_model = runtime.get("fireworks_chat_model") or model
+
+        if provider == "local" and not await check_model_available(resolved_model, runtime=runtime):
+            yield _sse_event(
+                "error",
+                {"message": f"Model '{resolved_model}' is not available. Run: make ollama-pull"},
+            )
+            yield _sse_event("done", {})
+            return
+        if provider == "fireworks" and not runtime.get("fireworks_api_key"):
+            yield _sse_event(
+                "error",
+                {"message": "Fireworks provider is not configured. Save FIREWORKS_API_KEY first."},
+            )
+            yield _sse_event("done", {})
+            return
+
         # 1. Retrieve relevant chunks
         chunks = retrieve_chunks(db, question, feed_ids=feed_ids, episode_id=episode_id)
 
@@ -62,7 +84,7 @@ async def _stream_ask(question: str, model: str, feed_ids: list[str] | None, epi
         # 3. Build prompt and stream response
         messages = build_prompt(question, chunks)
 
-        async for token in stream_ollama_response(messages, model=model):
+        async for token in stream_response(messages, model=resolved_model, runtime=runtime):
             yield _sse_event("token", {"content": token})
 
         yield _sse_event("done", {})
@@ -85,15 +107,6 @@ async def _stream_ask(question: str, model: str, feed_ids: list[str] | None, epi
 @router.post("/ask")
 async def ask_endpoint(req: AskRequest):
     model = req.model or DEFAULT_MODEL
-
-    # Validate model availability
-    if not await check_model_available(model):
-        return StreamingResponse(
-            iter([_sse_event("error", {"message": f"Model '{model}' is not available. Run: make ollama-pull"}),
-                  _sse_event("done", {})]),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
 
     # Support both feed_ids (multi-select) and legacy feed_id (single)
     feed_ids = req.feed_ids

@@ -96,10 +96,11 @@ class TestAskEndpoint:
 
         with (
             patch("app.api.ask.check_model_available", new_callable=AsyncMock, return_value=True),
+            patch("app.api.ask.get_runtime_inference_settings", return_value={"inference_provider": "local"}),
             patch("app.api.ask.retrieve_chunks", return_value=mock_chunks),
             patch("app.api.ask.build_prompt", return_value=[{"role": "user", "content": "test"}]),
             patch("app.api.ask.chunks_to_sources", return_value=[{"chunk_id": 1}]),
-            patch("app.api.ask.stream_ollama_response") as mock_stream,
+            patch("app.api.ask.stream_response") as mock_stream,
         ):
             async def fake_stream(*args, **kwargs):
                 yield "Hello"
@@ -120,6 +121,7 @@ class TestAskEndpoint:
     def test_no_chunks_returns_error_event(self):
         with (
             patch("app.api.ask.check_model_available", new_callable=AsyncMock, return_value=True),
+            patch("app.api.ask.get_runtime_inference_settings", return_value={"inference_provider": "local"}),
             patch("app.api.ask.retrieve_chunks", return_value=[]),
         ):
             resp = client.post("/api/ask", json={"question": "Unknown topic"})
@@ -127,12 +129,46 @@ class TestAskEndpoint:
             assert any(e["event"] == "error" for e in events)
 
     def test_model_unavailable_returns_error(self):
-        with patch("app.api.ask.check_model_available", new_callable=AsyncMock, return_value=False):
+        with (
+            patch("app.api.ask.check_model_available", new_callable=AsyncMock, return_value=False),
+            patch("app.api.ask.get_runtime_inference_settings", return_value={"inference_provider": "local"}),
+        ):
             resp = client.post("/api/ask", json={"question": "test", "model": "nonexistent"})
             events = _parse_sse(resp.text)
             assert any(e["event"] == "error" for e in events)
             error_data = next(e for e in events if e["event"] == "error")
             assert "nonexistent" in error_data["data"]["message"]
+
+    def test_fireworks_provider_skips_local_model_check(self):
+        mock_chunks = [_make_chunk()]
+        runtime = {
+            "inference_provider": "fireworks",
+            "fireworks_api_key": "fw_test",
+            "fireworks_chat_base_url": "https://api.fireworks.ai/inference/v1",
+            "fireworks_chat_model": "accounts/fireworks/models/llama-v3p1-8b-instruct",
+        }
+
+        with (
+            patch("app.api.ask.check_model_available", new_callable=AsyncMock, return_value=False) as mock_check,
+            patch("app.api.ask.get_runtime_inference_settings", return_value=runtime),
+            patch("app.api.ask.retrieve_chunks", return_value=mock_chunks),
+            patch("app.api.ask.build_prompt", return_value=[{"role": "user", "content": "test"}]),
+            patch("app.api.ask.chunks_to_sources", return_value=[{"chunk_id": 1}]),
+            patch("app.api.ask.stream_response") as mock_stream,
+        ):
+            async def fake_stream(*args, **kwargs):
+                yield "remote"
+                yield " answer"
+
+            mock_stream.return_value = fake_stream()
+
+            resp = client.post("/api/ask", json={"question": "What was discussed?"})
+            events = _parse_sse(resp.text)
+            tokens = [e["data"]["content"] for e in events if e["event"] == "token"]
+
+            assert resp.status_code == 200
+            assert "".join(tokens) == "remote answer"
+            mock_check.assert_not_called()
 
 
 class TestRetrieveChunks:
@@ -320,6 +356,56 @@ class TestCheckModelAvailable:
 
             result = asyncio.run(check_model_available("qwen2.5:3b"))
             assert result is False
+
+
+class TestFireworksStreaming:
+    def test_stream_fireworks_response_yields_content_deltas(self):
+        from app.services.rag import stream_fireworks_response
+
+        class _Resp:
+            status_code = 200
+
+            async def aread(self):
+                return b""
+
+            async def aiter_lines(self):
+                yield 'data: {"choices":[{"delta":{"content":"Hello"}}]}'
+                yield 'data: {"choices":[{"delta":{"content":" world"}}]}'
+                yield "data: [DONE]"
+
+        class _StreamCtx:
+            async def __aenter__(self):
+                return _Resp()
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class _Client:
+            def stream(self, *args, **kwargs):
+                return _StreamCtx()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        async def collect():
+            out = []
+            with patch("app.services.rag.httpx.AsyncClient", return_value=_Client()):
+                async for token in stream_fireworks_response(
+                    messages=[{"role": "user", "content": "test"}],
+                    runtime={
+                        "fireworks_api_key": "fw_test",
+                        "fireworks_chat_base_url": "https://api.fireworks.ai/inference/v1",
+                    },
+                    model="accounts/fireworks/models/llama-v3p1-8b-instruct",
+                ):
+                    out.append(token)
+            return out
+
+        tokens = asyncio.run(collect())
+        assert tokens == ["Hello", " world"]
 
 
 def _parse_sse(text: str) -> list[dict]:
