@@ -8,6 +8,7 @@ from app.models import SystemState
 from app.services.notification_settings import (
     get_notification_settings,
     get_runtime_inference_settings,
+    get_runtime_embedding_settings,
     save_notification_settings,
     mask_sensitive,
     SETTINGS_KEY,
@@ -156,6 +157,11 @@ class TestSaveNotificationSettings:
         db = _mock_db(stored_json=None)
         with pytest.raises(ValueError, match="inference_provider"):
             save_notification_settings(db, {"inference_provider": "cloud"})
+
+    def test_rejects_invalid_embedding_provider(self):
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="embedding_provider"):
+            save_notification_settings(db, {"embedding_provider": "cloud"})
 
     def test_rejects_negative_fireworks_cost_rate(self):
         db = _mock_db(stored_json=None)
@@ -329,3 +335,28 @@ class TestRuntimeInferenceSettings:
             mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
             result = get_runtime_inference_settings(None)
         assert result["inference_provider"] == "local"
+
+
+class TestRuntimeEmbeddingSettings:
+    def test_uses_db_override_when_present(self):
+        stored = json.dumps({"embedding_provider": "fireworks", "fireworks_api_key": "fw_abc"})
+        db = _mock_db(stored_json=stored)
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.embedding_provider = "local"
+            mock_settings.embedding_model = "all-MiniLM-L6-v2"
+            mock_settings.fireworks_api_key = None
+            mock_settings.fireworks_embedding_base_url = "https://api.fireworks.ai/inference/v1"
+            mock_settings.fireworks_embedding_model = "BAAI/bge-small-en-v1.5"
+            result = get_runtime_embedding_settings(db)
+        assert result["embedding_provider"] == "fireworks"
+        assert result["fireworks_api_key"] == "fw_abc"
+
+    def test_uses_env_defaults_without_db(self):
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.embedding_provider = "local"
+            mock_settings.embedding_model = "all-MiniLM-L6-v2"
+            mock_settings.fireworks_api_key = None
+            mock_settings.fireworks_embedding_base_url = "https://api.fireworks.ai/inference/v1"
+            mock_settings.fireworks_embedding_model = "BAAI/bge-small-en-v1.5"
+            result = get_runtime_embedding_settings(None)
+        assert result["embedding_provider"] == "local"

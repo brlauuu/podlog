@@ -12,6 +12,7 @@ import logging
 from app.database import SessionLocal
 from app.models import Chunk, Episode, Segment
 from app.services.chunking import merge_segments_into_chunks
+from app.services.notification_settings import get_runtime_embedding_settings
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +34,14 @@ def backfill_chunks(embed: bool = True) -> dict:
     """
     global progress
 
+    runtime = None
     if embed:
         from app.services.embed import embed_texts
 
     db = SessionLocal()
     try:
+        if embed:
+            runtime = get_runtime_embedding_settings(db)
         episodes = (
             db.query(Episode)
             .filter(Episode.status == "done")
@@ -109,7 +113,7 @@ def backfill_chunks(embed: bool = True) -> dict:
                 # Embed chunks
                 if chunk_objs:
                     texts = [c.text for c in chunk_objs]
-                    embeddings = embed_texts(texts)
+                    embeddings = embed_texts(texts, runtime=runtime)
                     for obj, emb in zip(chunk_objs, embeddings):
                         obj.embedding = emb
 
@@ -117,7 +121,7 @@ def backfill_chunks(embed: bool = True) -> dict:
                 segs_missing = [s for s in segments if s.embedding is None]
                 if segs_missing:
                     seg_texts = [s.text for s in segs_missing]
-                    seg_embeddings = embed_texts(seg_texts)
+                    seg_embeddings = embed_texts(seg_texts, runtime=runtime)
                     for seg, emb in zip(segs_missing, seg_embeddings):
                         seg.embedding = emb
                     total_segments_embedded += len(segs_missing)

@@ -10,6 +10,7 @@ import logging
 
 from app.database import SessionLocal
 from app.models import Chunk, Segment
+from app.services.notification_settings import get_runtime_embedding_settings
 from app.tasks.helpers import update_episode
 from app import job_queue
 
@@ -37,10 +38,11 @@ def embed_episode(episode_id: str) -> str:
             return episode_id
 
         from app.services.embed import embed_texts
+        runtime = get_runtime_embedding_settings(db)
 
         # Embed raw segments (backward compat with existing search)
         seg_texts = [seg.text for seg in segments]
-        seg_embeddings = embed_texts(seg_texts)
+        seg_embeddings = embed_texts(seg_texts, runtime=runtime)
         for seg, emb in zip(segments, seg_embeddings):
             seg.embedding = emb
 
@@ -53,7 +55,7 @@ def embed_episode(episode_id: str) -> str:
         )
         if chunks:
             chunk_texts = [c.text for c in chunks]
-            chunk_embeddings = embed_texts(chunk_texts)
+            chunk_embeddings = embed_texts(chunk_texts, runtime=runtime)
             for chunk, emb in zip(chunks, chunk_embeddings):
                 chunk.embedding = emb
 
