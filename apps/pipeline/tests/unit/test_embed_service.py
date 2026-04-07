@@ -91,6 +91,18 @@ class TestEmbedTexts:
                 },
             )
 
+    def test_fails_when_local_embedding_dim_mismatches_schema(self):
+        mock_model = MagicMock()
+        mock_embeddings = MagicMock()
+        mock_embeddings.tolist.return_value = [[0.1] * 768]
+        mock_model.encode.return_value = mock_embeddings
+
+        embed_mod._model = mock_model
+        embed_mod._model_name = "all-MiniLM-L6-v2"
+
+        with pytest.raises(RuntimeError, match=r"Unexpected embedding dimension 768 \(expected 384\)"):
+            embed_mod.embed_texts(["hello"])
+
 
 class TestEmbedQuery:
     def setup_method(self):

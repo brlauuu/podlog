@@ -45,6 +45,20 @@ def _normalize(vec: list[float]) -> list[float]:
     return (arr / norm).tolist()
 
 
+def _validate_vectors_dim(vectors: list[list[float]], expected_count: int) -> None:
+    if len(vectors) != expected_count:
+        raise RuntimeError(
+            f"Embeddings response size mismatch: expected {expected_count}, got {len(vectors)}"
+        )
+
+    for idx, vector in enumerate(vectors):
+        if len(vector) != EMBEDDING_DIM:
+            raise RuntimeError(
+                f"Unexpected embedding dimension {len(vector)} (expected {EMBEDDING_DIM}) at index {idx}. "
+                "Switch model/provider or backfill embeddings."
+            )
+
+
 def _embed_texts_fireworks(texts: list[str], runtime: dict[str, Any] | None = None) -> list[list[float]]:
     api_key = _runtime_value(runtime, "fireworks_api_key", settings.fireworks_api_key)
     if not api_key:
@@ -68,22 +82,13 @@ def _embed_texts_fireworks(texts: list[str], runtime: dict[str, Any] | None = No
         data = resp.json()
 
     items = data.get("data", []) or []
-    if len(items) != len(texts):
-        raise RuntimeError(
-            f"Fireworks embeddings response size mismatch: expected {len(texts)}, got {len(items)}"
-        )
-
     vectors: list[list[float]] = []
     for item in items:
         emb = item.get("embedding")
         if not isinstance(emb, list):
             raise RuntimeError("Fireworks embeddings response missing embedding vector")
-        if len(emb) != EMBEDDING_DIM:
-            raise RuntimeError(
-                f"Unexpected embedding dimension {len(emb)} (expected {EMBEDDING_DIM}). "
-                "Switch model/provider or backfill embeddings."
-            )
         vectors.append(_normalize([float(x) for x in emb]))
+    _validate_vectors_dim(vectors, len(texts))
 
     logger.info(
         '"action": "fireworks_embed_complete", "count": %d, "model": "%s"',
@@ -105,7 +110,9 @@ def embed_texts(texts: list[str], runtime: dict[str, Any] | None = None) -> list
     model_name = _runtime_value(runtime, "embedding_model", settings.embedding_model)
     model = _load_model(model_name)
     embeddings = model.encode(texts, show_progress_bar=False, normalize_embeddings=True)
-    return embeddings.tolist()
+    vectors = embeddings.tolist()
+    _validate_vectors_dim(vectors, len(texts))
+    return vectors
 
 
 def embed_query(text: str, runtime: dict[str, Any] | None = None) -> list[float]:
