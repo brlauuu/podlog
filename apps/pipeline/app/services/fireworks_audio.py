@@ -42,11 +42,11 @@ def _classify_http_error(status_code: int) -> tuple[str, bool]:
 
     Returns `(error_class, retryable)`:
     - 429 and 5xx are transient and retryable.
-    - other 4xx are access/config failures and non-retryable.
+    - other 4xx map to HTTP_ACCESS and follow standard retry policy.
     """
     if status_code == 429 or 500 <= status_code <= 599:
         return "TRANSIENT_NETWORK", True
-    return "HTTP_ACCESS", False
+    return "HTTP_ACCESS", True
 
 
 def transcribe(

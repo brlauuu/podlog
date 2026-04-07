@@ -279,3 +279,45 @@ class TestTranscribeEpisode:
         mock_jq.enqueue.assert_not_called()
         mock_fail.assert_called_once()
         assert mock_fail.call_args[0][2] == "TRANSIENT_NETWORK"
+
+    @patch("app.tasks.transcribe.job_queue")
+    @patch("app.tasks.transcribe._mark_failed")
+    @patch("app.tasks.transcribe.update_episode")
+    @patch("app.tasks.transcribe._convert_to_wav")
+    @patch("app.tasks.transcribe.SessionLocal")
+    def test_fireworks_import_failure_marks_system_error(
+        self, mock_session_cls, mock_convert, mock_update, mock_fail, mock_jq
+    ):
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        mock_session_cls.return_value = db
+
+        with (
+            patch(
+                "app.tasks.transcribe.get_runtime_inference_settings",
+                return_value={
+                    "inference_provider": "fireworks",
+                    "fireworks_api_key": "fw_test",
+                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
+                    "fireworks_stt_model": "whisper-v3-large",
+                    "fireworks_stt_diarize": True,
+                },
+            ),
+            patch("app.tasks.transcribe._load_fireworks_service", side_effect=ImportError("boom")),
+            patch("app.tasks.transcribe.settings") as mock_settings,
+        ):
+            mock_settings.retry_backoff_base = 30
+            mock_settings.retry_max = 3
+            mock_settings.fireworks_stt_model = "whisper-v3-large"
+            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+
+            from app.tasks.transcribe import transcribe_episode
+
+            result = transcribe_episode("ep1")
+
+        assert result == "ep1"
+        mock_convert.assert_not_called()
+        mock_jq.enqueue.assert_not_called()
+        mock_fail.assert_called_once()
+        assert mock_fail.call_args[0][2] == "SYSTEM_ERROR"

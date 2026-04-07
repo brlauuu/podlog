@@ -57,9 +57,10 @@ class TestRetryJob:
             return exc
 
     def test_retry_failed_episode_succeeds(self):
-        ep = _make_episode("failed", error_class="TRANSIENT_NETWORK")
+        ep = _make_episode("failed", error_class="TRANSIENT_NETWORK", retry_count=3)
         result = self._call_retry(ep)
         assert result["queued"] is True
+        assert ep.retry_count == 0
 
     def test_retry_stalled_episode_with_error_class_succeeds(self):
         """Stalled jobs with error_class set should be retryable (issue #46)."""

@@ -56,10 +56,10 @@ def test_classify_http_error_marks_429_and_5xx_as_retryable():
     assert _classify_http_error(503) == ("TRANSIENT_NETWORK", True)
 
 
-def test_classify_http_error_marks_4xx_as_non_retryable():
-    assert _classify_http_error(400) == ("HTTP_ACCESS", False)
-    assert _classify_http_error(401) == ("HTTP_ACCESS", False)
-    assert _classify_http_error(403) == ("HTTP_ACCESS", False)
+def test_classify_http_error_marks_4xx_as_http_access_retryable():
+    assert _classify_http_error(400) == ("HTTP_ACCESS", True)
+    assert _classify_http_error(401) == ("HTTP_ACCESS", True)
+    assert _classify_http_error(403) == ("HTTP_ACCESS", True)
 
 
 def test_transcribe_wraps_429_as_retryable(tmp_path: Path):

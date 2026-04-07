@@ -26,6 +26,13 @@ from app import job_queue
 logger = logging.getLogger(__name__)
 
 
+def _load_fireworks_service():
+    """Import Fireworks service lazily so local mode has no dependency edge."""
+    from app.services import fireworks_audio
+
+    return fireworks_audio
+
+
 def transcribe_episode(episode_id: str) -> str:
     db = SessionLocal()
     queued_next = False
@@ -65,18 +72,20 @@ def transcribe_episode(episode_id: str) -> str:
         provider = runtime.get("inference_provider") or "local"
         if provider == "fireworks":
             try:
-                from app.services.fireworks_audio import (
-                    FireworksTranscriptionError,
-                    transcribe as fw_transcribe,
-                )
+                fireworks_audio = _load_fireworks_service()
+            except Exception as exc:
+                _mark_failed(db, episode_id, "SYSTEM_ERROR", f"Fireworks service import failed: {exc}")
+                logger.exception('"action": "transcribe_failed", "episode_id": "%s"', episode_id)
+                return episode_id
 
+            try:
                 api_key = runtime.get("fireworks_api_key")
                 if not api_key:
                     raise RuntimeError(
                         "Fireworks inference provider selected but FIREWORKS_API_KEY is missing"
                     )
                 t0 = time.monotonic()
-                segments_data, language, fireworks_result = fw_transcribe(
+                segments_data, language, fireworks_result = fireworks_audio.transcribe(
                     str(audio_path),
                     api_key=api_key,
                     audio_base_url=runtime.get("fireworks_audio_base_url")
@@ -86,7 +95,7 @@ def transcribe_episode(episode_id: str) -> str:
                 )
                 transcribe_secs = round(time.monotonic() - t0, 1)
                 update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
-            except FireworksTranscriptionError as exc:
+            except fireworks_audio.FireworksTranscriptionError as exc:
                 retry_count = int(getattr(episode, "retry_count", 0) or 0)
                 retry_max = int(getattr(episode, "retry_max", settings.retry_max) or settings.retry_max)
                 if exc.retryable:

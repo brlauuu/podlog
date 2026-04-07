@@ -52,6 +52,7 @@ def retry_job(episode_id: str, db: Session = Depends(get_db)) -> dict:
     episode.status = "pending"
     episode.error_message = None
     episode.error_class = None
+    episode.retry_count = 0
     episode.diarization_error = None
     episode.has_diarization = False
     db.commit()

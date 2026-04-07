@@ -65,7 +65,7 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 When Fireworks mode is enabled, Podlog applies automatic retries for transient transcription failures:
 
 - Retryable: network/connect/timeouts, HTTP `429`, and HTTP `5xx`
-- Non-retryable: other HTTP `4xx` (credentials/config/access issues)
+- HTTP access errors: HTTP `4xx` map to `HTTP_ACCESS` and follow retry policy
 - Backoff: `RETRY_BACKOFF_BASE * 2^(attempt-1)` (for example `30s`, `60s`, `120s` with defaults)
 - Attempts: capped by `RETRY_MAX`
 
