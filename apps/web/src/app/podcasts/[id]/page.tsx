@@ -29,6 +29,9 @@ async function getEpisodes(feedId: string): Promise<EnrichedEpisode[]> {
        COALESCE(e.retry_count, 0) AS retry_count,
        COALESCE(e.retry_max, 3) AS retry_max,
        e.transcribe_duration_secs, e.diarize_duration_secs,
+       e.inference_provider_used,
+       e.fireworks_audio_minutes,
+       e.fireworks_stt_cost_usd,
        COALESCE(agg.segment_count, 0)::int AS segment_count,
        COALESCE(agg.speaker_count, 0)::int AS speaker_count
      FROM episodes e

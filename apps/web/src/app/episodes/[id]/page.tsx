@@ -55,6 +55,11 @@ interface Episode {
   inference_error: string | null;
   transcribe_duration_secs: number | null;
   diarize_duration_secs: number | null;
+  inference_provider_used: string | null;
+  fireworks_audio_secs: number | null;
+  fireworks_audio_minutes: number | null;
+  fireworks_stt_cost_per_minute_usd: number | null;
+  fireworks_stt_cost_usd: number | null;
   audio_url: string | null;
   audio_local_path: string | null;
   guid: string | null;
@@ -187,6 +192,19 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
             )}
             {episode.diarize_duration_secs != null && (
               <span>Diarization: {formatTimestamp(episode.diarize_duration_secs)}</span>
+            )}
+          </div>
+        )}
+        {episode.inference_provider_used === "fireworks" && (
+          <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-muted-foreground">
+            {episode.fireworks_audio_minutes != null && (
+              <span>Fireworks audio: {episode.fireworks_audio_minutes.toFixed(2)} min</span>
+            )}
+            {episode.fireworks_stt_cost_usd != null && (
+              <span>Est. Fireworks STT cost: ${episode.fireworks_stt_cost_usd.toFixed(4)}</span>
+            )}
+            {episode.fireworks_stt_cost_per_minute_usd != null && (
+              <span>Rate: ${episode.fireworks_stt_cost_per_minute_usd.toFixed(4)}/min</span>
             )}
           </div>
         )}

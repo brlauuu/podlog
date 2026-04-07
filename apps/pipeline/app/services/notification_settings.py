@@ -5,6 +5,7 @@ Settings are stored as a JSON blob in the system_state table under the key
 the corresponding env var value from config.py.
 """
 import json
+import math
 import logging
 import re
 
@@ -34,6 +35,7 @@ _FIELDS = [
     "fireworks_audio_base_url",
     "fireworks_stt_model",
     "fireworks_stt_diarize",
+    "fireworks_stt_cost_per_minute_usd",
 ]
 
 _SENSITIVE_FIELDS = {"telegram_bot_token", "smtp_password", "fireworks_api_key"}
@@ -55,6 +57,7 @@ _INFERENCE_FIELDS = {
     "fireworks_audio_base_url",
     "fireworks_stt_model",
     "fireworks_stt_diarize",
+    "fireworks_stt_cost_per_minute_usd",
 }
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
@@ -118,6 +121,17 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
                 f"inference_provider must be one of {_VALID_INFERENCE_PROVIDERS}, "
                 f"got '{updates['inference_provider']}'"
             )
+    if "fireworks_stt_cost_per_minute_usd" in updates:
+        rate = updates["fireworks_stt_cost_per_minute_usd"]
+        if (
+            not isinstance(rate, (int, float))
+            or not math.isfinite(float(rate))
+            or float(rate) < 0
+        ):
+            raise ValueError(
+                "fireworks_stt_cost_per_minute_usd must be a non-negative number"
+            )
+        updates["fireworks_stt_cost_per_minute_usd"] = float(rate)
 
     # Normalize empty/whitespace strings to None for nullable fields
     for key in list(updates.keys()):

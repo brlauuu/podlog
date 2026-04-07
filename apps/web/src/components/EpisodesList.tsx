@@ -31,6 +31,9 @@ export interface EnrichedEpisode {
   retry_max: number;
   transcribe_duration_secs: number | null;
   diarize_duration_secs: number | null;
+  inference_provider_used: string | null;
+  fireworks_audio_minutes: number | null;
+  fireworks_stt_cost_usd: number | null;
   segment_count: number;
   speaker_count: number;
 }
@@ -365,6 +368,16 @@ export default function EpisodesList({ episodes, feedId }: Props) {
                     )}
                     {ep.diarize_duration_secs != null && ep.has_diarization && (
                       <span>Diarization: {formatDuration(ep.diarize_duration_secs)}</span>
+                    )}
+                    {ep.inference_provider_used === "fireworks" && (
+                      <>
+                        {ep.fireworks_audio_minutes != null && (
+                          <span>Fireworks audio: {ep.fireworks_audio_minutes.toFixed(2)} min</span>
+                        )}
+                        {ep.fireworks_stt_cost_usd != null && (
+                          <span>Est. cost: ${ep.fireworks_stt_cost_usd.toFixed(4)}</span>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

@@ -21,6 +21,7 @@ interface Settings {
   fireworks_audio_base_url: string;
   fireworks_stt_model: string;
   fireworks_stt_diarize: boolean;
+  fireworks_stt_cost_per_minute_usd: number;
   telegram_configured: boolean;
   email_configured: boolean;
   fireworks_configured: boolean;
@@ -583,7 +584,7 @@ function FireworksTab({
   saving,
 }: {
   settings: Settings;
-  onChange: (field: keyof Settings, value: string | boolean | null) => void;
+  onChange: (field: keyof Settings, value: string | number | boolean | null) => void;
   onSave: () => void;
   saving: boolean;
 }) {
@@ -656,6 +657,24 @@ function FireworksTab({
           />
           Enable diarization
         </label>
+      </FieldGroup>
+
+      <FieldGroup
+        label="STT Cost Rate (USD / minute)"
+        hint="Used only for cost estimates shown in episode observability."
+      >
+        <input
+          id="fireworks-stt-cost-per-minute-usd"
+          type="number"
+          className={inputClass}
+          step="0.0001"
+          min="0"
+          value={settings.fireworks_stt_cost_per_minute_usd}
+          onChange={(e) => {
+            const raw = Number(e.target.value);
+            onChange("fireworks_stt_cost_per_minute_usd", Number.isFinite(raw) ? raw : 0);
+          }}
+        />
       </FieldGroup>
 
       <div className="flex gap-3 mt-6">
