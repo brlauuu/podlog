@@ -22,6 +22,10 @@ interface Settings {
   fireworks_stt_model: string;
   fireworks_stt_diarize: boolean;
   fireworks_stt_cost_per_minute_usd: number;
+  embedding_provider: "local" | "fireworks";
+  embedding_model: string;
+  fireworks_embedding_base_url: string;
+  fireworks_embedding_model: string;
   telegram_configured: boolean;
   email_configured: boolean;
   fireworks_configured: boolean;
@@ -608,6 +612,34 @@ function FireworksTab({
         </select>
       </FieldGroup>
 
+      <FieldGroup
+        label="Embedding Provider"
+        hint="Controls query + segment/chunk embedding generation."
+      >
+        <select
+          id="embedding-provider"
+          className={inputClass}
+          value={settings.embedding_provider}
+          onChange={(e) => onChange("embedding_provider", e.target.value)}
+        >
+          <option value="local">Local</option>
+          <option value="fireworks">Fireworks AI</option>
+        </select>
+      </FieldGroup>
+
+      <FieldGroup
+        label="Local Embedding Model"
+        hint="Sentence-transformers model used when Embedding Provider is local."
+      >
+        <input
+          id="embedding-model"
+          type="text"
+          className={inputClass}
+          value={settings.embedding_model}
+          onChange={(e) => onChange("embedding_model", e.target.value)}
+        />
+      </FieldGroup>
+
       <FieldGroup label="Fireworks API Key" hint="Stored in Podlog settings and masked on read.">
         <input
           id="fireworks-api-key"
@@ -642,6 +674,32 @@ function FireworksTab({
           className={inputClass}
           value={settings.fireworks_audio_base_url}
           onChange={(e) => onChange("fireworks_audio_base_url", e.target.value)}
+        />
+      </FieldGroup>
+
+      <FieldGroup
+        label="Embeddings Base URL"
+        hint="Embeddings endpoint base. Keep default unless you have a custom route."
+      >
+        <input
+          id="fireworks-embedding-base-url"
+          type="text"
+          className={inputClass}
+          value={settings.fireworks_embedding_base_url}
+          onChange={(e) => onChange("fireworks_embedding_base_url", e.target.value)}
+        />
+      </FieldGroup>
+
+      <FieldGroup
+        label="Fireworks Embedding Model"
+        hint="Remote embedding model used when Embedding Provider is fireworks."
+      >
+        <input
+          id="fireworks-embedding-model"
+          type="text"
+          className={inputClass}
+          value={settings.fireworks_embedding_model}
+          onChange={(e) => onChange("fireworks_embedding_model", e.target.value)}
         />
       </FieldGroup>
 

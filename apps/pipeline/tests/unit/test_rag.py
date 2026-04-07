@@ -1,7 +1,7 @@
 """Unit tests for RAG retrieval, prompt construction, and SSE streaming."""
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -159,7 +159,7 @@ class TestRetrieveChunks:
         assert len(results) == 1
         assert results[0].episode_title == "Test Ep"
         assert results[0].similarity == 0.8
-        mock_embed.assert_called_once_with("test question")
+        mock_embed.assert_called_once_with("test question", runtime=ANY)
 
     @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
     def test_filters_below_threshold(self, mock_embed):

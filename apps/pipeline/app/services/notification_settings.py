@@ -36,6 +36,10 @@ _FIELDS = [
     "fireworks_stt_model",
     "fireworks_stt_diarize",
     "fireworks_stt_cost_per_minute_usd",
+    "embedding_provider",
+    "embedding_model",
+    "fireworks_embedding_base_url",
+    "fireworks_embedding_model",
 ]
 
 _SENSITIVE_FIELDS = {"telegram_bot_token", "smtp_password", "fireworks_api_key"}
@@ -51,6 +55,7 @@ _NULLABLE_FIELDS = {
 
 _VALID_FREQUENCIES = {"immediate", "daily", "weekly"}
 _VALID_INFERENCE_PROVIDERS = {"local", "fireworks"}
+_VALID_EMBEDDING_PROVIDERS = {"local", "fireworks"}
 _INFERENCE_FIELDS = {
     "inference_provider",
     "fireworks_api_key",
@@ -58,6 +63,13 @@ _INFERENCE_FIELDS = {
     "fireworks_stt_model",
     "fireworks_stt_diarize",
     "fireworks_stt_cost_per_minute_usd",
+}
+_EMBEDDING_FIELDS = {
+    "embedding_provider",
+    "embedding_model",
+    "fireworks_api_key",
+    "fireworks_embedding_base_url",
+    "fireworks_embedding_model",
 }
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
@@ -120,6 +132,12 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
             raise ValueError(
                 f"inference_provider must be one of {_VALID_INFERENCE_PROVIDERS}, "
                 f"got '{updates['inference_provider']}'"
+            )
+    if "embedding_provider" in updates:
+        if updates["embedding_provider"] not in _VALID_EMBEDDING_PROVIDERS:
+            raise ValueError(
+                f"embedding_provider must be one of {_VALID_EMBEDDING_PROVIDERS}, "
+                f"got '{updates['embedding_provider']}'"
             )
     if "fireworks_stt_cost_per_minute_usd" in updates:
         rate = updates["fireworks_stt_cost_per_minute_usd"]
@@ -204,3 +222,12 @@ def get_runtime_inference_settings(db: Session | None = None) -> dict:
     else:
         base = get_notification_settings(db)
     return {key: base.get(key) for key in _INFERENCE_FIELDS}
+
+
+def get_runtime_embedding_settings(db: Session | None = None) -> dict:
+    """Resolve embedding settings for task/query embedding execution."""
+    if db is None:
+        base = _env_defaults()
+    else:
+        base = get_notification_settings(db)
+    return {key: base.get(key) for key in _EMBEDDING_FIELDS}

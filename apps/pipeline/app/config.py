@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     # Keep this explicit because provider pricing can change.
     fireworks_stt_cost_per_minute_usd: float = 0.006
 
+    # Embedding provider routing (Issue #258)
+    embedding_provider: Literal["local", "fireworks"] = "local"
+    embedding_model: str = "all-MiniLM-L6-v2"
+    fireworks_embedding_base_url: str = "https://api.fireworks.ai/inference/v1"
+    fireworks_embedding_model: str = "BAAI/bge-small-en-v1.5"
+
     # Notifications (all optional — no env vars = no notifications)
     notification_email_to: str | None = None
     notification_email_from: str = "podlog@localhost"

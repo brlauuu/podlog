@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.services.embed import embed_query
+from app.services.notification_settings import get_runtime_embedding_settings
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,8 @@ def retrieve_chunks(
     episode_id: str | None = None,
 ) -> list[ChunkResult]:
     """Retrieve top-K chunks by cosine similarity to the question embedding."""
-    embedding = embed_query(question)
+    runtime = get_runtime_embedding_settings(db)
+    embedding = embed_query(question, runtime=runtime)
     embedding_str = f"[{','.join(str(x) for x in embedding)}]"
 
     feed_filter = ""
