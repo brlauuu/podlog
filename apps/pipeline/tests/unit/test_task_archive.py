@@ -148,6 +148,25 @@ class TestArchiveEpisode:
             archive_episode("ep1")
 
 
+    def test_compress_skips_when_already_in_archive_dir(self, tmp_path):
+        """_compress_audio should skip ffmpeg when source is already the dest."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        existing = archive_dir / "ep1.mp3"
+        existing.write_bytes(b"fake-mp3-data")
+
+        with patch("app.tasks.archive.settings") as mock_settings:
+            mock_settings.audio_archive_dir = str(archive_dir)
+
+            from app.tasks.archive import _compress_audio
+
+            result = _compress_audio(existing, "ep1")
+
+        assert result == existing
+        # File should be unchanged (no ffmpeg ran)
+        assert existing.read_bytes() == b"fake-mp3-data"
+
+
 class TestWriteTranscript:
     def test_writes_with_speaker_labels(self):
         ep = MagicMock()

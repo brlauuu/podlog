@@ -138,6 +138,15 @@ def _compress_audio(raw_path: Path, episode_id: str) -> Path:
     archive_dir.mkdir(parents=True, exist_ok=True)
     dest = archive_dir / f"{episode_id}.mp3"
 
+    # Skip compression if the source is already in the archive directory
+    # (e.g. re-running archive after a previous successful compression).
+    if raw_path.resolve() == dest.resolve():
+        logger.info(
+            '"action": "archive_skip_already_compressed", "episode_id": "%s"',
+            episode_id,
+        )
+        return dest
+
     ffmpeg.input(str(raw_path)).output(
         str(dest),
         audio_bitrate=settings.audio_archive_bitrate,
