@@ -13,6 +13,7 @@ Add RSS feeds, transcribe episodes with Whisper, label speakers with pyannote, a
 ![License](https://img.shields.io/badge/license-O'Saasy-green)
 ![Next.js](https://img.shields.io/badge/next.js-16.2.2-black?logo=next.js&logoColor=white)
 ![React](https://img.shields.io/badge/react-19.2.4-149eca?logo=react&logoColor=white)
+[![CI](https://github.com/brlauuu/podlog/actions/workflows/ci.yml/badge.svg)](https://github.com/brlauuu/podlog/actions/workflows/ci.yml)
 
 </div>
 

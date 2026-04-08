@@ -117,6 +117,16 @@ make test-e2e
 
 Run Playwright browser tests against the full Docker stack.
 
+### GitHub Actions CI
+
+The repository runs a minimal CI workflow at [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+
+- Trigger: push to `main` and pull requests
+- `pipeline-unit`: Python unit test subset (no ML extras)
+- `web-unit`: Jest unit test subset for core UI flows
+
+This is intentionally small to provide test freshness signals with low maintenance overhead.
+
 ## Makefile Targets
 
 ```
