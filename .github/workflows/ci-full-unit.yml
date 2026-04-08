@@ -1,4 +1,4 @@
-name: CI Full Unit (469 tests)
+name: CI Full Unit
 
 on:
   push:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   pipeline-unit-full:
-    name: Pipeline Unit Full (363)
+    name: Pipeline Unit Full
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -41,7 +41,7 @@ jobs:
         run: pytest tests/unit -q
 
   web-unit-full:
-    name: Web Unit Full (106)
+    name: Web Unit Full
     runs-on: ubuntu-latest
     defaults:
       run:

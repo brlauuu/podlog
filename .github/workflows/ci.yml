@@ -1,4 +1,4 @@
-name: CI Fast (111 tests)
+name: CI Fast
 
 on:
   push:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   pipeline-unit-fast:
-    name: Pipeline Unit Fast (70)
+    name: Pipeline Unit Fast
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -45,7 +45,7 @@ jobs:
                  tests/unit/test_embed_service.py -q
 
   web-unit-fast:
-    name: Web Unit Fast (41)
+    name: Web Unit Fast
     runs-on: ubuntu-latest
     defaults:
       run:
