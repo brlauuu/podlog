@@ -1,0 +1,65 @@
+name: CI Full Unit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-full-unit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pipeline-unit-full:
+    name: Pipeline Unit Full
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/pipeline
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install pipeline dependencies (no ML extras)
+        run: |
+          poetry config virtualenvs.create false
+          poetry install --with dev --without ml --no-interaction --no-ansi --no-root
+
+      - name: Run all pipeline unit tests
+        run: pytest tests/unit -q
+
+  web-unit-full:
+    name: Web Unit Full
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Run all web unit tests
+        run: npm test -- --runInBand --testPathPattern=tests/unit
