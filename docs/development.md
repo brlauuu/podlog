@@ -123,18 +123,18 @@ The repository uses three CI lanes:
 
 - Fast lane ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml))
   - Trigger: push to `main` and pull requests
-  - `pipeline-unit-fast`: stable subset (70 tests)
-  - `web-unit-fast`: stable subset (41 tests)
+  - `pipeline-unit-fast`: stable subset
+  - `web-unit-fast`: stable subset
 - Full unit lane ([`.github/workflows/ci-full-unit.yml`](../.github/workflows/ci-full-unit.yml))
   - Trigger: push to `main` and pull requests
-  - `pipeline-unit-full`: all pipeline unit tests (363 tests)
-  - `web-unit-full`: all web unit tests (106 tests)
+  - `pipeline-unit-full`: all pipeline unit tests
+  - `web-unit-full`: all web unit tests
 - Slow lane ([`.github/workflows/ci-slow.yml`](../.github/workflows/ci-slow.yml))
   - Trigger: nightly schedule and manual dispatch
   - `pipeline-integration`: integration tests in Docker
   - `web-e2e`: Playwright e2e tests in Docker
 
-The README shows live status badges for each lane and includes the current test counts for the fast and full unit lanes.
+The README shows live status badges for each lane.
 
 ## Makefile Targets
 
