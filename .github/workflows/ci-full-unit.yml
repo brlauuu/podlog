@@ -1,4 +1,4 @@
-name: CI Fast (111 tests)
+name: CI Full Unit (469 tests)
 
 on:
   push:
@@ -9,12 +9,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-full-unit-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  pipeline-unit-fast:
-    name: Pipeline Unit Fast (70)
+  pipeline-unit-full:
+    name: Pipeline Unit Full (363)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,15 +37,11 @@ jobs:
           poetry config virtualenvs.create false
           poetry install --with dev --without ml --no-interaction --no-ansi --no-root
 
-      - name: Run pipeline unit tests (stable subset)
-        run: |
-          pytest tests/unit/test_api.py \
-                 tests/unit/test_rag.py \
-                 tests/unit/test_notification_settings.py \
-                 tests/unit/test_embed_service.py -q
+      - name: Run all pipeline unit tests
+        run: pytest tests/unit -q
 
-  web-unit-fast:
-    name: Web Unit Fast (41)
+  web-unit-full:
+    name: Web Unit Full (106)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -65,5 +61,5 @@ jobs:
       - name: Install web dependencies
         run: npm ci
 
-      - name: Run web unit tests (stable subset)
-        run: npm test -- --runTestsByPath tests/unit/notification-settings.test.tsx tests/unit/setup-wizard.test.tsx
+      - name: Run all web unit tests
+        run: npm test -- --runInBand --testPathPattern=tests/unit
