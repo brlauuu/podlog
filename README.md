@@ -11,11 +11,10 @@ Add RSS feeds, transcribe episodes with Whisper, label speakers with pyannote, a
 ![PostgreSQL](https://img.shields.io/badge/postgresql-15-4169e1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-compose-2496ed?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-O'Saasy-green)
-![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
+![Next.js](https://img.shields.io/badge/next.js-16.2.2-black?logo=next.js&logoColor=white)
+![React](https://img.shields.io/badge/react-19.2.4-149eca?logo=react&logoColor=white)
 
 </div>
-
-![Podlog search interface](docs/screenshot-search.png)
 
 ## Features
 
@@ -71,7 +70,7 @@ This uses `docker-compose.remote.yml` on top of the default compose file.
 
 ```
                         ┌──────────────────────────────────────────────┐
-  Browser :3000  ──────>│  web (Next.js 14)                            │
+  Browser :3000  ──────>│  web (Next.js 16)                            │
                         │    Search, episodes, queue, audio player     │
                         │    Reads PostgreSQL directly for FTS/vector  │
                         │    Proxies to pipeline API for management    │
@@ -157,7 +156,7 @@ make help            # List all available commands
 | [pyannote](https://github.com/pyannote/pyannote-audio) | Speaker diarization 3.1 | Speaker labeling and separation |
 | [sentence-transformers](https://www.sbert.net/) | all-MiniLM-L6-v2 | Semantic search embeddings (384-dim) |
 | [pgvector](https://github.com/pgvector/pgvector) | PostgreSQL vector extension | Approximate nearest neighbor search |
-| [Next.js](https://nextjs.org/) 14 | App Router, React Server Components | Web UI |
+| [Next.js](https://nextjs.org/) 16 | App Router, React Server Components | Web UI |
 | [Tailwind CSS](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) | Utility-first CSS + components | Styling |
 | [FastAPI](https://fastapi.tiangolo.com/) | Python async web framework | Pipeline API |
 | [PostgreSQL](https://www.postgresql.org/) 15 | Relational database | Storage, FTS, job queue, vector search |

@@ -22,7 +22,7 @@ podlog/
 │   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, notifications, digest, events)
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # Unit, integration, e2e tests
-│   └── web/                        # Next.js 14 (App Router)
+│   └── web/                        # Next.js 16 (App Router)
 │       ├── src/app/                # Pages: /, /podcasts, /episodes/[id], /queue, /feeds, /ask, /notifications
 │       ├── src/components/         # React components
 │       └── src/lib/                # Utilities (db, search, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest)
