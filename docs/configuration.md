@@ -67,6 +67,14 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `FIREWORKS_EMBEDDING_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks embeddings API. |
 | `FIREWORKS_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Fireworks embedding model used when `EMBEDDING_PROVIDER=fireworks`. |
 
+### Ask / RAG Model Selection
+
+Ask AI uses the model selected in the `/ask` page UI and sends it with each request. There is no `OLLAMA_MODEL` environment variable in Podlog.
+
+- For local Ask mode, `OLLAMA_URL` controls the Ollama endpoint that serves the selected model.
+- The Ask page defaults to `qwen2.5:3b` unless you choose another option in the UI.
+- When `INFERENCE_PROVIDER=fireworks`, `FIREWORKS_CHAT_MODEL` provides the default Ask model for remote generation.
+
 ### Deployment profiles
 
 - Local-first profile (default): `docker compose up -d` or `make up`

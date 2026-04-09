@@ -1,6 +1,6 @@
 # Ask AI (RAG Search)
 
-Ask natural language questions and get answers drawn from your transcript library, powered by either local Ollama or Fireworks remote chat inference.
+Ask natural language questions and get answers drawn from your transcript library, powered by either local Ollama or Fireworks remote chat inference. Ask AI is live at `/ask`.
 
 ## How It Works
 

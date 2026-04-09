@@ -47,7 +47,7 @@ make build
 make up
 ```
 
-Open **http://localhost:3000** — that's it.
+Open **http://localhost:3000** — that's the home page. Search lives at `/search` and Ask lives at `/ask`.
 
 > **First run:** The worker downloads Whisper and pyannote model weights (~3 GB). Jobs are queued during this phase and start processing once models are cached.
 
@@ -73,8 +73,8 @@ This uses `docker-compose.remote.yml` on top of the default compose file.
 
 ```
                         ┌──────────────────────────────────────────────┐
-  Browser :3000  ──────>│  web (Next.js 16)                            │
-                        │    Search, episodes, queue, audio player     │
+  Browser :3000  ──────>│  web (Next.js 16.2.2)                        │
+                        │    Home, search, episodes, queue, audio player│
                         │    Reads PostgreSQL directly for FTS/vector  │
                         │    Proxies to pipeline API for management    │
                         └──────────────┬───────────────────────────────┘
@@ -159,7 +159,7 @@ make help            # List all available commands
 | [pyannote](https://github.com/pyannote/pyannote-audio) | Speaker diarization 3.1 | Speaker labeling and separation |
 | [sentence-transformers](https://www.sbert.net/) | all-MiniLM-L6-v2 | Semantic search embeddings (384-dim) |
 | [pgvector](https://github.com/pgvector/pgvector) | PostgreSQL vector extension | Approximate nearest neighbor search |
-| [Next.js](https://nextjs.org/) 16 | App Router, React Server Components | Web UI |
+| [Next.js](https://nextjs.org/) 16.2.2 | App Router, React Server Components | Web UI |
 | [Tailwind CSS](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) | Utility-first CSS + components | Styling |
 | [FastAPI](https://fastapi.tiangolo.com/) | Python async web framework | Pipeline API |
 | [PostgreSQL](https://www.postgresql.org/) 15 | Relational database | Storage, FTS, job queue, vector search |

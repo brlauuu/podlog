@@ -15,7 +15,7 @@ Podlog is a self-hosted podcast transcription and search app. It downloads episo
 9. [Notifications](09-notifications.md) — Telegram and email setup, frequency options
 10. [Configuration](10-configuration.md) — Model selection and resource tuning
 11. [Hardware & Performance](11-hardware.md) — Processing times, storage estimates
-12. [RAG Search](12-rag-search.md) — AI-powered Q&A over transcripts (coming soon)
+12. [Ask AI (RAG Search)](12-rag-search.md) — AI-powered Q&A over transcripts
 13. [Troubleshooting](13-troubleshooting.md) — Common issues and fixes
 
 ## Quick Start

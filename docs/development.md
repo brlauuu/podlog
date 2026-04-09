@@ -22,8 +22,8 @@ podlog/
 │   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, notifications, digest, events)
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # Unit, integration, e2e tests
-│   └── web/                        # Next.js 16 (App Router)
-│       ├── src/app/                # Pages: /, /podcasts, /episodes/[id], /queue, /feeds, /ask, /notifications
+│   └── web/                        # Next.js 16.2.2 (App Router)
+│       ├── src/app/                # Pages: /, /podcasts, /episodes/[id], /queue, /feeds, /ask, /settings (/notifications redirects here)
 │       ├── src/components/         # React components
 │       └── src/lib/                # Utilities (db, search, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest)
 ├── docs/                           # User-facing documentation

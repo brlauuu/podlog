@@ -1,6 +1,6 @@
 # Notifications
 
-Podlog can send notifications when episodes finish processing or fail. Two channels are supported: Telegram and email. Configure either or both from the `/notifications` page in the web UI.
+Podlog can send notifications when episodes finish processing or fail. Two channels are supported: Telegram and email. Configure either or both from the `/settings` page in the web UI. The older `/notifications` route redirects there.
 
 ## Telegram Setup
 
@@ -12,7 +12,7 @@ Podlog can send notifications when episodes finish processing or fail. Two chann
    ```
    Find `"chat":{"id":123456789}` in the response — that number is your **Chat ID**.
 
-3. **Configure in Podlog:** Go to `/notifications`, open the Telegram tab, enter your bot token and chat ID, and click **Save**.
+3. **Configure in Podlog:** Go to `/settings`, open the Telegram tab, enter your bot token and chat ID, and click **Save**.
 
 4. **Test:** Click **Send test message**. You should receive a message from your bot in Telegram.
 
@@ -37,7 +37,7 @@ The simplest option if you're running Podlog on a Linux machine.
    ```
    This adds the Docker bridge network to Postfix's trusted networks.
 
-3. **Configure in Podlog:** Go to `/notifications`, open the Email tab. The default SMTP settings (`host.docker.internal` port `25`, no TLS) work with local Postfix. Just enter your recipient email address and click **Save**.
+3. **Configure in Podlog:** Go to `/settings`, open the Email tab. The default SMTP settings (`host.docker.internal` port `25`, no TLS) work with local Postfix. Just enter your recipient email address and click **Save**.
 
 4. **Test:** Click **Send test email**.
 
@@ -50,7 +50,7 @@ Use an existing email provider's SMTP server for reliable delivery.
 1. **Gmail example:**
    - Enable 2-Factor Authentication on your Google account
    - Go to Google Account > Security > App passwords, create one for "Mail"
-   - In Podlog `/notifications` > Email > SMTP Configuration:
+   - In Podlog `/settings` > Email > SMTP Configuration:
      - Host: `smtp.gmail.com`
      - Port: `587`
      - Username: `your.email@gmail.com`
@@ -73,7 +73,7 @@ Configure how often you receive success notifications (failures are always sent 
 | **Daily digest** | Summary of all completed episodes, sent at 8:00 AM UTC |
 | **Weekly digest** | Summary sent Monday at 8:00 AM UTC |
 
-Set the frequency on the **General** tab in `/notifications`.
+Set the frequency on the **General** tab in `/settings`.
 
 ## Health Monitoring
 
