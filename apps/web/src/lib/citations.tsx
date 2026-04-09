@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { episodeTimestampHref } from "@/lib/episode-link";
 
 export interface Source {
   chunk_id: number;
@@ -70,7 +71,7 @@ export function renderAnswerWithCitations(
         nodes.push(
           <Link
             key={`cite-${match.index}`}
-            href={`/episodes/${matchedSource.episode_id}?t=${citedSeconds}`}
+            href={episodeTimestampHref(matchedSource.episode_id, citedSeconds)}
             className="inline-flex items-center gap-0.5 text-primary hover:underline font-medium"
             title={`${matchedSource.episode_title} at ${citedTimestamp}`}
           >

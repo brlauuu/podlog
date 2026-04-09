@@ -5,6 +5,7 @@ import { Play, ChevronDown, BrainCircuit, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { renderAnswerWithCitations, type Source } from "@/lib/citations";
+import { episodeTimestampHref } from "@/lib/episode-link";
 import { loadAskSnapshot, saveAskSnapshot } from "@/lib/page-state";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { basename } from "@/lib/utils";
@@ -214,7 +215,7 @@ export default function AskPage() {
 
   function handlePlaySource(source: Source) {
     if (!source.audio_local_path) {
-      window.open(`/episodes/${source.episode_id}?t=${Math.floor(source.start_time)}`, "_blank");
+      window.open(episodeTimestampHref(source.episode_id, source.start_time), "_blank");
       return;
     }
     playEpisode(
@@ -478,7 +479,7 @@ export default function AskPage() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <Link
-                      href={`/episodes/${source.episode_id}?t=${Math.floor(source.start_time)}`}
+                      href={episodeTimestampHref(source.episode_id, source.start_time)}
                       className="font-medium truncate hover:underline text-primary"
                     >
                       {source.episode_title}
