@@ -4,7 +4,7 @@
 
 Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Single user, local only. Production runs in Docker Compose; development can run services natively (see `docs/development.md`).
 
-**Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. 332 pipeline + 101 web tests pass. 10 Alembic migrations applied. Web UI serves search, queue dashboard, feed management, and an Ask AI feature.
+**Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. The repo has an active automated test suite and Alembic migration history. Web UI serves search, queue dashboard, feed management, and an Ask AI feature.
 
 ## Documentation
 
@@ -43,7 +43,7 @@ podlog/
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, diarize, chunk, embed, infer, archive, cleanup, prewarm)
 │   │   │   ├── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, notifications, digest, events)
 │   │   │   └── worker.py           # Background job worker
-│   │   ├── alembic/                # Database migrations (10 applied)
+│   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # unit, integration, e2e
 │   └── web/                        # Next.js 16 (App Router)
 │       ├── src/app/                # Pages: /, /about, /podcasts, /episodes/[id], /queue, /feeds, /ask, /search, /notifications
@@ -67,7 +67,7 @@ podlog/
 | Database | PostgreSQL 15 (pgvector/pgvector:pg15) | FTS via `to_tsvector` + GIN index, vector HNSW index |
 | ORM | SQLAlchemy 2.0 + Alembic | Migrations auto-run on pipeline startup |
 | Web app | Next.js 16 (App Router) | `output: 'standalone'` for Docker |
-| Styling | Tailwind CSS + shadcn/ui | Dark mode via `class` strategy; 12 shadcn/ui components installed |
+| Styling | Tailwind CSS + shadcn/ui | Dark mode via `class` strategy; shadcn/ui component set is installed |
 | Data fetching | TanStack React Query | Polling for queue status |
 | DB client (web) | `pg` (node-postgres) raw SQL | Direct PostgreSQL queries for search |
 
@@ -109,9 +109,9 @@ Services: web (:3000), pipeline API (:8000), ollama (:11434).
 - Full pipeline: ingest, download, transcribe, diarize, chunk, embed, infer, archive
 - All FastAPI endpoints (feeds, episodes, queue, health, ask, notifications, backfill)
 - All Next.js pages, API routes, and components (search, ask, queue, feeds, episodes, notifications)
-- 332 pipeline tests + 101 web tests passing
-- 10 Alembic migrations applied
-- 12 shadcn/ui components installed
+- Automated test suites for pipeline and web are maintained in-repo
+- Alembic migration history is maintained under `apps/pipeline/alembic/versions/`
+- shadcn/ui component set is installed and used in the web app
 - Setup wizard for first-run onboarding
 - RAG-based Ask AI feature via Ollama
 - Speaker merge/rename UI
