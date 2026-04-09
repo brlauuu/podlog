@@ -177,6 +177,9 @@ export default function WizardAddFeed({ onNext, onBack, onSkip }: Props) {
         <p className="text-sm text-muted-foreground">
           Paste an RSS feed URL to get started. We recommend <strong>Test mode</strong> for your first feed — it grabs one episode so you can see results fast.
         </p>
+        <p className="text-xs text-muted-foreground mt-2">
+          Prefer local files? You can upload audio anytime from <strong>Sources</strong> at <code>/podcasts</code>.
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
