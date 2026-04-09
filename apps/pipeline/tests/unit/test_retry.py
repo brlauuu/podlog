@@ -43,9 +43,8 @@ class TestRetryLogic:
                                       error_class="HTTP_ACCESS", error_msg="HTTP 403")
             mock_jq.enqueue.assert_called_once()
 
-    @patch("app.tasks.helpers.compute_avg_duration", return_value=1800.0)
-    @patch("app.tasks.helpers.estimate_queue_status", return_value=(0, None, None))
-    def test_marks_failed_at_max_retries(self, mock_estimate, mock_avg_dur):
+    @patch("app.tasks.helpers.emit_episode_failed_event")
+    def test_marks_failed_at_max_retries(self, mock_emit_failed):
         db = self._make_db()
         episode = MagicMock()
         episode.retry_count = 3
@@ -61,6 +60,12 @@ class TestRetryLogic:
         # mark_failed uses setattr on the episode object
         assert episode.status == "failed"
         assert episode.error_class == "HTTP_ACCESS"
+        mock_emit_failed.assert_called_once_with(
+            db,
+            episode,
+            error_class="HTTP_ACCESS",
+            error_message="Failed after 3 retries: HTTP 403",
+        )
 
     def test_disk_full_does_not_retry(self):
         """DISK_FULL should never be retried automatically."""

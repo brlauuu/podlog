@@ -2,166 +2,19 @@
 import httpx
 import logging
 import smtplib
-from dataclasses import dataclass
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from sqlalchemy.orm import Session
-
-from app.models import Episode
 from app.services.events import Event
+from app.services.notification_events import EpisodeDoneEvent, EpisodeFailedEvent
+from app.services.notification_runtime import (
+    compute_avg_duration,
+    compute_avg_processing_stats,
+    estimate_queue_status,
+)
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class EpisodeDoneEvent(Event):
-    episode_id: str = ""
-    episode_title: str = ""
-    podcast_title: str = ""
-    published_at: datetime | None = None
-    duration_secs: int | None = None
-    transcribe_duration_secs: float | None = None
-    diarize_duration_secs: float | None = None
-    total_duration_secs: float | None = None
-    queue_remaining: int = 0
-    queue_estimated_secs: float | None = None
-    avg_transcribe_secs: float | None = None
-    avg_diarize_secs: float | None = None
-    avg_total_secs: float | None = None
-    avg_duration_secs: float | None = None
-    processing_factor: float | None = None
-
-
-@dataclass
-class EpisodeFailedEvent(Event):
-    episode_id: str = ""
-    episode_title: str = ""
-    podcast_title: str = ""
-    published_at: datetime | None = None
-    duration_secs: int | None = None
-    error_class: str = ""
-    error_message: str = ""
-    retry_count: int = 0
-    retry_max: int = 3
-    queue_remaining: int = 0
-    queue_estimated_secs: float | None = None
-    avg_transcribe_secs: float | None = None
-    avg_diarize_secs: float | None = None
-    avg_total_secs: float | None = None
-    avg_duration_secs: float | None = None
-    processing_factor: float | None = None
-
-
-def compute_avg_processing_stats(db: Session) -> tuple[float | None, float | None, float | None]:
-    """Compute average processing times across all completed episodes.
-
-    Returns (avg_transcribe_secs, avg_diarize_secs, avg_total_wall_secs).
-    Each value is None if no data is available for that metric.
-    """
-    done_episodes = (
-        db.query(Episode)
-        .filter(
-            Episode.status == "done",
-            Episode.processed_at.isnot(None),
-        )
-        .all()
-    )
-
-    if not done_episodes:
-        return None, None, None
-
-    transcribe_vals = [ep.transcribe_duration_secs for ep in done_episodes if ep.transcribe_duration_secs is not None]
-    diarize_vals = [ep.diarize_duration_secs for ep in done_episodes if ep.diarize_duration_secs is not None]
-    # Total = transcribe + diarize (actual processing time, excludes queue wait)
-    total_vals = [
-        (ep.transcribe_duration_secs or 0) + (ep.diarize_duration_secs or 0)
-        for ep in done_episodes
-        if ep.transcribe_duration_secs is not None or ep.diarize_duration_secs is not None
-    ]
-
-    avg_t = sum(transcribe_vals) / len(transcribe_vals) if transcribe_vals else None
-    avg_d = sum(diarize_vals) / len(diarize_vals) if diarize_vals else None
-    avg_total = sum(total_vals) / len(total_vals) if total_vals else None
-
-    return avg_t, avg_d, avg_total
-
-
-def compute_avg_duration(db: Session) -> float | None:
-    """Compute average episode audio duration across all completed episodes.
-
-    Returns the average duration in seconds, or None if no data is available.
-    """
-    done_episodes = (
-        db.query(Episode)
-        .filter(
-            Episode.status == "done",
-            Episode.duration_secs.isnot(None),
-        )
-        .all()
-    )
-    if not done_episodes:
-        return None
-    return sum(ep.duration_secs for ep in done_episodes) / len(done_episodes)
-
-
-def estimate_queue_status(db: Session) -> tuple[int, float | None, float | None]:
-    """Return (remaining_count, estimated_seconds_to_complete, processing_factor).
-
-    The estimate uses a duration-weighted processing rate from the last 10
-    completed episodes. The processing factor is the ratio of processing time
-    to audio duration (e.g. 1.5 means 1 min of audio takes 1.5 min to process).
-    Returns None for estimate/factor if no history is available.
-    """
-    # Count pending/in-progress episodes
-    remaining = (
-        db.query(Episode)
-        .filter(Episode.status.in_(["pending", "downloading", "transcribing", "diarizing", "archiving"]))
-        .count()
-    )
-
-    # Get recent completed episodes for rate calculation
-    recent = (
-        db.query(Episode)
-        .filter(
-            Episode.status == "done",
-            Episode.processed_at.isnot(None),
-            Episode.duration_secs.isnot(None),
-        )
-        .order_by(Episode.processed_at.desc())
-        .limit(10)
-        .all()
-    )
-
-    if not recent:
-        return remaining, None, None
-
-    # Compute duration-weighted processing rate using actual processing time
-    # (transcribe + diarize), not wall clock which includes queue wait
-    total_processing = 0.0
-    total_audio = 0.0
-    for ep in recent:
-        processing_secs = (ep.transcribe_duration_secs or 0) + (ep.diarize_duration_secs or 0)
-        if processing_secs <= 0:
-            continue
-        total_processing += processing_secs
-        total_audio += ep.duration_secs
-
-    if total_audio == 0:
-        return remaining, None, None
-
-    rate = total_processing / total_audio  # processing seconds per audio second
-
-    # Sum duration of queued episodes
-    queued_episodes = (
-        db.query(Episode)
-        .filter(Episode.status.in_(["pending", "downloading", "transcribing", "diarizing", "archiving"]))
-        .all()
-    )
-    queued_audio = sum(ep.duration_secs or 0 for ep in queued_episodes)
-
-    return remaining, queued_audio * rate, rate
 
 
 def _fmt_duration(secs: float | int | None) -> str:
