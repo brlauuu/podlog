@@ -1,11 +1,9 @@
 <div align="center">
 
-**Self-hosted audio transcription and comprehensive search web app**
-
 <img src="apps/web/public/brand/podlog-logo-dark-theme.svg" alt="Podlog" width="420" />
 
+**Self-hosted audio transcription and comprehensive search web app**
 
-Add RSS feeds or drag and drop audio files, transcribe with Whisper, label speakers with pyannote, and search across all your transcripts via standard but comprehensive or RAG enabled search. Everything is designed to run locally on your machine. But if your machine really sucks, you can also use the advanced feature of running all model inference using Fireworks AI models. 
 
 ![Python](https://img.shields.io/badge/python-3.11-3776ab?logo=python&logoColor=white)
 ![Node.js](https://img.shields.io/badge/node-20-339933?logo=node.js&logoColor=white)
@@ -22,8 +20,8 @@ Add RSS feeds or drag and drop audio files, transcribe with Whisper, label speak
 
 ## Features
 
-- **Audio transcription** - transcribe audio files or podcasts from provided RSS feeds (full, single or test)
-- **Speaker diarization** — automatic speaker labeling including speaker name inference (with capability to correct for issues)
+- **Audio transcription** - transcribe audio files or podcasts from provided RSS feeds (full, single or test) using Whisper
+- **Speaker diarization** — automatic speaker labeling using pyannote and speaker name inference using spaCy (with capability to easily correct speaker assignment through the UI)
 - **Granular timestamps** — sentence-level timestamps within speaker sections, clickable to play audio from any point
 - **Persistent audio player** — click any timestamp to play; player continues across page navigation
 - **Comprehensive search** — full-text keyword search with phrase matching (`"exact quotes"`, `OR`, `-exclude`) plus semantic vector search powered by pgvector
@@ -31,8 +29,9 @@ Add RSS feeds or drag and drop audio files, transcribe with Whisper, label speak
 - **RAG enabled search** - ask comprehensive questions about your transcription database and get semantic answers including direct references to episodes
 - **Queue dashboard** — live processing status, filter by stage, error classification with auto-retry
 - **Notification options** - get notified via Telegram or email when new episodes get processed and are ready for search and analysis
-- **Dark mode** — toggleable, remembers your preference
-- **No cloud dependencies** — all data stays on your machine, no external API calls
+- **No cloud dependencies** — podlog is designed to run locally on your machine with models chosen to run on CPUs
+- **Advanced option to run model inference remotely** -  if your machine really sucks and you don't mind spending some $$, there is a built-in option to run all or selected inference steps using Fireworks AI platform.
+
 
 ## Quick Start
 
