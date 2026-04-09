@@ -14,6 +14,7 @@ import DownloadReportButton from "@/components/DownloadReportButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import type { SearchPage as SearchPageType, GroupedSearchResult } from "@/lib/search";
+import { loadSearchSnapshot, saveSearchSnapshot } from "@/lib/page-state";
 
 const PAGE_SIZE = 20;
 
@@ -40,12 +41,21 @@ function SearchPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialQuery = searchParams.get("q") ?? "";
+  const initialSnapshot = loadSearchSnapshot();
 
-  const [query, setQuery] = useState(initialQuery);
-  const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
-  const [feedFilter, setFeedFilter] = useState<string>("");
-  const [page, setPage] = useState(1);
-  const [viewMode, setViewMode] = useState<ViewMode>("grouped");
+  const [query, setQuery] = useState(
+    initialQuery || initialSnapshot?.query || ""
+  );
+  const [submittedQuery, setSubmittedQuery] = useState(
+    initialQuery || initialSnapshot?.submittedQuery || ""
+  );
+  const [feedFilter, setFeedFilter] = useState<string>(
+    initialSnapshot?.feedFilter || ""
+  );
+  const [page, setPage] = useState(initialSnapshot?.page || 1);
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    initialSnapshot?.viewMode || "grouped"
+  );
 
   // Cache totals from page 1 to skip COUNT(*) on subsequent pages
   const cachedFlatTotal = useRef<{ key: string; total: number } | null>(null);
@@ -77,12 +87,22 @@ function SearchPageContent() {
   // Sync state when URL ?q= param changes (e.g. browser back/forward)
   useEffect(() => {
     const urlQuery = searchParams.get("q") ?? "";
-    if (urlQuery !== submittedQuery) {
+    if (urlQuery && urlQuery !== submittedQuery) {
       setQuery(urlQuery);
       setSubmittedQuery(urlQuery);
       setPage(1);
     }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    saveSearchSnapshot({
+      query,
+      submittedQuery,
+      feedFilter,
+      page,
+      viewMode,
+    });
+  }, [query, submittedQuery, feedFilter, page, viewMode]);
 
   // Flat search query
   const flatCacheKey = `${submittedQuery}:${feedFilter}`;

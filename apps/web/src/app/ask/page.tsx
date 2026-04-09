@@ -5,6 +5,7 @@ import { Play, ChevronDown, BrainCircuit, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { renderAnswerWithCitations, type Source } from "@/lib/citations";
+import { loadAskSnapshot, saveAskSnapshot } from "@/lib/page-state";
 
 interface Feed {
   id: string;
@@ -31,15 +32,20 @@ function getStoredModel(): string {
 }
 
 export default function AskPage() {
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [sources, setSources] = useState<Source[]>([]);
-  const [status, setStatus] = useState<StreamStatus>("idle");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [model, setModel] = useState(getStoredModel);
+  const initialSnapshot = loadAskSnapshot();
+  const [question, setQuestion] = useState(initialSnapshot?.question || "");
+  const [answer, setAnswer] = useState(initialSnapshot?.answer || "");
+  const [sources, setSources] = useState<Source[]>(initialSnapshot?.sources || []);
+  const [status, setStatus] = useState<StreamStatus>(() => {
+    const snapshotStatus = initialSnapshot?.status;
+    if (snapshotStatus === "done" || snapshotStatus === "error") return snapshotStatus;
+    return "idle";
+  });
+  const [errorMsg, setErrorMsg] = useState(initialSnapshot?.errorMsg || "");
+  const [model, setModel] = useState(initialSnapshot?.model || getStoredModel);
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(
-    new Set()
+    new Set(initialSnapshot?.selectedFeedIds || [])
   );
   const [feedDropdownOpen, setFeedDropdownOpen] = useState(false);
   const [hasManualUploads, setHasManualUploads] = useState(false);
@@ -51,6 +57,20 @@ export default function AskPage() {
   useEffect(() => {
     localStorage.setItem("podlog-ask-model", model);
   }, [model]);
+
+  useEffect(() => {
+    const snapshotStatus =
+      status === "connecting" || status === "streaming" ? "idle" : status;
+    saveAskSnapshot({
+      question,
+      answer,
+      sources,
+      status: snapshotStatus,
+      errorMsg,
+      model,
+      selectedFeedIds: Array.from(selectedFeedIds),
+    });
+  }, [question, answer, sources, status, errorMsg, model, selectedFeedIds]);
 
   // Close feed dropdown on outside click
   useEffect(() => {
