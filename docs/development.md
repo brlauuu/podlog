@@ -73,6 +73,12 @@ npx tsc --noEmit
 
 # Lint
 npm run lint
+
+# Unit tests (files exercised by current tests)
+npm test -- --runInBand
+
+# Coverage (full app denominator under src/** via jest collectCoverageFrom)
+npm test -- --coverage --runInBand
 ```
 
 ### Database
