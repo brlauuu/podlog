@@ -50,11 +50,18 @@ export default function AskPage() {
     new Set(initialSnapshot?.selectedFeedIds || [])
   );
   const [feedDropdownOpen, setFeedDropdownOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpPinned, setHelpPinned] = useState(false);
   const [hasManualUploads, setHasManualUploads] = useState(false);
   const [coverage, setCoverage] = useState<CoverageStats | null>(null);
+  const [helpCoverageSnapshot, setHelpCoverageSnapshot] = useState<CoverageStats | null>(() => {
+    const snapshot = loadAskSnapshot();
+    return snapshot?.helpCoverageSnapshot ?? null;
+  });
   const answerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const feedDropdownRef = useRef<HTMLDivElement>(null);
+  const helpRef = useRef<HTMLDivElement>(null);
   const { playEpisode } = useAudioPlayer();
 
   useEffect(() => {
@@ -72,8 +79,9 @@ export default function AskPage() {
       errorMsg,
       model,
       selectedFeedIds: Array.from(selectedFeedIds),
+      helpCoverageSnapshot,
     });
-  }, [question, answer, sources, status, errorMsg, model, selectedFeedIds]);
+  }, [question, answer, sources, status, errorMsg, model, selectedFeedIds, helpCoverageSnapshot]);
 
   // Close feed dropdown on outside click
   useEffect(() => {
@@ -83,6 +91,10 @@ export default function AskPage() {
         !feedDropdownRef.current.contains(e.target as Node)
       ) {
         setFeedDropdownOpen(false);
+      }
+      if (helpRef.current && !helpRef.current.contains(e.target as Node)) {
+        setHelpOpen(false);
+        setHelpPinned(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -102,30 +114,13 @@ export default function AskPage() {
       .then((r) => r.json())
       .then((data) => {
         setCoverage({ processed: data.processed, total: data.total });
+        setHelpCoverageSnapshot((prev) =>
+          prev ?? { processed: data.processed, total: data.total }
+        );
         setHasManualUploads(data.has_manual_uploads ?? false);
       })
       .catch(() => {});
   }, []);
-
-  // Compute filtered episode count based on selected feeds
-  const filteredEpisodeCount = useMemo(() => {
-    if (!coverage) return null;
-    if (selectedFeedIds.size === 0) return coverage.processed;
-    // Sum episode_count for selected feeds
-    let count = 0;
-    for (const feed of feeds) {
-      if (selectedFeedIds.has(feed.id)) {
-        count += feed.episode_count || 0;
-      }
-    }
-    // If manual uploads are selected, we don't have an exact count, so just note it
-    if (selectedFeedIds.has("__uploads__")) {
-      // We can't know the exact count without a query, approximate with total - feed sum
-      const feedTotal = feeds.reduce((s, f) => s + (f.episode_count || 0), 0);
-      count += Math.max(0, coverage.total - feedTotal);
-    }
-    return Math.min(count, coverage.processed);
-  }, [coverage, selectedFeedIds, feeds]);
 
   const renderedAnswer = useMemo(
     () => (answer ? renderAnswerWithCitations(answer, sources) : null),
@@ -231,6 +226,11 @@ export default function AskPage() {
   }
 
   const isProcessing = status === "connecting" || status === "streaming";
+  const helpSummary = useMemo(() => {
+    if (!helpCoverageSnapshot) return null;
+    const remaining = Math.max(0, helpCoverageSnapshot.total - helpCoverageSnapshot.processed);
+    return `Analyzing ${helpCoverageSnapshot.processed} processed episodes (${remaining} still processing)`;
+  }, [helpCoverageSnapshot]);
 
   return (
     <div className="space-y-6">
@@ -238,13 +238,44 @@ export default function AskPage() {
       <div className={`flex flex-col items-center ${answer || sources.length > 0 ? "pt-2" : "pt-16"} transition-all`}>
         <div className="w-full max-w-2xl space-y-3">
           {/* Title + description */}
-          <div className="text-center space-y-1">
-            <h1 className="text-3xl font-bold">Ask</h1>
-            <p className="text-sm text-muted-foreground">
-              Retrieval-augmented analysis across your transcripts. Finds the 8
-              most relevant transcript excerpts and generates an answer grounded
-              in their content.
-            </p>
+          <div className="text-center">
+            <div className="relative inline-flex items-center gap-2 min-h-10" ref={helpRef}>
+              <h1 className="text-3xl font-bold">Ask</h1>
+              <button
+                type="button"
+                aria-label="Ask help"
+                onMouseEnter={() => setHelpOpen(true)}
+                onMouseLeave={() => {
+                  if (!helpPinned) setHelpOpen(false);
+                }}
+                onClick={() => {
+                  const nextPinned = !helpPinned;
+                  setHelpPinned(nextPinned);
+                  setHelpOpen(nextPinned);
+                }}
+                className="h-5 w-5 rounded-full border border-input text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
+              >
+                ?
+              </button>
+              {helpOpen && (
+                <div
+                  role="dialog"
+                  aria-label="Ask help details"
+                  onMouseEnter={() => setHelpOpen(true)}
+                  onMouseLeave={() => {
+                    if (!helpPinned) setHelpOpen(false);
+                  }}
+                  className="absolute left-1/2 top-full z-40 mt-2 w-[min(28rem,90vw)] -translate-x-1/2 rounded-md border border-border bg-popover p-3 text-left text-sm text-popover-foreground shadow-lg"
+                >
+                  <p>
+                    Retrieval-augmented analysis across your transcripts. Finds the 8 most relevant transcript excerpts and generates an answer grounded in their content.
+                  </p>
+                  {helpSummary && (
+                    <p className="mt-2 text-muted-foreground">{helpSummary}</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Ask input */}
@@ -374,50 +405,32 @@ export default function AskPage() {
             )}
           </div>
 
-          {/* Episode count below settings */}
-          {filteredEpisodeCount !== null && (
-            <p className="text-center text-xs text-muted-foreground">
-              {selectedFeedIds.size === 0 ? (
-                <>
-                  Analyzing {filteredEpisodeCount} processed episode
-                  {filteredEpisodeCount !== 1 ? "s" : ""}
-                  {coverage &&
-                    coverage.total > coverage.processed &&
-                    ` (${coverage.total - coverage.processed} still processing)`}
-                </>
-              ) : (
-                <>
-                  Analyzing up to {filteredEpisodeCount} episode
-                  {filteredEpisodeCount !== 1 ? "s" : ""} from selected source
-                  {selectedFeedIds.size !== 1 ? "s" : ""}
-                </>
-              )}
-            </p>
-          )}
         </div>
       </div>
 
       {/* Loading / generating indicator — equalizer style */}
-      {isProcessing && (
-        <div className="flex flex-col items-center gap-2 py-4">
-          <div className="flex items-center gap-0.5">
-            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-              <span
-                key={i}
-                className="w-1 rounded-full bg-primary animate-[eqBar_1.4s_ease-in-out_infinite]"
-                style={{ animationDelay: `${i * 0.1}s` }}
-              />
-            ))}
+      <div className="min-h-16">
+        {isProcessing && (
+          <div className="flex flex-col items-center gap-2 py-4">
+            <div className="flex items-center gap-0.5">
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                <span
+                  key={i}
+                  className="w-1 rounded-full bg-foreground animate-[eqBar_1.4s_ease-in-out_infinite]"
+                  style={{ animationDelay: `${i * 0.1}s` }}
+                />
+              ))}
+            </div>
+            <span className="text-sm text-muted-foreground">
+              {status === "connecting"
+                ? "Searching transcripts..."
+                : !answer
+                  ? "Generating answer..."
+                  : "Writing..."}
+            </span>
           </div>
-          <span className="text-sm text-muted-foreground">
-            {status === "connecting"
-              ? "Searching transcripts..."
-              : !answer
-                ? "Generating answer..."
-                : "Writing..."}
-          </span>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Error */}
       {status === "error" && errorMsg && (

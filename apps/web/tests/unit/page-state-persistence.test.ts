@@ -47,6 +47,7 @@ describe("page state persistence", () => {
       errorMsg: "",
       model: "qwen2.5:3b",
       selectedFeedIds: ["feed-1", "__uploads__"],
+      helpCoverageSnapshot: { processed: 195, total: 392 },
       sources: [
         {
           chunk_id: 1,
@@ -72,6 +73,25 @@ describe("page state persistence", () => {
     storage.setItem("podlog-ask-page-state", "{}");
 
     expect(loadSearchSnapshot(storage)).toBeNull();
+    expect(loadAskSnapshot(storage)).toBeNull();
+  });
+
+  test("rejects ask snapshots with malformed helpCoverageSnapshot", () => {
+    const storage = makeStorage();
+    storage.setItem(
+      "podlog-ask-page-state",
+      JSON.stringify({
+        question: "Q",
+        answer: "A",
+        sources: [],
+        status: "done",
+        errorMsg: "",
+        model: "qwen2.5:3b",
+        selectedFeedIds: [],
+        helpCoverageSnapshot: { processed: "bad", total: 100 },
+      })
+    );
+
     expect(loadAskSnapshot(storage)).toBeNull();
   });
 });
