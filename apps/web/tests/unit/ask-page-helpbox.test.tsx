@@ -55,6 +55,21 @@ describe("Ask page helpbox behavior", () => {
     ).toBeInTheDocument();
   });
 
+  test("closes helpbox on outside click", async () => {
+    render(<AskPage />);
+
+    const helpTrigger = screen.getByRole("button", { name: "Ask help" });
+    fireEvent.click(helpTrigger);
+    expect(
+      await screen.findByText(/Retrieval-augmented analysis across your transcripts/i)
+    ).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+    expect(
+      screen.queryByText(/Retrieval-augmented analysis across your transcripts/i)
+    ).toBeNull();
+  });
+
   test("uses foreground-colored spinner bars while processing", async () => {
     (global.fetch as jest.Mock).mockImplementation((url: string) => {
       if (url === "/api/feeds") {

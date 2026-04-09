@@ -22,6 +22,7 @@ export interface AskPageSnapshot {
   errorMsg: string;
   model: string;
   selectedFeedIds: string[];
+  helpCoverageSnapshot?: { processed: number; total: number } | null;
 }
 
 function parseJson<T>(raw: string | null): T | null {

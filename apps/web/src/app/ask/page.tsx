@@ -54,7 +54,10 @@ export default function AskPage() {
   const [helpPinned, setHelpPinned] = useState(false);
   const [hasManualUploads, setHasManualUploads] = useState(false);
   const [coverage, setCoverage] = useState<CoverageStats | null>(null);
-  const [helpCoverageSnapshot, setHelpCoverageSnapshot] = useState<CoverageStats | null>(null);
+  const [helpCoverageSnapshot, setHelpCoverageSnapshot] = useState<CoverageStats | null>(() => {
+    const snapshot = loadAskSnapshot();
+    return snapshot?.helpCoverageSnapshot ?? null;
+  });
   const answerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const feedDropdownRef = useRef<HTMLDivElement>(null);
@@ -76,8 +79,9 @@ export default function AskPage() {
       errorMsg,
       model,
       selectedFeedIds: Array.from(selectedFeedIds),
+      helpCoverageSnapshot,
     });
-  }, [question, answer, sources, status, errorMsg, model, selectedFeedIds]);
+  }, [question, answer, sources, status, errorMsg, model, selectedFeedIds, helpCoverageSnapshot]);
 
   // Close feed dropdown on outside click
   useEffect(() => {
@@ -110,13 +114,13 @@ export default function AskPage() {
       .then((r) => r.json())
       .then((data) => {
         setCoverage({ processed: data.processed, total: data.total });
-        if (helpCoverageSnapshot === null) {
-          setHelpCoverageSnapshot({ processed: data.processed, total: data.total });
-        }
+        setHelpCoverageSnapshot((prev) =>
+          prev ?? { processed: data.processed, total: data.total }
+        );
         setHasManualUploads(data.has_manual_uploads ?? false);
       })
       .catch(() => {});
-  }, [helpCoverageSnapshot]);
+  }, []);
 
   const renderedAnswer = useMemo(
     () => (answer ? renderAnswerWithCitations(answer, sources) : null),

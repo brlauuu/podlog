@@ -47,6 +47,7 @@ describe("page state persistence", () => {
       errorMsg: "",
       model: "qwen2.5:3b",
       selectedFeedIds: ["feed-1", "__uploads__"],
+      helpCoverageSnapshot: { processed: 195, total: 392 },
       sources: [
         {
           chunk_id: 1,
