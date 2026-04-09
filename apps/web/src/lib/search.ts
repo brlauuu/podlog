@@ -1,5 +1,6 @@
 import pool from "@/lib/db";
 import { PIPELINE_API } from "@/lib/pipeline";
+import { mergeHybridSearchResults } from "@/lib/searchHybrid";
 
 /**
  * Get embedding for a search query from the pipeline's embed API.
@@ -141,17 +142,6 @@ const SPEAKER_TURNS_CTE = `
     GROUP BY episode_id, speaker_label, turn_num
   )`;
 
-// RRF constant — standard value for Reciprocal Rank Fusion
-const RRF_K = 60;
-
-/**
- * Truncate text to ~200 chars for vector-only result snippets.
- */
-function truncateSnippet(text: string, maxLen = 200): string {
-  if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen).replace(/\s\S*$/, "") + "…";
-}
-
 /**
  * Hybrid search: FTS + vector similarity with Reciprocal Rank Fusion.
  *
@@ -269,83 +259,14 @@ export async function searchSegments(
     ftsPromise, vecPromise, countPromise, coveragePromise,
   ]);
 
-  // 4. Build result map keyed by episodeId:bucketedTime for deduplication
-  type MergedEntry = SearchResult & { ftsRank?: number; vecRank?: number; rrfScore: number };
-  const merged = new Map<string, MergedEntry>();
-
-  function bucketKey(episodeId: string, startTime: number): string {
-    return `${episodeId}:${Math.floor(startTime / 30)}`; // 30-second buckets
-  }
-
-  // Add FTS results
-  ftsResult.rows.forEach((row, i) => {
-    const key = bucketKey(row.episode_id, parseFloat(row.start_time));
-    merged.set(key, {
-      id: row.id,
-      startTime: parseFloat(row.start_time),
-      endTime: parseFloat(row.end_time),
-      speakerLabel: row.speaker_label,
-      speakerDisplay: row.speaker_display,
-      snippet: row.snippet,
-      rank: parseFloat(row.rank),
-      episodeId: row.episode_id,
-      episodeTitle: row.episode_title,
-      audioUrl: row.audio_url,
-      audioLocalPath: row.audio_local_path,
-      episodeUrl: row.episode_url,
-      hasDiarization: row.has_diarization,
-      diarizationError: row.diarization_error,
-      feedTitle: row.feed_title,
-      feedMode: row.feed_mode,
-      feedId: row.feed_id,
-      ftsRank: i + 1,
-      rrfScore: 1 / (RRF_K + i + 1),
-    });
-  });
-
-  // Add/merge vector results
-  vecResult.rows.forEach((row, i) => {
-    const key = bucketKey(row.episode_id, parseFloat(row.start_time));
-    const vecScore = 1 / (RRF_K + i + 1);
-    const existing = merged.get(key);
-    if (existing) {
-      // Boost existing FTS result with vector score
-      existing.vecRank = i + 1;
-      existing.rrfScore += vecScore;
-    } else {
-      // Vector-only result (semantic match, no keyword match)
-      merged.set(key, {
-        id: row.id,
-        startTime: parseFloat(row.start_time),
-        endTime: parseFloat(row.end_time),
-        speakerLabel: row.speaker_label,
-        speakerDisplay: row.speaker_display,
-        snippet: truncateSnippet(row.text),
-        rank: parseFloat(row.similarity),
-        episodeId: row.episode_id,
-        episodeTitle: row.episode_title,
-        audioUrl: row.audio_url,
-        audioLocalPath: row.audio_local_path,
-        episodeUrl: row.episode_url,
-        hasDiarization: row.has_diarization,
-        diarizationError: row.diarization_error,
-        feedTitle: row.feed_title,
-        feedMode: row.feed_mode,
-        feedId: row.feed_id,
-        vecRank: i + 1,
-        rrfScore: vecScore,
-      });
-    }
-  });
-
-  // 5. Sort by RRF score, paginate
-  const sorted = Array.from(merged.values()).sort((a, b) => b.rrfScore - a.rrfScore);
-  const offset = (page - 1) * pageSize;
-  const results: SearchResult[] = sorted.slice(offset, offset + pageSize);
-
-  // Total: use FTS count (vector-only results are supplementary)
   const ftsTotal = countResult ? parseInt(countResult.rows[0].count, 10) : -1;
-  const total = ftsTotal >= 0 ? Math.max(ftsTotal, sorted.length) : -1;
+  const merged = mergeHybridSearchResults({
+    ftsRows: ftsResult.rows,
+    vecRows: vecResult.rows,
+    page,
+    pageSize,
+    ftsTotal,
+  });
 
   const cov = coverageResult?.rows[0];
   const coverage: EpisodeCoverage = {
@@ -353,7 +274,7 @@ export async function searchSegments(
     total: cov?.total ?? 0,
   };
 
-  return { results, total, page, pageSize, coverage };
+  return { results: merged.results, total: merged.total, page, pageSize, coverage };
 }
 
 /**
