@@ -361,6 +361,54 @@ describe("WizardComplete — Ask AI link", () => {
   });
 });
 
+describe("WizardProvider", () => {
+  const actualWizardModule = jest.requireActual<typeof import("@/components/WizardProvider")>(
+    "@/components/WizardProvider"
+  );
+  const ActualWizardProvider = actualWizardModule.default;
+  const actualUseWizard = actualWizardModule.useWizard;
+
+  function WizardOpenStateProbe() {
+    const { open } = actualUseWizard();
+    return <div data-testid="wizard-open-state">{open ? "open" : "closed"}</div>;
+  }
+
+  it("auto-opens the wizard when /api/wizard/status reports incomplete", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ completed: false }),
+    });
+
+    render(
+      <ActualWizardProvider>
+        <WizardOpenStateProbe />
+      </ActualWizardProvider>
+    );
+
+    expect(screen.getByTestId("wizard-open-state")).toHaveTextContent("closed");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("wizard-open-state")).toHaveTextContent("open");
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith("/api/wizard/status");
+  });
+
+  it("falls back to opening the wizard when /api/wizard/status fails", async () => {
+    mockFetch.mockRejectedValue(new Error("status unavailable"));
+
+    render(
+      <ActualWizardProvider>
+        <WizardOpenStateProbe />
+      </ActualWizardProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("wizard-open-state")).toHaveTextContent("open");
+    });
+  });
+});
+
 describe("SetupWizard", () => {
   beforeEach(() => {
     mockFetch.mockResolvedValue({
