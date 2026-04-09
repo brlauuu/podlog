@@ -110,6 +110,17 @@ export default function AboutPage() {
           fetches to download episode metadata and audio.
         </p>
       </div>
+
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Disclaimer</h2>
+        <p className="text-sm text-muted-foreground">
+          This software is an open-source tool for audio transcription. It
+          does not include any copyrighted content. Users are responsible for
+          ensuring their use of the software complies with local copyright laws
+          and the Terms of Service of any content creators whose work they
+          process.
+        </p>
+      </div>
     </div>
   );
 }
