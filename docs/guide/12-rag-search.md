@@ -17,7 +17,7 @@ The system retrieves relevant transcript chunks via semantic search (pgvector), 
 1. Navigate to the **Ask** page from the navbar
 2. Type your question in the input box
 3. The answer streams in word-by-word with source citations
-4. Click any citation timestamp to jump to that point in the audio
+4. Click any citation timestamp to open the matching episode at that moment, using the same episode deep-link format as search results (`/episodes/{id}#t-<seconds>`)
 
 ## Architecture
 

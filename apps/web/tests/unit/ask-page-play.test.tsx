@@ -14,9 +14,15 @@ jest.mock("@/components/AudioPlayerContext", () => ({
 }));
 
 jest.mock("next/link", () => {
-  return ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
-    <a href={href} {...props}>{children}</a>
-  );
+  function MockLink({ href, children, ...props }: { href: string; children: React.ReactNode }) {
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    );
+  }
+  MockLink.displayName = "MockLink";
+  return MockLink;
 });
 
 import AskPage from "@/app/ask/page";
@@ -71,7 +77,7 @@ describe("Ask page source card actions", () => {
     render(<AskPage />);
 
     const episodeLink = screen.getByRole("link", { name: "Episode 42" });
-    expect(episodeLink).toHaveAttribute("href", "/episodes/ep-42?t=125");
+    expect(episodeLink).toHaveAttribute("href", "/episodes/ep-42#t-125");
 
     fireEvent.click(screen.getByTitle("Play from this point"));
 
