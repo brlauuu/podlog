@@ -174,3 +174,7 @@ Built by [@brlauuu](https://github.com/brlauuu) and [Claude](https://claude.ai) 
 [O'Saasy License](https://osaasy.dev). See [LICENSE](LICENSE).
 
 **pyannote models** are subject to their own license — you must accept this independently at [huggingface.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1). Users are responsible for copyright compliance with podcast audio content.
+
+## Disclaimer
+
+This software is an open-source tool for audio transcription. It does not include any copyrighted content. Users are responsible for ensuring their use of the software complies with local copyright laws and the Terms of Service of any content creators whose work they process.
