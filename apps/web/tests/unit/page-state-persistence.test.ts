@@ -75,4 +75,23 @@ describe("page state persistence", () => {
     expect(loadSearchSnapshot(storage)).toBeNull();
     expect(loadAskSnapshot(storage)).toBeNull();
   });
+
+  test("rejects ask snapshots with malformed helpCoverageSnapshot", () => {
+    const storage = makeStorage();
+    storage.setItem(
+      "podlog-ask-page-state",
+      JSON.stringify({
+        question: "Q",
+        answer: "A",
+        sources: [],
+        status: "done",
+        errorMsg: "",
+        model: "qwen2.5:3b",
+        selectedFeedIds: [],
+        helpCoverageSnapshot: { processed: "bad", total: 100 },
+      })
+    );
+
+    expect(loadAskSnapshot(storage)).toBeNull();
+  });
 });

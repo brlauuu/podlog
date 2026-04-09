@@ -90,6 +90,16 @@ export function loadAskSnapshot(storage?: Storage): AskPageSnapshot | null {
   if (!target) return null;
   const parsed = parseJson<AskPageSnapshot>(target.getItem(ASK_STORAGE_KEY));
   if (!parsed) return null;
+  const maybeHelpCoverage = parsed.helpCoverageSnapshot;
+  const hasValidHelpCoverage =
+    maybeHelpCoverage === undefined ||
+    maybeHelpCoverage === null ||
+    (typeof maybeHelpCoverage === "object" &&
+      maybeHelpCoverage !== null &&
+      typeof maybeHelpCoverage.processed === "number" &&
+      Number.isFinite(maybeHelpCoverage.processed) &&
+      typeof maybeHelpCoverage.total === "number" &&
+      Number.isFinite(maybeHelpCoverage.total));
   if (
     typeof parsed.question !== "string" ||
     typeof parsed.answer !== "string" ||
@@ -97,7 +107,8 @@ export function loadAskSnapshot(storage?: Storage): AskPageSnapshot | null {
     !isAskStatus(parsed.status) ||
     typeof parsed.errorMsg !== "string" ||
     typeof parsed.model !== "string" ||
-    !Array.isArray(parsed.selectedFeedIds)
+    !Array.isArray(parsed.selectedFeedIds) ||
+    !hasValidHelpCoverage
   ) {
     return null;
   }
