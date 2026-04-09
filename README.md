@@ -2,9 +2,9 @@
 
 <img src="apps/web/public/brand/podlog-logo-dark-theme.svg" alt="Podlog" width="420" />
 
-**Self-hosted podcast transcription and search**
+**Self-hosted audio transcription and comprehensive search web app**
 
-Add RSS feeds, transcribe episodes with Whisper, label speakers with pyannote, and search across all your transcripts — local-first in Docker, with an optional Fireworks remote-inference profile.
+Add RSS feeds or drag and drop audio files, transcribe with Whisper, label speakers with pyannote, and search across all your transcripts via standard but comprehensive or RAG enabled search. Everything is designed to run locally on your machine. But if your machine really sucks, you can also use the advanced feature of running all model inference using Fireworks AI models. 
 
 ![Python](https://img.shields.io/badge/python-3.11-3776ab?logo=python&logoColor=white)
 ![Node.js](https://img.shields.io/badge/node-20-339933?logo=node.js&logoColor=white)
@@ -21,13 +21,15 @@ Add RSS feeds, transcribe episodes with Whisper, label speakers with pyannote, a
 
 ## Features
 
-- **Hybrid search** — full-text keyword search with phrase matching (`"exact quotes"`, `OR`, `-exclude`) plus semantic vector search powered by pgvector
-- **Speaker diarization** — automatic speaker labeling with per-episode renaming and AI-inferred speaker names
+- **Audio transcription** - transcribe audio files or podcasts from provided RSS feeds (full, single or test)
+- **Speaker diarization** — automatic speaker labeling including speaker name inference (with capability to correct for issues)
 - **Granular timestamps** — sentence-level timestamps within speaker sections, clickable to play audio from any point
 - **Persistent audio player** — click any timestamp to play; player continues across page navigation
-- **Search export** — download search reports as Markdown, plain text, or print-friendly PDF
+- **Comprehensive search** — full-text keyword search with phrase matching (`"exact quotes"`, `OR`, `-exclude`) plus semantic vector search powered by pgvector
+- **Export full transcripts or search results** — download search reports as Markdown, plain text, or print-friendly PDF
+- **RAG enabled search** - ask comprehensive questions about your transcription database and get semantic answers including direct references to episodes
 - **Queue dashboard** — live processing status, filter by stage, error classification with auto-retry
-- **Episode reprocessing** — re-queue any episode from its page after model upgrades or config changes
+- **Notification options** - get notified via Telegram or email when new episodes get processed and are ready for search and analysis
 - **Dark mode** — toggleable, remembers your preference
 - **No cloud dependencies** — all data stays on your machine, no external API calls
 
