@@ -17,7 +17,9 @@ describe("HomePage issue 274", () => {
   test("renders logo image and renamed Ask button", () => {
     render(<HomePage />);
 
-    expect(screen.getByRole("img", { name: "Podlog" })).toBeInTheDocument();
+    const wordmark = screen.getByRole("img", { name: "Podlog" });
+    expect(wordmark).toBeInTheDocument();
+    expect(wordmark.className).toContain("dark:invert");
     expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/ask");
     expect(screen.queryByRole("link", { name: "Ask AI" })).toBeNull();
   });
