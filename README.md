@@ -1,6 +1,6 @@
 <div align="center">
 
-# Podlog
+<img src="apps/web/public/brand/podlog-logo-light-theme.svg" alt="Podlog" width="420" />
 
 **Self-hosted podcast transcription and search**
 

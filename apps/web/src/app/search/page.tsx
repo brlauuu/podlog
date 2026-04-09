@@ -214,12 +214,9 @@ function SearchPageContent() {
       {/* Centered header + search bar */}
       <div className={`flex flex-col items-center ${submittedQuery ? "pt-2" : "pt-16"} transition-all`}>
         <div className="w-full max-w-2xl space-y-3">
-          {/* Title + description */}
+          {/* Title */}
           <div className="text-center space-y-1">
             <h1 className="text-3xl font-bold">Search</h1>
-            <p className="text-sm text-muted-foreground">
-              Full-text search across all transcribed episodes
-            </p>
           </div>
 
           {/* Search input */}

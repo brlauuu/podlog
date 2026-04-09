@@ -265,7 +265,7 @@ export default function AskPage() {
                   onMouseLeave={() => {
                     if (!helpPinned) setHelpOpen(false);
                   }}
-                  className="absolute left-1/2 top-full z-40 mt-2 w-[min(28rem,90vw)] -translate-x-1/2 rounded-md border border-border bg-popover p-3 text-left text-sm text-popover-foreground shadow-lg"
+                  className="absolute left-1/2 top-full z-40 mt-2 w-[min(28rem,90vw)] -translate-x-1/2 rounded-md border border-border bg-background p-3 text-left text-sm text-foreground shadow-lg"
                 >
                   <p>
                     Retrieval-augmented analysis across your transcripts. Finds the 8 most relevant transcript excerpts and generates an answer grounded in their content.
@@ -303,6 +303,15 @@ export default function AskPage() {
               </button>
             </div>
           </form>
+
+          {/* Stats below search bar */}
+          {!answer && sources.length === 0 && coverage && (
+            <p className="text-center text-xs text-muted-foreground">
+              Searching across {feeds.length} podcast
+              {feeds.length !== 1 ? "s" : ""} and {coverage.processed} episode
+              {coverage.processed !== 1 ? "s" : ""}
+            </p>
+          )}
 
           {/* Settings row below input */}
           <div className="flex flex-wrap items-center justify-center gap-3 text-sm">

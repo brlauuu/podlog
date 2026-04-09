@@ -14,12 +14,23 @@ jest.mock("next/link", () => {
 import HomePage from "@/app/page";
 
 describe("HomePage issue 274", () => {
-  test("renders logo image and renamed Ask button", () => {
+  test("renders theme-aware logos and renamed Ask button", () => {
     render(<HomePage />);
 
-    const wordmark = screen.getByRole("img", { name: "Podlog" });
-    expect(wordmark).toBeInTheDocument();
-    expect(wordmark.className).toContain("dark:invert");
+    const logos = screen.getAllByRole("img", { name: "Podlog" });
+    expect(logos).toHaveLength(2);
+
+    const lightLogo = logos.find((img) =>
+      (img as HTMLImageElement).src.includes("podlog-logo-light-theme.svg"),
+    );
+    const darkLogo = logos.find((img) =>
+      (img as HTMLImageElement).src.includes("podlog-logo-dark-theme.svg"),
+    );
+    expect(lightLogo).toBeDefined();
+    expect(darkLogo).toBeDefined();
+    expect(lightLogo!.className).toContain("dark:hidden");
+    expect(darkLogo!.className).toContain("dark:block");
+
     expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/ask");
     expect(screen.queryByRole("link", { name: "Ask AI" })).toBeNull();
   });

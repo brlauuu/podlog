@@ -8,12 +8,20 @@ export default function HomePage() {
       {/* Title + tagline */}
       <div className="text-center space-y-3">
         <Image
-          src="/brand/podlog-wordmark.png"
+          src="/brand/podlog-logo-light-theme.svg"
           alt="Podlog"
           width={970}
           height={320}
           priority
-          className="h-auto w-[280px] sm:w-[420px] dark:invert"
+          className="h-auto w-[280px] sm:w-[420px] block dark:hidden"
+        />
+        <Image
+          src="/brand/podlog-logo-dark-theme.svg"
+          alt="Podlog"
+          width={970}
+          height={320}
+          priority
+          className="h-auto w-[280px] sm:w-[420px] hidden dark:block"
         />
         <p className="text-lg text-muted-foreground max-w-md mx-auto">
           Your self-hosted transcription database.
