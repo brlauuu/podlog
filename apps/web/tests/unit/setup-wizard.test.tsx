@@ -446,7 +446,7 @@ describe("SetupWizard", () => {
     expect(mockMarkCompleted).toHaveBeenCalledWith(false);
   });
 
-  it("dismisses wizard from screen 2 when Skip is clicked", async () => {
+  it("advances to screen 3 when Skip is clicked on screen 2", async () => {
     const mockMarkCompleted = jest.fn();
     const mockSetOpen = jest.fn();
     mockUseWizard.mockReturnValue({ open: true, setOpen: mockSetOpen, markCompleted: mockMarkCompleted });
@@ -462,8 +462,9 @@ describe("SetupWizard", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /skip/i }));
 
-    expect(mockMarkCompleted).toHaveBeenCalledWith(true);
-    expect(mockSetOpen).toHaveBeenCalledWith(false);
-    expect(screen.queryByText(/Ready When You Are/i)).not.toBeInTheDocument();
+    expect(mockMarkCompleted).not.toHaveBeenCalled();
+    expect(mockSetOpen).not.toHaveBeenCalled();
+    expect(screen.getByText(/Ready When You Are/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /get started/i })).toBeInTheDocument();
   });
 });

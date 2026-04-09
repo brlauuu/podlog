@@ -34,7 +34,7 @@ A lightweight setup wizard shown as a full-screen overlay dialog on first visit.
 - Health polls every 3 seconds via React Query (`/api/pipeline/health`)
 - Green checkmarks animate in as services come online
 - "Next" button always enabled — user can proceed while worker warms up
-- "Skip wizard" button on every screen — marks `wizard_completed` and closes
+- Screen 2 "Skip — I'll explore first" advances to Screen 3 without marking `wizard_completed`; the completion screen is the only place that records completion
 
 **Data source:** Existing `GET /api/pipeline/health` returns `{ status, services: [{ name, status }] }`. Worker status is `WARMING_UP` until `system_state.prewarm_done = "1"`.
 
