@@ -49,6 +49,7 @@ spacy = "^3.7"
 
 # Sentence embeddings for semantic search (Level 3)
 sentence-transformers = ">=2.2.0"
+numpy = ">=1.26,<3.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
