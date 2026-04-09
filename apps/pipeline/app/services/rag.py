@@ -41,6 +41,7 @@ class ChunkResult:
     end_time: float
     text: str
     similarity: float
+    audio_local_path: str | None = None
 
 
 def retrieve_chunks(
@@ -81,6 +82,7 @@ def retrieve_chunks(
             c.id AS chunk_id,
             c.episode_id,
             e.title AS episode_title,
+            e.audio_local_path,
             COALESCE(sn.display_name, c.speaker_label) AS speaker_label,
             c.start_time,
             c.end_time,
@@ -103,6 +105,7 @@ def retrieve_chunks(
             chunk_id=row.chunk_id,
             episode_id=row.episode_id,
             episode_title=row.episode_title or "Untitled Episode",
+            audio_local_path=row.audio_local_path,
             speaker_label=row.speaker_label,
             start_time=row.start_time,
             end_time=row.end_time,
@@ -149,6 +152,7 @@ def chunks_to_sources(chunks: list[ChunkResult]) -> list[dict]:
             "chunk_id": c.chunk_id,
             "episode_id": str(c.episode_id),
             "episode_title": c.episode_title,
+            "audio_local_path": c.audio_local_path,
             "speaker_label": c.speaker_label,
             "start_time": c.start_time,
             "end_time": c.end_time,

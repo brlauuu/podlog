@@ -4,6 +4,7 @@ export interface Source {
   chunk_id: number;
   episode_id: string;
   episode_title: string;
+  audio_local_path?: string | null;
   speaker_label: string | null;
   start_time: number;
   end_time: number;
