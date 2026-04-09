@@ -119,6 +119,12 @@ describe("WizardAddFeed", () => {
     expect(screen.getByRole("button", { name: /skip/i })).toBeInTheDocument();
   });
 
+  it("mentions manual upload path from Sources page", () => {
+    render(<WizardAddFeed onNext={noop} onBack={noop} onSkip={noop} />);
+    expect(screen.getByText(/upload audio anytime/i)).toBeInTheDocument();
+    expect(screen.getByText("/podcasts")).toBeInTheDocument();
+  });
+
   it("submits feed in test mode", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
@@ -321,6 +327,16 @@ describe("WizardComplete", () => {
   it("links Search CTA to /search when feed was skipped", () => {
     render(<WizardComplete feedAdded={false} onFinish={() => {}} onDontShowChange={() => {}} />);
     expect(screen.getByText("Search").closest("a")).toHaveAttribute("href", "/search");
+  });
+
+  it("shows Upload Audio link to /podcasts when feed was added", () => {
+    render(<WizardComplete feedAdded={true} onFinish={() => {}} onDontShowChange={() => {}} />);
+    expect(screen.getByText("Upload Audio").closest("a")).toHaveAttribute("href", "/podcasts");
+  });
+
+  it("shows Upload Audio link to /podcasts when feed was skipped", () => {
+    render(<WizardComplete feedAdded={false} onFinish={() => {}} onDontShowChange={() => {}} />);
+    expect(screen.getByText("Upload Audio").closest("a")).toHaveAttribute("href", "/podcasts");
   });
 
   it("shows 'Don't show this wizard' checkbox", () => {

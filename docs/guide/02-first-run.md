@@ -36,6 +36,14 @@ In the browser, the queue page at `/queue` will show stage counts and be ready t
 
 **Tip:** Pick a podcast with short episodes (15-30 minutes) for your first test. A 30-minute episode takes roughly 45 minutes to fully process on an 8-core CPU.
 
+## Or Upload Audio Manually
+
+If you don't have an RSS feed handy, you can ingest local files directly:
+
+1. Go to **http://localhost:3000/podcasts**
+2. In **Manual uploads**, choose an audio file (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.opus`, `.aac`, `.wma`, `.webm`)
+3. Submit the upload and monitor progress from `/queue`
+
 ## Watching Progress
 
 After adding a feed, go to `/queue` to watch the episode move through the pipeline:
