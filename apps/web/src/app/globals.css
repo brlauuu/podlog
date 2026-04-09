@@ -48,19 +48,19 @@
   @keyframes eqBar {
     0%,
     100% {
-      height: 4px;
+      transform: scaleY(0.17);
       opacity: 0.3;
     }
     25% {
-      height: 18px;
+      transform: scaleY(0.75);
       opacity: 0.8;
     }
     50% {
-      height: 10px;
+      transform: scaleY(0.42);
       opacity: 1;
     }
     75% {
-      height: 24px;
+      transform: scaleY(1);
       opacity: 0.6;
     }
   }

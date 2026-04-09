@@ -70,7 +70,7 @@ describe("Ask page helpbox behavior", () => {
     ).toBeNull();
   });
 
-  test("uses foreground-colored spinner bars while processing", async () => {
+  test("uses fixed-height foreground spinner bars while processing", async () => {
     (global.fetch as jest.Mock).mockImplementation((url: string) => {
       if (url === "/api/feeds") {
         return Promise.resolve({ json: async () => [] } as Response);
@@ -94,6 +94,10 @@ describe("Ask page helpbox behavior", () => {
     fireEvent.submit(input.closest("form") as HTMLFormElement);
 
     expect(await screen.findByText("Searching transcripts...")).toBeInTheDocument();
-    expect(container.querySelector(".bg-foreground.animate-\\[eqBar_1\\.4s_ease-in-out_infinite\\]")).toBeInTheDocument();
+    expect(
+      container.querySelector(
+        ".bg-foreground.h-6.origin-center.animate-\\[eqBar_1\\.4s_ease-in-out_infinite\\]"
+      )
+    ).toBeInTheDocument();
   });
 });
