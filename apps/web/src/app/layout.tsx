@@ -15,6 +15,11 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Podlog",
   description: "Self-hosted podcast transcription and search",
+  icons: {
+    icon: "/brand/podlog-favicon.png",
+    shortcut: "/brand/podlog-favicon.png",
+    apple: "/brand/podlog-favicon.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
