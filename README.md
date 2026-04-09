@@ -1,8 +1,9 @@
+**Self-hosted audio transcription and comprehensive search web app**
+
 <div align="center">
 
 <img src="apps/web/public/brand/podlog-logo-dark-theme.svg" alt="Podlog" width="420" />
 
-**Self-hosted audio transcription and comprehensive search web app**
 
 Add RSS feeds or drag and drop audio files, transcribe with Whisper, label speakers with pyannote, and search across all your transcripts via standard but comprehensive or RAG enabled search. Everything is designed to run locally on your machine. But if your machine really sucks, you can also use the advanced feature of running all model inference using Fireworks AI models. 
 
