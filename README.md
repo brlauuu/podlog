@@ -1,6 +1,6 @@
-**Self-hosted audio transcription and comprehensive search web app**
-
 <div align="center">
+
+**Self-hosted audio transcription and comprehensive search web app**
 
 <img src="apps/web/public/brand/podlog-logo-dark-theme.svg" alt="Podlog" width="420" />
 
