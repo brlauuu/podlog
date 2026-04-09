@@ -9,7 +9,7 @@ On first boot, the worker downloads Whisper and pyannote model weights (~3 GB to
 During this phase:
 - The worker logs will show download progress
 - Jobs are queued but won't start processing until models are ready
-- The queue dashboard at `/queue` may show a "Warming up" banner
+- The queue dashboard at `/queue` will stay focused on queue state; watch the worker logs for model download progress
 
 **Expected wait:** 5-15 minutes depending on your internet connection.
 

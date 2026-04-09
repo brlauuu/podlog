@@ -66,7 +66,7 @@ make build    # Build Docker images (first time takes a few minutes)
 make up       # Start all services in the background
 ```
 
-Open **http://localhost:3000** — you should see the Podlog search page.
+Open **http://localhost:3000** — you should see the Podlog home page with quick links to Search and Ask. The search page itself is at `/search`.
 
 ### Optional: Remote-Inference Profile
 
@@ -91,7 +91,7 @@ Service details:
 
 | Service | Port | Role |
 |---|---|---|
-| **web** | 3000 | Next.js frontend — search, episodes, queue |
+| **web** | 3000 | Next.js frontend — home, search, episodes, queue, Ask |
 | **pipeline** | 8000 | FastAPI control plane — feed management, health |
 | **worker** | — | Processes episodes: download, transcribe, diarize, archive |
 | **db** | 5432 | PostgreSQL 15 with pgvector for FTS + semantic search |
