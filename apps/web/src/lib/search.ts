@@ -38,7 +38,7 @@ export interface FeedGroup {
   episodes: EpisodeGroup[];
 }
 
-export interface EpisodeGroup {
+interface EpisodeGroup {
   episodeId: string;
   episodeTitle: string;
   audioUrl: string;
