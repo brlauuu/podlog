@@ -1,6 +1,6 @@
 services:
   db_test:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     environment:
       POSTGRES_DB: podlog_test
       POSTGRES_USER: postgres
@@ -28,6 +28,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
       TEST_DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
+      PIPELINE_API_URL: http://pipeline_test:8000
       MOCK_RSS_URL: http://mock_rss/feed.xml
       HF_TOKEN: ${HF_TOKEN:-}
     depends_on:
@@ -35,6 +36,8 @@ services:
         condition: service_healthy
       mock_rss:
         condition: service_started
+      pipeline_test:
+        condition: service_healthy
 
   pipeline_test:
     build:

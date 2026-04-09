@@ -12,7 +12,7 @@ import time
 import httpx
 import pytest
 
-PIPELINE_URL = os.environ.get("PIPELINE_API_URL", "http://localhost:8000")
+PIPELINE_URL = os.environ.get("PIPELINE_API_URL", "http://pipeline_test:8000")
 
 
 @pytest.mark.e2e

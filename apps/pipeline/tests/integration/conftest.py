@@ -24,6 +24,8 @@ def _require_test_db():
 def engine():
     _require_test_db()
     eng = create_engine(TEST_DATABASE_URL, pool_pre_ping=True)
+    with eng.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(eng)
     yield eng
     Base.metadata.drop_all(eng)
