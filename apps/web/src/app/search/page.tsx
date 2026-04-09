@@ -52,7 +52,9 @@ function SearchPageContent() {
   const [feedFilter, setFeedFilter] = useState<string>(
     initialSnapshot?.feedFilter || ""
   );
-  const [page, setPage] = useState(initialSnapshot?.page || 1);
+  const [page, setPage] = useState(
+    initialQuery ? 1 : initialSnapshot?.page || 1
+  );
   const [viewMode, setViewMode] = useState<ViewMode>(
     initialSnapshot?.viewMode || "grouped"
   );
