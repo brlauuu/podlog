@@ -36,12 +36,12 @@ class ChunkResult:
     chunk_id: int
     episode_id: str
     episode_title: str
-    audio_local_path: str | None
     speaker_label: str | None
     start_time: float
     end_time: float
     text: str
     similarity: float
+    audio_local_path: str | None = None
 
 
 def retrieve_chunks(
