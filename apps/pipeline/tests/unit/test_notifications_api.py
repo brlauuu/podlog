@@ -118,3 +118,84 @@ class TestPostTest:
     def test_invalid_channel(self, mock_db):
         resp = client.post("/api/notifications/test", json={"channel": "sms"})
         assert resp.status_code == 422
+
+    @patch("app.api.notifications.get_notification_settings")
+    @patch("app.api.notifications.send_test_telegram", side_effect=RuntimeError("telegram boom"))
+    def test_telegram_test_failure_returns_502(self, mock_send, mock_get, mock_db):
+        mock_get.return_value = {
+            "telegram_bot_token": "tok",
+            "telegram_chat_id": "123",
+            "telegram_configured": True,
+            "email_configured": False,
+        }
+
+        resp = client.post("/api/notifications/test", json={"channel": "telegram"})
+        assert resp.status_code == 502
+        assert "telegram boom" in resp.json()["error"]
+
+    @patch("app.api.notifications.get_notification_settings")
+    def test_email_test_not_configured(self, mock_get, mock_db):
+        mock_get.return_value = {
+            "telegram_configured": False,
+            "email_configured": False,
+        }
+
+        resp = client.post("/api/notifications/test", json={"channel": "email"})
+        assert resp.status_code == 400
+        assert "not configured" in resp.json()["error"].lower()
+
+    @patch("app.api.notifications.get_notification_settings")
+    @patch("app.api.notifications.send_test_email", side_effect=RuntimeError("smtp down"))
+    def test_email_test_failure_returns_502(self, mock_send, mock_get, mock_db):
+        mock_get.return_value = {
+            "notification_email_to": "user@example.com",
+            "notification_email_from": "podlog@localhost",
+            "smtp_host": "localhost",
+            "smtp_port": 25,
+            "smtp_user": None,
+            "smtp_password": None,
+            "smtp_use_tls": False,
+            "telegram_configured": False,
+            "email_configured": True,
+        }
+
+        resp = client.post("/api/notifications/test", json={"channel": "email"})
+        assert resp.status_code == 502
+        assert "smtp down" in resp.json()["error"]
+
+
+@patch("app.api.notifications.httpx.post")
+def test_send_test_telegram_calls_api(mock_post):
+    from app.api.notifications import send_test_telegram
+
+    mock_resp = MagicMock()
+    mock_post.return_value = mock_resp
+
+    send_test_telegram("token", "chat-id")
+
+    mock_post.assert_called_once()
+    mock_resp.raise_for_status.assert_called_once()
+
+
+@patch("app.api.notifications.smtplib.SMTP")
+def test_send_test_email_tls_and_login(mock_smtp):
+    from app.api.notifications import send_test_email
+
+    smtp_inst = MagicMock()
+    mock_smtp.return_value.__enter__.return_value = smtp_inst
+
+    send_test_email(
+        {
+            "notification_email_to": "user@example.com",
+            "notification_email_from": "podlog@localhost",
+            "smtp_host": "localhost",
+            "smtp_port": 2525,
+            "smtp_user": "user",
+            "smtp_password": "pass",
+            "smtp_use_tls": True,
+        }
+    )
+
+    smtp_inst.starttls.assert_called_once()
+    smtp_inst.login.assert_called_once_with("user", "pass")
+    smtp_inst.send_message.assert_called_once()

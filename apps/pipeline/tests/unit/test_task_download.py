@@ -138,6 +138,129 @@ class TestDownloadEpisode:
         with pytest.raises(RuntimeError, match="not found"):
             download_episode("ep1")
 
+    @patch("app.tasks.download.job_queue")
+    @patch("app.tasks.download._download_file")
+    @patch("app.tasks.download.shutil")
+    @patch("app.tasks.download._update_episode")
+    @patch("app.tasks.download.SessionLocal")
+    def test_disk_usage_check_oserror_is_non_fatal(
+        self, mock_session_cls, mock_update, mock_shutil, mock_dl, mock_jq
+    ):
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        mock_session_cls.return_value = db
+        mock_shutil.disk_usage.side_effect = OSError("disk usage unavailable")
+
+        with patch("app.tasks.download.Path"):
+            from app.tasks.download import download_episode
+            result = download_episode("ep1")
+
+        assert result == "ep1"
+        mock_dl.assert_called_once()
+        mock_jq.enqueue.assert_called_once()
+
+    @patch("app.tasks.download._handle_transient_failure")
+    @patch("app.tasks.download._download_file")
+    @patch("app.tasks.download.shutil")
+    @patch("app.tasks.download._update_episode")
+    @patch("app.tasks.download.SessionLocal")
+    def test_http_status_error_classifies_and_retries(
+        self, mock_session_cls, mock_update, mock_shutil, mock_dl, mock_handle
+    ):
+        import httpx
+
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        mock_session_cls.return_value = db
+        mock_shutil.disk_usage.return_value = DiskUsage(100_000_000_000, 0, 100_000_000_000)
+        req = httpx.Request("GET", "https://example.com/ep.mp3")
+        resp = httpx.Response(404, request=req)
+        mock_dl.side_effect = httpx.HTTPStatusError("404", request=req, response=resp)
+
+        with patch("app.tasks.download.Path"):
+            from app.tasks.download import download_episode
+            result = download_episode("ep1")
+
+        assert result == "ep1"
+        mock_handle.assert_called_once()
+        assert mock_handle.call_args[0][4] == "HTTP_ACCESS"
+
+    @patch("app.tasks.download.mark_failed")
+    @patch("app.tasks.download._download_file")
+    @patch("app.tasks.download.shutil")
+    @patch("app.tasks.download._update_episode")
+    @patch("app.tasks.download.SessionLocal")
+    def test_non_disk_oserror_marks_system_error(
+        self, mock_session_cls, mock_update, mock_shutil, mock_dl, mock_fail
+    ):
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        mock_session_cls.return_value = db
+        mock_shutil.disk_usage.return_value = DiskUsage(100_000_000_000, 0, 100_000_000_000)
+        mock_dl.side_effect = OSError("permission denied")
+
+        with patch("app.tasks.download.Path"):
+            from app.tasks.download import download_episode
+            result = download_episode("ep1")
+
+        assert result == "ep1"
+        assert "SYSTEM_ERROR" in str(mock_fail.call_args)
+
+    @patch("app.tasks.download.mark_failed")
+    @patch("app.tasks.download._download_file")
+    @patch("app.tasks.download.shutil")
+    @patch("app.tasks.download._update_episode")
+    @patch("app.tasks.download.SessionLocal")
+    def test_unexpected_exception_marks_system_error(
+        self, mock_session_cls, mock_update, mock_shutil, mock_dl, mock_fail
+    ):
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        mock_session_cls.return_value = db
+        mock_shutil.disk_usage.return_value = DiskUsage(100_000_000_000, 0, 100_000_000_000)
+        mock_dl.side_effect = ValueError("bad value")
+
+        with patch("app.tasks.download.Path"):
+            from app.tasks.download import download_episode
+            result = download_episode("ep1")
+
+        assert result == "ep1"
+        assert "SYSTEM_ERROR" in str(mock_fail.call_args)
+
+
+def test_download_file_updates_progress_and_commits(tmp_path):
+    from app.tasks.download import _download_file
+
+    class _Resp:
+        headers = {"content-length": "100"}
+
+        def raise_for_status(self):
+            return None
+
+        def iter_bytes(self, chunk_size=65536):
+            for _ in range(10):
+                yield b"x" * 10
+
+    class _StreamCtx:
+        def __enter__(self):
+            return _Resp()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    db = MagicMock()
+    dest = tmp_path / "ep1.mp3"
+    with patch("app.tasks.download.httpx.stream", return_value=_StreamCtx()):
+        _download_file("https://example.com/ep.mp3", dest, "ep1", db)
+
+    assert dest.exists()
+    assert db.commit.call_count >= 2
+    assert db.query.return_value.filter.return_value.update.call_count >= 1
+
 
 class TestHandleTransientFailure:
     @patch("app.tasks.download.job_queue")
