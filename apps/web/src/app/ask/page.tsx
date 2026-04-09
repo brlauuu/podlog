@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { renderAnswerWithCitations, type Source } from "@/lib/citations";
 import { loadAskSnapshot, saveAskSnapshot } from "@/lib/page-state";
+import { useAudioPlayer } from "@/components/AudioPlayerContext";
+import { basename } from "@/lib/utils";
 
 interface Feed {
   id: string;
@@ -53,6 +55,7 @@ export default function AskPage() {
   const answerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const feedDropdownRef = useRef<HTMLDivElement>(null);
+  const { playEpisode } = useAudioPlayer();
 
   useEffect(() => {
     localStorage.setItem("podlog-ask-model", model);
@@ -215,9 +218,15 @@ export default function AskPage() {
   );
 
   function handlePlaySource(source: Source) {
-    window.open(
-      `/episodes/${source.episode_id}?t=${Math.floor(source.start_time)}`,
-      "_blank"
+    if (!source.audio_local_path) {
+      window.open(`/episodes/${source.episode_id}?t=${Math.floor(source.start_time)}`, "_blank");
+      return;
+    }
+    playEpisode(
+      source.episode_id,
+      basename(source.audio_local_path),
+      source.start_time,
+      source.episode_title
     );
   }
 
