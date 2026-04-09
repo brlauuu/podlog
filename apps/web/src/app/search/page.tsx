@@ -268,7 +268,7 @@ function SearchPageContent() {
             {[0, 1, 2, 3, 4, 5, 6].map((i) => (
               <span
                 key={i}
-                className="w-1 rounded-full bg-primary animate-[eqBar_1.4s_ease-in-out_infinite]"
+                className="w-1 h-6 origin-center rounded-full bg-primary animate-[eqBar_1.4s_ease-in-out_infinite]"
                 style={{ animationDelay: `${i * 0.1}s` }}
               />
             ))}
