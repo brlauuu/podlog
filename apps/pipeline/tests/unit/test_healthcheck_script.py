@@ -1,14 +1,13 @@
 """Unit tests for scripts/healthcheck.py — state transitions and alerting logic."""
-import json
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Import the module under test
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Import scripts/healthcheck.py from repository root
+REPO_ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import healthcheck
 
 
