@@ -117,6 +117,14 @@ make test-e2e
 
 Run Playwright browser tests against the full Docker stack.
 
+For local Playwright runs (outside Docker), install browsers once and run:
+
+```bash
+cd apps/web
+npm run test:e2e:install
+npm run test:e2e
+```
+
 ### GitHub Actions CI
 
 The repository uses three CI lanes:
