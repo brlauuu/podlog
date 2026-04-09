@@ -54,6 +54,35 @@ def _resolve_handler(dotted_path: str):
     return getattr(mod, func_name)
 
 
+def _validate_worker_wiring() -> None:
+    """Validate task/periodic handler references at startup."""
+    errors: list[str] = []
+
+    for task, handler_path in TASK_HANDLERS.items():
+        try:
+            handler = _resolve_handler(handler_path)
+            if not callable(handler):
+                raise TypeError("resolved object is not callable")
+        except Exception as exc:
+            errors.append(
+                f'TASK_HANDLERS["{task}"] -> "{handler_path}": {type(exc).__name__}: {exc}'
+            )
+
+    for name, handler_path, _ in PERIODIC_TASKS:
+        try:
+            handler = _resolve_handler(handler_path)
+            if not callable(handler):
+                raise TypeError("resolved object is not callable")
+        except Exception as exc:
+            errors.append(
+                f'PERIODIC_TASKS["{name}"] -> "{handler_path}": {type(exc).__name__}: {exc}'
+            )
+
+    if errors:
+        joined = "; ".join(errors)
+        raise RuntimeError(f"Invalid worker registry wiring: {joined}")
+
+
 def _run_periodic_tasks(last_run: dict[str, datetime], now: datetime) -> None:
     """Run any periodic tasks that are due."""
     for name, func_path, interval_secs in PERIODIC_TASKS:
@@ -87,6 +116,7 @@ def main() -> None:
     from app.services.events import bus
     from app.services.digest import register_notification_handlers
     register_notification_handlers(bus)
+    _validate_worker_wiring()
 
     last_periodic_run: dict[str, datetime] = {}
 

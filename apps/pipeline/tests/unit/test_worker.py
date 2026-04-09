@@ -49,6 +49,44 @@ class TestRunPeriodicTasks:
         assert mock_handler.call_count >= 1
         assert len(last_run) > 0
 
+
+class TestValidateWorkerWiring:
+    @patch("app.worker._resolve_handler")
+    def test_valid_wiring_passes(self, mock_resolve):
+        mock_resolve.return_value = MagicMock()
+
+        from app.worker import _validate_worker_wiring
+
+        _validate_worker_wiring()
+
+    @patch("app.worker._resolve_handler")
+    def test_invalid_task_handler_raises(self, mock_resolve):
+        def fake_resolve(path: str):
+            if path == "app.tasks.chunk:chunk_episode":
+                raise ModuleNotFoundError("broken")
+            return MagicMock()
+
+        mock_resolve.side_effect = fake_resolve
+
+        from app.worker import _validate_worker_wiring
+
+        with pytest.raises(RuntimeError, match="Invalid worker registry wiring"):
+            _validate_worker_wiring()
+
+    @patch("app.worker._resolve_handler")
+    def test_non_callable_handler_raises(self, mock_resolve):
+        def fake_resolve(path: str):
+            if path == "app.tasks.chunk:chunk_episode":
+                return object()
+            return MagicMock()
+
+        mock_resolve.side_effect = fake_resolve
+
+        from app.worker import _validate_worker_wiring
+
+        with pytest.raises(RuntimeError, match="not callable"):
+            _validate_worker_wiring()
+
     @patch("app.worker._resolve_handler")
     @patch("app.worker.settings")
     def test_skips_task_when_not_due(self, mock_settings, mock_resolve):
@@ -83,6 +121,34 @@ class TestRunPeriodicTasks:
 
 
 class TestMainLoop:
+    @patch("app.worker._validate_worker_wiring")
+    @patch("app.worker.time")
+    @patch("app.worker._run_periodic_tasks")
+    @patch("app.worker.job_queue")
+    @patch("app.worker.SessionLocal")
+    @patch("app.worker.signal")
+    @patch("app.services.events.bus")
+    @patch("app.services.digest.register_notification_handlers")
+    def test_startup_validation_failure_stops_main(
+        self,
+        mock_register,
+        mock_bus,
+        mock_signal,
+        mock_session_cls,
+        mock_jq,
+        mock_periodic,
+        mock_time,
+        mock_validate,
+    ):
+        import app.worker as w
+
+        mock_validate.side_effect = RuntimeError("bad wiring")
+
+        with pytest.raises(RuntimeError, match="bad wiring"):
+            w.main()
+
+        mock_jq.poll.assert_not_called()
+
     @patch("app.worker.time")
     @patch("app.worker._run_periodic_tasks")
     @patch("app.worker.job_queue")
