@@ -23,7 +23,7 @@ export default function WizardComplete({ feedAdded, onFinish, onDontShowChange }
 
   const links: LinkItem[] = feedAdded
     ? [
-        { href: "/", title: "Search", description: "Search across all your transcripts once processing completes" },
+        { href: "/search", title: "Search", description: "Search across all your transcripts once processing completes" },
         { href: "/ask", title: "Ask AI", description: "Ask natural language questions and get answers from your transcripts" },
         { href: "/queue", title: "Queue", description: "Watch your episode move through the pipeline stages" },
         { href: "/feeds", title: "Add More Feeds", description: "Subscribe to more podcasts from the Feeds page" },
@@ -31,7 +31,7 @@ export default function WizardComplete({ feedAdded, onFinish, onDontShowChange }
       ]
     : [
         { href: "/feeds", title: "Add Your First Feed", description: "Head to the Feeds page to subscribe to a podcast", highlight: true },
-        { href: "/", title: "Search", description: "Search across transcripts once you have processed episodes" },
+        { href: "/search", title: "Search", description: "Search across transcripts once you have processed episodes" },
         { href: "/ask", title: "Ask AI", description: "Ask natural language questions and get answers from your transcripts" },
         { href: "/queue", title: "Queue", description: "Monitor processing progress" },
         { href: "https://github.com/brlauuu/podlog/tree/main/docs/guide", title: "User Guide", description: "Full documentation covering all features" },

@@ -313,6 +313,16 @@ describe("WizardComplete", () => {
     expect(cta).toHaveClass("border-blue-500");
   });
 
+  it("links Search CTA to /search when feed was added", () => {
+    render(<WizardComplete feedAdded={true} onFinish={() => {}} onDontShowChange={() => {}} />);
+    expect(screen.getByText("Search").closest("a")).toHaveAttribute("href", "/search");
+  });
+
+  it("links Search CTA to /search when feed was skipped", () => {
+    render(<WizardComplete feedAdded={false} onFinish={() => {}} onDontShowChange={() => {}} />);
+    expect(screen.getByText("Search").closest("a")).toHaveAttribute("href", "/search");
+  });
+
   it("shows 'Don't show this wizard' checkbox", () => {
     render(<WizardComplete feedAdded={true} onFinish={() => {}} onDontShowChange={() => {}} />);
     expect(screen.getByLabelText(/Don't show this wizard/i)).toBeInTheDocument();
