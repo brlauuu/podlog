@@ -43,13 +43,10 @@ def _make_speaker_name(speaker_label="SPEAKER_00", display_name="Host", inferred
 
 
 class TestArchiveEpisode:
-    @patch("app.tasks.archive.bus")
-    @patch("app.tasks.archive.compute_avg_duration", return_value=1800.0)
-    @patch("app.tasks.archive.estimate_queue_status", return_value=(0, 0, None))
-    @patch("app.tasks.archive.compute_avg_processing_stats", return_value=(30, 20, 50))
+    @patch("app.tasks.archive.emit_episode_done_event")
     @patch("app.tasks.archive.update_episode")
     @patch("app.tasks.archive.SessionLocal")
-    def test_happy_path(self, mock_session_cls, mock_update, mock_avg, mock_queue, mock_avg_dur, mock_bus):
+    def test_happy_path(self, mock_session_cls, mock_update, mock_emit_done):
         ep = _make_episode()
         seg = _make_segment()
         sn = _make_speaker_name()
@@ -80,7 +77,7 @@ class TestArchiveEpisode:
 
         assert result == "ep1"
         mock_update.assert_any_call(db, "ep1", status="archiving")
-        mock_bus.emit.assert_called_once()
+        mock_emit_done.assert_called_once_with(db, ep)
 
     @patch("app.tasks.archive.mark_failed")
     @patch("app.tasks.archive.update_episode")

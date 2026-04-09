@@ -9,16 +9,17 @@ from app.database import SessionLocal
 from app.services.notification_settings import get_notification_settings
 from app.models import NotificationLog, SystemState
 from app.services.events import Event, EventBus
+from app.services.notification_events import EpisodeDoneEvent, EpisodeFailedEvent
+from app.services.notification_runtime import (
+    compute_avg_duration,
+    compute_avg_processing_stats,
+    estimate_queue_status,
+)
 from app.services.notifications import (
-    EpisodeDoneEvent,
-    EpisodeFailedEvent,
     _fmt_duration,
     _fmt_short_duration,
     _fmt_estimate,
     _fmt_factor,
-    compute_avg_duration,
-    compute_avg_processing_stats,
-    estimate_queue_status,
     send_email,
     send_telegram,
 )

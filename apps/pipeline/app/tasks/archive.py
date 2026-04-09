@@ -13,8 +13,7 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment, SpeakerName
-from app.services.events import bus
-from app.services.notifications import EpisodeDoneEvent, compute_avg_duration, compute_avg_processing_stats, estimate_queue_status
+from app.services.notification_runtime import emit_episode_done_event
 from app.tasks.helpers import mark_failed, update_episode
 
 logger = logging.getLogger(__name__)
@@ -91,35 +90,8 @@ def archive_episode(episode_id: str) -> str:
                 f"(current status: {verified.status if verified else 'NOT_FOUND'})"
             )
 
-        # Emit notification event
-        remaining, estimated, factor = estimate_queue_status(db)
-        avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
-        avg_dur = compute_avg_duration(db)
-        # Notification "Total" should reflect active speech-processing time, not
-        # queue age or pre-transcription waiting. Sum the measured stage durations.
-        measured_durations = [
-            secs
-            for secs in (episode.transcribe_duration_secs, episode.diarize_duration_secs)
-            if secs is not None
-        ]
-        total_secs = sum(measured_durations) if measured_durations else None
-        bus.emit(EpisodeDoneEvent(
-            episode_id=episode_id,
-            episode_title=episode.title or "",
-            podcast_title=episode.feed.title if episode.feed else "",
-            published_at=episode.published_at,
-            duration_secs=episode.duration_secs,
-            transcribe_duration_secs=episode.transcribe_duration_secs,
-            diarize_duration_secs=episode.diarize_duration_secs,
-            total_duration_secs=total_secs,
-            queue_remaining=remaining,
-            queue_estimated_secs=estimated,
-            avg_transcribe_secs=avg_t,
-            avg_diarize_secs=avg_d,
-            avg_total_secs=avg_total,
-            avg_duration_secs=avg_dur,
-            processing_factor=factor,
-        ))
+        # Delegate payload construction and event emission to notification runtime.
+        emit_episode_done_event(db, episode)
 
         # Safe to delete raw audio now that status is confirmed
         if raw_path and raw_path.exists():
