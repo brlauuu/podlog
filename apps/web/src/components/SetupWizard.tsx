@@ -17,9 +17,14 @@ export default function SetupWizard() {
   const [dontShow, setDontShow] = useState(false);
   const router = useRouter();
 
-  function handleSkip() {
+  function handleHealthCheckSkip() {
     markCompleted(true);
     close();
+  }
+
+  function handleFeedSkip() {
+    setFeedAdded(false);
+    setStep(3);
   }
 
   function close() {
@@ -56,14 +61,14 @@ export default function SetupWizard() {
         {step === 1 && (
           <WizardHealthCheck
             onNext={() => setStep(2)}
-            onSkip={handleSkip}
+            onSkip={handleHealthCheckSkip}
           />
         )}
         {step === 2 && (
           <WizardAddFeed
             onNext={() => { setFeedAdded(true); setStep(3); }}
             onBack={() => setStep(1)}
-            onSkip={handleSkip}
+            onSkip={handleFeedSkip}
           />
         )}
         {step === 3 && (
