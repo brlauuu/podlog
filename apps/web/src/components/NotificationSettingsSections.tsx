@@ -220,6 +220,8 @@ function FieldGroup({
 
 const inputClass =
   "w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring";
+const actionButtonClass =
+  "px-5 py-2 rounded-md bg-action text-action-foreground text-sm font-medium hover:bg-action/90 disabled:opacity-50";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 
@@ -364,7 +366,7 @@ export function TelegramTab({
 
       <div className="flex gap-3 mt-6">
         <button
-          className="px-5 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
+          className={actionButtonClass}
           onClick={onSave}
           disabled={saving}
         >
@@ -499,7 +501,7 @@ export function EmailTab({
 
       <div className="flex gap-3 mt-6">
         <button
-          className="px-5 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
+          className={actionButtonClass}
           onClick={onSave}
           disabled={saving}
         >
@@ -564,7 +566,7 @@ export function GeneralTab({
 
       <div className="flex gap-3 mt-6">
         <button
-          className="px-5 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
+          className={actionButtonClass}
           onClick={onSave}
           disabled={saving}
         >
@@ -757,7 +759,7 @@ export function FireworksTab({
 
       <div className="flex gap-3 mt-6">
         <button
-          className="px-5 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
+          className={actionButtonClass}
           onClick={onSave}
           disabled={saving}
         >

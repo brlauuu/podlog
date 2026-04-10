@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { MessageSquare, Send, X, Loader2 } from "lucide-react";
+import { BrainCircuit, Send, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { renderAnswerWithCitations, type Source, type OnCitationClick } from "@/lib/citations";
 
@@ -140,10 +140,10 @@ export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProp
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-action px-4 py-3 text-action-foreground shadow-lg hover:bg-action/90 transition-colors"
         aria-label="Ask about this episode"
       >
-        <MessageSquare size={18} />
+        <BrainCircuit size={18} />
         <span className="text-sm font-medium">Ask</span>
       </button>
     );
@@ -155,7 +155,7 @@ export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProp
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <MessageSquare size={16} className="text-primary shrink-0" />
+          <BrainCircuit size={16} className="text-link shrink-0" />
           <span className="text-sm font-medium truncate">{episodeTitle}</span>
         </div>
         <button
@@ -259,7 +259,7 @@ function MessageBubble({ message, episodeId, isStreaming }: { message: Message; 
                   key={s.chunk_id}
                   type="button"
                   onClick={() => scrollToTime(Math.floor(s.start_time))}
-                  className="block w-full text-left text-xs text-primary hover:underline truncate"
+                  className="block w-full text-left text-xs text-link hover:underline truncate"
                 >
                   {s.timestamp} {s.speaker_label ? `(${s.speaker_label})` : ""} — {s.text.slice(0, 80)}...
                 </button>

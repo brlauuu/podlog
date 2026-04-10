@@ -268,7 +268,7 @@ function SearchPageContent() {
             {[0, 1, 2, 3, 4, 5, 6].map((i) => (
               <span
                 key={i}
-                className="w-1 h-6 origin-center rounded-full bg-primary animate-[eqBar_1.4s_ease-in-out_infinite]"
+                className="w-1 h-6 origin-center rounded-full bg-foreground animate-[eqBar_1.4s_ease-in-out_infinite]"
                 style={{ animationDelay: `${i * 0.1}s` }}
               />
             ))}
@@ -317,7 +317,7 @@ function SearchPageContent() {
                   }}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
                     viewMode === "grouped"
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-action text-action-foreground"
                       : "hover:bg-accent/30"
                   }`}
                   title="Grouped view"
@@ -332,7 +332,7 @@ function SearchPageContent() {
                   }}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
                     viewMode === "flat"
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-action text-action-foreground"
                       : "hover:bg-accent/30"
                   }`}
                   title="Flat view"

@@ -203,7 +203,7 @@ export default function WizardAddFeed({ onNext, onBack, onSkip }: Props) {
               onClick={() => setMode("test")}
               className={`flex-1 flex items-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
                 mode === "test"
-                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 ring-1 ring-blue-300 dark:ring-blue-700"
+                  ? "bg-action text-action-foreground"
                   : "bg-muted text-muted-foreground hover:bg-accent"
               }`}
             >
@@ -218,7 +218,7 @@ export default function WizardAddFeed({ onNext, onBack, onSkip }: Props) {
               onClick={() => setMode("selective")}
               className={`flex-1 flex items-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
                 mode === "selective"
-                  ? "bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200 ring-1 ring-sky-300 dark:ring-sky-700"
+                  ? "bg-action text-action-foreground"
                   : "bg-muted text-muted-foreground hover:bg-accent"
               }`}
             >
@@ -233,7 +233,7 @@ export default function WizardAddFeed({ onNext, onBack, onSkip }: Props) {
               onClick={() => setMode("full")}
               className={`flex-1 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
                 mode === "full"
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-action text-action-foreground"
                   : "bg-muted text-muted-foreground hover:bg-accent"
               }`}
             >

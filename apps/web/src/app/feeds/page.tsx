@@ -227,7 +227,7 @@ export default function FeedsPage() {
                     onClick={() => setAddMode("test")}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       addMode === "test"
-                        ? "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200 ring-1 ring-violet-300 dark:ring-violet-700"
+                        ? "bg-action text-action-foreground"
                         : "bg-muted text-muted-foreground hover:bg-accent"
                     }`}
                   >
@@ -239,7 +239,7 @@ export default function FeedsPage() {
                     onClick={() => setAddMode("selective")}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       addMode === "selective"
-                        ? "bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200 ring-1 ring-sky-300 dark:ring-sky-700"
+                        ? "bg-action text-action-foreground"
                         : "bg-muted text-muted-foreground hover:bg-accent"
                     }`}
                   >
@@ -251,7 +251,7 @@ export default function FeedsPage() {
                     onClick={() => setAddMode("full")}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       addMode === "full"
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-action text-action-foreground"
                         : "bg-muted text-muted-foreground hover:bg-accent"
                     }`}
                   >
@@ -286,7 +286,7 @@ export default function FeedsPage() {
                   <button
                     type="button"
                     onClick={toggleAll}
-                    className="text-xs text-primary underline"
+                    className="text-xs text-link underline"
                   >
                     {selectedGuids.size === preview.episodes.length ? "Deselect all" : "Select all"}
                   </button>
@@ -362,7 +362,7 @@ export default function FeedsPage() {
           <p className="text-muted-foreground">No feeds yet.</p>
           <button
             onClick={() => setShowAddModal(true)}
-            className="mt-2 text-sm text-primary underline"
+            className="mt-2 text-sm text-link underline"
           >
             Add your first RSS feed
           </button>
