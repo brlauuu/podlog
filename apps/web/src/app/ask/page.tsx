@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Play, ChevronDown, BrainCircuit, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Play, BrainCircuit, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { renderAnswerWithCitations, type Source } from "@/lib/citations";
 import { episodeTimestampHref } from "@/lib/episode-link";
 import { loadAskSnapshot, saveAskSnapshot } from "@/lib/page-state";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { basename } from "@/lib/utils";
+import SearchInput from "@/components/SearchInput";
+import HelpPopover from "@/components/HelpPopover";
+import SearchSpinner from "@/components/SearchSpinner";
+import PodcastFilter from "@/components/PodcastFilter";
 
 interface Feed {
   id: string;
@@ -50,9 +53,6 @@ export default function AskPage() {
   const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(
     new Set(initialSnapshot?.selectedFeedIds || [])
   );
-  const [feedDropdownOpen, setFeedDropdownOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [helpPinned, setHelpPinned] = useState(false);
   const [hasManualUploads, setHasManualUploads] = useState(false);
   const [coverage, setCoverage] = useState<CoverageStats | null>(null);
   const [helpCoverageSnapshot, setHelpCoverageSnapshot] = useState<CoverageStats | null>(() => {
@@ -61,8 +61,6 @@ export default function AskPage() {
   });
   const answerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const feedDropdownRef = useRef<HTMLDivElement>(null);
-  const helpRef = useRef<HTMLDivElement>(null);
   const { playEpisode } = useAudioPlayer();
 
   useEffect(() => {
@@ -83,24 +81,6 @@ export default function AskPage() {
       helpCoverageSnapshot,
     });
   }, [question, answer, sources, status, errorMsg, model, selectedFeedIds, helpCoverageSnapshot]);
-
-  // Close feed dropdown on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (
-        feedDropdownRef.current &&
-        !feedDropdownRef.current.contains(e.target as Node)
-      ) {
-        setFeedDropdownOpen(false);
-      }
-      if (helpRef.current && !helpRef.current.contains(e.target as Node)) {
-        setHelpOpen(false);
-        setHelpPinned(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
 
   // Fetch feeds and coverage stats
   useEffect(() => {
@@ -213,6 +193,15 @@ export default function AskPage() {
     [question, model, selectedFeedIds]
   );
 
+  function handleClear() {
+    setQuestion("");
+    setAnswer("");
+    setSources([]);
+    setErrorMsg("");
+    setStatus("idle");
+    abortRef.current?.abort();
+  }
+
   function handlePlaySource(source: Source) {
     if (!source.audio_local_path) {
       window.open(episodeTimestampHref(source.episode_id, source.start_time), "_blank");
@@ -233,77 +222,44 @@ export default function AskPage() {
     return `Analyzing ${helpCoverageSnapshot.processed} processed episodes (${remaining} still processing)`;
   }, [helpCoverageSnapshot]);
 
+  const processingCount = coverage
+    ? Math.max(0, coverage.total - coverage.processed)
+    : 0;
+
   return (
     <div className="space-y-6">
       {/* Centered header + input */}
       <div className={`flex flex-col items-center ${answer || sources.length > 0 ? "pt-2" : "pt-16"} transition-all`}>
         <div className="w-full max-w-2xl space-y-3">
-          {/* Title + description */}
-          <div className="text-center">
-            <div className="relative inline-flex items-center gap-2 min-h-10" ref={helpRef}>
-              <h1 className="text-3xl font-bold">Ask</h1>
-              <button
-                type="button"
-                aria-label="Ask help"
-                onMouseEnter={() => setHelpOpen(true)}
-                onMouseLeave={() => {
-                  if (!helpPinned) setHelpOpen(false);
-                }}
-                onClick={() => {
-                  const nextPinned = !helpPinned;
-                  setHelpPinned(nextPinned);
-                  setHelpOpen(nextPinned);
-                }}
-                className="h-5 w-5 rounded-full border border-input text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
-              >
-                ?
-              </button>
-              {helpOpen && (
-                <div
-                  role="dialog"
-                  aria-label="Ask help details"
-                  onMouseEnter={() => setHelpOpen(true)}
-                  onMouseLeave={() => {
-                    if (!helpPinned) setHelpOpen(false);
-                  }}
-                  className="absolute left-1/2 top-full z-40 mt-2 w-[min(28rem,90vw)] -translate-x-1/2 rounded-md border border-border bg-background p-3 text-left text-sm text-foreground shadow-lg"
-                >
-                  <p>
-                    Retrieval-augmented analysis across your transcripts. Finds the 8 most relevant transcript excerpts and generates an answer grounded in their content.
-                  </p>
-                  {helpSummary && (
-                    <p className="mt-2 text-muted-foreground">{helpSummary}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Title + help popover */}
+          <HelpPopover title="Ask">
+            <p>
+              Retrieval-augmented analysis across your transcripts. Finds the 8 most relevant transcript excerpts and generates an answer grounded in their content.
+            </p>
+            {helpSummary && (
+              <p className="mt-2 text-muted-foreground">{helpSummary}</p>
+            )}
+          </HelpPopover>
 
           {/* Ask input */}
-          <form onSubmit={handleSubmit}>
-            <div className="relative">
-              <BrainCircuit
-                size={18}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-              />
-              <input
-                type="text"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask about your transcripts..."
-                className="w-full pl-10 pr-12 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-ring text-base transition-shadow"
-                disabled={isProcessing}
-                autoFocus
-              />
+          <SearchInput
+            value={question}
+            onChange={setQuestion}
+            onSubmit={handleSubmit}
+            onClear={handleClear}
+            placeholder="Ask about your transcripts..."
+            icon={<BrainCircuit size={18} />}
+            disabled={isProcessing}
+            rightSlot={
               <button
                 type="submit"
                 disabled={!question.trim() || isProcessing}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
               >
                 <ArrowRight size={18} />
               </button>
-            </div>
-          </form>
+            }
+          />
 
           {/* Stats below search bar */}
           {!answer && sources.length === 0 && coverage && (
@@ -311,6 +267,9 @@ export default function AskPage() {
               Searching across {feeds.length} podcast
               {feeds.length !== 1 ? "s" : ""} and {coverage.processed} episode
               {coverage.processed !== 1 ? "s" : ""}
+              {processingCount > 0 && (
+                <> ({processingCount} still processing)</>
+              )}
             </p>
           )}
 
@@ -339,108 +298,29 @@ export default function AskPage() {
             </div>
 
             {/* Source filter */}
-            {(feeds.length > 0 || hasManualUploads) && (
-              <div className="relative" ref={feedDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setFeedDropdownOpen((o) => !o)}
-                  className="flex items-center gap-1.5 text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground hover:bg-accent/30 transition-colors"
-                >
-                  <span className="text-muted-foreground">Source:</span>
-                  {selectedFeedIds.size === 0
-                    ? "All"
-                    : `${selectedFeedIds.size} selected`}
-                  <ChevronDown size={14} className="text-muted-foreground" />
-                </button>
-                {feedDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[220px] max-h-64 overflow-y-auto">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedFeedIds(new Set())}
-                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors ${
-                        selectedFeedIds.size === 0 ? "font-medium" : ""
-                      }`}
-                    >
-                      All sources
-                    </button>
-                    <div className="border-t border-border my-1" />
-                    {feeds.map((f) => (
-                      <label
-                        key={f.id}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedFeedIds.has(f.id)}
-                          onChange={() => {
-                            setSelectedFeedIds((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(f.id)) next.delete(f.id);
-                              else next.add(f.id);
-                              return next;
-                            });
-                          }}
-                          className="rounded"
-                        />
-                        <span className="truncate">
-                          {f.title || "Untitled"}
-                        </span>
-                      </label>
-                    ))}
-                    {hasManualUploads && (
-                      <>
-                        <div className="border-t border-border my-1" />
-                        <label className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedFeedIds.has("__uploads__")}
-                            onChange={() => {
-                              setSelectedFeedIds((prev) => {
-                                const next = new Set(prev);
-                                if (next.has("__uploads__"))
-                                  next.delete("__uploads__");
-                                else next.add("__uploads__");
-                                return next;
-                              });
-                            }}
-                            className="rounded"
-                          />
-                          <span>Manual uploads</span>
-                        </label>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+            <PodcastFilter
+              feeds={feeds}
+              selectedFeedIds={selectedFeedIds}
+              onSelectionChange={setSelectedFeedIds}
+              hasManualUploads={hasManualUploads}
+            />
           </div>
 
         </div>
       </div>
 
-      {/* Loading / generating indicator — equalizer style */}
-      <div className="min-h-16">
-        {isProcessing && (
-          <div className="flex flex-col items-center gap-2 py-4">
-            <div className="flex items-center gap-0.5">
-              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                <span
-                  key={i}
-                  className="w-1 h-6 origin-center rounded-full bg-foreground animate-[eqBar_1.4s_ease-in-out_infinite]"
-                  style={{ animationDelay: `${i * 0.1}s` }}
-                />
-              ))}
-            </div>
-            <span className="text-sm text-muted-foreground">
-              {status === "connecting"
-                ? "Searching transcripts..."
-                : !answer
-                  ? "Generating answer..."
-                  : "Writing..."}
-            </span>
-          </div>
-        )}
-      </div>
+      {/* Loading / generating indicator */}
+      {isProcessing && (
+        <SearchSpinner
+          label={
+            status === "connecting"
+              ? "Searching transcripts..."
+              : !answer
+                ? "Generating answer..."
+                : "Writing..."
+          }
+        />
+      )}
 
       {/* Error */}
       {status === "error" && errorMsg && (

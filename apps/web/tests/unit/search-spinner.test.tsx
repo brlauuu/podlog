@@ -74,7 +74,7 @@ describe("Search page loading spinner", () => {
     expect(await screen.findByText("Searching...")).toBeInTheDocument();
     expect(
       container.querySelector(
-        ".bg-primary.h-6.origin-center.animate-\\[eqBar_1\\.4s_ease-in-out_infinite\\]"
+        ".bg-foreground.h-6.origin-center.animate-\\[eqBar_1\\.4s_ease-in-out_infinite\\]"
       )
     ).toBeInTheDocument();
   });
