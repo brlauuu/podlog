@@ -53,13 +53,13 @@ describe("HomePage issue 274", () => {
     expect(screen.queryByText(/RAG-powered AI answers/i)).toBeNull();
   });
 
-  test("centers logo, tagline, and actions in the viewport area below navbar", () => {
+  test("uses main-area centering without hardcoded viewport subtraction", () => {
     const { container } = render(<HomePage />);
     const root = container.firstElementChild as HTMLElement;
 
-    expect(root.className).toContain("min-h-[calc(100dvh-4rem)]");
-    expect(root.className).toContain("justify-center");
+    expect(root.className).toContain("my-auto");
     expect(root.className).toContain("items-center");
+    expect(root.className).not.toContain("min-h-[calc(100dvh-4rem)]");
     expect(root.className).not.toContain("pt-16");
   });
 });
