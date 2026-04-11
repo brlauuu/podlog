@@ -16,10 +16,11 @@ jest.mock("@/components/WizardProvider", () => ({
 }));
 
 const mockUseWizard = useWizard as jest.Mock;
+const mockPush = jest.fn();
 
 // Mock next/navigation
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 const mockFetch = jest.fn();
@@ -32,6 +33,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 beforeEach(() => {
   mockFetch.mockReset();
+  mockPush.mockReset();
 });
 
 describe("WizardHealthCheck", () => {
@@ -530,5 +532,49 @@ describe("SetupWizard", () => {
     expect(mockSetOpen).not.toHaveBeenCalled();
     expect(screen.getByText(/Ready When You Are/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /get started/i })).toBeInTheDocument();
+  });
+
+  it("does not mark wizard completed when Skip wizard is clicked on screen 1", async () => {
+    const mockMarkCompleted = jest.fn();
+    const mockSetOpen = jest.fn();
+    mockUseWizard.mockReturnValue({ open: true, setOpen: mockSetOpen, markCompleted: mockMarkCompleted });
+    render(<SetupWizard />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByText("Welcome to Podlog")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /skip wizard/i }));
+
+    expect(mockMarkCompleted).not.toHaveBeenCalled();
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
+  });
+
+  it("uses link destination from completion cards instead of generic onFinish redirect", async () => {
+    const mockMarkCompleted = jest.fn();
+    const mockSetOpen = jest.fn();
+    mockUseWizard.mockReturnValue({ open: true, setOpen: mockSetOpen, markCompleted: mockMarkCompleted });
+    render(<SetupWizard />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByText("Welcome to Podlog")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Add Your First Podcast/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /skip/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Ready When You Are/i)).toBeInTheDocument();
+    });
+
+    const targetLink = screen.getByRole("link", { name: /add your first feed/i });
+    fireEvent.click(targetLink);
+
+    expect(mockMarkCompleted).toHaveBeenCalledWith(false);
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
+    expect(mockPush).not.toHaveBeenCalledWith("/");
   });
 });

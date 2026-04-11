@@ -16,9 +16,15 @@ interface Props {
   feedAdded: boolean;
   onFinish: () => void;
   onDontShowChange: (checked: boolean) => void;
+  onNavigate?: () => void;
 }
 
-export default function WizardComplete({ feedAdded, onFinish, onDontShowChange }: Props) {
+export default function WizardComplete({
+  feedAdded,
+  onFinish,
+  onDontShowChange,
+  onNavigate,
+}: Props) {
   const [dontShow, setDontShow] = useState(false);
 
   const links: LinkItem[] = feedAdded
@@ -61,7 +67,7 @@ export default function WizardComplete({ feedAdded, onFinish, onDontShowChange }
             <Link
               key={link.href}
               href={link.href}
-              onClick={onFinish}
+              onClick={onNavigate}
               className={`flex items-center gap-3 p-2.5 rounded-md transition-colors ${
                 link.highlight
                   ? "border-2 border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/30"

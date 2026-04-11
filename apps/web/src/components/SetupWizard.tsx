@@ -18,7 +18,6 @@ export default function SetupWizard() {
   const router = useRouter();
 
   function handleHealthCheckSkip() {
-    markCompleted(true);
     close();
   }
 
@@ -39,6 +38,11 @@ export default function SetupWizard() {
     close();
     if (feedAdded) router.push("/queue");
     else router.push("/");
+  }
+
+  function handleNavigateFromCompletion() {
+    markCompleted(dontShow);
+    close();
   }
 
   function goToStep(s: Step) {
@@ -76,6 +80,7 @@ export default function SetupWizard() {
             feedAdded={feedAdded}
             onFinish={handleFinish}
             onDontShowChange={setDontShow}
+            onNavigate={handleNavigateFromCompletion}
           />
         )}
 
