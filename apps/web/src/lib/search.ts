@@ -1,6 +1,28 @@
 import pool from "@/lib/db";
 import { PIPELINE_API } from "@/lib/pipeline";
+import { buildFeedFilter } from "@/lib/search/feedFilter";
+import { groupRowsByFeed } from "@/lib/search/grouping";
+import { SPEAKER_TURNS_CTE } from "@/lib/search/speakerTurns";
 import { mergeHybridSearchResults } from "@/lib/searchHybrid";
+import type {
+  ContextSegment,
+  EpisodeCoverage,
+  EpisodeMentions,
+  GroupedSearchResult,
+  Mention,
+  SearchPage,
+} from "@/lib/search/types";
+
+export type {
+  ContextSegment,
+  EpisodeCoverage,
+  EpisodeMentions,
+  FeedGroup,
+  GroupedSearchResult,
+  Mention,
+  SearchPage,
+  SearchResult,
+} from "@/lib/search/types";
 
 /**
  * Get embedding for a search query from the pipeline's embed API.
@@ -20,160 +42,6 @@ async function getQueryEmbedding(text: string): Promise<number[] | null> {
     return null;
   }
 }
-
-// ── Feed filter helper ──────────────────────────────────────
-
-/**
- * Build a SQL WHERE clause fragment for feed filtering.
- * Handles: no filter, feed UUIDs only, manual uploads only, or both.
- * Returns the clause, bound params, and the next available $N placeholder index.
- */
-function buildFeedFilter(
-  feedIds: string[] | null,
-  includeManualUploads: boolean,
-  startParam: number
-): { clause: string; params: unknown[]; nextIdx: number } {
-  const hasFeedIds = feedIds && feedIds.length > 0;
-  if (!hasFeedIds && !includeManualUploads) {
-    return { clause: "TRUE", params: [], nextIdx: startParam };
-  }
-  const parts: string[] = [];
-  const params: unknown[] = [];
-  if (hasFeedIds) {
-    parts.push(`f.id = ANY($${startParam}::uuid[])`);
-    params.push(feedIds);
-    startParam++;
-  }
-  if (includeManualUploads) {
-    parts.push("e.feed_id IS NULL");
-  }
-  return {
-    clause: `(${parts.join(" OR ")})`,
-    params,
-    nextIdx: startParam,
-  };
-}
-
-// ── Grouped search types ────────────────────────────────────
-
-export interface GroupedSearchResult {
-  feeds: FeedGroup[];
-  totalFeeds: number;
-  totalEpisodes: number;
-  totalMentions: number;
-  coverage: EpisodeCoverage;
-}
-
-export interface FeedGroup {
-  feedId: string;
-  feedTitle: string;
-  feedMode: string;
-  mentionCount: number;
-  episodes: EpisodeGroup[];
-}
-
-interface EpisodeGroup {
-  episodeId: string;
-  episodeTitle: string;
-  audioUrl: string;
-  audioLocalPath: string | null;
-  episodeUrl: string | null;
-  mentionCount: number;
-  bestRank: number;
-}
-
-export interface EpisodeMentions {
-  episodeId: string;
-  mentions: Mention[];
-}
-
-export interface ContextSegment {
-  startTime: number;
-  endTime: number;
-  speakerLabel: string | null;
-  speakerDisplay: string | null;
-  text: string;
-}
-
-export interface Mention {
-  id: number;
-  startTime: number;
-  endTime: number;
-  speakerLabel: string | null;
-  speakerDisplay: string | null;
-  snippet: string;
-  text: string;
-  rank: number;
-  contextBefore: ContextSegment[];
-  contextAfter: ContextSegment[];
-}
-
-// ── Flat search types ───────────────────────────────────────
-
-export interface SearchResult {
-  id: number;
-  startTime: number;
-  endTime: number;
-  speakerLabel: string | null;
-  speakerDisplay: string | null;
-  snippet: string;
-  rank: number;
-  episodeId: string;
-  episodeTitle: string | null;
-  audioUrl: string;
-  audioLocalPath: string | null;
-  episodeUrl: string | null;
-  hasDiarization: boolean;
-  diarizationError: string | null;
-  feedTitle: string | null;
-  feedMode: string;
-  feedId: string;
-}
-
-export interface EpisodeCoverage {
-  processed: number;
-  total: number;
-}
-
-export interface SearchPage {
-  results: SearchResult[];
-  total: number;
-  page: number;
-  pageSize: number;
-  coverage: EpisodeCoverage;
-}
-
-// ── Speaker turn aggregation CTE ────────────────────────────
-//
-// Assigns a turn number to each segment based on consecutive same-speaker
-// runs within an episode. Used by all search functions to deduplicate
-// results: one hit per speaker turn instead of one per segment.
-
-const SPEAKER_TURNS_CTE = `
-  lagged AS (
-    SELECT s.id, s.episode_id, s.speaker_label, s.start_time, s.end_time, s.text,
-      CASE WHEN s.speaker_label IS DISTINCT FROM
-        LAG(s.speaker_label) OVER (PARTITION BY s.episode_id ORDER BY s.start_time)
-        THEN 1 ELSE 0 END AS is_new_turn
-    FROM segments s
-  ),
-  turn_numbered AS (
-    SELECT l.*,
-      SUM(is_new_turn) OVER (PARTITION BY episode_id ORDER BY start_time) AS turn_num
-    FROM lagged l
-  ),
-  speaker_turns AS (
-    SELECT
-      episode_id,
-      speaker_label,
-      turn_num,
-      MIN(id) AS min_id,
-      MIN(start_time) AS start_time,
-      MAX(end_time) AS end_time,
-      string_agg(text, ' ' ORDER BY start_time) AS full_text
-    FROM turn_numbered
-    GROUP BY episode_id, speaker_label, turn_num
-  )`;
 
 /**
  * Hybrid search: FTS + vector similarity with Reciprocal Rank Fusion.
@@ -195,7 +63,6 @@ export async function searchSegments(
   const FETCH_LIMIT = 100; // fetch more than pageSize for RRF merging
   const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
 
-  // 1. FTS on speaker turns
   const ftsPromise = pool.query(
     `WITH ${SPEAKER_TURNS_CTE}
     SELECT
@@ -229,7 +96,6 @@ export async function searchSegments(
     [query, ...feedFilter.params, FETCH_LIMIT]
   );
 
-  // 2. Vector similarity on raw segments (if embeddings available)
   const embedding = await getQueryEmbedding(query);
   const vecFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
   const vecPromise = embedding
@@ -265,7 +131,6 @@ export async function searchSegments(
       )
     : Promise.resolve({ rows: [] });
 
-  // 3. Count (FTS-based, skipped on page 2+)
   const countFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
   const countPromise = skipCount
     ? Promise.resolve(null)
@@ -282,7 +147,6 @@ export async function searchSegments(
         [query, ...countFeedFilter.params]
       );
 
-  // 4. Episode coverage (processed vs total)
   const coveragePromise = skipCount
     ? Promise.resolve(null)
     : pool.query(
@@ -293,7 +157,10 @@ export async function searchSegments(
       );
 
   const [ftsResult, vecResult, countResult, coverageResult] = await Promise.all([
-    ftsPromise, vecPromise, countPromise, coveragePromise,
+    ftsPromise,
+    vecPromise,
+    countPromise,
+    coveragePromise,
   ]);
 
   const ftsTotal = countResult ? parseInt(countResult.rows[0].count, 10) : -1;
@@ -315,7 +182,7 @@ export async function searchSegments(
 }
 
 /**
- * Grouped search — returns results grouped by feed → episode with mention counts.
+ * Grouped search — returns results grouped by feed -> episode with mention counts.
  * Counts are based on deduplicated speaker turns, not raw segments.
  */
 export async function searchGrouped(
@@ -384,41 +251,17 @@ export async function searchGrouped(
         FROM episodes`
       );
 
-  const [rowsResult, countResult, coverageResult] = await Promise.all([rowsPromise, countPromise, coveragePromise]);
-
-  // Group episode rows by feed
-  const feedMap = new Map<string, FeedGroup>();
-
-  for (const row of rowsResult.rows) {
-    const feedKey = row.feed_id ?? "__manual__";
-    if (!feedMap.has(feedKey)) {
-      feedMap.set(feedKey, {
-        feedId: row.feed_id,
-        feedTitle: row.feed_title,
-        feedMode: row.feed_mode,
-        mentionCount: 0,
-        episodes: [],
-      });
-    }
-    const feed = feedMap.get(feedKey)!;
-    const mentionCount = row.mention_count;
-    feed.mentionCount += mentionCount;
-    feed.episodes.push({
-      episodeId: row.episode_id,
-      episodeTitle: row.episode_title,
-      audioUrl: row.audio_url,
-      audioLocalPath: row.audio_local_path,
-      episodeUrl: row.episode_url,
-      mentionCount,
-      bestRank: parseFloat(row.best_rank),
-    });
-  }
+  const [rowsResult, countResult, coverageResult] = await Promise.all([
+    rowsPromise,
+    countPromise,
+    coveragePromise,
+  ]);
 
   const counts = countResult?.rows[0];
   const cov = coverageResult?.rows[0];
 
   return {
-    feeds: Array.from(feedMap.values()),
+    feeds: groupRowsByFeed(rowsResult.rows),
     totalFeeds: (counts?.total_feeds ?? -1) + (counts?.has_manual ? 1 : 0),
     totalEpisodes: counts?.total_episodes ?? -1,
     totalMentions: counts?.total_mentions ?? -1,
@@ -437,7 +280,6 @@ export async function searchMentions(
   query: string,
   episodeId: string
 ): Promise<EpisodeMentions> {
-  // Fetch all speaker turns for this episode with match info in one query
   const result = await pool.query(
     `WITH ${SPEAKER_TURNS_CTE}
     SELECT
@@ -468,7 +310,6 @@ export async function searchMentions(
     .filter((i) => i >= 0);
 
   const CONTEXT_SIZE = 2;
-
   function toContextSegment(row: typeof allTurns[0]): ContextSegment {
     return {
       startTime: parseFloat(row.start_time),
@@ -482,11 +323,10 @@ export async function searchMentions(
   const mentions: Mention[] = matchIndices.map((idx) => {
     const row = allTurns[idx];
 
-    // Gather context turns, skipping other matches
     const before: ContextSegment[] = [];
     for (let i = idx - 1; i >= 0 && before.length < CONTEXT_SIZE; i--) {
       if (!allTurns[i].is_match) before.unshift(toContextSegment(allTurns[i]));
-      else break; // stop at adjacent match to avoid overlap
+      else break;
     }
 
     const after: ContextSegment[] = [];
