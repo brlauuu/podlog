@@ -201,7 +201,7 @@ export default function FeedsPage() {
               Add Feed
             </Button>
           </DialogTrigger>
-          <DialogContent className={previewStep ? "max-w-2xl" : undefined}>
+          <DialogContent className={previewStep ? "max-w-2xl flex flex-col max-h-[90vh]" : undefined}>
             <DialogHeader>
               <DialogTitle>
                 {previewStep
@@ -278,8 +278,8 @@ export default function FeedsPage() {
 
             {/* Step 2: Episode selection (selective mode only) */}
             {previewStep && preview && (
-              <form onSubmit={handleAddOrPreview} className="space-y-3">
-                <div className="flex items-center justify-between">
+              <form onSubmit={handleAddOrPreview} className="flex flex-col flex-1 overflow-hidden space-y-3 min-h-0">
+                <div className="flex items-center justify-between shrink-0">
                   <span className="text-sm text-muted-foreground">
                     {preview.episodes.length} episodes found
                   </span>
@@ -291,7 +291,7 @@ export default function FeedsPage() {
                     {selectedGuids.size === preview.episodes.length ? "Deselect all" : "Select all"}
                   </button>
                 </div>
-                <div className="max-h-72 overflow-y-auto overflow-x-hidden divide-y rounded-md border">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden divide-y rounded-md border min-h-[80px]">
                   {preview.episodes.map((ep) => (
                     <label
                       key={ep.guid}
@@ -316,8 +316,8 @@ export default function FeedsPage() {
                     </label>
                   ))}
                 </div>
-                {addError && <p className="text-sm text-destructive">{addError}</p>}
-                <div className="flex justify-end gap-2">
+                {addError && <p className="text-sm text-destructive shrink-0">{addError}</p>}
+                <div className="flex justify-end gap-2 shrink-0">
                   <Button
                     type="button"
                     variant="outline"

@@ -34,6 +34,7 @@ export default function TranscriptView({
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const { playEpisode } = useAudioPlayer();
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasScrolledToHashRef = useRef(false);
 
   /**
    * Find the segment element closest to a given time (in seconds) and
@@ -68,14 +69,17 @@ export default function TranscriptView({
     [segments],
   );
 
-  // Handle initial hash navigation (from search results or direct links)
+  // Handle initial hash navigation (from search results or direct links).
+  // Guard with a ref so speaker-filter re-renders don't re-trigger the scroll.
   useEffect(() => {
+    if (hasScrolledToHashRef.current) return;
     const hash = window.location.hash;
     if (hash.startsWith("#t-")) {
       const targetSecs = parseInt(hash.slice(3), 10);
       if (!isNaN(targetSecs)) {
         // Small delay to ensure DOM is rendered
         requestAnimationFrame(() => scrollToTime(targetSecs));
+        hasScrolledToHashRef.current = true;
       }
     }
   }, [segments, scrollToTime]);
