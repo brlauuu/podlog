@@ -371,6 +371,7 @@ export default function RemoteInferenceSection({
                     <PopoverTrigger asChild>
                       <button
                         type="button"
+                        aria-label={`Help for ${step.title}`}
                         className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-border text-xs text-muted-foreground hover:text-foreground hover:border-muted-foreground"
                       >
                         ?

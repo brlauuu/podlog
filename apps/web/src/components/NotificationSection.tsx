@@ -345,7 +345,7 @@ export default function NotificationSection({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-4 mb-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FieldGroup
                   label="SMTP Host"
                   hint="Leave default for local, or e.g. smtp.gmail.com"
@@ -375,7 +375,7 @@ export default function NotificationSection({
                   />
                 </FieldGroup>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FieldGroup
                   label="SMTP Username"
                   hint="Usually your email address — leave empty for local"
