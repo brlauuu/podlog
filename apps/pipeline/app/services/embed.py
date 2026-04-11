@@ -59,6 +59,9 @@ def _validate_vectors_dim(vectors: list[list[float]], expected_count: int) -> No
             )
 
 
+_FIREWORKS_EMBED_BATCH_SIZE = 256  # Fireworks API limit
+
+
 def _embed_texts_fireworks(texts: list[str], runtime: dict[str, Any] | None = None) -> list[list[float]]:
     api_key = _runtime_value(runtime, "fireworks_api_key", settings.fireworks_api_key)
     if not api_key:
@@ -74,20 +77,22 @@ def _embed_texts_fireworks(texts: list[str], runtime: dict[str, Any] | None = No
 
     timeout = httpx.Timeout(connect=20.0, read=120.0, write=20.0, pool=20.0)
     headers = {"Authorization": f"Bearer {api_key}"}
-    payload = {"model": model, "input": texts}
 
-    with httpx.Client(timeout=timeout) as client:
-        resp = client.post(url, headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-
-    items = data.get("data", []) or []
     vectors: list[list[float]] = []
-    for item in items:
-        emb = item.get("embedding")
-        if not isinstance(emb, list):
-            raise RuntimeError("Fireworks embeddings response missing embedding vector")
-        vectors.append(_normalize([float(x) for x in emb]))
+    with httpx.Client(timeout=timeout) as client:
+        for i in range(0, len(texts), _FIREWORKS_EMBED_BATCH_SIZE):
+            batch = texts[i : i + _FIREWORKS_EMBED_BATCH_SIZE]
+            payload = {"model": model, "input": batch}
+            resp = client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            items = data.get("data", []) or []
+            for item in items:
+                emb = item.get("embedding")
+                if not isinstance(emb, list):
+                    raise RuntimeError("Fireworks embeddings response missing embedding vector")
+                vectors.append(_normalize([float(x) for x in emb]))
+
     _validate_vectors_dim(vectors, len(texts))
 
     logger.info(

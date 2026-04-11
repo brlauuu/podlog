@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     inference_provider: Literal["local", "fireworks"] = "local"
     fireworks_api_key: str | None = None
     fireworks_audio_base_url: str = "https://audio-turbo.api.fireworks.ai"
-    fireworks_stt_model: str = "whisper-v3-large"
+    fireworks_stt_model: str = "whisper-v3-turbo"
     fireworks_stt_diarize: bool = True
     fireworks_chat_base_url: str = "https://api.fireworks.ai/inference/v1"
     fireworks_chat_model: str = "accounts/fireworks/models/llama-v3p1-8b-instruct"

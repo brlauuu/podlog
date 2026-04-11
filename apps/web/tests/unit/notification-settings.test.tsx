@@ -24,7 +24,7 @@ const defaultSettings = {
   inference_provider: "local",
   fireworks_api_key: null,
   fireworks_audio_base_url: "https://audio-turbo.api.fireworks.ai",
-  fireworks_stt_model: "whisper-v3-large",
+  fireworks_stt_model: "whisper-v3-turbo",
   fireworks_stt_diarize: true,
   fireworks_stt_cost_per_minute_usd: 0.006,
   fireworks_chat_base_url: "https://api.fireworks.ai/inference/v1",

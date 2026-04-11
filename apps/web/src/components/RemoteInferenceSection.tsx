@@ -70,7 +70,7 @@ const PIPELINE_STEPS: PipelineStep[] = [
     providerField: "inference_provider",
     localModels: [{ value: "large-v3-turbo", label: "WhisperX large-v3-turbo" }],
     remoteModels: [
-      { value: "whisper-v3-large", label: "Fireworks whisper-v3-large" },
+      { value: "whisper-v3-turbo", label: "Fireworks whisper-v3-turbo" },
     ],
     modelField: null,
     remoteModelField: "fireworks_stt_model",
