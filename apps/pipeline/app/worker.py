@@ -10,7 +10,9 @@ Usage:
 import logging
 import signal
 import time
+import importlib
 from datetime import datetime, timezone
+from typing import Callable
 
 from app.config import settings
 from app.database import SessionLocal
@@ -18,8 +20,67 @@ from app import job_queue
 
 logger = logging.getLogger(__name__)
 
-# Task name -> handler function (lazily resolved to avoid circular imports)
-TASK_HANDLERS: dict[str, str] = {
+
+def _resolve_handler(dotted_path: str):
+    """Resolve 'module.path:function_name' to a callable."""
+    module_path, func_name = dotted_path.rsplit(":", 1)
+    mod = importlib.import_module(module_path)
+    return getattr(mod, func_name)
+
+def _download_handler(episode_id: str) -> None:
+    from app.tasks.download import download_episode
+
+    download_episode(episode_id)
+
+
+def _transcribe_handler(episode_id: str) -> None:
+    from app.tasks.transcribe import transcribe_episode
+
+    transcribe_episode(episode_id)
+
+
+def _diarize_handler(episode_id: str) -> None:
+    from app.tasks.diarize import diarize_episode
+
+    diarize_episode(episode_id)
+
+
+def _chunk_handler(episode_id: str) -> None:
+    from app.tasks.chunk import chunk_episode
+
+    chunk_episode(episode_id)
+
+
+def _embed_handler(episode_id: str) -> None:
+    from app.tasks.embed import embed_episode
+
+    embed_episode(episode_id)
+
+
+def _infer_handler(episode_id: str) -> None:
+    from app.tasks.infer import infer_speakers
+
+    infer_speakers(episode_id)
+
+
+def _archive_handler(episode_id: str) -> None:
+    from app.tasks.archive import archive_episode
+
+    archive_episode(episode_id)
+
+
+# Task name -> handler function (typed callable registry; lazy imports inside wrappers)
+TASK_HANDLERS: dict[str, Callable[[str], None]] = {
+    "download": _download_handler,
+    "transcribe": _transcribe_handler,
+    "diarize": _diarize_handler,
+    "chunk": _chunk_handler,
+    "embed": _embed_handler,
+    "infer": _infer_handler,
+    "archive": _archive_handler,
+}
+
+TASK_HANDLER_TARGETS: dict[str, str] = {
     "download": "app.tasks.download:download_episode",
     "transcribe": "app.tasks.transcribe:transcribe_episode",
     "diarize": "app.tasks.diarize:diarize_episode",
@@ -30,12 +91,38 @@ TASK_HANDLERS: dict[str, str] = {
 }
 
 POLL_INTERVAL = 2  # seconds between queue polls when idle
-PERIODIC_TASKS = [
-    # (name, function_path, interval_seconds)
-    ("poll_all_feeds", "app.tasks.ingest:poll_all_feeds", None),  # interval set from settings
-    ("cleanup_zombie_jobs", "app.tasks.cleanup:cleanup_zombie_jobs", 30 * 60),
-    ("send_digest", "app.services.digest:send_digest_if_due", 15 * 60),
+
+
+def _poll_all_feeds() -> None:
+    from app.tasks.ingest import poll_all_feeds
+
+    poll_all_feeds()
+
+
+def _cleanup_zombie_jobs() -> None:
+    from app.tasks.cleanup import cleanup_zombie_jobs
+
+    cleanup_zombie_jobs()
+
+
+def _send_digest() -> None:
+    from app.services.digest import send_digest_if_due
+
+    send_digest_if_due()
+
+
+PERIODIC_TASKS: list[tuple[str, Callable[[], None], int | None]] = [
+    # (name, function, interval_seconds)
+    ("poll_all_feeds", _poll_all_feeds, None),  # interval set from settings
+    ("cleanup_zombie_jobs", _cleanup_zombie_jobs, 30 * 60),
+    ("send_digest", _send_digest, 15 * 60),
 ]
+
+PERIODIC_TASK_TARGETS: dict[str, str] = {
+    "poll_all_feeds": "app.tasks.ingest:poll_all_feeds",
+    "cleanup_zombie_jobs": "app.tasks.cleanup:cleanup_zombie_jobs",
+    "send_digest": "app.services.digest:send_digest_if_due",
+}
 
 _shutdown = False
 
@@ -46,36 +133,41 @@ def _handle_signal(signum, frame):
     _shutdown = True
 
 
-def _resolve_handler(dotted_path: str):
-    """Resolve 'module.path:function_name' to a callable."""
-    module_path, func_name = dotted_path.rsplit(":", 1)
-    import importlib
-    mod = importlib.import_module(module_path)
-    return getattr(mod, func_name)
-
-
 def _validate_worker_wiring() -> None:
     """Validate task/periodic handler references at startup."""
     errors: list[str] = []
 
-    for task, handler_path in TASK_HANDLERS.items():
+    if set(TASK_HANDLERS) != set(TASK_HANDLER_TARGETS):
+        errors.append("TASK_HANDLERS and TASK_HANDLER_TARGETS keys differ")
+
+    for task, handler in TASK_HANDLERS.items():
         try:
-            handler = _resolve_handler(handler_path)
             if not callable(handler):
                 raise TypeError("resolved object is not callable")
+            target = TASK_HANDLER_TARGETS[task]
+            resolved = _resolve_handler(target)
+            if not callable(resolved):
+                raise TypeError("import target is not callable")
         except Exception as exc:
             errors.append(
-                f'TASK_HANDLERS["{task}"] -> "{handler_path}": {type(exc).__name__}: {exc}'
+                f'TASK_HANDLERS["{task}"]: {type(exc).__name__}: {exc}'
             )
 
-    for name, handler_path, _ in PERIODIC_TASKS:
+    periodic_names = {name for name, _, _ in PERIODIC_TASKS}
+    if periodic_names != set(PERIODIC_TASK_TARGETS):
+        errors.append("PERIODIC_TASKS and PERIODIC_TASK_TARGETS keys differ")
+
+    for name, handler, _ in PERIODIC_TASKS:
         try:
-            handler = _resolve_handler(handler_path)
             if not callable(handler):
                 raise TypeError("resolved object is not callable")
+            target = PERIODIC_TASK_TARGETS[name]
+            resolved = _resolve_handler(target)
+            if not callable(resolved):
+                raise TypeError("import target is not callable")
         except Exception as exc:
             errors.append(
-                f'PERIODIC_TASKS["{name}"] -> "{handler_path}": {type(exc).__name__}: {exc}'
+                f'PERIODIC_TASKS["{name}"]: {type(exc).__name__}: {exc}'
             )
 
     if errors:
@@ -85,14 +177,13 @@ def _validate_worker_wiring() -> None:
 
 def _run_periodic_tasks(last_run: dict[str, datetime], now: datetime) -> None:
     """Run any periodic tasks that are due."""
-    for name, func_path, interval_secs in PERIODIC_TASKS:
+    for name, handler, interval_secs in PERIODIC_TASKS:
         if interval_secs is None:
             interval_secs = settings.feed_poll_interval_hours * 3600
 
         last = last_run.get(name)
         if last is None or (now - last).total_seconds() >= interval_secs:
             try:
-                handler = _resolve_handler(func_path)
                 handler()
                 last_run[name] = now
                 logger.info('"action": "periodic_task_ran", "task": "%s"', name)
@@ -140,13 +231,12 @@ def main() -> None:
                 job.id, job.task, job.episode_id,
             )
 
-            handler_path = TASK_HANDLERS.get(job.task)
-            if handler_path is None:
+            handler = TASK_HANDLERS.get(job.task)
+            if handler is None:
                 job_queue.fail(db, job, f"Unknown task: {job.task}")
                 continue
 
             try:
-                handler = _resolve_handler(handler_path)
                 handler(job.episode_id)
                 job_queue.complete(db, job)
             except Exception as exc:

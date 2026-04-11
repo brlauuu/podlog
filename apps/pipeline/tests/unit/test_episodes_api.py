@@ -36,7 +36,7 @@ class TestIngestEndpoint:
         mock_db.refresh.side_effect = refresh_side_effect
         _override_db(mock_db)
         try:
-            with patch("app.api.episodes.ingest_episode") as mock_ingest:
+            with patch("app.api.episodes.enqueue_episode_ingest") as mock_ingest:
                 resp = client.post("/api/episodes/ingest", json={
                     "audio_url": "https://example.com/episode.mp3",
                     "title": "Test Episode",
@@ -47,7 +47,7 @@ class TestIngestEndpoint:
                 assert data["episode_id"] == "ep-123"
                 mock_db.add.assert_called_once()
                 mock_db.commit.assert_called_once()
-                mock_ingest.assert_called_once_with("ep-123")
+                mock_ingest.assert_called_once_with(mock_db, "ep-123")
         finally:
             _cleanup_db()
 
@@ -77,7 +77,7 @@ class TestIngestEndpoint:
         mock_db.refresh.side_effect = refresh_side_effect
         _override_db(mock_db)
         try:
-            with patch("app.api.episodes.ingest_episode"):
+            with patch("app.api.episodes.enqueue_episode_ingest"):
                 resp = client.post("/api/episodes/ingest", json={
                     "audio_url": "https://example.com/ep.mp3",
                 })

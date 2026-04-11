@@ -19,8 +19,8 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import Episode
-from app.tasks.ingest import ingest_episode
 from app import job_queue
+from app.services.pipeline_commands import enqueue_episode_ingest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -50,7 +50,7 @@ def ingest_manual(body: IngestEpisodeRequest, db: Session = Depends(get_db)) -> 
     db.commit()
     db.refresh(episode)
 
-    ingest_episode(episode.id)
+    enqueue_episode_ingest(db, str(episode.id))
     logger.info('"action": "manual_ingest", "episode_id": "%s"', episode.id)
     return {"episode_id": episode.id}
 
