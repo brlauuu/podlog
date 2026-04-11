@@ -577,4 +577,35 @@ describe("SetupWizard", () => {
     expect(mockSetOpen).toHaveBeenCalledWith(false);
     expect(mockPush).not.toHaveBeenCalledWith("/");
   });
+
+  it("does not trigger generic /queue redirect when clicking completion links after adding a feed", async () => {
+    const mockMarkCompleted = jest.fn();
+    const mockSetOpen = jest.fn();
+    mockUseWizard.mockReturnValue({ open: true, setOpen: mockSetOpen, markCompleted: mockMarkCompleted });
+    render(<SetupWizard />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByText("Welcome to Podlog")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Add Your First Podcast/i)).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByPlaceholderText(/feeds\.example\.com/i), {
+      target: { value: "https://example.com/feed.xml" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add feed/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/You're All Set!/i)).toBeInTheDocument();
+    });
+
+    const searchLink = screen.getByRole("link", { name: /search/i });
+    fireEvent.click(searchLink);
+
+    expect(mockMarkCompleted).toHaveBeenCalledWith(false);
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
+    expect(mockPush).not.toHaveBeenCalledWith("/queue");
+  });
 });
