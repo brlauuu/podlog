@@ -38,9 +38,21 @@ def get_settings(db: Session = Depends(get_db)):
 def put_settings(body: dict = Body(...), db: Session = Depends(get_db)):
     try:
         result = save_notification_settings(db, body)
-        return mask_sensitive(result)
     except ValueError as e:
         return JSONResponse(status_code=422, content={"error": str(e)})
+
+    response = mask_sensitive(result)
+
+    # Validate Fireworks API key if it was updated with a non-empty value
+    if body.get("fireworks_api_key") and body["fireworks_api_key"].strip():
+        from app.services.hardware import validate_fireworks_key
+
+        if not validate_fireworks_key(body["fireworks_api_key"]):
+            response["fireworks_key_warning"] = (
+                "Fireworks API key could not be validated -- check that it's correct."
+            )
+
+    return response
 
 
 @router.post("/notifications/test")

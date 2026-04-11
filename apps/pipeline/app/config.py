@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     inference_enabled: bool = True
     spacy_model: str = "en_core_web_lg"
 
+    # Hardware profile override for cost estimates (Issue #322)
+    hardware_profile: str | None = None
+
     # Inference provider routing (Issue #222)
     inference_provider: Literal["local", "fireworks"] = "local"
     fireworks_api_key: str | None = None
