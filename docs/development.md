@@ -35,7 +35,7 @@ podlog/
 ### Prerequisites
 
 - Python 3.11+ with [Poetry](https://python-poetry.org/)
-- Node.js 20+ with npm
+- Node.js 20.9.0+ with npm (see `.nvmrc` for the pinned local dev version)
 - Docker and Docker Compose (for the database)
 
 ### Pipeline (Python)
