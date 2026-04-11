@@ -14,6 +14,9 @@
 
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-action: hsl(var(--action));
+  --color-action-foreground: hsl(var(--action-foreground));
+  --color-link: hsl(var(--link));
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
@@ -91,8 +94,11 @@
     --foreground: 0 0% 20%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 20%;
-    --primary: 210 79% 56%;
+    --primary: 0 0% 20%;
     --primary-foreground: 0 0% 100%;
+    --action: 0 0% 20%;
+    --action-foreground: 0 0% 100%;
+    --link: 210 79% 56%;
     --secondary: 0 0% 96%;
     --secondary-foreground: 0 0% 20%;
     --muted: 0 0% 96%;
@@ -103,7 +109,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 0 0% 90%;
     --input: 0 0% 90%;
-    --ring: 210 79% 56%;
+    --ring: 0 0% 35%;
     --radius: 0.5rem;
   }
 
@@ -113,8 +119,11 @@
     --foreground: 0 0% 83%;
     --card: 0 0% 10%;
     --card-foreground: 0 0% 83%;
-    --primary: 210 79% 65%;
+    --primary: 0 0% 83%;
     --primary-foreground: 0 0% 10%;
+    --action: 0 0% 83%;
+    --action-foreground: 0 0% 10%;
+    --link: 210 79% 65%;
     --secondary: 0 0% 17%;
     --secondary-foreground: 0 0% 83%;
     --muted: 0 0% 17%;
@@ -125,7 +134,7 @@
     --destructive-foreground: 0 0% 83%;
     --border: 0 0% 17%;
     --input: 0 0% 17%;
-    --ring: 210 79% 65%;
+    --ring: 0 0% 65%;
   }
 }
 

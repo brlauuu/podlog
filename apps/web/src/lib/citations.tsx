@@ -61,7 +61,7 @@ export function renderAnswerWithCitations(
             key={`cite-${match.index}`}
             type="button"
             onClick={() => onCitationClick(matchedSource.episode_id, citedSeconds)}
-            className="inline-flex items-center gap-0.5 text-primary hover:underline font-medium"
+            className="inline-flex items-center gap-0.5 text-link hover:underline font-medium"
             title={`${matchedSource.episode_title} at ${citedTimestamp}`}
           >
             [{citedTitle}, {citedTimestamp}]
@@ -72,7 +72,7 @@ export function renderAnswerWithCitations(
           <Link
             key={`cite-${match.index}`}
             href={episodeTimestampHref(matchedSource.episode_id, citedSeconds)}
-            className="inline-flex items-center gap-0.5 text-primary hover:underline font-medium"
+            className="inline-flex items-center gap-0.5 text-link hover:underline font-medium"
             title={`${matchedSource.episode_title} at ${citedTimestamp}`}
           >
             [{citedTitle}, {citedTimestamp}]
