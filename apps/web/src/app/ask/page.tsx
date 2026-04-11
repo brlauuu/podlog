@@ -360,7 +360,7 @@ export default function AskPage() {
                   <div className="flex items-center gap-2 min-w-0">
                     <Link
                       href={episodeTimestampHref(source.episode_id, source.start_time)}
-                      className="font-medium truncate hover:underline text-primary"
+                      className="font-medium truncate hover:underline text-link"
                     >
                       {source.episode_title}
                     </Link>

@@ -4,7 +4,7 @@ import { Search, BrainCircuit } from "lucide-react";
 
 export default function HomePage() {
   return (
-    <div className="flex flex-col items-center pt-16 pb-16 space-y-8">
+    <div className="my-auto flex flex-col items-center space-y-8">
       {/* Title + tagline */}
       <div className="text-center space-y-3">
         <Image

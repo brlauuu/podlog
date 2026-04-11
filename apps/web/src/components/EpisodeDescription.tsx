@@ -148,7 +148,7 @@ export default function EpisodeDescription({
       <div
         ref={containerRef}
         onClick={handleClick}
-        className={`prose prose-sm dark:prose-invert max-w-none prose-a:text-primary prose-a:underline ${
+        className={`prose prose-sm dark:prose-invert max-w-none prose-a:text-link prose-a:underline ${
           !expanded && isLong ? "line-clamp-3" : ""
         }`}
         dangerouslySetInnerHTML={{ __html: sanitizedHtml }}

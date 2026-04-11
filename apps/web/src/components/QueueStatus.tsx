@@ -129,7 +129,7 @@ function EpisodeRow({
         <td className="px-3 py-2 text-sm">
           <Link
             href={`/episodes/${job.episode_id}`}
-            className="hover:text-primary hover:underline transition-colors"
+            className="hover:text-link hover:underline transition-colors"
             onClick={(e) => e.stopPropagation()}
           >
             {job.title ?? "Untitled"}
@@ -188,7 +188,7 @@ function EpisodeRow({
               )}
               {canRetry && (
                 <button
-                  className="mt-2 px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                  className="mt-2 px-3 py-1 text-xs bg-action text-action-foreground rounded hover:bg-action/90"
                   onClick={(e) => {
                     e.stopPropagation();
                     onRetry(job.episode_id);
@@ -306,7 +306,7 @@ export default function QueueStatus() {
         <div className="text-center py-12 text-muted-foreground">
           <p>No episodes in the queue.</p>
           <p className="text-sm mt-1">
-            <Link href="/feeds" className="text-primary hover:underline">
+            <Link href="/feeds" className="text-link hover:underline">
               Add a feed
             </Link>{" "}
             to get started.
@@ -321,7 +321,7 @@ export default function QueueStatus() {
             Filtering by <b>{stageFilter}</b>
           </span>
           <button
-            className="text-xs text-primary hover:underline"
+            className="text-xs text-link hover:underline"
             onClick={() => setStageFilter(null)}
           >
             Clear filter

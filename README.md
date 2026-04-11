@@ -89,8 +89,8 @@ This uses `docker-compose.remote.yml` on top of the default compose file.
                                        │
                         ┌──────────────▼───────────────────────────────┐
                         │  worker (Python)                             │
-                        │    download → transcribe → diarize → embed  │
-                        │    → infer speakers → archive                │
+                        │    download → transcribe → diarize → chunk  │
+                        │    → embed → infer speakers → archive        │
                         │    Sequential processing (concurrency=1)     │
                         │    Whisper + pyannote never in memory at once│
                         └──────────────┬───────────────────────────────┘
@@ -146,7 +146,7 @@ make down-remote     # Stop Fireworks remote-inference profile
 make build           # Rebuild Docker images
 make logs            # Follow logs for all services
 make logs-remote     # Follow logs for remote-inference profile
-make test-unit       # Run unit tests
+make test-unit       # Run pipeline unit tests + healthcheck script tests
 make shell-db        # Open psql shell
 make health-install  # Install health monitoring cron (every 15 min)
 make help            # List all available commands

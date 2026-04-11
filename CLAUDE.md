@@ -63,7 +63,7 @@ podlog/
 | Task queue | PostgreSQL-backed job queue | Sequential processing (concurrency=1) to avoid OOM |
 | Transcription | WhisperX (CTranslate2 backend), default `large-v3-turbo` | Explicit unload before diarization — mandatory |
 | Diarization | `pyannote/speaker-diarization-3.1` | Requires HF_TOKEN; graceful failure path |
-| LLM inference | Ollama (local) | RAG-based Ask AI feature; default model configurable via `OLLAMA_MODEL` |
+| LLM inference | Ollama (local) | RAG-based Ask AI feature; model is selected in the Ask UI and sent per request (no `OLLAMA_MODEL` env var) |
 | Database | PostgreSQL 15 (pgvector/pgvector:pg15) | FTS via `to_tsvector` + GIN index, vector HNSW index |
 | ORM | SQLAlchemy 2.0 + Alembic | Migrations auto-run on pipeline startup |
 | Web app | Next.js 16 (App Router) | `output: 'standalone'` for Docker |
@@ -75,7 +75,7 @@ podlog/
 
 - **Whisper and pyannote never in memory simultaneously.** Whisper is explicitly unloaded (+ `gc.collect()`) before pyannote loads. This is mandatory on CPU-only machines. See PRD-01 §5.4.
 - **Web app reads DB directly for search** but proxies to the pipeline API for feed management, queue retries, and health checks.
-- **Audio serving has path traversal protection.** The `/api/audio/[episodeId]/[filename]` route strips path separators and validates the resolved path stays within `/data/audio/archive/`.
+- **Audio serving has path traversal protection.** The `/api/audio/[episodeId]/[filename]` route strips path separators and validates the resolved path stays within allowed audio directories (`/data/audio/archive/` and `/data/audio/raw/`).
 - **Error classification drives retry logic.** `TRANSIENT_NETWORK` and `HTTP_ACCESS` auto-retry (up to 3x with exponential backoff). `DISK_FULL` and `OOM` fail immediately.
 - **Diarization failure is non-fatal.** If pyannote fails, the transcript is still written with `speaker_label = NULL` and `has_diarization = false`.
 

@@ -129,7 +129,7 @@ export default function SearchResult({ result, query }: Props) {
           {isLong && (
             <button
               onClick={() => setExpanded((e) => !e)}
-              className="text-xs text-primary hover:underline mt-1"
+              className="text-xs text-link hover:underline mt-1"
             >
               {expanded ? "Show less" : "Show more"}
             </button>

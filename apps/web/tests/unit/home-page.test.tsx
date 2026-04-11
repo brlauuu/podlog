@@ -52,4 +52,14 @@ describe("HomePage issue 274", () => {
     expect(screen.queryByText(/Fully self-hosted/i)).toBeNull();
     expect(screen.queryByText(/RAG-powered AI answers/i)).toBeNull();
   });
+
+  test("uses main-area centering without hardcoded viewport subtraction", () => {
+    const { container } = render(<HomePage />);
+    const root = container.firstElementChild as HTMLElement;
+
+    expect(root.className).toContain("my-auto");
+    expect(root.className).toContain("items-center");
+    expect(root.className).not.toContain("min-h-[calc(100dvh-4rem)]");
+    expect(root.className).not.toContain("pt-16");
+  });
 });

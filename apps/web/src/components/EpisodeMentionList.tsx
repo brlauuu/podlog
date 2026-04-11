@@ -121,7 +121,7 @@ function MentionCard({
             {isLong && (
               <button
                 onClick={() => setExpanded((e) => !e)}
-                className="text-xs text-primary hover:underline mt-1 block"
+                className="text-xs text-link hover:underline mt-1 block"
               >
                 {expanded ? "Show less" : "Show more"}
               </button>
@@ -198,7 +198,7 @@ export default function EpisodeMentionList({
       {!showAll && hiddenCount > 0 && (
         <button
           onClick={() => setShowAll(true)}
-          className="text-sm text-primary hover:underline w-full text-center py-1"
+          className="text-sm text-link hover:underline w-full text-center py-1"
         >
           Show {hiddenCount} more mention{hiddenCount !== 1 ? "s" : ""}
         </button>

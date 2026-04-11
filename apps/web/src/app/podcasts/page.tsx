@@ -114,7 +114,7 @@ export default async function SourcesPage() {
       {feeds.length === 0 && uploads.total === 0 && (
         <div className="text-center py-12 space-y-3">
           <p className="text-muted-foreground">No sources yet.</p>
-          <Link href="/feeds" className="text-sm text-primary underline">
+          <Link href="/feeds" className="text-sm text-link underline">
             Add your first RSS feed
           </Link>
           <p className="text-xs text-muted-foreground">or upload an audio file below</p>
