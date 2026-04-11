@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Episode, Job
-from app.tasks.ingest import ingest_episode
+from app.services.pipeline_commands import enqueue_episode_ingest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -57,7 +57,7 @@ def retry_job(episode_id: str, db: Session = Depends(get_db)) -> dict:
     episode.has_diarization = False
     db.commit()
 
-    ingest_episode(episode.id)
+    enqueue_episode_ingest(db, str(episode.id))
 
     logger.info('"action": "manual_retry", "episode_id": "%s"', episode.id)
     return {"queued": True, "episode_id": episode.id}

@@ -4,6 +4,8 @@ from threading import Lock, Thread
 
 from fastapi import APIRouter
 
+from app.services.pipeline_commands import run_chunk_backfill
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["backfill"])
@@ -28,9 +30,7 @@ async def backfill_chunks_endpoint(embed: bool = True) -> dict:
     def _run() -> None:
         global _running
         try:
-            from app.tasks.backfill_chunks import backfill_chunks
-
-            backfill_chunks(embed=embed)
+            run_chunk_backfill(embed=embed)
         except Exception:
             logger.exception('"action": "backfill_chunks_api_error"')
         finally:

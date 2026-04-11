@@ -51,7 +51,7 @@ class TestRetryJob:
 
         db.query.side_effect = query_side_effect
         try:
-            with patch("app.api.queue.ingest_episode"):
+            with patch("app.api.queue.enqueue_episode_ingest"):
                 return retry_job("ep-1", db=db)
         except HTTPException as exc:
             return exc

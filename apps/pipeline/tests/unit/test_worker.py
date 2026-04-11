@@ -1,25 +1,9 @@
 """Unit tests for app.worker — DB-backed job worker."""
 import signal
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, call
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
 
 import pytest
-
-
-class TestResolveHandler:
-    def test_resolves_known_module(self):
-        from app.worker import _resolve_handler
-
-        handler = _resolve_handler("app.tasks.chunk:chunk_episode")
-        from app.tasks.chunk import chunk_episode
-
-        assert handler is chunk_episode
-
-    def test_raises_on_bad_path(self):
-        from app.worker import _resolve_handler
-
-        with pytest.raises(ModuleNotFoundError):
-            _resolve_handler("nonexistent.module:func")
 
 
 class TestHandleSignal:
@@ -32,92 +16,72 @@ class TestHandleSignal:
         w._shutdown = False  # reset
 
 
+class TestWorkerRegistry:
+    def test_worker_registries_are_callable(self):
+        import app.worker as w
+
+        for name, handler in w.TASK_HANDLERS.items():
+            assert callable(handler), f"task handler for {name} is not callable"
+
+        for name, handler, _ in w.PERIODIC_TASKS:
+            assert callable(handler), f"periodic handler for {name} is not callable"
+
+    def test_validate_worker_wiring_raises_for_non_callable_task(self):
+        import app.worker as w
+
+        with patch.dict(w.TASK_HANDLERS, {"chunk": object()}):
+            with pytest.raises(RuntimeError, match="Invalid worker registry wiring"):
+                w._validate_worker_wiring()
+
+    def test_validate_worker_wiring_raises_for_non_callable_periodic(self):
+        import app.worker as w
+
+        with patch.object(w, "PERIODIC_TASKS", [("poll_all_feeds", object(), None)]):
+            with pytest.raises(RuntimeError, match="Invalid worker registry wiring"):
+                w._validate_worker_wiring()
+
+
 class TestRunPeriodicTasks:
-    @patch("app.worker._resolve_handler")
     @patch("app.worker.settings")
-    def test_runs_task_when_due(self, mock_settings, mock_resolve):
+    def test_runs_task_when_due(self, mock_settings):
+        import app.worker as w
+
         mock_settings.feed_poll_interval_hours = 1
         mock_handler = MagicMock()
-        mock_resolve.return_value = mock_handler
+        with patch.object(w, "PERIODIC_TASKS", [("poll_all_feeds", mock_handler, None)]):
+            last_run = {}
+            now = datetime.now(timezone.utc)
+            w._run_periodic_tasks(last_run, now)
 
-        from app.worker import _run_periodic_tasks
+        mock_handler.assert_called_once()
+        assert "poll_all_feeds" in last_run
 
-        last_run = {}
-        now = datetime.now(timezone.utc)
-        _run_periodic_tasks(last_run, now)
-
-        assert mock_handler.call_count >= 1
-        assert len(last_run) > 0
-
-
-class TestValidateWorkerWiring:
-    @patch("app.worker._resolve_handler")
-    def test_valid_wiring_passes(self, mock_resolve):
-        mock_resolve.return_value = MagicMock()
-
-        from app.worker import _validate_worker_wiring
-
-        _validate_worker_wiring()
-
-    @patch("app.worker._resolve_handler")
-    def test_invalid_task_handler_raises(self, mock_resolve):
-        def fake_resolve(path: str):
-            if path == "app.tasks.chunk:chunk_episode":
-                raise ModuleNotFoundError("broken")
-            return MagicMock()
-
-        mock_resolve.side_effect = fake_resolve
-
-        from app.worker import _validate_worker_wiring
-
-        with pytest.raises(RuntimeError, match="Invalid worker registry wiring"):
-            _validate_worker_wiring()
-
-    @patch("app.worker._resolve_handler")
-    def test_non_callable_handler_raises(self, mock_resolve):
-        def fake_resolve(path: str):
-            if path == "app.tasks.chunk:chunk_episode":
-                return object()
-            return MagicMock()
-
-        mock_resolve.side_effect = fake_resolve
-
-        from app.worker import _validate_worker_wiring
-
-        with pytest.raises(RuntimeError, match="not callable"):
-            _validate_worker_wiring()
-
-    @patch("app.worker._resolve_handler")
     @patch("app.worker.settings")
-    def test_skips_task_when_not_due(self, mock_settings, mock_resolve):
+    def test_skips_task_when_not_due(self, mock_settings):
+        import app.worker as w
+
         mock_settings.feed_poll_interval_hours = 1
         mock_handler = MagicMock()
-        mock_resolve.return_value = mock_handler
-
-        from app.worker import _run_periodic_tasks, PERIODIC_TASKS
-
-        now = datetime.now(timezone.utc)
-        last_run = {name: now for name, _, _ in PERIODIC_TASKS}
-
-        mock_handler.reset_mock()
-        _run_periodic_tasks(last_run, now)
+        with patch.object(w, "PERIODIC_TASKS", [("poll_all_feeds", mock_handler, None)]):
+            now = datetime.now(timezone.utc)
+            last_run = {"poll_all_feeds": now - timedelta(minutes=30)}
+            w._run_periodic_tasks(last_run, now)
 
         mock_handler.assert_not_called()
 
-    @patch("app.worker._resolve_handler")
     @patch("app.worker.settings")
-    def test_failure_still_updates_last_run(self, mock_settings, mock_resolve):
+    def test_failure_still_updates_last_run(self, mock_settings):
+        import app.worker as w
+
         mock_settings.feed_poll_interval_hours = 1
-        mock_resolve.return_value = MagicMock(side_effect=RuntimeError("boom"))
-
-        from app.worker import _run_periodic_tasks
-
-        last_run = {}
-        now = datetime.now(timezone.utc)
-        _run_periodic_tasks(last_run, now)
+        crashing_handler = MagicMock(side_effect=RuntimeError("boom"))
+        with patch.object(w, "PERIODIC_TASKS", [("poll_all_feeds", crashing_handler, None)]):
+            last_run = {}
+            now = datetime.now(timezone.utc)
+            w._run_periodic_tasks(last_run, now)
 
         # Should still mark as run to avoid immediate retry
-        assert len(last_run) > 0
+        assert "poll_all_feeds" in last_run
 
 
 class TestMainLoop:
@@ -156,11 +120,18 @@ class TestMainLoop:
     @patch("app.worker.signal")
     @patch("app.services.events.bus")
     @patch("app.services.digest.register_notification_handlers")
-    def test_processes_job_and_stops(self, mock_register, mock_bus, mock_signal,
-                                     mock_session_cls, mock_jq, mock_periodic, mock_time):
+    def test_processes_job_and_stops(
+        self,
+        mock_register,
+        mock_bus,
+        mock_signal,
+        mock_session_cls,
+        mock_jq,
+        mock_periodic,
+        mock_time,
+    ):
         import app.worker as w
 
-        # Set up: one job found, then shutdown
         job = MagicMock()
         job.id = 1
         job.task = "chunk"
@@ -170,28 +141,18 @@ class TestMainLoop:
         mock_session_cls.return_value = db
         mock_jq.poll.return_value = job
 
-        # Stop after first iteration
-        call_count = 0
-        original_shutdown = w._shutdown
-
         def stop_after_one(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 1:
-                w._shutdown = True
+            w._shutdown = True
 
         mock_jq.complete.side_effect = stop_after_one
+        mock_handler = MagicMock()
 
-        with patch("app.worker._resolve_handler") as mock_resolve:
-            mock_handler = MagicMock()
-            mock_resolve.return_value = mock_handler
-
+        with patch.dict(w.TASK_HANDLERS, {"chunk": mock_handler}, clear=False):
             w._shutdown = False
             w.main()
 
         mock_handler.assert_called_once_with("ep1")
         mock_jq.complete.assert_called_once_with(db, job)
-        w._shutdown = original_shutdown
 
     @patch("app.worker.time")
     @patch("app.worker._run_periodic_tasks")
@@ -200,8 +161,16 @@ class TestMainLoop:
     @patch("app.worker.signal")
     @patch("app.services.events.bus")
     @patch("app.services.digest.register_notification_handlers")
-    def test_unknown_task_fails_job(self, mock_register, mock_bus, mock_signal,
-                                    mock_session_cls, mock_jq, mock_periodic, mock_time):
+    def test_unknown_task_fails_job(
+        self,
+        mock_register,
+        mock_bus,
+        mock_signal,
+        mock_session_cls,
+        mock_jq,
+        mock_periodic,
+        mock_time,
+    ):
         import app.worker as w
 
         job = MagicMock()
@@ -231,8 +200,16 @@ class TestMainLoop:
     @patch("app.worker.signal")
     @patch("app.services.events.bus")
     @patch("app.services.digest.register_notification_handlers")
-    def test_handler_exception_fails_job(self, mock_register, mock_bus, mock_signal,
-                                          mock_session_cls, mock_jq, mock_periodic, mock_time):
+    def test_handler_exception_fails_job(
+        self,
+        mock_register,
+        mock_bus,
+        mock_signal,
+        mock_session_cls,
+        mock_jq,
+        mock_periodic,
+        mock_time,
+    ):
         import app.worker as w
 
         job = MagicMock()
@@ -248,10 +225,9 @@ class TestMainLoop:
             w._shutdown = True
 
         mock_jq.fail.side_effect = stop
+        crashing_handler = MagicMock(side_effect=RuntimeError("task crash"))
 
-        with patch("app.worker._resolve_handler") as mock_resolve:
-            mock_resolve.return_value = MagicMock(side_effect=RuntimeError("task crash"))
-
+        with patch.dict(w.TASK_HANDLERS, {"chunk": crashing_handler}, clear=False):
             w._shutdown = False
             w.main()
 
@@ -264,8 +240,16 @@ class TestMainLoop:
     @patch("app.worker.signal")
     @patch("app.services.events.bus")
     @patch("app.services.digest.register_notification_handlers")
-    def test_no_job_sleeps(self, mock_register, mock_bus, mock_signal,
-                            mock_session_cls, mock_jq, mock_periodic, mock_time):
+    def test_no_job_sleeps(
+        self,
+        mock_register,
+        mock_bus,
+        mock_signal,
+        mock_session_cls,
+        mock_jq,
+        mock_periodic,
+        mock_time,
+    ):
         import app.worker as w
 
         db = MagicMock()
