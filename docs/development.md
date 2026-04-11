@@ -159,7 +159,7 @@ make build              Rebuild all Docker images
 make logs               Follow logs for all services
 make migrate            Run database migrations
 make test               Run all tests
-make test-unit          Run unit tests only
+make test-unit          Run pipeline unit tests + host healthcheck tests (no web unit tests)
 make test-integration   Run integration tests
 make test-e2e           Run Playwright e2e tests
 make shell-db           Open psql shell

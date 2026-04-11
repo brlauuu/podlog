@@ -93,7 +93,7 @@ Service details:
 |---|---|---|
 | **web** | 3000 | Next.js frontend — home, search, episodes, queue, Ask |
 | **pipeline** | 8000 | FastAPI control plane — feed management, health |
-| **worker** | — | Processes episodes: download, transcribe, diarize, archive |
+| **worker** | — | Processes episodes: download, transcribe, diarize, chunk, embed, infer, archive |
 | **db** | 5432 | PostgreSQL 15 with pgvector for FTS + semantic search |
 | **ollama** | 11434 | Local Ask AI generation provider (local-first profile) |
 
@@ -110,7 +110,7 @@ make build           # Rebuild Docker images
 make logs            # Follow logs for all services
 make logs-remote     # Follow logs for remote-inference profile
 make shell-db        # Open a psql shell
-make test-unit       # Run unit tests
+make test-unit       # Run pipeline unit tests + healthcheck script tests
 make health-install  # Install health monitoring cron job (every 15 min)
 make health-check    # Run health check once (manual)
 make help            # List all available commands
