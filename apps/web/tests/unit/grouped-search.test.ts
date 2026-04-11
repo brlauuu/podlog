@@ -55,7 +55,7 @@ describe("GET /api/search/grouped", () => {
     );
     const resp = await GET(req);
     expect(resp.status).toBe(200);
-    expect(searchGrouped).toHaveBeenCalledWith("tariffs", null, 2, 10, false);
+    expect(searchGrouped).toHaveBeenCalledWith("tariffs", null, false, 2, 10, false);
   });
 
   test("passes feedId filter when provided", async () => {
@@ -71,7 +71,7 @@ describe("GET /api/search/grouped", () => {
       `http://localhost/api/search/grouped?q=test&feedId=${feedId}`
     );
     await GET(req);
-    expect(searchGrouped).toHaveBeenCalledWith("test", [feedId], 1, 20, false);
+    expect(searchGrouped).toHaveBeenCalledWith("test", [feedId], false, 1, 20, false);
   });
 
   test("clamps pageSize to max 50", async () => {
@@ -86,7 +86,7 @@ describe("GET /api/search/grouped", () => {
       "http://localhost/api/search/grouped?q=test&pageSize=100"
     );
     await GET(req);
-    expect(searchGrouped).toHaveBeenCalledWith("test", null, 1, 50, false);
+    expect(searchGrouped).toHaveBeenCalledWith("test", null, false, 1, 50, false);
   });
 
   test("returns 500 on search error", async () => {

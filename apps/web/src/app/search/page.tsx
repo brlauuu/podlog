@@ -115,15 +115,16 @@ function SearchPageContent() {
     });
   }, [query, submittedQuery, selectedFeedIds, page, viewMode]);
 
-  // Build feed filter string for API (comma-separated IDs)
-  const feedFilterParam = selectedFeedIds.size > 0
-    ? Array.from(selectedFeedIds).join(",")
-    : "";
+  // Separate real feed UUIDs from the __uploads__ sentinel
+  const includeManualUploads = selectedFeedIds.has("__uploads__");
+  const feedFilterParam = Array.from(selectedFeedIds)
+    .filter((id) => id !== "__uploads__")
+    .join(",");
 
   // Flat search query
-  const flatCacheKey = `${submittedQuery}:${feedFilterParam}`;
+  const flatCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}`;
   const flatQuery = useQuery<SearchPageType>({
-    queryKey: ["search", submittedQuery, feedFilterParam, page],
+    queryKey: ["search", submittedQuery, feedFilterParam, includeManualUploads, page],
     queryFn: async () => {
       if (!submittedQuery)
         return {
@@ -141,6 +142,7 @@ function SearchPageContent() {
         pageSize: String(PAGE_SIZE),
       });
       if (feedFilterParam) params.set("feedId", feedFilterParam);
+      if (includeManualUploads) params.set("uploads", "true");
       if (canSkipCount) params.set("skipCount", "true");
       const resp = await fetch(`/api/search?${params}`);
       if (!resp.ok) throw new Error("Search failed");
@@ -157,9 +159,9 @@ function SearchPageContent() {
   });
 
   // Grouped search query
-  const groupedCacheKey = `${submittedQuery}:${feedFilterParam}`;
+  const groupedCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}`;
   const groupedQuery = useQuery<GroupedSearchResult>({
-    queryKey: ["search-grouped", submittedQuery, feedFilterParam, page],
+    queryKey: ["search-grouped", submittedQuery, feedFilterParam, includeManualUploads, page],
     queryFn: async () => {
       if (!submittedQuery)
         return {
@@ -177,6 +179,7 @@ function SearchPageContent() {
         pageSize: String(PAGE_SIZE),
       });
       if (feedFilterParam) params.set("feedId", feedFilterParam);
+      if (includeManualUploads) params.set("uploads", "true");
       if (canSkipCount) params.set("skipCount", "true");
       const resp = await fetch(`/api/search/grouped?${params}`);
       if (!resp.ok) throw new Error("Search failed");
@@ -268,17 +271,15 @@ function SearchPageContent() {
             </p>
           )}
 
-          {/* Podcast filter + controls row */}
-          {!submittedQuery && (
-            <div className="flex justify-center">
-              <PodcastFilter
-                feeds={feeds}
-                selectedFeedIds={selectedFeedIds}
-                onSelectionChange={setSelectedFeedIds}
-                hasManualUploads={hasManualUploads}
-              />
-            </div>
-          )}
+          {/* Podcast filter */}
+          <div className="flex justify-center">
+            <PodcastFilter
+              feeds={feeds}
+              selectedFeedIds={selectedFeedIds}
+              onSelectionChange={setSelectedFeedIds}
+              hasManualUploads={hasManualUploads}
+            />
+          </div>
         </div>
       </div>
 
