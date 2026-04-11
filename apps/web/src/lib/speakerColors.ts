@@ -3,7 +3,7 @@
  * Colors are assigned by speaker slot index (SPEAKER_00 = blue, etc.).
  */
 
-export interface SpeakerColor {
+interface SpeakerColor {
   name: string;
   hex: string;
   bg: string;       // Tailwind-compatible bg tint (rgba)
