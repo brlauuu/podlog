@@ -53,10 +53,16 @@ class TestDiarizeEpisode:
             result = diarize_episode("ep1")
 
         assert result == "ep1"
-        mock_update.assert_any_call(
-            db, "ep1", has_diarization=True, diarization_error=None,
-            diarize_duration_secs=pytest.approx(0.0, abs=5),
-        )
+        matching = [
+            call for call in mock_update.call_args_list
+            if call.args[:2] == (db, "ep1")
+            and call.kwargs.get("has_diarization") is True
+            and call.kwargs.get("diarization_error") is None
+            and "diarize_duration_secs" in call.kwargs
+            and "diarize_step_durations" in call.kwargs
+        ]
+        assert matching
+        assert "provider_diarization_secs" in matching[0].kwargs["diarize_step_durations"]
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "chunk")
 
     @patch("app.tasks.diarize.job_queue")
@@ -87,6 +93,15 @@ class TestDiarizeEpisode:
             result = diarize_episode("ep1")
 
         assert result == "ep1"
+        matching = [
+            call for call in mock_update.call_args_list
+            if call.args[:2] == (db, "ep1")
+            and call.kwargs.get("has_diarization") is True
+            and call.kwargs.get("diarization_error") is None
+            and "diarize_step_durations" in call.kwargs
+        ]
+        assert matching
+        assert "speaker_assignment_secs" in matching[0].kwargs["diarize_step_durations"]
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "chunk")
 
     @patch("app.tasks.diarize.job_queue")
@@ -112,9 +127,13 @@ class TestDiarizeEpisode:
 
         assert result == "ep1"
         # Should mark diarization as failed but continue
-        mock_update.assert_any_call(
-            db, "ep1", has_diarization=False, diarization_error="pyannote crash"
-        )
+        matching = [
+            call for call in mock_update.call_args_list
+            if call.args[:2] == (db, "ep1")
+            and call.kwargs.get("has_diarization") is False
+            and call.kwargs.get("diarization_error") == "pyannote crash"
+        ]
+        assert matching
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "chunk")
 
     @patch("app.tasks.diarize.SessionLocal")
@@ -173,10 +192,16 @@ class TestDiarizeEpisode:
             result = diarize_episode("ep1")
 
         assert result == "ep1"
-        mock_update.assert_any_call(
-            db, "ep1", has_diarization=True, diarization_error=None,
-            diarize_duration_secs=pytest.approx(0.0, abs=5),
-        )
+        matching = [
+            call for call in mock_update.call_args_list
+            if call.args[:2] == (db, "ep1")
+            and call.kwargs.get("has_diarization") is True
+            and call.kwargs.get("diarization_error") is None
+            and "diarize_duration_secs" in call.kwargs
+            and "diarize_step_durations" in call.kwargs
+        ]
+        assert matching
+        assert "artifact_load_secs" in matching[0].kwargs["diarize_step_durations"]
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "chunk")
 
     @patch("app.tasks.diarize.job_queue")
@@ -205,5 +230,7 @@ class TestDiarizeEpisode:
             result = diarize_episode("ep1")
 
         assert result == "ep1"
-        mock_update.assert_any_call(db, "ep1", has_diarization=False, diarization_error=None)
+        mock_update.assert_any_call(
+            db, "ep1", has_diarization=False, diarization_error=None, diarize_step_durations=None
+        )
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "chunk")

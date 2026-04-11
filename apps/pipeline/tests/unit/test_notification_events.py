@@ -10,6 +10,7 @@ def test_episode_done_event_defaults_and_base_type():
     assert event.episode_id == ""
     assert event.queue_remaining == 0
     assert event.processing_factor is None
+    assert event.diarize_step_durations is None
 
 
 def test_episode_failed_event_fields():

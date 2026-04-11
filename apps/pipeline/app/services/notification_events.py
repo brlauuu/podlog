@@ -14,6 +14,7 @@ class EpisodeDoneEvent(Event):
     duration_secs: int | None = None
     transcribe_duration_secs: float | None = None
     diarize_duration_secs: float | None = None
+    diarize_step_durations: dict[str, float] | None = None
     total_duration_secs: float | None = None
     queue_remaining: int = 0
     queue_estimated_secs: float | None = None

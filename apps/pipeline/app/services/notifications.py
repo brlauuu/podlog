@@ -54,6 +54,39 @@ def _fmt_factor(factor: float | None) -> str:
     return f"{factor:.1f}x"
 
 
+def _humanize_step_key(key: str) -> str:
+    words = key.replace("_secs", "").replace("_", " ").strip()
+    return words[:1].upper() + words[1:] if words else key
+
+
+def _fmt_diarize_steps_html(step_durations: dict[str, float] | None) -> str:
+    if not step_durations:
+        return ""
+    rows = []
+    for idx, (name, secs) in enumerate(step_durations.items()):
+        row_bg = ' style="background: #f9f9f9;"' if idx % 2 else ""
+        rows.append(
+            f"""\
+    <tr{row_bg}><td style="padding: 4px 12px; color: #666;">{_humanize_step_key(name)}</td>
+        <td style="padding: 4px 12px;">{_fmt_short_duration(secs)}</td></tr>"""
+        )
+    rows_html = "\n".join(rows)
+    return f"""\
+  <h3 style="margin-top: 20px; margin-bottom: 8px;">Diarization Step Breakdown</h3>
+  <table style="border-collapse: collapse; width: 100%;">
+{rows_html}
+  </table>"""
+
+
+def _fmt_diarize_steps_telegram(step_durations: dict[str, float] | None) -> str:
+    if not step_durations:
+        return ""
+    lines = "\n*Diarization Step Breakdown*\n"
+    for name, secs in step_durations.items():
+        lines += f"`{_humanize_step_key(name)}: {_fmt_short_duration(secs)}`\n"
+    return lines
+
+
 def _fmt_avg_section_html(event) -> str:
     """Render the HTML averages section if avg data is available."""
     if (event.avg_transcribe_secs is None and event.avg_diarize_secs is None
@@ -107,6 +140,7 @@ def _fmt_avg_section_telegram(event) -> str:
 
 def format_done_html(event: EpisodeDoneEvent) -> str:
     avg_html = _fmt_avg_section_html(event)
+    diarize_steps_html = _fmt_diarize_steps_html(event.diarize_step_durations)
     return f"""\
 <html>
 <body style="font-family: -apple-system, Arial, sans-serif; color: #222; max-width: 520px; margin: 0 auto; padding: 16px;">
@@ -133,6 +167,7 @@ def format_done_html(event: EpisodeDoneEvent) -> str:
     <tr><td style="padding: 4px 12px; color: #666;">Total</td>
         <td style="padding: 4px 12px; font-weight: 600;">{_fmt_short_duration(event.total_duration_secs)}</td></tr>
   </table>
+{diarize_steps_html}
 {avg_html}
   <h3 style="margin-top: 20px; margin-bottom: 8px;">Queue Status</h3>
   <table style="border-collapse: collapse; width: 100%;">
@@ -150,6 +185,7 @@ def format_done_html(event: EpisodeDoneEvent) -> str:
 
 def format_done_telegram(event: EpisodeDoneEvent) -> str:
     avg_section = _fmt_avg_section_telegram(event)
+    diarize_steps_section = _fmt_diarize_steps_telegram(event.diarize_step_durations)
     return (
         f"*✅ Episode Processed*\n\n"
         f"*Podcast:* {event.podcast_title}\n"
@@ -160,6 +196,7 @@ def format_done_telegram(event: EpisodeDoneEvent) -> str:
         f"`Transcription:  {_fmt_short_duration(event.transcribe_duration_secs)}`\n"
         f"`Diarization:    {_fmt_short_duration(event.diarize_duration_secs)}`\n"
         f"`Total:          {_fmt_short_duration(event.total_duration_secs)}`\n"
+        f"{diarize_steps_section}"
         f"{avg_section}\n"
         f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate(event.queue_estimated_secs)}"
     )
