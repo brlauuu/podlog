@@ -52,9 +52,11 @@ After adding a feed, go to `/queue` to watch the episode move through the pipeli
 2. **Downloading** — fetching audio from the RSS feed
 3. **Transcribing** — running Whisper speech-to-text
 4. **Diarizing** — running pyannote speaker separation
-5. **Inferring** — extracting speaker names via NER
-6. **Archiving** — compressing audio to MP3
-7. **Done**
+5. **Chunking** — merging diarized segments into speaker-turn chunks for RAG
+6. **Embedding** — generating vector embeddings for segments and chunks
+7. **Inferring** — extracting speaker names via NER
+8. **Archiving** — compressing audio to MP3
+9. **Done**
 
 For more detail on each stage and error handling, see [Queue Dashboard](08-queue.md).
 

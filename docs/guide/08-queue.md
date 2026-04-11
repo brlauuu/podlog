@@ -12,6 +12,8 @@ Every episode moves through these stages in order:
 | **Downloading** | Fetching audio from the RSS feed URL |
 | **Transcribing** | Running Whisper speech-to-text |
 | **Diarizing** | Running pyannote speaker separation |
+| **Chunking** | Merging diarized segments into speaker-turn chunks for RAG |
+| **Embedding** | Generating vector embeddings for segments and chunks |
 | **Inferring** | Extracting speaker names via spaCy NER |
 | **Archiving** | Compressing audio to MP3 and writing transcript file |
 | **Done** | Fully processed and searchable |

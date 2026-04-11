@@ -7,7 +7,7 @@ This document describes the complete processing pipeline for an episode and what
 An episode moves through these stages sequentially. Each stage produces specific data that downstream features depend on.
 
 ```
-pending → download → transcribe → diarize → embed → infer → archive → done
+pending → download → transcribe → diarize → chunk → embed → infer → archive → done
 ```
 
 ### 1. Download
@@ -74,9 +74,30 @@ pending → download → transcribe → diarize → embed → infer → archive 
 
 ---
 
-### 4. Embed
+### 4. Chunk
 
-**Status:** (no episode status change — runs as a job queue task)
+**Status:** `chunking`
+
+**What it does:**
+- Merges diarized segments into larger speaker-turn chunks for higher-quality RAG retrieval
+- Rebuilds chunks idempotently for the episode (removes old chunks first)
+- Enqueues the embed step when finished
+
+**Data produced:**
+| Field | Table | Description |
+|-------|-------|-------------|
+| `text` | chunks | Merged speaker-turn text |
+| `start_time` / `end_time` | chunks | Chunk timing boundaries |
+| `speaker_label` | chunks | Speaker label carried from diarized segments |
+| `segment_ids` | chunks | Source segment IDs merged into each chunk |
+
+**Failure mode:** Non-fatal — pipeline continues to embed even if chunking fails.
+
+---
+
+### 5. Embed
+
+**Status:** `embedding`
 
 **What it does:**
 - Loads all segments for the episode
@@ -88,14 +109,15 @@ pending → download → transcribe → diarize → embed → infer → archive 
 | Field | Table | Description |
 |-------|-------|-------------|
 | `embedding` | segments | 384-dim normalized vector per segment |
+| `embedding` | chunks | 384-dim normalized vector per merged chunk |
 
 **Failure mode:** Non-fatal — episode continues to infer. Segments without embeddings are excluded from vector search but still found by FTS.
 
 ---
 
-### 5. Infer (Speaker Name Inference)
+### 6. Infer (Speaker Name Inference)
 
-**Status:** (no episode status change)
+**Status:** `inferring`
 
 **What it does:**
 - Extracts host/guest names from episode title and description using spaCy NER (`en_core_web_lg`)
@@ -117,7 +139,7 @@ pending → download → transcribe → diarize → embed → infer → archive 
 
 ---
 
-### 6. Archive
+### 7. Archive
 
 **Status:** `archiving` → `done`
 
