@@ -10,6 +10,7 @@ export interface SearchPageSnapshot {
   query: string;
   submittedQuery: string;
   selectedFeedIds: string[];
+  selectedSpeaker?: string | null;
   page: number;
   viewMode: ViewMode;
 }

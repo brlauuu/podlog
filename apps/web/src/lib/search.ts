@@ -58,10 +58,16 @@ export async function searchSegments(
   includeManualUploads: boolean,
   page: number,
   pageSize: number = 20,
-  skipCount: boolean = false
+  skipCount: boolean = false,
+  speakerLabel: string | null = null
 ): Promise<SearchPage> {
   const FETCH_LIMIT = 100; // fetch more than pageSize for RRF merging
   const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
+
+  // FTS query — speaker filter uses table alias 't'
+  const ftsSpeakerClause = speakerLabel ? `AND t.speaker_label = $${feedFilter.nextIdx}` : "";
+  const ftsLimitIdx = feedFilter.nextIdx + (speakerLabel ? 1 : 0);
+  const ftsParams = [query, ...feedFilter.params, ...(speakerLabel ? [speakerLabel] : []), FETCH_LIMIT];
 
   const ftsPromise = pool.query(
     `WITH ${SPEAKER_TURNS_CTE}
@@ -91,13 +97,19 @@ export async function searchSegments(
     WHERE to_tsvector('english', t.full_text) @@ query
       AND e.status = 'done'
       AND ${feedFilter.clause}
+      ${ftsSpeakerClause}
     ORDER BY rank DESC
-    LIMIT $${feedFilter.nextIdx}`,
-    [query, ...feedFilter.params, FETCH_LIMIT]
+    LIMIT $${ftsLimitIdx}`,
+    ftsParams
   );
 
   const embedding = await getQueryEmbedding(query);
   const vecFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
+  // Vector query — speaker filter uses table alias 's'
+  const vecSpeakerClause = speakerLabel ? `AND s.speaker_label = $${vecFeedFilter.nextIdx}` : "";
+  const vecLimitIdx = vecFeedFilter.nextIdx + (speakerLabel ? 1 : 0);
+  const vecParams = [`[${embedding?.join(",")}]`, ...vecFeedFilter.params, ...(speakerLabel ? [speakerLabel] : []), FETCH_LIMIT];
+
   const vecPromise = embedding
     ? pool.query(
         `SELECT
@@ -125,13 +137,16 @@ export async function searchSegments(
         WHERE s.embedding IS NOT NULL
           AND e.status = 'done'
           AND ${vecFeedFilter.clause}
+          ${vecSpeakerClause}
         ORDER BY s.embedding <=> $1::vector
-        LIMIT $${vecFeedFilter.nextIdx}`,
-        [`[${embedding.join(",")}]`, ...vecFeedFilter.params, FETCH_LIMIT]
+        LIMIT $${vecLimitIdx}`,
+        vecParams
       )
     : Promise.resolve({ rows: [] });
 
   const countFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
+  const countSpeakerClause = speakerLabel ? `AND t.speaker_label = $${countFeedFilter.nextIdx}` : "";
+  const countParams = [query, ...countFeedFilter.params, ...(speakerLabel ? [speakerLabel] : [])];
   const countPromise = skipCount
     ? Promise.resolve(null)
     : pool.query(
@@ -143,8 +158,9 @@ export async function searchSegments(
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND e.status = 'done'
-          AND ${countFeedFilter.clause}`,
-        [query, ...countFeedFilter.params]
+          AND ${countFeedFilter.clause}
+          ${countSpeakerClause}`,
+        countParams
       );
 
   const coveragePromise = skipCount
@@ -191,10 +207,14 @@ export async function searchGrouped(
   includeManualUploads: boolean,
   page: number,
   pageSize: number = 20,
-  skipCount: boolean = false
+  skipCount: boolean = false,
+  speakerLabel: string | null = null
 ): Promise<GroupedSearchResult> {
   const offset = (page - 1) * pageSize;
   const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
+  const rowsSpeakerClause = speakerLabel ? `AND t.speaker_label = $${feedFilter.nextIdx}` : "";
+  const rowsLimitIdx = feedFilter.nextIdx + (speakerLabel ? 1 : 0);
+  const rowsParams = [query, ...feedFilter.params, ...(speakerLabel ? [speakerLabel] : []), pageSize, offset];
 
   const rowsPromise = pool.query(
     `WITH ${SPEAKER_TURNS_CTE}
@@ -216,13 +236,16 @@ export async function searchGrouped(
     WHERE to_tsvector('english', t.full_text) @@ query
       AND e.status = 'done'
       AND ${feedFilter.clause}
+      ${rowsSpeakerClause}
     GROUP BY f.id, f.title, f.mode, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
     ORDER BY best_rank DESC, mention_count DESC
-    LIMIT $${feedFilter.nextIdx} OFFSET $${feedFilter.nextIdx + 1}`,
-    [query, ...feedFilter.params, pageSize, offset]
+    LIMIT $${rowsLimitIdx} OFFSET $${rowsLimitIdx + 1}`,
+    rowsParams
   );
 
   const grpCountFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
+  const countSpeakerClause = speakerLabel ? `AND t.speaker_label = $${grpCountFilter.nextIdx}` : "";
+  const countParams = [query, ...grpCountFilter.params, ...(speakerLabel ? [speakerLabel] : [])];
   const countPromise = skipCount
     ? Promise.resolve(null)
     : pool.query(
@@ -238,8 +261,9 @@ export async function searchGrouped(
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND e.status = 'done'
-          AND ${grpCountFilter.clause}`,
-        [query, ...grpCountFilter.params]
+          AND ${grpCountFilter.clause}
+          ${countSpeakerClause}`,
+        countParams
       );
 
   const coveragePromise = skipCount

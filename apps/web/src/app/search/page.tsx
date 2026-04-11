@@ -16,6 +16,7 @@ import SearchInput from "@/components/SearchInput";
 import HelpPopover from "@/components/HelpPopover";
 import SearchSpinner from "@/components/SearchSpinner";
 import PodcastFilter from "@/components/PodcastFilter";
+import SpeakerFilter from "@/components/SpeakerFilter";
 import type { SearchPage as SearchPageType, GroupedSearchResult } from "@/lib/search";
 import { loadSearchSnapshot, saveSearchSnapshot } from "@/lib/page-state";
 
@@ -54,6 +55,9 @@ function SearchPageContent() {
   );
   const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(
     new Set(initialSnapshot?.selectedFeedIds || [])
+  );
+  const [selectedSpeaker, setSelectedSpeaker] = useState<string | null>(
+    initialSnapshot?.selectedSpeaker ?? null
   );
   const [page, setPage] = useState(
     initialQuery ? 1 : initialSnapshot?.page || 1
@@ -110,10 +114,11 @@ function SearchPageContent() {
       query,
       submittedQuery,
       selectedFeedIds: Array.from(selectedFeedIds),
+      selectedSpeaker,
       page,
       viewMode,
     });
-  }, [query, submittedQuery, selectedFeedIds, page, viewMode]);
+  }, [query, submittedQuery, selectedFeedIds, selectedSpeaker, page, viewMode]);
 
   // Separate real feed UUIDs from the __uploads__ sentinel
   const includeManualUploads = selectedFeedIds.has("__uploads__");
@@ -122,9 +127,9 @@ function SearchPageContent() {
     .join(",");
 
   // Flat search query
-  const flatCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}`;
+  const flatCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}:${selectedSpeaker}`;
   const flatQuery = useQuery<SearchPageType>({
-    queryKey: ["search", submittedQuery, feedFilterParam, includeManualUploads, page],
+    queryKey: ["search", submittedQuery, feedFilterParam, includeManualUploads, selectedSpeaker, page],
     queryFn: async () => {
       if (!submittedQuery)
         return {
@@ -143,6 +148,7 @@ function SearchPageContent() {
       });
       if (feedFilterParam) params.set("feedId", feedFilterParam);
       if (includeManualUploads) params.set("uploads", "true");
+      if (selectedSpeaker) params.set("speaker", selectedSpeaker);
       if (canSkipCount) params.set("skipCount", "true");
       const resp = await fetch(`/api/search?${params}`);
       if (!resp.ok) throw new Error("Search failed");
@@ -159,9 +165,9 @@ function SearchPageContent() {
   });
 
   // Grouped search query
-  const groupedCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}`;
+  const groupedCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}:${selectedSpeaker}`;
   const groupedQuery = useQuery<GroupedSearchResult>({
-    queryKey: ["search-grouped", submittedQuery, feedFilterParam, includeManualUploads, page],
+    queryKey: ["search-grouped", submittedQuery, feedFilterParam, includeManualUploads, selectedSpeaker, page],
     queryFn: async () => {
       if (!submittedQuery)
         return {
@@ -180,6 +186,7 @@ function SearchPageContent() {
       });
       if (feedFilterParam) params.set("feedId", feedFilterParam);
       if (includeManualUploads) params.set("uploads", "true");
+      if (selectedSpeaker) params.set("speaker", selectedSpeaker);
       if (canSkipCount) params.set("skipCount", "true");
       const resp = await fetch(`/api/search/grouped?${params}`);
       if (!resp.ok) throw new Error("Search failed");
@@ -220,6 +227,7 @@ function SearchPageContent() {
     setQuery("");
     setSubmittedQuery("");
     setPage(1);
+    setSelectedSpeaker(null);
     router.replace("/search", { scroll: false });
   }
 
@@ -271,13 +279,19 @@ function SearchPageContent() {
             </p>
           )}
 
-          {/* Podcast filter */}
-          <div className="flex justify-center">
+          {/* Filters: podcast + speaker */}
+          <div className="flex justify-center gap-2 flex-wrap">
             <PodcastFilter
               feeds={feeds}
               selectedFeedIds={selectedFeedIds}
-              onSelectionChange={setSelectedFeedIds}
+              onSelectionChange={(next) => { setSelectedFeedIds(next); setSelectedSpeaker(null); setPage(1); }}
               hasManualUploads={hasManualUploads}
+            />
+            <SpeakerFilter
+              feedIds={Array.from(selectedFeedIds)}
+              includeManualUploads={includeManualUploads}
+              selectedSpeaker={selectedSpeaker}
+              onSelectionChange={(s) => { setSelectedSpeaker(s); setPage(1); }}
             />
           </div>
         </div>
