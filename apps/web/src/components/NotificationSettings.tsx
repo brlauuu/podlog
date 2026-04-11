@@ -1,23 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-import {
-  EmailTab,
-  FireworksTab,
-  GeneralTab,
-  Settings,
-  Tab,
-  TelegramTab,
-  Toast,
-} from "./NotificationSettingsSections";
+import { Separator } from "@/components/ui/separator";
+import { Settings, Toast } from "./NotificationSettingsSections";
+import NotificationSection from "./NotificationSection";
+import RemoteInferenceSection from "./RemoteInferenceSection";
 
 export default function NotificationSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("telegram");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
   const [dirty, setDirty] = useState<Partial<Settings>>({});
 
   useEffect(() => {
@@ -34,10 +30,15 @@ export default function NotificationSettings() {
   }, [toast]);
 
   if (!settings) {
-    return <div className="text-muted-foreground text-sm">Loading settings...</div>;
+    return (
+      <div className="text-muted-foreground text-sm">Loading settings...</div>
+    );
   }
 
-  function handleChange(field: keyof Settings, value: string | number | boolean | null) {
+  function handleChange(
+    field: keyof Settings,
+    value: string | number | boolean | null
+  ) {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
     setDirty((prev) => ({ ...prev, [field]: value }));
   }
@@ -55,6 +56,13 @@ export default function NotificationSettings() {
         const updated = await resp.json();
         setSettings(updated);
         setDirty({});
+        if (updated.fireworks_key_warning) {
+          setToast({
+            message: updated.fireworks_key_warning,
+            type: "error",
+          });
+          return;
+        }
         setToast({ message: "Settings saved", type: "success" });
       } else {
         const err = await resp.json();
@@ -88,82 +96,55 @@ export default function NotificationSettings() {
     }
   }
 
-  const tabs: { key: Tab; label: string; dot?: boolean; configured?: boolean }[] = [
-    { key: "telegram", label: "Telegram", dot: true, configured: settings.telegram_configured },
-    { key: "email", label: "Email", dot: true, configured: !!settings.notification_email_to },
-    { key: "general", label: "General" },
-    { key: "fireworks", label: "Fireworks AI", dot: true, configured: settings.fireworks_configured },
-  ];
+  const actionButtonClass =
+    "px-5 py-2 rounded-md bg-action text-action-foreground text-sm font-medium hover:bg-action/90 disabled:opacity-50";
 
   return (
     <div>
       <div className="mb-5">
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Configure notifications and optional advanced provider settings.
+          Configure notifications and remote inference providers.
         </p>
       </div>
-      <div className="flex border-b border-border mb-6" role="tablist">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            role="tab"
-            aria-selected={activeTab === tab.key}
-            className={`px-5 py-2.5 text-sm border-b-2 transition-colors ${
-              activeTab === tab.key
-                ? "border-indigo-500 text-foreground font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-            {tab.dot && (
-              <span
-                className={`inline-block w-1.5 h-1.5 rounded-full ml-1.5 ${
-                  tab.configured ? "bg-green-500" : "bg-muted-foreground"
-                }`}
-              />
-            )}
-          </button>
-        ))}
-      </div>
 
-      {activeTab === "telegram" && (
-        <TelegramTab
+      {/* Section 1: Notifications */}
+      <section>
+        <h2 className="text-lg font-semibold mb-1">Notifications</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Configure how and when Podlog sends you notifications about processed
+          episodes and system health.
+        </p>
+        <NotificationSection
           settings={settings}
           onChange={handleChange}
-          onSave={handleSave}
-          onTest={() => handleTest("telegram")}
-          saving={saving}
+          onTest={handleTest}
           testing={testing}
         />
-      )}
-      {activeTab === "email" && (
-        <EmailTab
-          settings={settings}
-          onChange={handleChange}
-          onSave={handleSave}
-          onTest={() => handleTest("email")}
-          saving={saving}
-          testing={testing}
-        />
-      )}
-      {activeTab === "general" && (
-        <GeneralTab
-          settings={settings}
-          onChange={handleChange}
-          onSave={handleSave}
-          saving={saving}
-        />
-      )}
-      {activeTab === "fireworks" && (
-        <FireworksTab
-          settings={settings}
-          onChange={handleChange}
-          onSave={handleSave}
-          saving={saving}
-        />
-      )}
+      </section>
+
+      <Separator className="my-8" />
+
+      {/* Section 2: Remote Inference */}
+      <section>
+        <h2 className="text-lg font-semibold mb-1">Remote Inference</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Configure which pipeline steps run locally and which use a remote
+          provider for faster processing.
+        </p>
+        <RemoteInferenceSection settings={settings} onChange={handleChange} />
+      </section>
+
+      {/* Single Save button */}
+      <div className="flex gap-3 mt-8 mb-4">
+        <button
+          className={actionButtonClass}
+          onClick={handleSave}
+          disabled={saving || Object.keys(dirty).length === 0}
+        >
+          {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
 
       {toast && <Toast message={toast.message} type={toast.type} />}
     </div>
