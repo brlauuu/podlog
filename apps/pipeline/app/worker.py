@@ -10,6 +10,7 @@ Usage:
 import logging
 import signal
 import time
+import importlib
 from datetime import datetime, timezone
 from typing import Callable
 
@@ -18,6 +19,13 @@ from app.database import SessionLocal
 from app import job_queue
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_handler(dotted_path: str):
+    """Resolve 'module.path:function_name' to a callable."""
+    module_path, func_name = dotted_path.rsplit(":", 1)
+    mod = importlib.import_module(module_path)
+    return getattr(mod, func_name)
 
 def _download_handler(episode_id: str) -> None:
     from app.tasks.download import download_episode
@@ -72,7 +80,19 @@ TASK_HANDLERS: dict[str, Callable[[str], None]] = {
     "archive": _archive_handler,
 }
 
+TASK_HANDLER_TARGETS: dict[str, str] = {
+    "download": "app.tasks.download:download_episode",
+    "transcribe": "app.tasks.transcribe:transcribe_episode",
+    "diarize": "app.tasks.diarize:diarize_episode",
+    "chunk": "app.tasks.chunk:chunk_episode",
+    "embed": "app.tasks.embed:embed_episode",
+    "infer": "app.tasks.infer:infer_speakers",
+    "archive": "app.tasks.archive:archive_episode",
+}
+
 POLL_INTERVAL = 2  # seconds between queue polls when idle
+
+
 def _poll_all_feeds() -> None:
     from app.tasks.ingest import poll_all_feeds
 
@@ -98,6 +118,12 @@ PERIODIC_TASKS: list[tuple[str, Callable[[], None], int | None]] = [
     ("send_digest", _send_digest, 15 * 60),
 ]
 
+PERIODIC_TASK_TARGETS: dict[str, str] = {
+    "poll_all_feeds": "app.tasks.ingest:poll_all_feeds",
+    "cleanup_zombie_jobs": "app.tasks.cleanup:cleanup_zombie_jobs",
+    "send_digest": "app.services.digest:send_digest_if_due",
+}
+
 _shutdown = False
 
 
@@ -111,19 +137,34 @@ def _validate_worker_wiring() -> None:
     """Validate task/periodic handler references at startup."""
     errors: list[str] = []
 
+    if set(TASK_HANDLERS) != set(TASK_HANDLER_TARGETS):
+        errors.append("TASK_HANDLERS and TASK_HANDLER_TARGETS keys differ")
+
     for task, handler in TASK_HANDLERS.items():
         try:
             if not callable(handler):
                 raise TypeError("resolved object is not callable")
+            target = TASK_HANDLER_TARGETS[task]
+            resolved = _resolve_handler(target)
+            if not callable(resolved):
+                raise TypeError("import target is not callable")
         except Exception as exc:
             errors.append(
                 f'TASK_HANDLERS["{task}"]: {type(exc).__name__}: {exc}'
             )
 
+    periodic_names = {name for name, _, _ in PERIODIC_TASKS}
+    if periodic_names != set(PERIODIC_TASK_TARGETS):
+        errors.append("PERIODIC_TASKS and PERIODIC_TASK_TARGETS keys differ")
+
     for name, handler, _ in PERIODIC_TASKS:
         try:
             if not callable(handler):
                 raise TypeError("resolved object is not callable")
+            target = PERIODIC_TASK_TARGETS[name]
+            resolved = _resolve_handler(target)
+            if not callable(resolved):
+                raise TypeError("import target is not callable")
         except Exception as exc:
             errors.append(
                 f'PERIODIC_TASKS["{name}"]: {type(exc).__name__}: {exc}'

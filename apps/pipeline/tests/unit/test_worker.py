@@ -17,6 +17,18 @@ class TestHandleSignal:
 
 
 class TestWorkerRegistry:
+    def test_resolves_known_module(self):
+        import app.worker as w
+        from app.tasks.chunk import chunk_episode
+
+        assert w._resolve_handler("app.tasks.chunk:chunk_episode") is chunk_episode
+
+    def test_raises_on_bad_path(self):
+        import app.worker as w
+
+        with pytest.raises(ModuleNotFoundError):
+            w._resolve_handler("nonexistent.module:func")
+
     def test_worker_registries_are_callable(self):
         import app.worker as w
 
@@ -39,6 +51,20 @@ class TestWorkerRegistry:
         with patch.object(w, "PERIODIC_TASKS", [("poll_all_feeds", object(), None)]):
             with pytest.raises(RuntimeError, match="Invalid worker registry wiring"):
                 w._validate_worker_wiring()
+
+    @patch("app.worker._resolve_handler")
+    def test_validate_worker_wiring_raises_for_broken_import_target(self, mock_resolve):
+        import app.worker as w
+
+        def side_effect(path: str):
+            if path == "app.tasks.chunk:chunk_episode":
+                raise ModuleNotFoundError("broken import")
+            return MagicMock()
+
+        mock_resolve.side_effect = side_effect
+
+        with pytest.raises(RuntimeError, match="Invalid worker registry wiring"):
+            w._validate_worker_wiring()
 
 
 class TestRunPeriodicTasks:
