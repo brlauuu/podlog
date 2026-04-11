@@ -10,10 +10,12 @@ import os
 import time
 
 import httpx
+import pytest
 
 PIPELINE_URL = os.environ.get("PIPELINE_API_URL", "http://pipeline_test:8000")
 
 
+@pytest.mark.e2e
 class TestFullIngestionFlow:
     """Requires a running Docker stack (docker compose -f docker-compose.test.yml up)."""
 
