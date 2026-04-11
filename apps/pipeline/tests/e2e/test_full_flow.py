@@ -10,12 +10,10 @@ import os
 import time
 
 import httpx
-import pytest
 
 PIPELINE_URL = os.environ.get("PIPELINE_API_URL", "http://pipeline_test:8000")
 
 
-@pytest.mark.e2e
 class TestFullIngestionFlow:
     """Requires a running Docker stack (docker compose -f docker-compose.test.yml up)."""
 
@@ -25,16 +23,3 @@ class TestFullIngestionFlow:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] in ("OK", "WARMING_UP")
-
-    def test_add_feed_and_poll(self):
-        """
-        POST a feed → trigger poll → verify episode(s) enqueued.
-        """
-        pytest.skip("E2E stub — requires mock RSS server in test stack")
-
-    def test_full_ingestion_produces_transcript(self):
-        """
-        POST a feed with a 10-second audio file → wait for completion
-        → assert segments exist and transcript file written.
-        """
-        pytest.skip("E2E stub — requires mock RSS server + audio fixture in test stack")

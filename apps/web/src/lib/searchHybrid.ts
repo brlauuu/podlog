@@ -1,4 +1,4 @@
-export interface HybridSearchResultItem {
+interface HybridSearchResultItem {
   id: number;
   startTime: number;
   endTime: number;
