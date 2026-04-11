@@ -71,7 +71,7 @@ describe("GET /api/search/grouped", () => {
       `http://localhost/api/search/grouped?q=test&feedId=${feedId}`
     );
     await GET(req);
-    expect(searchGrouped).toHaveBeenCalledWith("test", feedId, 1, 20, false);
+    expect(searchGrouped).toHaveBeenCalledWith("test", [feedId], 1, 20, false);
   });
 
   test("clamps pageSize to max 50", async () => {

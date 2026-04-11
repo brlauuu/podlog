@@ -153,7 +153,7 @@ const SPEAKER_TURNS_CTE = `
  */
 export async function searchSegments(
   query: string,
-  feedId: string | null,
+  feedIds: string[] | null,
   page: number,
   pageSize: number = 20,
   skipCount: boolean = false
@@ -188,10 +188,10 @@ export async function searchSegments(
       websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
       AND e.status = 'done'
-      AND ($2::uuid IS NULL OR f.id = $2)
+      AND ($2::uuid[] IS NULL OR f.id = ANY($2::uuid[]))
     ORDER BY rank DESC
     LIMIT $3`,
-    [query, feedId, FETCH_LIMIT]
+    [query, feedIds, FETCH_LIMIT]
   );
 
   // 2. Vector similarity on raw segments (if embeddings available)
@@ -222,10 +222,10 @@ export async function searchSegments(
         LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = s.speaker_label
         WHERE s.embedding IS NOT NULL
           AND e.status = 'done'
-          AND ($2::uuid IS NULL OR f.id = $2)
+          AND ($2::uuid[] IS NULL OR f.id = ANY($2::uuid[]))
         ORDER BY s.embedding <=> $1::vector
         LIMIT $3`,
-        [`[${embedding.join(",")}]`, feedId, FETCH_LIMIT]
+        [`[${embedding.join(",")}]`, feedIds, FETCH_LIMIT]
       )
     : Promise.resolve({ rows: [] });
 
@@ -241,8 +241,8 @@ export async function searchSegments(
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND e.status = 'done'
-          AND ($2::uuid IS NULL OR f.id = $2)`,
-        [query, feedId]
+          AND ($2::uuid[] IS NULL OR f.id = ANY($2::uuid[]))`,
+        [query, feedIds]
       );
 
   // 4. Episode coverage (processed vs total)
@@ -283,7 +283,7 @@ export async function searchSegments(
  */
 export async function searchGrouped(
   query: string,
-  feedId: string | null,
+  feedIds: string[] | null,
   page: number,
   pageSize: number = 20,
   skipCount: boolean = false
@@ -309,11 +309,11 @@ export async function searchGrouped(
       websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
       AND e.status = 'done'
-      AND ($2::uuid IS NULL OR f.id = $2)
+      AND ($2::uuid[] IS NULL OR f.id = ANY($2::uuid[]))
     GROUP BY f.id, f.title, f.mode, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
     ORDER BY best_rank DESC, mention_count DESC
     LIMIT $3 OFFSET $4`,
-    [query, feedId, pageSize, offset]
+    [query, feedIds, pageSize, offset]
   );
 
   const countPromise = skipCount
@@ -330,8 +330,8 @@ export async function searchGrouped(
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND e.status = 'done'
-          AND ($2::uuid IS NULL OR f.id = $2)`,
-        [query, feedId]
+          AND ($2::uuid[] IS NULL OR f.id = ANY($2::uuid[]))`,
+        [query, feedIds]
       );
 
   const coveragePromise = skipCount
