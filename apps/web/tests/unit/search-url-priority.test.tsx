@@ -77,7 +77,7 @@ describe("Search page URL query priority", () => {
     const staleSnapshot: SearchPageSnapshot = {
       query: "older-query",
       submittedQuery: "older-query",
-      feedFilter: "",
+      selectedFeedIds: [],
       page: 5,
       viewMode: "grouped",
     };

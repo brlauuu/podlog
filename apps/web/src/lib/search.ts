@@ -21,6 +21,39 @@ async function getQueryEmbedding(text: string): Promise<number[] | null> {
   }
 }
 
+// ── Feed filter helper ──────────────────────────────────────
+
+/**
+ * Build a SQL WHERE clause fragment for feed filtering.
+ * Handles: no filter, feed UUIDs only, manual uploads only, or both.
+ * Returns the clause, bound params, and the next available $N placeholder index.
+ */
+function buildFeedFilter(
+  feedIds: string[] | null,
+  includeManualUploads: boolean,
+  startParam: number
+): { clause: string; params: unknown[]; nextIdx: number } {
+  const hasFeedIds = feedIds && feedIds.length > 0;
+  if (!hasFeedIds && !includeManualUploads) {
+    return { clause: "TRUE", params: [], nextIdx: startParam };
+  }
+  const parts: string[] = [];
+  const params: unknown[] = [];
+  if (hasFeedIds) {
+    parts.push(`f.id = ANY($${startParam}::uuid[])`);
+    params.push(feedIds);
+    startParam++;
+  }
+  if (includeManualUploads) {
+    parts.push("e.feed_id IS NULL");
+  }
+  return {
+    clause: `(${parts.join(" OR ")})`,
+    params,
+    nextIdx: startParam,
+  };
+}
+
 // ── Grouped search types ────────────────────────────────────
 
 export interface GroupedSearchResult {
@@ -153,12 +186,14 @@ const SPEAKER_TURNS_CTE = `
  */
 export async function searchSegments(
   query: string,
-  feedId: string | null,
+  feedIds: string[] | null,
+  includeManualUploads: boolean,
   page: number,
   pageSize: number = 20,
   skipCount: boolean = false
 ): Promise<SearchPage> {
   const FETCH_LIMIT = 100; // fetch more than pageSize for RRF merging
+  const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
 
   // 1. FTS on speaker turns
   const ftsPromise = pool.query(
@@ -188,14 +223,15 @@ export async function searchSegments(
       websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
       AND e.status = 'done'
-      AND ($2::uuid IS NULL OR f.id = $2)
+      AND ${feedFilter.clause}
     ORDER BY rank DESC
-    LIMIT $3`,
-    [query, feedId, FETCH_LIMIT]
+    LIMIT $${feedFilter.nextIdx}`,
+    [query, ...feedFilter.params, FETCH_LIMIT]
   );
 
   // 2. Vector similarity on raw segments (if embeddings available)
   const embedding = await getQueryEmbedding(query);
+  const vecFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
   const vecPromise = embedding
     ? pool.query(
         `SELECT
@@ -222,14 +258,15 @@ export async function searchSegments(
         LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = s.speaker_label
         WHERE s.embedding IS NOT NULL
           AND e.status = 'done'
-          AND ($2::uuid IS NULL OR f.id = $2)
+          AND ${vecFeedFilter.clause}
         ORDER BY s.embedding <=> $1::vector
-        LIMIT $3`,
-        [`[${embedding.join(",")}]`, feedId, FETCH_LIMIT]
+        LIMIT $${vecFeedFilter.nextIdx}`,
+        [`[${embedding.join(",")}]`, ...vecFeedFilter.params, FETCH_LIMIT]
       )
     : Promise.resolve({ rows: [] });
 
   // 3. Count (FTS-based, skipped on page 2+)
+  const countFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
   const countPromise = skipCount
     ? Promise.resolve(null)
     : pool.query(
@@ -241,8 +278,8 @@ export async function searchSegments(
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND e.status = 'done'
-          AND ($2::uuid IS NULL OR f.id = $2)`,
-        [query, feedId]
+          AND ${countFeedFilter.clause}`,
+        [query, ...countFeedFilter.params]
       );
 
   // 4. Episode coverage (processed vs total)
@@ -283,12 +320,14 @@ export async function searchSegments(
  */
 export async function searchGrouped(
   query: string,
-  feedId: string | null,
+  feedIds: string[] | null,
+  includeManualUploads: boolean,
   page: number,
   pageSize: number = 20,
   skipCount: boolean = false
 ): Promise<GroupedSearchResult> {
   const offset = (page - 1) * pageSize;
+  const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
 
   const rowsPromise = pool.query(
     `WITH ${SPEAKER_TURNS_CTE}
@@ -309,13 +348,14 @@ export async function searchGrouped(
       websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
       AND e.status = 'done'
-      AND ($2::uuid IS NULL OR f.id = $2)
+      AND ${feedFilter.clause}
     GROUP BY f.id, f.title, f.mode, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
     ORDER BY best_rank DESC, mention_count DESC
-    LIMIT $3 OFFSET $4`,
-    [query, feedId, pageSize, offset]
+    LIMIT $${feedFilter.nextIdx} OFFSET $${feedFilter.nextIdx + 1}`,
+    [query, ...feedFilter.params, pageSize, offset]
   );
 
+  const grpCountFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
   const countPromise = skipCount
     ? Promise.resolve(null)
     : pool.query(
@@ -323,15 +363,16 @@ export async function searchGrouped(
         SELECT
           COUNT(DISTINCT e.id)::int AS total_episodes,
           COUNT(DISTINCT f.id)::int AS total_feeds,
-          COUNT(*)::int AS total_mentions
+          COUNT(*)::int AS total_mentions,
+          BOOL_OR(e.feed_id IS NULL)::bool AS has_manual
         FROM speaker_turns t
         JOIN episodes e ON t.episode_id = e.id
         LEFT JOIN feeds f ON e.feed_id = f.id,
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND e.status = 'done'
-          AND ($2::uuid IS NULL OR f.id = $2)`,
-        [query, feedId]
+          AND ${grpCountFilter.clause}`,
+        [query, ...grpCountFilter.params]
       );
 
   const coveragePromise = skipCount
@@ -378,7 +419,7 @@ export async function searchGrouped(
 
   return {
     feeds: Array.from(feedMap.values()),
-    totalFeeds: counts?.total_feeds ?? -1,
+    totalFeeds: (counts?.total_feeds ?? -1) + (counts?.has_manual ? 1 : 0),
     totalEpisodes: counts?.total_episodes ?? -1,
     totalMentions: counts?.total_mentions ?? -1,
     coverage: {

@@ -9,7 +9,7 @@ const ASK_STORAGE_KEY = "podlog-ask-page-state";
 export interface SearchPageSnapshot {
   query: string;
   submittedQuery: string;
-  feedFilter: string;
+  selectedFeedIds: string[];
   page: number;
   viewMode: ViewMode;
 }
@@ -68,7 +68,7 @@ export function loadSearchSnapshot(storage?: Storage): SearchPageSnapshot | null
   if (
     typeof parsed.query !== "string" ||
     typeof parsed.submittedQuery !== "string" ||
-    typeof parsed.feedFilter !== "string" ||
+    !Array.isArray(parsed.selectedFeedIds) ||
     typeof parsed.page !== "number" ||
     !Number.isFinite(parsed.page) ||
     parsed.page < 1 ||

@@ -29,7 +29,7 @@ describe("page state persistence", () => {
     const snapshot: SearchPageSnapshot = {
       query: "vector db",
       submittedQuery: "vector db",
-      feedFilter: "feed-123",
+      selectedFeedIds: ["feed-123"],
       page: 2,
       viewMode: "flat",
     };

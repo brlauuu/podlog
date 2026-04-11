@@ -11,8 +11,11 @@ import { useQuery } from "@tanstack/react-query";
 import SearchResult from "@/components/SearchResult";
 import FeedGroupCard from "@/components/FeedGroupCard";
 import DownloadReportButton from "@/components/DownloadReportButton";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import SearchInput from "@/components/SearchInput";
+import HelpPopover from "@/components/HelpPopover";
+import SearchSpinner from "@/components/SearchSpinner";
+import PodcastFilter from "@/components/PodcastFilter";
 import type { SearchPage as SearchPageType, GroupedSearchResult } from "@/lib/search";
 import { loadSearchSnapshot, saveSearchSnapshot } from "@/lib/page-state";
 
@@ -20,11 +23,11 @@ const PAGE_SIZE = 20;
 
 type ViewMode = "grouped" | "flat";
 
-const SEARCH_TIPS = [
-  'Use quotes for exact phrases: "machine learning"',
-  "Exclude words with minus: climate -politics",
-  "Combine terms: AI regulation ethics",
-];
+interface Feed {
+  id: string;
+  title: string | null;
+  episode_count: number;
+}
 
 /**
  * Wrapper that provides the required Suspense boundary for useSearchParams().
@@ -49,8 +52,8 @@ function SearchPageContent() {
   const [submittedQuery, setSubmittedQuery] = useState(
     initialQuery || initialSnapshot?.submittedQuery || ""
   );
-  const [feedFilter, setFeedFilter] = useState<string>(
-    initialSnapshot?.feedFilter || ""
+  const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(
+    new Set(initialSnapshot?.selectedFeedIds || [])
   );
   const [page, setPage] = useState(
     initialQuery ? 1 : initialSnapshot?.page || 1
@@ -58,6 +61,9 @@ function SearchPageContent() {
   const [viewMode, setViewMode] = useState<ViewMode>(
     initialSnapshot?.viewMode || "grouped"
   );
+
+  const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [hasManualUploads, setHasManualUploads] = useState(false);
 
   // Cache totals from page 1 to skip COUNT(*) on subsequent pages
   const cachedFlatTotal = useRef<{ key: string; total: number } | null>(null);
@@ -70,18 +76,21 @@ function SearchPageContent() {
 
   // Fetch stats for the info line below search — uses coverage endpoint
   // to include manual uploads (episodes with no feed_id)
-  const statsQuery = useQuery<{ feedCount: number; episodeCount: number }>({
+  const statsQuery = useQuery<{ feedCount: number; episodeCount: number; processing: number }>({
     queryKey: ["search-stats"],
     queryFn: async () => {
       const [feedsResp, coverageResp] = await Promise.all([
         fetch("/api/feeds"),
         fetch("/api/ask/coverage"),
       ]);
-      const feedCount = feedsResp.ok ? (await feedsResp.json()).length : 0;
-      const episodeCount = coverageResp.ok
-        ? (await coverageResp.json()).processed
-        : 0;
-      return { feedCount, episodeCount };
+      const feedsData = feedsResp.ok ? await feedsResp.json() : [];
+      const feedCount = Array.isArray(feedsData) ? feedsData.length : 0;
+      if (Array.isArray(feedsData)) setFeeds(feedsData);
+      const covData = coverageResp.ok ? await coverageResp.json() : {};
+      const episodeCount = covData.processed ?? 0;
+      const processing = Math.max(0, (covData.total ?? 0) - (covData.processed ?? 0));
+      setHasManualUploads(covData.has_manual_uploads ?? false);
+      return { feedCount, episodeCount, processing };
     },
     staleTime: 60_000,
   });
@@ -100,16 +109,22 @@ function SearchPageContent() {
     saveSearchSnapshot({
       query,
       submittedQuery,
-      feedFilter,
+      selectedFeedIds: Array.from(selectedFeedIds),
       page,
       viewMode,
     });
-  }, [query, submittedQuery, feedFilter, page, viewMode]);
+  }, [query, submittedQuery, selectedFeedIds, page, viewMode]);
+
+  // Separate real feed UUIDs from the __uploads__ sentinel
+  const includeManualUploads = selectedFeedIds.has("__uploads__");
+  const feedFilterParam = Array.from(selectedFeedIds)
+    .filter((id) => id !== "__uploads__")
+    .join(",");
 
   // Flat search query
-  const flatCacheKey = `${submittedQuery}:${feedFilter}`;
+  const flatCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}`;
   const flatQuery = useQuery<SearchPageType>({
-    queryKey: ["search", submittedQuery, feedFilter, page],
+    queryKey: ["search", submittedQuery, feedFilterParam, includeManualUploads, page],
     queryFn: async () => {
       if (!submittedQuery)
         return {
@@ -126,7 +141,8 @@ function SearchPageContent() {
         page: String(page),
         pageSize: String(PAGE_SIZE),
       });
-      if (feedFilter) params.set("feedId", feedFilter);
+      if (feedFilterParam) params.set("feedId", feedFilterParam);
+      if (includeManualUploads) params.set("uploads", "true");
       if (canSkipCount) params.set("skipCount", "true");
       const resp = await fetch(`/api/search?${params}`);
       if (!resp.ok) throw new Error("Search failed");
@@ -143,9 +159,9 @@ function SearchPageContent() {
   });
 
   // Grouped search query
-  const groupedCacheKey = `${submittedQuery}:${feedFilter}`;
+  const groupedCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}`;
   const groupedQuery = useQuery<GroupedSearchResult>({
-    queryKey: ["search-grouped", submittedQuery, feedFilter, page],
+    queryKey: ["search-grouped", submittedQuery, feedFilterParam, includeManualUploads, page],
     queryFn: async () => {
       if (!submittedQuery)
         return {
@@ -162,7 +178,8 @@ function SearchPageContent() {
         page: String(page),
         pageSize: String(PAGE_SIZE),
       });
-      if (feedFilter) params.set("feedId", feedFilter);
+      if (feedFilterParam) params.set("feedId", feedFilterParam);
+      if (includeManualUploads) params.set("uploads", "true");
       if (canSkipCount) params.set("skipCount", "true");
       const resp = await fetch(`/api/search/grouped?${params}`);
       if (!resp.ok) throw new Error("Search failed");
@@ -199,6 +216,13 @@ function SearchPageContent() {
     }
   }
 
+  function handleClear() {
+    setQuery("");
+    setSubmittedQuery("");
+    setPage(1);
+    router.replace("/search", { scroll: false });
+  }
+
   const isLoading =
     viewMode === "flat"
       ? flatQuery.isLoading || flatQuery.isFetching
@@ -214,28 +238,25 @@ function SearchPageContent() {
       {/* Centered header + search bar */}
       <div className={`flex flex-col items-center ${submittedQuery ? "pt-2" : "pt-16"} transition-all`}>
         <div className="w-full max-w-2xl space-y-3">
-          {/* Title */}
-          <div className="text-center space-y-1">
-            <h1 className="text-3xl font-bold">Search</h1>
-          </div>
+          {/* Title + help popover */}
+          <HelpPopover title="Search">
+            <p className="font-medium mb-1">Search tips</p>
+            <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+              <li>Use quotes for exact phrases: &quot;machine learning&quot;</li>
+              <li>Exclude words with minus: climate -politics</li>
+              <li>Combine terms: AI regulation ethics</li>
+            </ul>
+          </HelpPopover>
 
           {/* Search input */}
-          <form onSubmit={handleSubmit}>
-            <div className="relative">
-              <Search
-                size={18}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-              />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search transcripts..."
-                className="w-full pl-10 pr-4 py-3 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-ring text-base transition-shadow"
-                autoFocus
-              />
-            </div>
-          </form>
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            onSubmit={handleSubmit}
+            onClear={handleClear}
+            placeholder="Search transcripts..."
+            icon={<Search size={18} />}
+          />
 
           {/* Stats below search bar */}
           {!submittedQuery && statsQuery.data && (
@@ -244,37 +265,27 @@ function SearchPageContent() {
               {statsQuery.data.feedCount !== 1 ? "s" : ""} and{" "}
               {statsQuery.data.episodeCount} episode
               {statsQuery.data.episodeCount !== 1 ? "s" : ""}
+              {statsQuery.data.processing > 0 && (
+                <> ({statsQuery.data.processing} still processing)</>
+              )}
             </p>
           )}
 
-          {/* Search tips */}
-          {!submittedQuery && (
-            <div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-xs text-muted-foreground space-y-1">
-              <p className="font-medium text-foreground">Search tips</p>
-              <ul className="list-disc list-inside space-y-0.5">
-                {SEARCH_TIPS.map((tip) => (
-                  <li key={tip}>{tip}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* Podcast filter */}
+          <div className="flex justify-center">
+            <PodcastFilter
+              feeds={feeds}
+              selectedFeedIds={selectedFeedIds}
+              onSelectionChange={setSelectedFeedIds}
+              hasManualUploads={hasManualUploads}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Search spinner — equalizer style */}
+      {/* Search spinner */}
       {submittedQuery && isLoading && (
-        <div className="flex flex-col items-center gap-2 py-8">
-          <div className="flex items-center gap-0.5">
-            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-              <span
-                key={i}
-                className="w-1 h-6 origin-center rounded-full bg-foreground animate-[eqBar_1.4s_ease-in-out_infinite]"
-                style={{ animationDelay: `${i * 0.1}s` }}
-              />
-            ))}
-          </div>
-          <span className="text-sm text-muted-foreground">Searching...</span>
-        </div>
+        <SearchSpinner label="Searching..." />
       )}
 
       {submittedQuery && !isLoading && (
