@@ -89,6 +89,57 @@ describe("GET /api/search/grouped", () => {
     expect(searchGrouped).toHaveBeenCalledWith("test", null, false, 1, 50, false);
   });
 
+  test("parses comma-separated feedId into array", async () => {
+    searchGrouped.mockResolvedValue({
+      feeds: [],
+      totalFeeds: 0,
+      totalEpisodes: 0,
+      totalMentions: 0,
+    });
+
+    const req = new NextRequest(
+      "http://localhost/api/search/grouped?q=test&feedId=id-1,id-2,id-3"
+    );
+    await GET(req);
+    expect(searchGrouped).toHaveBeenCalledWith(
+      "test", ["id-1", "id-2", "id-3"], false, 1, 20, false
+    );
+  });
+
+  test("passes includeManualUploads when uploads=true", async () => {
+    searchGrouped.mockResolvedValue({
+      feeds: [],
+      totalFeeds: 0,
+      totalEpisodes: 0,
+      totalMentions: 0,
+    });
+
+    const req = new NextRequest(
+      "http://localhost/api/search/grouped?q=test&uploads=true"
+    );
+    await GET(req);
+    expect(searchGrouped).toHaveBeenCalledWith(
+      "test", null, true, 1, 20, false
+    );
+  });
+
+  test("passes both feedIds and uploads together", async () => {
+    searchGrouped.mockResolvedValue({
+      feeds: [],
+      totalFeeds: 0,
+      totalEpisodes: 0,
+      totalMentions: 0,
+    });
+
+    const req = new NextRequest(
+      "http://localhost/api/search/grouped?q=test&feedId=id-1&uploads=true"
+    );
+    await GET(req);
+    expect(searchGrouped).toHaveBeenCalledWith(
+      "test", ["id-1"], true, 1, 20, false
+    );
+  });
+
   test("returns 500 on search error", async () => {
     searchGrouped.mockRejectedValue(new Error("DB down"));
 

@@ -363,7 +363,8 @@ export async function searchGrouped(
         SELECT
           COUNT(DISTINCT e.id)::int AS total_episodes,
           COUNT(DISTINCT f.id)::int AS total_feeds,
-          COUNT(*)::int AS total_mentions
+          COUNT(*)::int AS total_mentions,
+          BOOL_OR(e.feed_id IS NULL)::bool AS has_manual
         FROM speaker_turns t
         JOIN episodes e ON t.episode_id = e.id
         LEFT JOIN feeds f ON e.feed_id = f.id,
@@ -418,7 +419,7 @@ export async function searchGrouped(
 
   return {
     feeds: Array.from(feedMap.values()),
-    totalFeeds: counts?.total_feeds ?? -1,
+    totalFeeds: (counts?.total_feeds ?? -1) + (counts?.has_manual ? 1 : 0),
     totalEpisodes: counts?.total_episodes ?? -1,
     totalMentions: counts?.total_mentions ?? -1,
     coverage: {
