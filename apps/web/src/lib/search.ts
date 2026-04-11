@@ -63,7 +63,6 @@ export async function searchSegments(
 ): Promise<SearchPage> {
   const FETCH_LIMIT = 100; // fetch more than pageSize for RRF merging
   const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
-  const speakerClause = speakerLabel ? `AND t.speaker_label = $${feedFilter.nextIdx}` : "";
 
   // FTS query — speaker filter uses table alias 't'
   const ftsSpeakerClause = speakerLabel ? `AND t.speaker_label = $${feedFilter.nextIdx}` : "";

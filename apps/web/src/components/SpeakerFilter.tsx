@@ -23,9 +23,11 @@ export default function SpeakerFilter({
 }: SpeakerFilterProps) {
   const [open, setOpen] = useState(false);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
+  const [loading, setLoading] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setLoading(true);
     const params = new URLSearchParams();
     const realIds = feedIds.filter((id) => id !== "__uploads__");
     if (realIds.length > 0) params.set("feedId", realIds.join(","));
@@ -36,7 +38,8 @@ export default function SpeakerFilter({
       .then((data) => {
         if (Array.isArray(data)) setSpeakers(data);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [feedIds, includeManualUploads]);
 
   useEffect(() => {
@@ -49,7 +52,7 @@ export default function SpeakerFilter({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  if (speakers.length === 0) return null;
+  if (loading || speakers.length === 0) return null;
 
   const selectedDisplay = selectedSpeaker
     ? (speakers.find((s) => s.speaker_label === selectedSpeaker)?.display_name ?? selectedSpeaker)
