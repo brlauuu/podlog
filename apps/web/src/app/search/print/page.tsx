@@ -18,7 +18,7 @@ export default async function PrintPage({
   if (!query) notFound();
 
   // Fetch all episodes that match
-  const grouped = await searchGrouped(query, null, 1, 100);
+  const grouped = await searchGrouped(query, null, true, 1, 100);
   if (grouped.feeds.length === 0) notFound();
 
   // Fetch mentions with context for each episode
