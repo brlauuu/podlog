@@ -43,14 +43,14 @@ describe("GET /api/search", () => {
     searchSegments.mockResolvedValue(mockResult);
     const req = new NextRequest("http://localhost/api/search?q=test");
     await GET(req);
-    expect(searchSegments).toHaveBeenCalledWith("test", null, false, 1, 20, false);
+    expect(searchSegments).toHaveBeenCalledWith("test", null, false, 1, 20, false, null);
   });
 
   test("passes single feedId as array", async () => {
     searchSegments.mockResolvedValue(mockResult);
     const req = new NextRequest("http://localhost/api/search?q=test&feedId=abc-123");
     await GET(req);
-    expect(searchSegments).toHaveBeenCalledWith("test", ["abc-123"], false, 1, 20, false);
+    expect(searchSegments).toHaveBeenCalledWith("test", ["abc-123"], false, 1, 20, false, null);
   });
 
   test("parses comma-separated feedId into array", async () => {
@@ -58,7 +58,7 @@ describe("GET /api/search", () => {
     const req = new NextRequest("http://localhost/api/search?q=test&feedId=id-1,id-2,id-3");
     await GET(req);
     expect(searchSegments).toHaveBeenCalledWith(
-      "test", ["id-1", "id-2", "id-3"], false, 1, 20, false
+      "test", ["id-1", "id-2", "id-3"], false, 1, 20, false, null
     );
   });
 
@@ -66,21 +66,21 @@ describe("GET /api/search", () => {
     searchSegments.mockResolvedValue(mockResult);
     const req = new NextRequest("http://localhost/api/search?q=test&uploads=true");
     await GET(req);
-    expect(searchSegments).toHaveBeenCalledWith("test", null, true, 1, 20, false);
+    expect(searchSegments).toHaveBeenCalledWith("test", null, true, 1, 20, false, null);
   });
 
   test("passes both feedIds and uploads together", async () => {
     searchSegments.mockResolvedValue(mockResult);
     const req = new NextRequest("http://localhost/api/search?q=test&feedId=id-1&uploads=true");
     await GET(req);
-    expect(searchSegments).toHaveBeenCalledWith("test", ["id-1"], true, 1, 20, false);
+    expect(searchSegments).toHaveBeenCalledWith("test", ["id-1"], true, 1, 20, false, null);
   });
 
   test("clamps pageSize to max 50", async () => {
     searchSegments.mockResolvedValue(mockResult);
     const req = new NextRequest("http://localhost/api/search?q=test&pageSize=100");
     await GET(req);
-    expect(searchSegments).toHaveBeenCalledWith("test", null, false, 1, 50, false);
+    expect(searchSegments).toHaveBeenCalledWith("test", null, false, 1, 50, false, null);
   });
 
   test("returns 500 on search error", async () => {
