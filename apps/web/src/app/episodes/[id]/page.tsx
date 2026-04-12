@@ -73,9 +73,15 @@ interface Episode {
   feed_url: string | null;
 }
 
+const STEP_ABBREVIATIONS: Record<string, string> = {
+  io: "I/O", api: "API", stt: "STT", url: "URL",
+};
+
 function formatDiarizeStepLabel(key: string): string {
-  const label = key.replace(/_secs$/, "").replaceAll("_", " ").trim();
-  if (!label) return key;
+  const words = key.replace(/_secs$/, "").split("_").filter(Boolean);
+  if (!words.length) return key;
+  const formatted = words.map(w => STEP_ABBREVIATIONS[w.toLowerCase()] ?? w.toLowerCase());
+  const label = formatted.join(" ");
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
