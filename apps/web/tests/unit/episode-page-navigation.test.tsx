@@ -215,4 +215,28 @@ describe("Episode page navigation", () => {
     // Should NOT have flex-1 when alone
     expect(nextLink).not.toHaveClass("flex-1");
   });
+
+  it("truncates long episode titles in single-button layout", async () => {
+    const longTitle = "This is a very long episode title that should be truncated with ellipsis when rendered in the navigation button";
+    mockQuery
+      .mockResolvedValueOnce({ rows: [currentEpisode] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: "ep-next", title: longTitle }] });
+
+    render(await EpisodePage({ params: Promise.resolve({ id: "ep-current" }) }));
+
+    const nextLink = screen.getByRole("link", { name: new RegExp(longTitle.substring(0, 20)) });
+    expect(nextLink).toBeInTheDocument();
+
+    // Should have min-w-0 for proper truncation context
+    expect(nextLink).toHaveClass("min-w-0");
+
+    // Should NOT have max-w-[50%] when single button
+    expect(nextLink).not.toHaveClass("max-w-[50%]");
+
+    // Title span should have truncation classes
+    const titleSpan = nextLink.querySelector("span.truncate");
+    expect(titleSpan).toHaveClass("flex-1", "min-w-0", "truncate");
+  });
 });

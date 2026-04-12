@@ -240,18 +240,18 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
           {prev && (
             <Link
               href={`/episodes/${prev.id}`}
-              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors ${next ? 'flex-1' : ''} max-w-[50%]`}
+              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors min-w-0 ${next ? 'flex-1 max-w-[50%]' : ''}`}
             >
               <ChevronLeft size={16} className="shrink-0" />
-              <span className="truncate">{prev.title ?? "Previous episode"}</span>
+              <span className="flex-1 min-w-0 truncate">{prev.title ?? "Previous episode"}</span>
             </Link>
           )}
           {next && (
             <Link
               href={`/episodes/${next.id}`}
-              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors ${prev ? 'flex-1' : ''} max-w-[50%]`}
+              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors min-w-0 ${prev ? 'flex-1 max-w-[50%]' : ''}`}
             >
-              <span className="truncate">{next.title ?? "Next episode"}</span>
+              <span className="flex-1 min-w-0 truncate">{next.title ?? "Next episode"}</span>
               <ChevronRight size={16} className="shrink-0" />
             </Link>
           )}
