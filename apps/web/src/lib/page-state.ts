@@ -12,6 +12,7 @@ export interface SearchPageSnapshot {
   selectedFeedIds: string[];
   selectedSpeaker?: string | null;
   page: number;
+  pageSize?: number;
   viewMode: ViewMode;
 }
 
@@ -73,6 +74,10 @@ export function loadSearchSnapshot(storage?: Storage): SearchPageSnapshot | null
     typeof parsed.page !== "number" ||
     !Number.isFinite(parsed.page) ||
     parsed.page < 1 ||
+    (parsed.pageSize !== undefined &&
+      (typeof parsed.pageSize !== "number" ||
+        !Number.isFinite(parsed.pageSize) ||
+        parsed.pageSize < 1)) ||
     !isViewMode(parsed.viewMode)
   ) {
     return null;
