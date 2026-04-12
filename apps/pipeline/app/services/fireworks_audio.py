@@ -201,6 +201,113 @@ def assign_segment_speakers_from_words(transcript_segments: list[dict], raw: dic
     return assignments
 
 
+def rebuild_segments_from_words(raw: dict) -> list[dict]:
+    """
+    Rebuild sentence-level segments from Fireworks word-level speaker data.
+
+    Mirrors the WhisperX word-level alignment path used by the local provider:
+    groups consecutive same-speaker words within the same original Fireworks
+    segment boundary into a single DB segment, splitting on speaker changes.
+
+    This ensures the Fireworks path produces the same granularity of segments
+    as the local path — one per sentence fragment per speaker — so per-sentence
+    timestamps are shown in the transcript view.
+
+    Returns list of {"start": float, "end": float, "text": str, "speaker": str}.
+    Returns empty list if word-level speaker data is unavailable (caller falls back).
+    """
+    words = raw.get("words", []) or []
+    segments = raw.get("segments", []) or []
+
+    if not words:
+        return []
+
+    # Build ordered segment end-times to map each word to its parent segment.
+    # Fireworks words always fall within a segment boundary, so we iterate
+    # segments in order and assign each word to the first segment whose end
+    # time is after the word's start.
+    seg_ends = [float(s.get("end", 0.0)) for s in segments]
+
+    def _seg_idx_for(word_start: float) -> int:
+        for i, end in enumerate(seg_ends):
+            if word_start < end + 0.05:  # small tolerance for rounding
+                return i
+        return max(0, len(seg_ends) - 1)
+
+    # Build tagged word list (skip words missing required fields).
+    tagged: list[dict] = []
+    for w in words:
+        start = w.get("start")
+        end = w.get("end")
+        word_text = w.get("word", "")
+        speaker_id = w.get("speaker_id")
+        if start is None or end is None or not word_text:
+            continue
+        tagged.append({
+            "word": word_text,
+            "start": float(start),
+            "end": float(end),
+            "speaker": _normalize_speaker(str(speaker_id)) if speaker_id is not None else None,
+            "seg_idx": _seg_idx_for(float(start)),
+        })
+
+    if not tagged:
+        return []
+
+    # If no word has a speaker label, can't rebuild with diarization.
+    if not any(w["speaker"] for w in tagged):
+        return []
+
+    # Propagate speaker labels forward/backward to cover unlabeled words.
+    last_known: str | None = None
+    for w in tagged:
+        if w["speaker"] is not None:
+            last_known = w["speaker"]
+        elif last_known is not None:
+            w["speaker"] = last_known
+    # Fill any remaining gaps at the start (backward pass).
+    first_known = next((w["speaker"] for w in tagged if w["speaker"]), "SPEAKER_00")
+    for w in tagged:
+        if w["speaker"] is None:
+            w["speaker"] = first_known
+
+    # Rebuild segments: split on speaker change OR original segment boundary —
+    # same logic as alignment.assign_speakers_wordlevel for the local path.
+    rebuilt: list[dict] = []
+    cur = tagged[0]
+    c_speaker = cur["speaker"]
+    c_seg = cur["seg_idx"]
+    c_start = cur["start"]
+    c_end = cur["end"]
+    c_words: list[str] = [cur["word"]]
+
+    for tw in tagged[1:]:
+        if tw["speaker"] == c_speaker and tw["seg_idx"] == c_seg:
+            c_end = tw["end"]
+            c_words.append(tw["word"])
+        else:
+            rebuilt.append({
+                "start": c_start,
+                "end": c_end,
+                "text": " ".join(w.strip() for w in c_words),
+                "speaker": c_speaker,
+            })
+            c_speaker = tw["speaker"]
+            c_seg = tw["seg_idx"]
+            c_start = tw["start"]
+            c_end = tw["end"]
+            c_words = [tw["word"]]
+
+    rebuilt.append({
+        "start": c_start,
+        "end": c_end,
+        "text": " ".join(w.strip() for w in c_words),
+        "speaker": c_speaker,
+    })
+
+    return rebuilt
+
+
 def _normalize_speaker(raw_speaker: str) -> str:
     clean = raw_speaker.strip().replace("-", "_").upper()
     if clean.startswith("SPEAKER_"):
