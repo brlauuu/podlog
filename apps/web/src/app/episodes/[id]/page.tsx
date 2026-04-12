@@ -236,28 +236,24 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
 
       {/* Episode navigation */}
       {(prev || next) && (
-        <div className="flex items-center justify-between gap-4">
-          {prev ? (
+        <div className="flex justify-center gap-2">
+          {prev && (
             <Link
               href={`/episodes/${prev.id}`}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-w-0"
+              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors ${next ? 'flex-1' : ''} max-w-[50%]`}
             >
               <ChevronLeft size={16} className="shrink-0" />
               <span className="truncate">{prev.title ?? "Previous episode"}</span>
             </Link>
-          ) : (
-            <span />
           )}
-          {next ? (
+          {next && (
             <Link
               href={`/episodes/${next.id}`}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors min-w-0 text-right"
+              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors ${prev ? 'flex-1' : ''} max-w-[50%]`}
             >
               <span className="truncate">{next.title ?? "Next episode"}</span>
               <ChevronRight size={16} className="shrink-0" />
             </Link>
-          ) : (
-            <span />
           )}
         </div>
       )}
