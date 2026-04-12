@@ -7,7 +7,6 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronUp,
-  RotateCcw,
 } from "lucide-react";
 
 import ReprocessButton from "./ReprocessButton";
@@ -137,7 +136,7 @@ function FireworksCostTag({ costUsd, audioMinutes }: { costUsd: number; audioMin
 
   return (
     <div
-      className="relative inline-block"
+      className="relative inline-block pointer-events-auto"
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
@@ -419,11 +418,11 @@ export default function EpisodesList({ episodes, feedId }: Props) {
                     audioMinutes={ep.fireworks_audio_minutes}
                   />
                 )}
-              </div>
 
-              {/* Reprocess button - always visible, right-aligned */}
-              <div className="absolute right-2 top-2 z-20">
-                <ReprocessButton episodeId={ep.id} status={ep.status} />
+                {/* Reprocess button - last item in tag row */}
+                <span className="relative z-10">
+                  <ReprocessButton episodeId={ep.id} status={ep.status} />
+                </span>
               </div>
 
               {/* Speaker name tags — row 2 (only when names are known) */}
