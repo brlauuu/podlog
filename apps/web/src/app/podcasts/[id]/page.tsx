@@ -23,7 +23,7 @@ async function getFeed(id: string): Promise<Feed | null> {
 async function getEpisodes(feedId: string): Promise<EnrichedEpisode[]> {
   const result = await pool.query(
     `SELECT
-       e.id, e.title, e.description, e.published_at, e.processed_at,
+       e.id, e.title, e.published_at, e.processed_at,
        e.duration_secs, e.language, e.status, e.has_diarization,
        e.diarization_error, e.error_class, e.error_message,
        COALESCE(e.retry_count, 0) AS retry_count,
@@ -32,16 +32,25 @@ async function getEpisodes(feedId: string): Promise<EnrichedEpisode[]> {
        e.inference_provider_used,
        e.fireworks_audio_minutes,
        e.fireworks_stt_cost_usd,
-       COALESCE(agg.segment_count, 0)::int AS segment_count,
-       COALESCE(agg.speaker_count, 0)::int AS speaker_count
+       COALESCE(agg.speaker_count, 0)::int AS speaker_count,
+       COALESCE(sn_agg.speaker_name_tags, '[]'::json) AS speaker_name_tags
      FROM episodes e
      LEFT JOIN LATERAL (
-       SELECT
-         COUNT(*)::int AS segment_count,
-         COUNT(DISTINCT s.speaker_label)::int AS speaker_count
+       SELECT COUNT(DISTINCT s.speaker_label)::int AS speaker_count
        FROM segments s
        WHERE s.episode_id = e.id
      ) agg ON true
+     LEFT JOIN LATERAL (
+       SELECT json_agg(
+         json_build_object(
+           'display_name', sn.display_name,
+           'inferred', sn.inferred,
+           'confirmed_by_user', sn.confirmed_by_user
+         ) ORDER BY sn.display_name
+       ) FILTER (WHERE sn.id IS NOT NULL) AS speaker_name_tags
+       FROM speaker_names sn
+       WHERE sn.episode_id = e.id
+     ) sn_agg ON true
      WHERE e.feed_id = $1
      ORDER BY e.published_at DESC NULLS LAST`,
     [feedId]
