@@ -13,6 +13,7 @@ from app.services.notification_runtime import (
     compute_avg_processing_stats,
     estimate_queue_status,
 )
+from app.services.timing_labels import humanize_timing_key
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +55,6 @@ def _fmt_factor(factor: float | None) -> str:
     return f"{factor:.1f}x"
 
 
-def _humanize_step_key(key: str) -> str:
-    words = key.replace("_secs", "").replace("_", " ").strip()
-    return words[:1].upper() + words[1:] if words else key
-
-
 def _fmt_diarize_steps_html(step_durations: dict[str, float] | None) -> str:
     if not step_durations:
         return ""
@@ -67,7 +63,7 @@ def _fmt_diarize_steps_html(step_durations: dict[str, float] | None) -> str:
         row_bg = ' style="background: #f9f9f9;"' if idx % 2 else ""
         rows.append(
             f"""\
-    <tr{row_bg}><td style="padding: 4px 12px; color: #666;">{_humanize_step_key(name)}</td>
+    <tr{row_bg}><td style="padding: 4px 12px; color: #666;">{humanize_timing_key(name)}</td>
         <td style="padding: 4px 12px;">{_fmt_short_duration(secs)}</td></tr>"""
         )
     rows_html = "\n".join(rows)
@@ -83,7 +79,7 @@ def _fmt_diarize_steps_telegram(step_durations: dict[str, float] | None) -> str:
         return ""
     lines = "\n*Diarization Step Breakdown*\n"
     for name, secs in step_durations.items():
-        lines += f"`{_humanize_step_key(name)}: {_fmt_short_duration(secs)}`\n"
+        lines += f"`{humanize_timing_key(name)}: {_fmt_short_duration(secs)}`\n"
     return lines
 
 

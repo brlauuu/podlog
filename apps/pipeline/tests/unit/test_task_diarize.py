@@ -202,6 +202,7 @@ class TestDiarizeEpisode:
         ]
         assert matching
         assert "artifact_load_secs" in matching[0].kwargs["diarize_step_durations"]
+        assert "speaker_assignment_secs" in matching[0].kwargs["diarize_step_durations"]
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "chunk")
 
     @patch("app.tasks.diarize.job_queue")

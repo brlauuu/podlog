@@ -23,6 +23,7 @@ from app.services.notifications import (
     send_email,
     send_telegram,
 )
+from app.services.timing_labels import humanize_timing_key
 
 logger = logging.getLogger(__name__)
 
@@ -90,16 +91,11 @@ class DigestData:
     processing_factor: float | None = None
 
 
-def _humanize_step_key(key: str) -> str:
-    words = key.replace("_secs", "").replace("_", " ").strip()
-    return words[:1].upper() + words[1:] if words else key
-
-
 def _fmt_diarization_steps(step_durations: dict[str, float] | None) -> str:
     if not step_durations:
         return ""
     parts = [
-        f"{_humanize_step_key(name)} {_fmt_short_duration(secs)}"
+        f"{humanize_timing_key(name)} {_fmt_short_duration(secs)}"
         for name, secs in step_durations.items()
     ]
     return f"Diarization steps: {'; '.join(parts)}"
