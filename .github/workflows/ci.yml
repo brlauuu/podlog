@@ -66,4 +66,4 @@ jobs:
         run: npm ci
 
       - name: Run web unit tests (stable subset)
-        run: npm test -- --runTestsByPath tests/unit/notification-settings.test.tsx tests/unit/setup-wizard.test.tsx
+        run: npm test -- --runTestsByPath tests/unit/notification-settings.test.tsx tests/unit/docs.test.tsx

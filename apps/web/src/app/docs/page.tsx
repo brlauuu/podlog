@@ -11,7 +11,7 @@ function filenameToTitle(filename: string): string {
 }
 
 export default async function DocsPage() {
-  const docsDir = join(process.cwd(), "docs", "guide");
+  const docsDir = join(process.cwd(), "..", "..", "docs", "guide");
 
   let docs: { name: string; title: string }[] = [];
 

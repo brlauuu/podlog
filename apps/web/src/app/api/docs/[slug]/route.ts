@@ -17,7 +17,7 @@ export async function GET(
   }
 
   const filename = slug + ".md";
-  const docsDir = join(process.cwd(), "docs", "guide");
+  const docsDir = join(process.cwd(), "..", "..", "docs", "guide");
   const filePath = join(docsDir, filename);
 
   if (!filePath.startsWith(docsDir)) {
