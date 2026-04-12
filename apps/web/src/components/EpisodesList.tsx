@@ -7,17 +7,18 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronUp,
-  Clock,
-  Globe,
-  MessageSquare,
   RotateCcw,
-  Users,
 } from "lucide-react";
+
+export interface SpeakerNameTag {
+  display_name: string;
+  inferred: boolean;
+  confirmed_by_user: boolean;
+}
 
 export interface EnrichedEpisode {
   id: string;
   title: string | null;
-  description: string | null;
   published_at: string | null;
   processed_at: string | null;
   duration_secs: number | null;
@@ -34,8 +35,8 @@ export interface EnrichedEpisode {
   inference_provider_used: string | null;
   fireworks_audio_minutes: number | null;
   fireworks_stt_cost_usd: number | null;
-  segment_count: number;
   speaker_count: number;
+  speaker_name_tags: SpeakerNameTag[];
 }
 
 type SortKey = "published_at" | "status" | "duration_secs" | "processed_at" | "title";
@@ -61,6 +62,17 @@ const STATUS_ORDER: Record<string, number> = {
 
 const PROCESSING_STEPS = ["downloading", "transcribing", "diarizing", "archiving"];
 
+// ISO 639-1 → flag emoji
+const LANGUAGE_FLAGS: Record<string, string> = {
+  en: "🇺🇸", de: "🇩🇪", fr: "🇫🇷", es: "🇪🇸", pt: "🇧🇷",
+  it: "🇮🇹", nl: "🇳🇱", ja: "🇯🇵", zh: "🇨🇳", ko: "🇰🇷",
+  ru: "🇷🇺", ar: "🇸🇦", pl: "🇵🇱", sv: "🇸🇪", da: "🇩🇰",
+  fi: "🇫🇮", no: "🇳🇴", nb: "🇳🇴", cs: "🇨🇿", uk: "🇺🇦",
+  tr: "🇹🇷", hu: "🇭🇺", ro: "🇷🇴", el: "🇬🇷", he: "🇮🇱",
+  hi: "🇮🇳", id: "🇮🇩", vi: "🇻🇳", th: "🇹🇭", sr: "🇷🇸",
+  hr: "🇭🇷", bg: "🇧🇬", sk: "🇸🇰", sl: "🇸🇮",
+};
+
 function formatDuration(secs: number): string {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
@@ -70,7 +82,15 @@ function formatDuration(secs: number): string {
   return `${s}s`;
 }
 
-function StatusBadge({ status }: { status: string }) {
+function Tag({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${className ?? ""}`}>
+      {children}
+    </span>
+  );
+}
+
+function StatusTag({ status }: { status: string }) {
   const colors: Record<string, string> = {
     done: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     failed: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
@@ -81,9 +101,21 @@ function StatusBadge({ status }: { status: string }) {
     archiving: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
   };
   const label = status === "done" ? "Transcribed" : status.charAt(0).toUpperCase() + status.slice(1);
-  const style = colors[status] ?? colors.pending;
+  return <Tag className={colors[status] ?? colors.pending}>{label}</Tag>;
+}
+
+function ProviderTag({ provider }: { provider: string }) {
+  const isRemote = provider === "fireworks";
   return (
-    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${style}`}>{label}</span>
+    <Tag
+      className={
+        isRemote
+          ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+          : "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200"
+      }
+    >
+      {isRemote ? "Remote" : "Local"}
+    </Tag>
   );
 }
 
@@ -94,9 +126,7 @@ function ErrorPill({ errorClass }: { errorClass: string }) {
     : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300";
   const label = errorClass.replace(/_/g, " ").toLowerCase();
   return (
-    <span className={`text-xs px-1.5 py-0.5 rounded font-medium capitalize ${color}`}>
-      {label}
-    </span>
+    <Tag className={`capitalize ${color}`}>{label}</Tag>
   );
 }
 
@@ -179,7 +209,6 @@ export default function EpisodesList({ episodes, feedId }: Props) {
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
   const [retrying, setRetrying] = useState<Set<string>>(new Set());
 
-  // Load sort preference from localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -191,7 +220,6 @@ export default function EpisodesList({ episodes, feedId }: Props) {
     } catch {}
   }, []);
 
-  // Persist sort preference
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ key: sortKey, dir: sortDir }));
@@ -236,12 +264,12 @@ export default function EpisodesList({ episodes, feedId }: Props) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      // sensible defaults per sort key
       setSortDir(key === "title" ? "asc" : "desc");
     }
   }
 
-  function toggleError(id: string) {
+  function toggleError(e: React.MouseEvent, id: string) {
+    e.preventDefault();
     setExpandedErrors((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -250,7 +278,8 @@ export default function EpisodesList({ episodes, feedId }: Props) {
     });
   }
 
-  async function handleRetry(episodeId: string) {
+  async function handleRetry(e: React.MouseEvent, episodeId: string) {
+    e.preventDefault();
     setRetrying((prev) => new Set(prev).add(episodeId));
     try {
       await fetch(`/api/episodes/${episodeId}/retry`, { method: "POST" });
@@ -268,10 +297,8 @@ export default function EpisodesList({ episodes, feedId }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Stats bar */}
       <StatsBar episodes={episodes} />
 
-      {/* Sort controls */}
       <div className="flex flex-wrap items-center gap-2">
         <ArrowUpDown size={14} className="text-muted-foreground" />
         {SORT_OPTIONS.map((opt) => (
@@ -294,108 +321,124 @@ export default function EpisodesList({ episodes, feedId }: Props) {
         ))}
       </div>
 
-      {/* Episode cards */}
       <div className="space-y-2">
         {sorted.map((ep) => {
           const isProcessing = PROCESSING_STEPS.includes(ep.status);
           const isFailed = ep.status === "failed";
+          const lang = ep.language?.toLowerCase() ?? "";
+          const flag = LANGUAGE_FLAGS[lang];
+          const totalProcessingSecs =
+            (ep.transcribe_duration_secs ?? 0) + (ep.diarize_duration_secs ?? 0);
+          const hasSpeakerNames = ep.speaker_name_tags?.length > 0;
 
           return (
             <div
               key={ep.id}
-              className={`border rounded-lg p-3 transition-colors ${
+              className={`relative border rounded-lg p-3 transition-colors ${
                 isFailed
                   ? "border-red-200 dark:border-red-800"
                   : "border-border hover:bg-accent/30"
               }`}
             >
-              <Link href={`/episodes/${ep.id}`} className="block">
-                {/* Top row: title + status */}
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-medium truncate flex-1">
-                    {ep.title ?? "Untitled"}
-                  </p>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {!ep.has_diarization && ep.status === "done" && (
-                      <span
-                        className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400"
-                        title="Speaker labels unavailable"
-                      >
-                        <AlertTriangle size={11} />
-                        No labels
-                      </span>
-                    )}
-                    <StatusBadge status={ep.status} />
-                  </div>
-                </div>
+              {/* Stretched link covers the entire card; interactive elements sit above it with z-10 */}
+              <Link
+                href={`/episodes/${ep.id}`}
+                className="absolute inset-0 rounded-lg"
+                aria-label={ep.title ?? "Episode"}
+              />
 
-                {/* Metadata row */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
-                  {ep.published_at && (
-                    <span>{new Date(ep.published_at).toLocaleDateString()}</span>
-                  )}
-                  {ep.duration_secs != null && (
-                    <span className="inline-flex items-center gap-1">
-                      <Clock size={11} />
-                      {formatDuration(ep.duration_secs)}
-                    </span>
-                  )}
-                  {ep.language && (
-                    <span className="inline-flex items-center gap-1">
-                      <Globe size={11} />
-                      {ep.language}
-                    </span>
-                  )}
-                </div>
+              {/* Title */}
+              <p className="text-base font-semibold leading-snug pr-2 relative z-10 pointer-events-none">
+                {ep.title ?? "Untitled"}
+              </p>
 
-                {/* Done: segment/speaker counts + processing times */}
-                {ep.status === "done" && (
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
-                    {ep.segment_count > 0 && (
-                      <span className="inline-flex items-center gap-1">
-                        <MessageSquare size={11} />
-                        {ep.segment_count} segments
-                      </span>
-                    )}
-                    {ep.has_diarization && ep.speaker_count > 0 && (
-                      <span className="inline-flex items-center gap-1">
-                        <Users size={11} />
-                        {ep.speaker_count} speakers
-                      </span>
-                    )}
-                    {ep.transcribe_duration_secs != null && (
-                      <span>Transcription: {formatDuration(ep.transcribe_duration_secs)}</span>
-                    )}
-                    {ep.diarize_duration_secs != null && ep.has_diarization && (
-                      <span>Diarization: {formatDuration(ep.diarize_duration_secs)}</span>
-                    )}
-                    {ep.inference_provider_used === "fireworks" && (
-                      <>
-                        {ep.fireworks_audio_minutes != null && (
-                          <span>Fireworks audio: {ep.fireworks_audio_minutes.toFixed(2)} min</span>
-                        )}
-                        {ep.fireworks_stt_cost_usd != null && (
-                          <span>Est. cost: ${ep.fireworks_stt_cost_usd.toFixed(4)}</span>
-                        )}
-                      </>
-                    )}
-                  </div>
+              {/* Tag strip — row 1 */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-2 relative z-10 pointer-events-none">
+                <StatusTag status={ep.status} />
+
+                {!ep.has_diarization && ep.status === "done" && (
+                  <Tag className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                    <AlertTriangle size={10} />
+                    No labels
+                  </Tag>
                 )}
 
-                {/* Description snippet */}
-                {ep.description && ep.status === "done" && (
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                    {ep.description.replace(/<[^>]+>/g, "").slice(0, 120)}
-                  </p>
+                {ep.published_at && (
+                  <Tag className="bg-muted text-muted-foreground">
+                    {new Date(ep.published_at).toLocaleDateString(undefined, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </Tag>
                 )}
-              </Link>
 
-              {/* Processing progress */}
-              {isProcessing && <ProcessingProgress status={ep.status} />}
+                {ep.duration_secs != null && (
+                  <Tag className="bg-muted text-muted-foreground">
+                    {formatDuration(ep.duration_secs)}
+                  </Tag>
+                )}
+
+                {ep.language && (
+                  <Tag className="bg-muted text-muted-foreground">
+                    {flag ? `${flag} ` : ""}{ep.language.toUpperCase()}
+                  </Tag>
+                )}
+
+                {ep.inference_provider_used && (
+                  <ProviderTag provider={ep.inference_provider_used} />
+                )}
+
+                {ep.status === "done" && totalProcessingSecs > 0 && (
+                  <Tag className="bg-muted text-muted-foreground">
+                    Processed in {formatDuration(totalProcessingSecs)}
+                  </Tag>
+                )}
+
+                {ep.inference_provider_used === "fireworks" && ep.fireworks_stt_cost_usd != null && (
+                  <Tag className="bg-muted text-muted-foreground">
+                    ${ep.fireworks_stt_cost_usd.toFixed(4)}
+                  </Tag>
+                )}
+              </div>
+
+              {/* Speaker name tags — row 2 (only when names are known) */}
+              {hasSpeakerNames && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5 relative z-10 pointer-events-none">
+                  {ep.speaker_name_tags.map((sn) => (
+                    <Tag
+                      key={sn.display_name}
+                      className={
+                        sn.confirmed_by_user
+                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                          : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                      }
+                    >
+                      {sn.display_name}
+                    </Tag>
+                  ))}
+                </div>
+              )}
+
+              {/* Fallback: show speaker count when diarized but no named speakers */}
+              {!hasSpeakerNames && ep.has_diarization && ep.speaker_count > 0 && (
+                <div className="flex items-center gap-1.5 mt-1.5 relative z-10 pointer-events-none">
+                  <Tag className="bg-muted text-muted-foreground">
+                    {ep.speaker_count} speaker{ep.speaker_count !== 1 ? "s" : ""}
+                  </Tag>
+                </div>
+              )}
+
+              {/* Processing progress (in-flight) */}
+              {isProcessing && (
+                <div className="relative z-10 pointer-events-none">
+                  <ProcessingProgress status={ep.status} />
+                </div>
+              )}
 
               {/* Failed episode details */}
               {isFailed && (
-                <div className="mt-2 space-y-1">
+                <div className="mt-2 space-y-1 relative z-10">
                   <div className="flex items-center gap-2">
                     {ep.error_class && <ErrorPill errorClass={ep.error_class} />}
                     {ep.retry_count > 0 && (
@@ -405,7 +448,7 @@ export default function EpisodesList({ episodes, feedId }: Props) {
                     )}
                     {isRetryable(ep) && (
                       <button
-                        onClick={() => handleRetry(ep.id)}
+                        onClick={(e) => handleRetry(e, ep.id)}
                         disabled={retrying.has(ep.id)}
                         className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border border-border hover:bg-accent transition-colors disabled:opacity-50"
                       >
@@ -415,7 +458,7 @@ export default function EpisodesList({ episodes, feedId }: Props) {
                     )}
                     {ep.error_message && (
                       <button
-                        onClick={() => toggleError(ep.id)}
+                        onClick={(e) => toggleError(e, ep.id)}
                         className="text-xs text-muted-foreground hover:text-foreground"
                       >
                         {expandedErrors.has(ep.id) ? "Hide details" : "Show details"}
