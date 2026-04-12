@@ -7,9 +7,12 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronUp,
+  Search,
+  X,
 } from "lucide-react";
 
 import ReprocessButton from "./ReprocessButton";
+import { Input } from "@/components/ui/input";
 
 export interface SpeakerNameTag {
   display_name: string;
@@ -184,7 +187,15 @@ function ProcessingProgress({ status }: { status: string }) {
   );
 }
 
-function StatsBar({ episodes }: { episodes: EnrichedEpisode[] }) {
+function StatsBar({
+  episodes,
+  filteredCount,
+  searchQuery
+}: {
+  episodes: EnrichedEpisode[];
+  filteredCount: number;
+  searchQuery: string;
+}) {
   const counts = useMemo(() => {
     const c = { total: episodes.length, done: 0, processing: 0, failed: 0, pending: 0 };
     for (const ep of episodes) {
@@ -198,7 +209,13 @@ function StatsBar({ episodes }: { episodes: EnrichedEpisode[] }) {
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-      <span className="font-medium text-foreground">{counts.total} episodes</span>
+      {searchQuery ? (
+        <span className="font-medium text-foreground">
+          Showing {filteredCount} of {counts.total} episodes
+        </span>
+      ) : (
+        <span className="font-medium text-foreground">{counts.total} episodes</span>
+      )}
       <span className="text-muted-foreground/50">·</span>
       <span>{counts.done} transcribed</span>
       {counts.processing > 0 && (
@@ -234,6 +251,7 @@ export default function EpisodesList({ episodes, feedId }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("published_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     try {
@@ -252,8 +270,16 @@ export default function EpisodesList({ episodes, feedId }: Props) {
     } catch {}
   }, [sortKey, sortDir]);
 
-  const sorted = useMemo(() => {
-    const arr = [...episodes];
+  const filteredAndSorted = useMemo(() => {
+    // First filter by search query
+    const filtered = searchQuery
+      ? episodes.filter((ep) =>
+          ep.title?.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : episodes;
+
+    // Then sort
+    const arr = [...filtered];
     arr.sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
@@ -283,7 +309,7 @@ export default function EpisodesList({ episodes, feedId }: Props) {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [episodes, sortKey, sortDir]);
+  }, [episodes, sortKey, sortDir, searchQuery]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -310,7 +336,29 @@ export default function EpisodesList({ episodes, feedId }: Props) {
 
   return (
     <div className="space-y-4">
-      <StatsBar episodes={episodes} />
+      <StatsBar episodes={episodes} filteredCount={filteredAndSorted.length} searchQuery={searchQuery} />
+
+      {/* Search input */}
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search episodes..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10 pr-10"
+          aria-label="Search episodes by title"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear search"
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <ArrowUpDown size={14} className="text-muted-foreground" />
@@ -335,7 +383,12 @@ export default function EpisodesList({ episodes, feedId }: Props) {
       </div>
 
       <div className="space-y-2">
-        {sorted.map((ep) => {
+        {filteredAndSorted.length === 0 ? (
+          <p className="text-muted-foreground text-center py-8">
+            No episodes match your search
+          </p>
+        ) : (
+          filteredAndSorted.map((ep) => {
           const isProcessing = PROCESSING_STEPS.includes(ep.status);
           const isFailed = ep.status === "failed";
           const lang = ep.language?.toLowerCase() ?? "";
@@ -487,7 +540,7 @@ export default function EpisodesList({ episodes, feedId }: Props) {
               )}
             </div>
           );
-        })}
+        }))}
       </div>
     </div>
   );
