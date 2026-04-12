@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const feedIds = feedIdRaw ? feedIdRaw.split(",").filter(Boolean) : null;
   const includeManualUploads = searchParams.get("uploads") === "true";
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get("pageSize") ?? "20", 10)));
+  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") ?? "20", 10)));
   const skipCount = searchParams.get("skipCount") === "true";
   const speakerLabel = searchParams.get("speaker") || null;
 
