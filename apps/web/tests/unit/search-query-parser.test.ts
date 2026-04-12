@@ -28,6 +28,12 @@ describe("parseSearchQuery", () => {
     expect(parsed.mode).toBe("metadata_only");
   });
 
+  test("keeps colons inside quoted scoped values", () => {
+    const parsed = parseSearchQuery('title:"Interview: The Sequel"');
+    expect(parsed.titleFilter).toBe("Interview: The Sequel");
+    expect(parsed.mode).toBe("metadata_only");
+  });
+
   test("parses case-insensitive scope names", () => {
     const parsed = parseSearchQuery("TITLE:china SPEAKER:jacob");
     expect(parsed.titleFilter).toBe("china");
@@ -39,6 +45,15 @@ describe("parseSearchQuery", () => {
     const parsed = parseSearchQuery("crisis in Iran speaker: Jacob Shapiro");
     expect(parsed.freeText).toBe("crisis in Iran");
     expect(parsed.speakerFilter).toBe("Jacob Shapiro");
+    expect(parsed.mode).toBe("transcript_hybrid");
+  });
+
+  test("parses mixed query with all scopes and free text", () => {
+    const parsed = parseSearchQuery("geopolitics title:Interview speaker:jacob description:weekly");
+    expect(parsed.freeText).toBe("geopolitics");
+    expect(parsed.titleFilter).toBe("Interview");
+    expect(parsed.speakerFilter).toBe("jacob");
+    expect(parsed.descriptionFilter).toBe("weekly");
     expect(parsed.mode).toBe("transcript_hybrid");
   });
 

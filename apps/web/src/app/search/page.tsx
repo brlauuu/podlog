@@ -22,6 +22,8 @@ import { loadSearchSnapshot, saveSearchSnapshot } from "@/lib/page-state";
 
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+const isValidPageSize = (value: number): value is (typeof PAGE_SIZE_OPTIONS)[number] =>
+  PAGE_SIZE_OPTIONS.includes(value as (typeof PAGE_SIZE_OPTIONS)[number]);
 
 type ViewMode = "grouped" | "flat";
 
@@ -64,7 +66,7 @@ function SearchPageContent() {
     initialQuery ? 1 : initialSnapshot?.page || 1
   );
   const [pageSize, setPageSize] = useState(
-    initialSnapshot?.pageSize && PAGE_SIZE_OPTIONS.includes(initialSnapshot.pageSize as 20 | 50 | 100)
+    initialSnapshot?.pageSize && isValidPageSize(initialSnapshot.pageSize)
       ? initialSnapshot.pageSize
       : DEFAULT_PAGE_SIZE
   );
@@ -264,7 +266,7 @@ function SearchPageContent() {
               <li>Use quotes for exact phrases: &quot;machine learning&quot;</li>
               <li>Exclude words with minus: climate -politics</li>
               <li>Combine terms: AI regulation ethics</li>
-              <li>Field search: title:, description:, speaker: (case-insensitive)</li>
+              <li>Field search: title:, description:, speaker: (case-insensitive; speaker supports partial matching)</li>
             </ul>
           </HelpPopover>
 
@@ -341,7 +343,8 @@ function SearchPageContent() {
                 <select
                   value={pageSize}
                   onChange={(e) => {
-                    setPageSize(parseInt(e.target.value, 10));
+                    const next = Number.parseInt(e.target.value, 10);
+                    setPageSize(isValidPageSize(next) ? next : DEFAULT_PAGE_SIZE);
                     setPage(1);
                   }}
                   className="bg-background border border-input rounded-md px-2 py-1 text-xs"
