@@ -13,7 +13,7 @@ export default function ReprocessButton({ episodeId, status }: ReprocessButtonPr
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  if (status !== "done" && status !== "failed") return null;
+  // Always render - parent controls visibility via CSS if needed
 
   async function handleReprocess() {
     if (!window.confirm("Re-queue this episode for full reprocessing?")) return;

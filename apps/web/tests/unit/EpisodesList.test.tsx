@@ -1,0 +1,156 @@
+/**
+ * @jest-environment jsdom
+ */
+import React from "react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import "@testing-library/jest-dom";
+
+// Mock next/link
+jest.mock("next/link", () => {
+  return ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  );
+});
+
+// Mock ReprocessButton
+jest.mock("@/components/ReprocessButton", () => {
+  return ({ episodeId, status }: { episodeId: string; status: string }) => (
+    <button data-testid="reprocess-button" data-episode-id={episodeId} data-status={status}>
+      Reprocess
+    </button>
+  );
+});
+
+import EpisodesList, { EnrichedEpisode } from "@/components/EpisodesList";
+
+const mockEpisodes: EnrichedEpisode[] = [
+  {
+    id: "ep-1",
+    title: "Test Episode 1",
+    published_at: "2026-04-01T10:00:00.000Z",
+    processed_at: "2026-04-01T11:00:00.000Z",
+    duration_secs: 3600,
+    language: "en",
+    status: "done",
+    has_diarization: true,
+    diarization_error: null,
+    error_class: null,
+    error_message: null,
+    retry_count: 0,
+    retry_max: 3,
+    transcribe_duration_secs: 120,
+    diarize_duration_secs: 60,
+    inference_provider_used: "fireworks",
+    fireworks_audio_minutes: 60,
+    fireworks_stt_cost_usd: 0.0123,
+    speaker_count: 2,
+    speaker_name_tags: [],
+  },
+  {
+    id: "ep-2",
+    title: "Test Episode 2",
+    published_at: "2026-04-02T10:00:00.000Z",
+    processed_at: null,
+    duration_secs: 1800,
+    language: "de",
+    status: "done",
+    has_diarization: true,
+    diarization_error: null,
+    error_class: null,
+    error_message: null,
+    retry_count: 0,
+    retry_max: 3,
+    transcribe_duration_secs: 90,
+    diarize_duration_secs: 45,
+    inference_provider_used: "local",
+    fireworks_audio_minutes: null,
+    fireworks_stt_cost_usd: null,
+    speaker_count: 3,
+    speaker_name_tags: [],
+  },
+];
+
+describe("EpisodesList", () => {
+  it("renders separate Transcribed: and Diarized: tags for done episodes", () => {
+    render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
+
+    // Check for separate transcribe and diarize tags (should be 2 of each - one per episode)
+    const transcribedTags = screen.getAllByText(/Transcribed:/);
+    const diarizedTags = screen.getAllByText(/Diarized:/);
+    expect(transcribedTags.length).toBe(2);
+    expect(diarizedTags.length).toBe(2);
+
+    // Ensure old combined "Processed in" tag is NOT present
+    expect(screen.queryByText(/Processed in/)).not.toBeInTheDocument();
+  });
+
+  it("renders Fireworks STT cost tag with correct format when provider is fireworks", () => {
+    render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
+
+    // Check for Fireworks STT tag with rounded to 2 decimals
+    expect(screen.getByText(/Fireworks STT: \$0\.01/)).toBeInTheDocument();
+  });
+
+  it("does not render Fireworks STT cost tag when provider is not fireworks", () => {
+    render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
+
+    // Should only show one Fireworks tag (for ep-1), not for ep-2
+    const fireworksTags = screen.getAllByText(/Fireworks STT/);
+    expect(fireworksTags.length).toBe(1);
+  });
+
+  it("renders ReprocessButton in list rows for all episodes", () => {
+    render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
+
+    const reprocessButtons = screen.getAllByTestId("reprocess-button");
+    expect(reprocessButtons.length).toBe(2);
+
+    // Verify both buttons are present (order depends on sorting, just check they exist)
+    const episodeIds = reprocessButtons.map(btn => btn.getAttribute("data-episode-id"));
+    expect(episodeIds).toContain("ep-1");
+    expect(episodeIds).toContain("ep-2");
+  });
+
+  it("shows Fireworks STT Details tooltip on hover", () => {
+    render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
+
+    const fireworksTag = screen.getByText(/Fireworks STT: \$0\.01/);
+
+    // Initially tooltip should not be visible
+    expect(screen.queryByText(/Fireworks STT Details/)).not.toBeInTheDocument();
+
+    // Hover over the tag
+    fireEvent.mouseEnter(fireworksTag);
+
+    // Tooltip should now be visible
+    expect(screen.getByText(/Fireworks STT Details/)).toBeInTheDocument();
+    expect(screen.getByText(/Audio:/)).toBeInTheDocument();
+    expect(screen.getByText(/Cost:/)).toBeInTheDocument();
+    expect(screen.getByText(/Rate:/)).toBeInTheDocument();
+
+    // Leave hover
+    fireEvent.mouseLeave(fireworksTag);
+
+    // Tooltip should be hidden
+    expect(screen.queryByText(/Fireworks STT Details/)).not.toBeInTheDocument();
+  });
+
+  it("does not render transcribe/diarize tags when duration is 0 or null", () => {
+    const episodesWithZeroDuration: EnrichedEpisode[] = [
+      {
+        ...mockEpisodes[0],
+        id: "ep-3",
+        transcribe_duration_secs: 0,
+        diarize_duration_secs: 0,
+      },
+    ];
+
+    render(<EpisodesList episodes={episodesWithZeroDuration} feedId="feed-1" />);
+
+    // Should not show transcribe/diarize tags when duration is 0
+    expect(screen.queryByText(/Transcribed:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Diarized:/)).not.toBeInTheDocument();
+  });
+});

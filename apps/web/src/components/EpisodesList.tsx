@@ -7,8 +7,9 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronUp,
-  RotateCcw,
 } from "lucide-react";
+
+import ReprocessButton from "./ReprocessButton";
 
 export interface SpeakerNameTag {
   display_name: string;
@@ -130,6 +131,32 @@ function ErrorPill({ errorClass }: { errorClass: string }) {
   );
 }
 
+function FireworksCostTag({ costUsd, audioMinutes }: { costUsd: number; audioMinutes: number | null }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  return (
+    <div
+      className="relative inline-block pointer-events-auto"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      <Tag className="bg-muted text-muted-foreground cursor-default">
+        Fireworks STT: ${costUsd.toFixed(2)}
+      </Tag>
+      {showTooltip && (
+        <div className="absolute z-50 bottom-full mb-1 left-1/2 -translate-x-1/2 w-48 p-2 rounded-md bg-popover text-popover-foreground text-xs shadow-md border">
+          <div className="font-medium mb-1">Fireworks STT Details</div>
+          {audioMinutes != null && <div>Audio: {audioMinutes.toFixed(1)} min</div>}
+          <div>Cost: ${costUsd.toFixed(4)}</div>
+          {audioMinutes != null && audioMinutes > 0 && (
+            <div>Rate: ${(costUsd / audioMinutes).toFixed(4)}/min</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProcessingProgress({ status }: { status: string }) {
   const currentIdx = PROCESSING_STEPS.indexOf(status);
   if (currentIdx === -1) return null;
@@ -207,7 +234,6 @@ export default function EpisodesList({ episodes, feedId }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("published_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
-  const [retrying, setRetrying] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     try {
@@ -278,19 +304,6 @@ export default function EpisodesList({ episodes, feedId }: Props) {
     });
   }
 
-  async function handleRetry(e: React.MouseEvent, episodeId: string) {
-    e.preventDefault();
-    setRetrying((prev) => new Set(prev).add(episodeId));
-    try {
-      await fetch(`/api/episodes/${episodeId}/retry`, { method: "POST" });
-    } finally {
-      // Keep retrying state — page will refresh on next navigation
-    }
-  }
-
-  const isRetryable = (ep: EnrichedEpisode) =>
-    ep.status === "failed" && ep.error_class !== "DISK_FULL" && ep.error_class !== "OOM";
-
   if (episodes.length === 0) {
     return <p className="text-muted-foreground">No episodes yet.</p>;
   }
@@ -327,8 +340,6 @@ export default function EpisodesList({ episodes, feedId }: Props) {
           const isFailed = ep.status === "failed";
           const lang = ep.language?.toLowerCase() ?? "";
           const flag = LANGUAGE_FLAGS[lang];
-          const totalProcessingSecs =
-            (ep.transcribe_duration_secs ?? 0) + (ep.diarize_duration_secs ?? 0);
           const hasSpeakerNames = ep.speaker_name_tags?.length > 0;
 
           return (
@@ -352,7 +363,7 @@ export default function EpisodesList({ episodes, feedId }: Props) {
                 {ep.title ?? "Untitled"}
               </p>
 
-              {/* Tag strip — row 1 */}
+              {/* Tag strip — metadata row */}
               <div className="flex flex-wrap items-center gap-1.5 mt-2 relative z-10 pointer-events-none">
                 <StatusTag status={ep.status} />
 
@@ -389,17 +400,29 @@ export default function EpisodesList({ episodes, feedId }: Props) {
                   <ProviderTag provider={ep.inference_provider_used} />
                 )}
 
-                {ep.status === "done" && totalProcessingSecs > 0 && (
+                {ep.status === "done" && ep.transcribe_duration_secs != null && ep.transcribe_duration_secs > 0 && (
                   <Tag className="bg-muted text-muted-foreground">
-                    Processed in {formatDuration(totalProcessingSecs)}
+                    Transcribed: {formatDuration(ep.transcribe_duration_secs)}
+                  </Tag>
+                )}
+
+                {ep.status === "done" && ep.diarize_duration_secs != null && ep.diarize_duration_secs > 0 && (
+                  <Tag className="bg-muted text-muted-foreground">
+                    Diarized: {formatDuration(ep.diarize_duration_secs)}
                   </Tag>
                 )}
 
                 {ep.inference_provider_used === "fireworks" && ep.fireworks_stt_cost_usd != null && (
-                  <Tag className="bg-muted text-muted-foreground">
-                    ${ep.fireworks_stt_cost_usd.toFixed(4)}
-                  </Tag>
+                  <FireworksCostTag
+                    costUsd={ep.fireworks_stt_cost_usd}
+                    audioMinutes={ep.fireworks_audio_minutes}
+                  />
                 )}
+
+                {/* Reprocess button - last item in tag row */}
+                <span className="relative z-10 pointer-events-auto">
+                  <ReprocessButton episodeId={ep.id} status={ep.status} />
+                </span>
               </div>
 
               {/* Speaker name tags — row 2 (only when names are known) */}
@@ -445,16 +468,6 @@ export default function EpisodesList({ episodes, feedId }: Props) {
                       <span className="text-xs text-muted-foreground">
                         Attempt {ep.retry_count} of {ep.retry_max}
                       </span>
-                    )}
-                    {isRetryable(ep) && (
-                      <button
-                        onClick={(e) => handleRetry(e, ep.id)}
-                        disabled={retrying.has(ep.id)}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border border-border hover:bg-accent transition-colors disabled:opacity-50"
-                      >
-                        <RotateCcw size={11} className={retrying.has(ep.id) ? "animate-spin" : ""} />
-                        {retrying.has(ep.id) ? "Retrying…" : "Retry"}
-                      </button>
                     )}
                     {ep.error_message && (
                       <button
