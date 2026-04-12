@@ -30,18 +30,18 @@ Replace the entire navigation section (lines 238-263) with:
           {prev && (
             <Link
               href={`/episodes/${prev.id}`}
-              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors ${next ? 'flex-1' : ''} max-w-[50%]`}
+              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors min-w-0 ${next ? 'flex-1 max-w-[50%]' : ''}`}
             >
               <ChevronLeft size={16} className="shrink-0" />
-              <span className="truncate">{prev.title ?? "Previous episode"}</span>
+              <span className="flex-1 min-w-0 truncate">{prev.title ?? "Previous episode"}</span>
             </Link>
           )}
           {next && (
             <Link
               href={`/episodes/${next.id}`}
-              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors ${prev ? 'flex-1' : ''} max-w-[50%]`}
+              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors min-w-0 ${prev ? 'flex-1 max-w-[50%]' : ''}`}
             >
-              <span className="truncate">{next.title ?? "Next episode"}</span>
+              <span className="flex-1 min-w-0 truncate">{next.title ?? "Next episode"}</span>
               <ChevronRight size={16} className="shrink-0" />
             </Link>
           )}
@@ -53,8 +53,9 @@ Key changes:
 - Uses `justify-center` to center buttons
 - `gap-2` for small gap between buttons
 - `flex-1` only when both prev and next exist (using conditional class)
-- `max-w-[50%]` to prevent overflow
-- `truncate` for long titles
+- `max-w-[50%]` only when both exist (prevents overflow while allowing natural width for single)
+- `min-w-0` on link for shrinking context
+- `flex-1 min-w-0 truncate` on title span for proper truncation
 - Matches landing page button style exactly
 - Chevrons inside buttons with proper direction
 
@@ -178,10 +179,12 @@ git commit -m "test: add navigation button layout tests (#358)"
 
 - ✅ Button style matching landing page (rounded-lg, border, hover:bg-accent)
 - ✅ Both buttons stretch with flex-1 when both present
-- ✅ Single button stays at natural width (no flex-1)
+- ✅ Single button stays at natural width (no flex-1, no max-w cap)
 - ✅ Chevron icons inside buttons
-- ✅ Truncated titles for long episode names
+- ✅ Truncated titles for long episode names (flex-1 min-w-0 on text spans)
 - ✅ Container centered with justify-center
+- ✅ min-w-0 on links for proper flex shrinking context
+- ✅ max-w-[50%] only applied when both buttons present
 
 ## Placeholder Scan
 
