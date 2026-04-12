@@ -10,6 +10,7 @@ from app.services.fireworks_audio import (
     _classify_http_error,
     diarization_segments_from_transcription,
     assign_segment_speakers_from_words,
+    rebuild_segments_from_words,
     transcribe,
 )
 
@@ -48,6 +49,103 @@ def test_assign_segment_speakers_from_words_majority_overlap():
 
     assert mapping[1] == "SPEAKER_00"
     assert mapping[2] == "SPEAKER_01"
+
+
+def _make_raw(words: list[dict], segments: list[dict] | None = None) -> dict:
+    """Helper to build a minimal Fireworks response dict for tests."""
+    return {"words": words, "segments": segments or [{"start": 0.0, "end": 999.0}]}
+
+
+class TestRebuildSegmentsFromWords:
+    def test_basic_two_speakers(self):
+        raw = _make_raw(
+            words=[
+                {"word": "Hello", "start": 0.0, "end": 0.5, "speaker_id": "0"},
+                {"word": "world", "start": 0.5, "end": 1.0, "speaker_id": "0"},
+                {"word": "Hi", "start": 1.1, "end": 1.5, "speaker_id": "1"},
+                {"word": "there", "start": 1.5, "end": 2.0, "speaker_id": "1"},
+            ],
+            segments=[{"start": 0.0, "end": 2.0}],
+        )
+        result = rebuild_segments_from_words(raw)
+        assert len(result) == 2
+        assert result[0]["speaker"] == "SPEAKER_00"
+        assert result[0]["text"] == "Hello world"
+        assert result[0]["start"] == 0.0
+        assert result[0]["end"] == 1.0
+        assert result[1]["speaker"] == "SPEAKER_01"
+        assert result[1]["text"] == "Hi there"
+
+    def test_segment_boundary_splits_same_speaker(self):
+        """Same speaker across two Fireworks segments → two DB segments."""
+        raw = _make_raw(
+            words=[
+                {"word": "First", "start": 0.0, "end": 0.5, "speaker_id": "0"},
+                {"word": "sentence.", "start": 0.5, "end": 1.0, "speaker_id": "0"},
+                {"word": "Second", "start": 1.1, "end": 1.5, "speaker_id": "0"},
+                {"word": "sentence.", "start": 1.5, "end": 2.0, "speaker_id": "0"},
+            ],
+            segments=[
+                {"start": 0.0, "end": 1.0},
+                {"start": 1.0, "end": 2.0},
+            ],
+        )
+        result = rebuild_segments_from_words(raw)
+        assert len(result) == 2
+        assert result[0]["text"] == "First sentence."
+        assert result[1]["text"] == "Second sentence."
+        assert result[0]["speaker"] == result[1]["speaker"] == "SPEAKER_00"
+
+    def test_speaker_change_within_segment(self):
+        """Speaker changes mid-sentence → split within the same Fireworks segment."""
+        raw = _make_raw(
+            words=[
+                {"word": "Yes", "start": 0.0, "end": 0.4, "speaker_id": "0"},
+                {"word": "but", "start": 0.4, "end": 0.7, "speaker_id": "1"},
+                {"word": "actually", "start": 0.7, "end": 1.0, "speaker_id": "1"},
+            ],
+            segments=[{"start": 0.0, "end": 1.0}],
+        )
+        result = rebuild_segments_from_words(raw)
+        assert len(result) == 2
+        assert result[0]["speaker"] == "SPEAKER_00"
+        assert result[0]["text"] == "Yes"
+        assert result[1]["speaker"] == "SPEAKER_01"
+        assert result[1]["text"] == "but actually"
+
+    def test_returns_empty_when_no_words(self):
+        raw = _make_raw(words=[])
+        assert rebuild_segments_from_words(raw) == []
+
+    def test_returns_empty_when_no_speaker_ids(self):
+        raw = _make_raw(
+            words=[
+                {"word": "Hello", "start": 0.0, "end": 0.5},
+                {"word": "world", "start": 0.5, "end": 1.0},
+            ]
+        )
+        assert rebuild_segments_from_words(raw) == []
+
+    def test_propagates_speaker_to_unlabeled_words(self):
+        """Words without speaker_id should inherit from adjacent labeled words."""
+        raw = _make_raw(
+            words=[
+                {"word": "Hello", "start": 0.0, "end": 0.5, "speaker_id": "0"},
+                {"word": "world", "start": 0.5, "end": 1.0},  # no speaker_id
+            ]
+        )
+        result = rebuild_segments_from_words(raw)
+        assert len(result) == 1
+        assert result[0]["speaker"] == "SPEAKER_00"
+        assert result[0]["text"] == "Hello world"
+
+    def test_normalizes_speaker_ids(self):
+        """Numeric speaker IDs like "0", "1" should be normalized to SPEAKER_00."""
+        raw = _make_raw(
+            words=[{"word": "Test", "start": 0.0, "end": 0.5, "speaker_id": "2"}]
+        )
+        result = rebuild_segments_from_words(raw)
+        assert result[0]["speaker"] == "SPEAKER_02"
 
 
 def test_classify_http_error_marks_429_and_5xx_as_retryable():

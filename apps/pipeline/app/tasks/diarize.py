@@ -54,32 +54,61 @@ def diarize_episode(episode_id: str) -> str:
                 from app.services.fireworks_audio import (
                     diarization_segments_from_transcription,
                     assign_segment_speakers_from_words,
+                    rebuild_segments_from_words,
                 )
 
-                diarization_segments = diarization_segments_from_transcription(raw)
-                if diarization_segments:
-                    _diarize_segment_level(db, episode_id, diarization_segments)
-                else:
-                    transcript_segments = (
-                        db.query(Segment)
-                        .filter(Segment.episode_id == episode_id)
-                        .order_by(Segment.start_time)
-                        .all()
-                    )
-                    assignments = assign_segment_speakers_from_words(
-                        transcript_segments=[
-                            {"id": s.id, "start": s.start_time, "end": s.end_time}
-                            for s in transcript_segments
-                        ],
-                        raw=raw,
-                    )
-                    if not assignments:
-                        raise RuntimeError("No speaker labels found in Fireworks transcript words")
-                    for seg_id, speaker in assignments.items():
-                        db.query(Segment).filter(Segment.id == seg_id).update(
-                            {"speaker_label": speaker}
+                # Preferred path: rebuild segments from word-level speaker data,
+                # mirroring the WhisperX word-level alignment used by the local
+                # provider. This gives per-sentence granularity and correct
+                # speaker labels without the segment-level majority-overlap
+                # approximation.
+                rebuilt = rebuild_segments_from_words(raw)
+                if rebuilt:
+                    db.query(Segment).filter(Segment.episode_id == episode_id).delete()
+                    for seg in rebuilt:
+                        db.add(
+                            Segment(
+                                episode_id=episode_id,
+                                start_time=seg["start"],
+                                end_time=seg["end"],
+                                text=seg["text"],
+                                speaker_label=seg["speaker"],
+                            )
                         )
                     db.flush()
+                    logger.info(
+                        '"action": "diarize_fireworks_wordlevel_complete", "episode_id": "%s", '
+                        '"segments": %d, "speakers": %d',
+                        episode_id,
+                        len(rebuilt),
+                        len({s["speaker"] for s in rebuilt}),
+                    )
+                else:
+                    # Fallback: segment-level speaker assignment (no word data available).
+                    diarization_segments = diarization_segments_from_transcription(raw)
+                    if diarization_segments:
+                        _diarize_segment_level(db, episode_id, diarization_segments)
+                    else:
+                        transcript_segments = (
+                            db.query(Segment)
+                            .filter(Segment.episode_id == episode_id)
+                            .order_by(Segment.start_time)
+                            .all()
+                        )
+                        assignments = assign_segment_speakers_from_words(
+                            transcript_segments=[
+                                {"id": s.id, "start": s.start_time, "end": s.end_time}
+                                for s in transcript_segments
+                            ],
+                            raw=raw,
+                        )
+                        if not assignments:
+                            raise RuntimeError("No speaker labels found in Fireworks transcript words")
+                        for seg_id, speaker in assignments.items():
+                            db.query(Segment).filter(Segment.id == seg_id).update(
+                                {"speaker_label": speaker}
+                            )
+                        db.flush()
                 diarize_secs = round(time.monotonic() - t0, 1)
                 update_episode(
                     db, episode_id,
