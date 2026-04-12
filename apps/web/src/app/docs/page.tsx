@@ -1,5 +1,6 @@
-import { readdir, readFile } from "fs/promises";
+import { readdir } from "fs/promises";
 import { join } from "path";
+import { Suspense } from "react";
 import DocsClient from "./DocsClient";
 
 function filenameToTitle(filename: string): string {
@@ -27,5 +28,9 @@ export default async function DocsPage() {
     // Directory doesn't exist or is empty
   }
 
-  return <DocsClient docs={docs} />;
+  return (
+    <Suspense fallback={<div className="p-6 text-muted-foreground">Loading...</div>}>
+      <DocsClient docs={docs} />
+    </Suspense>
+  );
 }

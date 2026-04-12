@@ -13,19 +13,9 @@ interface DocEntry {
 
 interface DocsClientProps {
   docs: DocEntry[];
-  defaultContent: string;
 }
 
-function filenameToTitle(filename: string): string {
-  // "01-installation" -> "Installation"
-  // "README" -> "README"
-  return filename
-    .replace(/^\d+-/, "")  // remove leading "01-"
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-export default function DocsClient({ docs, defaultContent }: DocsClientProps) {
+export default function DocsClient({ docs }: DocsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [content, setContent] = useState<string | null>(null);

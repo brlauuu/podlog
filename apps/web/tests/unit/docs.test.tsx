@@ -46,7 +46,7 @@ describe("DocsClient", () => {
       text: () => Promise.resolve("# Test Doc\n\nHello world"),
     });
 
-    render(<DocsClient docs={mockDocs} defaultContent="" />);
+    render(<DocsClient docs={mockDocs} />);
 
     expect(screen.getByText("README")).toBeInTheDocument();
     expect(screen.getByText("Installation")).toBeInTheDocument();
@@ -59,7 +59,7 @@ describe("DocsClient", () => {
       text: () => Promise.resolve("# Test Doc\n\nHello world"),
     });
 
-    render(<DocsClient docs={mockDocs} defaultContent="" />);
+    render(<DocsClient docs={mockDocs} />);
 
     await waitFor(() => {
       expect(screen.getByText(/Test Doc/)).toBeInTheDocument();
@@ -72,7 +72,7 @@ describe("DocsClient", () => {
       () => new Promise(() => {}) // never resolves
     );
 
-    render(<DocsClient docs={mockDocs} defaultContent="" />);
+    render(<DocsClient docs={mockDocs} />);
 
     expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
@@ -82,7 +82,7 @@ describe("DocsClient", () => {
       ok: false,
     });
 
-    render(<DocsClient docs={mockDocs} defaultContent="" />);
+    render(<DocsClient docs={mockDocs} />);
 
     await waitFor(() => {
       expect(screen.getByText("Could not load the requested page.")).toBeInTheDocument();
