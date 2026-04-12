@@ -24,6 +24,10 @@ from app import job_queue
 logger = logging.getLogger(__name__)
 
 
+def _elapsed_seconds(start: float) -> float:
+    return round(time.monotonic() - start, 1)
+
+
 def diarize_episode(episode_id: str) -> str:
     db = SessionLocal()
     alignment_path = Path(settings.transcript_dir) / f"{episode_id}.whisperx.json"
@@ -38,18 +42,26 @@ def diarize_episode(episode_id: str) -> str:
 
         if provider == "fireworks":
             # Fireworks mode uses remote diarization metadata and never loads pyannote locally.
+            step_durations: dict[str, float] = {}
             try:
                 t0 = time.monotonic()
                 if not bool(runtime.get("fireworks_stt_diarize", True)):
                     # Provider is remote and diarization is intentionally disabled.
-                    update_episode(db, episode_id, has_diarization=False, diarization_error=None)
+                    update_episode(
+                        db, episode_id,
+                        has_diarization=False,
+                        diarization_error=None,
+                        diarize_step_durations=None,
+                    )
                     job_queue.enqueue(db, episode_id, "chunk")
                     return episode_id
                 if not fireworks_path.exists():
                     raise RuntimeError("Missing Fireworks transcript artifact for diarization")
 
+                t_load = time.monotonic()
                 with open(fireworks_path) as f:
                     raw = json.load(f)
+                step_durations["artifact_load_secs"] = _elapsed_seconds(t_load)
 
                 from app.services.fireworks_audio import (
                     diarization_segments_from_transcription,
@@ -62,6 +74,7 @@ def diarize_episode(episode_id: str) -> str:
                 # provider. This gives per-sentence granularity and correct
                 # speaker labels without the segment-level majority-overlap
                 # approximation.
+                t_rebuild = time.monotonic()
                 rebuilt = rebuild_segments_from_words(raw)
                 if rebuilt:
                     db.query(Segment).filter(Segment.episode_id == episode_id).delete()
@@ -76,6 +89,7 @@ def diarize_episode(episode_id: str) -> str:
                             )
                         )
                     db.flush()
+                    step_durations["segment_rebuild_secs"] = _elapsed_seconds(t_rebuild)
                     logger.info(
                         '"action": "diarize_fireworks_wordlevel_complete", "episode_id": "%s", '
                         '"segments": %d, "speakers": %d',
@@ -85,9 +99,11 @@ def diarize_episode(episode_id: str) -> str:
                     )
                 else:
                     # Fallback: segment-level speaker assignment (no word data available).
+                    t_provider = time.monotonic()
                     diarization_segments = diarization_segments_from_transcription(raw)
+                    step_durations["provider_diarization_secs"] = _elapsed_seconds(t_provider)
                     if diarization_segments:
-                        _diarize_segment_level(db, episode_id, diarization_segments)
+                        step_durations.update(_diarize_segment_level(db, episode_id, diarization_segments))
                     else:
                         transcript_segments = (
                             db.query(Segment)
@@ -95,6 +111,7 @@ def diarize_episode(episode_id: str) -> str:
                             .order_by(Segment.start_time)
                             .all()
                         )
+                        t_assign = time.monotonic()
                         assignments = assign_segment_speakers_from_words(
                             transcript_segments=[
                                 {"id": s.id, "start": s.start_time, "end": s.end_time}
@@ -109,16 +126,21 @@ def diarize_episode(episode_id: str) -> str:
                                 {"speaker_label": speaker}
                             )
                         db.flush()
+                        step_durations["speaker_assignment_secs"] = _elapsed_seconds(t_assign)
                 diarize_secs = round(time.monotonic() - t0, 1)
                 update_episode(
                     db, episode_id,
-                    has_diarization=True, diarization_error=None, diarize_duration_secs=diarize_secs,
+                    has_diarization=True,
+                    diarization_error=None,
+                    diarize_duration_secs=diarize_secs,
+                    diarize_step_durations=step_durations,
                 )
             except Exception as exc:
                 update_episode(
                     db, episode_id,
                     has_diarization=False,
                     diarization_error=str(exc),
+                    diarize_step_durations=step_durations or None,
                 )
                 logger.warning(
                     '"action": "diarize_failed_graceful", "episode_id": "%s", "error": "%s"',
@@ -127,23 +149,31 @@ def diarize_episode(episode_id: str) -> str:
                 )
         else:
             audio_path = episode.audio_local_path
+            step_durations: dict[str, float] = {}
 
             try:
                 from app.services.pyannote import diarize
 
                 t0 = time.monotonic()
+                t_provider = time.monotonic()
                 diarization_segments = diarize(audio_path)
+                step_durations["provider_diarization_secs"] = _elapsed_seconds(t_provider)
 
                 # Try word-level alignment first (preferred)
                 if alignment_path.exists():
-                    _diarize_wordlevel(db, episode_id, alignment_path, diarization_segments)
+                    step_durations.update(
+                        _diarize_wordlevel(db, episode_id, alignment_path, diarization_segments)
+                    )
                 else:
-                    _diarize_segment_level(db, episode_id, diarization_segments)
+                    step_durations.update(_diarize_segment_level(db, episode_id, diarization_segments))
 
                 diarize_secs = round(time.monotonic() - t0, 1)
                 update_episode(
                     db, episode_id,
-                    has_diarization=True, diarization_error=None, diarize_duration_secs=diarize_secs,
+                    has_diarization=True,
+                    diarization_error=None,
+                    diarize_duration_secs=diarize_secs,
+                    diarize_step_durations=step_durations,
                 )
 
             except Exception as exc:
@@ -152,6 +182,7 @@ def diarize_episode(episode_id: str) -> str:
                     db, episode_id,
                     has_diarization=False,
                     diarization_error=str(exc),
+                    diarize_step_durations=step_durations or None,
                 )
                 logger.warning(
                     '"action": "diarize_failed_graceful", "episode_id": "%s", "error": "%s"',
@@ -182,12 +213,15 @@ def diarize_episode(episode_id: str) -> str:
 
 def _diarize_wordlevel(
     db, episode_id: str, alignment_path: Path, diarization_segments: list[dict]
-) -> None:
+) -> dict[str, float]:
     """Word-level speaker assignment: rebuild segments at speaker boundaries."""
     from app.services.alignment import assign_speakers_wordlevel
 
+    step_durations: dict[str, float] = {}
+    t_load = time.monotonic()
     with open(alignment_path) as f:
         aligned_result = json.load(f)
+    step_durations["alignment_io_secs"] = _elapsed_seconds(t_load)
 
     aligned_segments = aligned_result.get("segments", [])
 
@@ -199,10 +233,12 @@ def _diarize_wordlevel(
             '"reason": "alignment data has no word timestamps, falling back to segment-level"',
             episode_id,
         )
-        _diarize_segment_level(db, episode_id, diarization_segments)
-        return
+        step_durations.update(_diarize_segment_level(db, episode_id, diarization_segments))
+        return step_durations
 
+    t_assign = time.monotonic()
     rebuilt_segments = assign_speakers_wordlevel(aligned_segments, diarization_segments)
+    step_durations["speaker_assignment_secs"] = _elapsed_seconds(t_assign)
 
     if not rebuilt_segments:
         logger.warning(
@@ -210,8 +246,8 @@ def _diarize_wordlevel(
             '"reason": "word-level assignment produced 0 segments, falling back to segment-level"',
             episode_id,
         )
-        _diarize_segment_level(db, episode_id, diarization_segments)
-        return
+        step_durations.update(_diarize_segment_level(db, episode_id, diarization_segments))
+        return step_durations
 
     # Replace existing segments with rebuilt ones
     db.query(Segment).filter(Segment.episode_id == episode_id).delete()
@@ -234,11 +270,12 @@ def _diarize_wordlevel(
         len(rebuilt_segments),
         len({s["speaker"] for s in rebuilt_segments}),
     )
+    return step_durations
 
 
 def _diarize_segment_level(
     db, episode_id: str, diarization_segments: list[dict]
-) -> None:
+) -> dict[str, float]:
     """Fallback: segment-level majority overlap speaker assignment."""
     from app.services.alignment import assign_speakers
 
@@ -249,6 +286,7 @@ def _diarize_segment_level(
         .all()
     )
 
+    t_assign = time.monotonic()
     assignments = assign_speakers(
         transcript_segments=[
             {"id": s.id, "start": s.start_time, "end": s.end_time}
@@ -262,6 +300,7 @@ def _diarize_segment_level(
             {"speaker_label": speaker}
         )
     db.flush()
+    step_durations = {"speaker_assignment_secs": _elapsed_seconds(t_assign)}
 
     logger.info(
         '"action": "diarize_segment_level_complete", "episode_id": "%s", '
@@ -270,3 +309,4 @@ def _diarize_segment_level(
         len(assignments),
         len(set(assignments.values())),
     )
+    return step_durations

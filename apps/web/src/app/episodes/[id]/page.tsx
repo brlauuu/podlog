@@ -55,6 +55,7 @@ interface Episode {
   inference_error: string | null;
   transcribe_duration_secs: number | null;
   diarize_duration_secs: number | null;
+  diarize_step_durations: Record<string, number> | null;
   inference_provider_used: string | null;
   fireworks_audio_secs: number | null;
   fireworks_audio_minutes: number | null;
@@ -70,6 +71,18 @@ interface Episode {
   feed_website_url: string | null;
   created_at: string;
   feed_url: string | null;
+}
+
+const STEP_ABBREVIATIONS: Record<string, string> = {
+  io: "I/O", api: "API", stt: "STT", url: "URL",
+};
+
+function formatDiarizeStepLabel(key: string): string {
+  const words = key.replace(/_secs$/, "").split("_").filter(Boolean);
+  if (!words.length) return key;
+  const formatted = words.map(w => STEP_ABBREVIATIONS[w.toLowerCase()] ?? w.toLowerCase());
+  const label = formatted.join(" ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 interface AdjacentEpisode {
@@ -193,6 +206,17 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
             {episode.diarize_duration_secs != null && (
               <span>Diarization: {formatTimestamp(episode.diarize_duration_secs)}</span>
             )}
+          </div>
+        )}
+        {episode.diarize_step_durations && Object.keys(episode.diarize_step_durations).length > 0 && (
+          <div className="mt-1 text-xs text-muted-foreground">
+            <span className="mr-1">Diarization steps:</span>
+            {Object.entries(episode.diarize_step_durations).map(([step, secs], idx) => (
+              <span key={step}>
+                {idx > 0 ? " · " : ""}
+                {formatDiarizeStepLabel(step)}: {formatTimestamp(secs)}
+              </span>
+            ))}
           </div>
         )}
         {episode.inference_provider_used === "fireworks" && (

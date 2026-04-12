@@ -15,6 +15,9 @@ def _make_episode(status, **kwargs):
     ep.error_class = kwargs.get("error_class", None)
     ep.retry_count = kwargs.get("retry_count", 0)
     ep.retry_max = kwargs.get("retry_max", 3)
+    ep.transcribe_duration_secs = kwargs.get("transcribe_duration_secs", None)
+    ep.diarize_duration_secs = kwargs.get("diarize_duration_secs", None)
+    ep.diarize_step_durations = kwargs.get("diarize_step_durations", None)
     ep.updated_at = kwargs.get("updated_at", None)
     ep.feed = MagicMock()
     ep.feed.mode = kwargs.get("feed_mode", "live")
@@ -57,10 +60,20 @@ class TestRetryJob:
             return exc
 
     def test_retry_failed_episode_succeeds(self):
-        ep = _make_episode("failed", error_class="TRANSIENT_NETWORK", retry_count=3)
+        ep = _make_episode(
+            "failed",
+            error_class="TRANSIENT_NETWORK",
+            retry_count=3,
+            transcribe_duration_secs=120.0,
+            diarize_duration_secs=60.0,
+            diarize_step_durations={"provider_diarization_secs": 40.0},
+        )
         result = self._call_retry(ep)
         assert result["queued"] is True
         assert ep.retry_count == 0
+        assert ep.transcribe_duration_secs is None
+        assert ep.diarize_duration_secs is None
+        assert ep.diarize_step_durations is None
 
     def test_retry_stalled_episode_with_error_class_succeeds(self):
         """Stalled jobs with error_class set should be retryable (issue #46)."""

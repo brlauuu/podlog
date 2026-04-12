@@ -22,6 +22,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
@@ -98,6 +99,7 @@ class Episode(Base):
     # Processing duration (seconds)
     transcribe_duration_secs: Mapped[float | None] = mapped_column(Float)
     diarize_duration_secs: Mapped[float | None] = mapped_column(Float)
+    diarize_step_durations: Mapped[dict[str, float] | None] = mapped_column(JSONB)
 
     # Remote inference observability (Issue #261)
     inference_provider_used: Mapped[str | None] = mapped_column(Text)

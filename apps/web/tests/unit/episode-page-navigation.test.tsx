@@ -48,6 +48,12 @@ const currentEpisode = {
   inference_error: null,
   transcribe_duration_secs: null,
   diarize_duration_secs: null,
+  diarize_step_durations: null,
+  inference_provider_used: null,
+  fireworks_audio_secs: null,
+  fireworks_audio_minutes: null,
+  fireworks_stt_cost_per_minute_usd: null,
+  fireworks_stt_cost_usd: null,
   audio_url: null,
   audio_local_path: null,
   guid: null,
@@ -126,5 +132,32 @@ describe("Episode page navigation", () => {
     const transcript = screen.getByTestId("transcript-section");
 
     expect(prevLink.compareDocumentPosition(transcript) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders diarization step timing details when available", async () => {
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            ...currentEpisode,
+            transcribe_duration_secs: 120,
+            diarize_duration_secs: 60,
+            diarize_step_durations: {
+              provider_diarization_secs: 42,
+              alignment_io_secs: 5,
+              speaker_assignment_secs: 13,
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    render(await EpisodePage({ params: Promise.resolve({ id: "ep-current" }) }));
+
+    expect(screen.getByText(/Diarization steps:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Provider diarization/i)).toBeInTheDocument();
+    expect(screen.getByText(/Speaker assignment/i)).toBeInTheDocument();
   });
 });

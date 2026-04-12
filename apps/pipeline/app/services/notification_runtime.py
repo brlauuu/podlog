@@ -122,6 +122,7 @@ def emit_episode_done_event(db: Session, episode: Episode) -> None:
             duration_secs=episode.duration_secs,
             transcribe_duration_secs=episode.transcribe_duration_secs,
             diarize_duration_secs=episode.diarize_duration_secs,
+            diarize_step_durations=episode.diarize_step_durations,
             total_duration_secs=total_secs,
             queue_remaining=remaining,
             queue_estimated_secs=estimated,

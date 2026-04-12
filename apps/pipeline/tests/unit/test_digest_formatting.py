@@ -16,6 +16,10 @@ def _make_digest_data() -> DigestData:
                 podcast_title="Tech Talk",
                 duration_secs=3600,
                 total_duration_secs=200.0,
+                diarize_step_durations={
+                    "provider_diarization_secs": 42.0,
+                    "speaker_assignment_secs": 13.0,
+                },
                 error_class=None,
                 retry_count=None,
                 retry_max=None,
@@ -26,6 +30,7 @@ def _make_digest_data() -> DigestData:
                 podcast_title="My Podcast",
                 duration_secs=2700,
                 total_duration_secs=130.0,
+                diarize_step_durations=None,
                 error_class=None,
                 retry_count=None,
                 retry_max=None,
@@ -36,6 +41,7 @@ def _make_digest_data() -> DigestData:
                 podcast_title="Other Pod",
                 duration_secs=1800,
                 total_duration_secs=None,
+                diarize_step_durations=None,
                 error_class="OOM",
                 retry_count=3,
                 retry_max=3,
@@ -118,3 +124,19 @@ def test_format_digest_telegram_duration_uses_unit_labels():
     data = _make_digest_data()
     md = format_digest_telegram(data)
     assert "1h 00m 00s" in md  # first item: 3600s
+
+
+def test_format_digest_html_includes_diarization_step_breakdown():
+    data = _make_digest_data()
+    html = format_digest_html(data)
+    assert "Diarization steps:" in html
+    assert "Provider diarization" in html
+    assert "Speaker assignment" in html
+
+
+def test_format_digest_telegram_includes_diarization_step_breakdown():
+    data = _make_digest_data()
+    md = format_digest_telegram(data)
+    assert "Diarization steps:" in md
+    assert "Provider diarization" in md
+    assert "Speaker assignment" in md

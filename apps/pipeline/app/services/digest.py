@@ -23,6 +23,7 @@ from app.services.notifications import (
     send_email,
     send_telegram,
 )
+from app.services.timing_labels import humanize_timing_key
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ class DigestItem:
     error_class: str | None  # failure events
     retry_count: int | None
     retry_max: int | None
+    diarize_step_durations: dict[str, float] | None = None
 
 
 @dataclass
@@ -89,6 +91,16 @@ class DigestData:
     processing_factor: float | None = None
 
 
+def _fmt_diarization_steps(step_durations: dict[str, float] | None) -> str:
+    if not step_durations:
+        return ""
+    parts = [
+        f"{humanize_timing_key(name)} {_fmt_short_duration(secs)}"
+        for name, secs in step_durations.items()
+    ]
+    return f"Diarization steps: {'; '.join(parts)}"
+
+
 def format_digest_html(data: DigestData) -> str:
     freq_label = "Daily" if data.frequency == "daily" else "Weekly"
     done_count = sum(1 for i in data.items if i.event_type == "episode.done")
@@ -100,6 +112,9 @@ def format_digest_html(data: DigestData) -> str:
         if item.event_type == "episode.done":
             icon = "&#9989;"
             detail = f"processed in {_fmt_short_duration(item.total_duration_secs)}"
+            step_detail = _fmt_diarization_steps(item.diarize_step_durations)
+            if step_detail:
+                detail = f"{detail}. {step_detail}"
         else:
             detail = f"{item.error_class} after {item.retry_count}/{item.retry_max} retries"
             icon = "&#10060;"
@@ -179,6 +194,9 @@ def format_digest_telegram(data: DigestData) -> str:
         duration = _fmt_duration(item.duration_secs)
         if item.event_type == "episode.done":
             detail = f"processed in {_fmt_short_duration(item.total_duration_secs)}"
+            step_detail = _fmt_diarization_steps(item.diarize_step_durations)
+            if step_detail:
+                detail = f"{detail}. {step_detail}"
             lines.append(f"✅ \"{item.episode_title}\" ({item.podcast_title}) — {duration}, {detail}")
         else:
             lines.append(
@@ -302,6 +320,7 @@ def send_digest_if_due(now: datetime | None = None) -> None:
                 podcast_title=payload.get("podcast_title", ""),
                 duration_secs=payload.get("duration_secs"),
                 total_duration_secs=payload.get("total_duration_secs"),
+                diarize_step_durations=payload.get("diarize_step_durations"),
                 error_class=payload.get("error_class"),
                 retry_count=payload.get("retry_count"),
                 retry_max=payload.get("retry_max"),
