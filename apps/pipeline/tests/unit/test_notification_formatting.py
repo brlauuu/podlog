@@ -73,7 +73,7 @@ def test_format_done_html_contains_diarization_step_breakdown():
     html = format_done_html(_make_done_event())
     assert "Diarization Step Breakdown" in html
     assert "Provider diarization" in html
-    assert "Alignment io" in html
+    assert "Alignment I/O" in html
     assert "Speaker assignment" in html
 
 
@@ -81,7 +81,7 @@ def test_format_done_telegram_contains_diarization_step_breakdown():
     md = format_done_telegram(_make_done_event())
     assert "Diarization Step Breakdown" in md
     assert "Provider diarization" in md
-    assert "Alignment io" in md
+    assert "Alignment I/O" in md
     assert "Speaker assignment" in md
 
 

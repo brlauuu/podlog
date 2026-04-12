@@ -165,10 +165,13 @@ class TestDiarizeEpisode:
         mock_session_cls.return_value = db
 
         fireworks_raw = {
+            "segments": [
+                {"start": 0.0, "end": 2.0},
+            ],
             "words": [
-                {"speaker_id": "0", "start": 0.0, "end": 1.0},
-                {"speaker_id": "0", "start": 1.0, "end": 2.0},
-            ]
+                {"speaker_id": "0", "word": "Hello", "start": 0.0, "end": 1.0},
+                {"speaker_id": "0", "word": "world.", "start": 1.0, "end": 2.0},
+            ],
         }
 
         with (
@@ -201,8 +204,7 @@ class TestDiarizeEpisode:
             and "diarize_step_durations" in call.kwargs
         ]
         assert matching
-        assert "artifact_load_secs" in matching[0].kwargs["diarize_step_durations"]
-        assert "speaker_assignment_secs" in matching[0].kwargs["diarize_step_durations"]
+        assert "segment_rebuild_secs" in matching[0].kwargs["diarize_step_durations"]
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "chunk")
 
     @patch("app.tasks.diarize.job_queue")
