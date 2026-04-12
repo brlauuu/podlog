@@ -20,7 +20,10 @@ import SpeakerFilter from "@/components/SpeakerFilter";
 import type { SearchPage as SearchPageType, GroupedSearchResult } from "@/lib/search";
 import { loadSearchSnapshot, saveSearchSnapshot } from "@/lib/page-state";
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+const isValidPageSize = (value: number): value is (typeof PAGE_SIZE_OPTIONS)[number] =>
+  PAGE_SIZE_OPTIONS.includes(value as (typeof PAGE_SIZE_OPTIONS)[number]);
 
 type ViewMode = "grouped" | "flat";
 
@@ -61,6 +64,11 @@ function SearchPageContent() {
   );
   const [page, setPage] = useState(
     initialQuery ? 1 : initialSnapshot?.page || 1
+  );
+  const [pageSize, setPageSize] = useState(
+    initialSnapshot?.pageSize && isValidPageSize(initialSnapshot.pageSize)
+      ? initialSnapshot.pageSize
+      : DEFAULT_PAGE_SIZE
   );
   const [viewMode, setViewMode] = useState<ViewMode>(
     initialSnapshot?.viewMode || "grouped"
@@ -116,9 +124,10 @@ function SearchPageContent() {
       selectedFeedIds: Array.from(selectedFeedIds),
       selectedSpeaker,
       page,
+      pageSize,
       viewMode,
     });
-  }, [query, submittedQuery, selectedFeedIds, selectedSpeaker, page, viewMode]);
+  }, [query, submittedQuery, selectedFeedIds, selectedSpeaker, page, pageSize, viewMode]);
 
   // Separate real feed UUIDs from the __uploads__ sentinel
   const includeManualUploads = selectedFeedIds.has("__uploads__");
@@ -127,16 +136,16 @@ function SearchPageContent() {
     .join(",");
 
   // Flat search query
-  const flatCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}:${selectedSpeaker}`;
+  const flatCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}:${selectedSpeaker}:${pageSize}`;
   const flatQuery = useQuery<SearchPageType>({
-    queryKey: ["search", submittedQuery, feedFilterParam, includeManualUploads, selectedSpeaker, page],
+    queryKey: ["search", submittedQuery, feedFilterParam, includeManualUploads, selectedSpeaker, page, pageSize],
     queryFn: async () => {
       if (!submittedQuery)
         return {
           results: [],
           total: 0,
           page: 1,
-          pageSize: PAGE_SIZE,
+          pageSize,
           coverage: { processed: 0, total: 0 },
         };
       const canSkipCount =
@@ -144,7 +153,7 @@ function SearchPageContent() {
       const params = new URLSearchParams({
         q: submittedQuery,
         page: String(page),
-        pageSize: String(PAGE_SIZE),
+        pageSize: String(pageSize),
       });
       if (feedFilterParam) params.set("feedId", feedFilterParam);
       if (includeManualUploads) params.set("uploads", "true");
@@ -165,9 +174,9 @@ function SearchPageContent() {
   });
 
   // Grouped search query
-  const groupedCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}:${selectedSpeaker}`;
+  const groupedCacheKey = `${submittedQuery}:${feedFilterParam}:${includeManualUploads}:${selectedSpeaker}:${pageSize}`;
   const groupedQuery = useQuery<GroupedSearchResult>({
-    queryKey: ["search-grouped", submittedQuery, feedFilterParam, includeManualUploads, selectedSpeaker, page],
+    queryKey: ["search-grouped", submittedQuery, feedFilterParam, includeManualUploads, selectedSpeaker, page, pageSize],
     queryFn: async () => {
       if (!submittedQuery)
         return {
@@ -182,7 +191,7 @@ function SearchPageContent() {
       const params = new URLSearchParams({
         q: submittedQuery,
         page: String(page),
-        pageSize: String(PAGE_SIZE),
+        pageSize: String(pageSize),
       });
       if (feedFilterParam) params.set("feedId", feedFilterParam);
       if (includeManualUploads) params.set("uploads", "true");
@@ -238,7 +247,11 @@ function SearchPageContent() {
 
   const totalPages =
     viewMode === "flat" && flatQuery.data
-      ? Math.ceil(flatQuery.data.total / PAGE_SIZE)
+      ? Math.ceil(flatQuery.data.total / pageSize)
+      : 0;
+  const groupedTotalPages =
+    viewMode === "grouped" && groupedQuery.data
+      ? Math.ceil(groupedQuery.data.totalEpisodes / pageSize)
       : 0;
 
   return (
@@ -253,6 +266,7 @@ function SearchPageContent() {
               <li>Use quotes for exact phrases: &quot;machine learning&quot;</li>
               <li>Exclude words with minus: climate -politics</li>
               <li>Combine terms: AI regulation ethics</li>
+              <li>Field search: title:, description:, speaker: (case-insensitive; speaker supports partial matching)</li>
             </ul>
           </HelpPopover>
 
@@ -262,7 +276,7 @@ function SearchPageContent() {
             onChange={setQuery}
             onSubmit={handleSubmit}
             onClear={handleClear}
-            placeholder="Search transcripts..."
+            placeholder="Search transcripts, titles, descriptions..."
             icon={<Search size={18} />}
           />
 
@@ -324,6 +338,24 @@ function SearchPageContent() {
               })()}
             </div>
             <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <span>Per page</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    const next = Number.parseInt(e.target.value, 10);
+                    setPageSize(isValidPageSize(next) ? next : DEFAULT_PAGE_SIZE);
+                    setPage(1);
+                  }}
+                  className="bg-background border border-input rounded-md px-2 py-1 text-xs"
+                >
+                  {PAGE_SIZE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <DownloadReportButton
                 query={submittedQuery}
                 viewMode={viewMode}
@@ -371,15 +403,40 @@ function SearchPageContent() {
 
           {viewMode === "grouped" ? (
             groupedQuery.data && groupedQuery.data.feeds.length > 0 ? (
-              <div className="space-y-3">
-                {groupedQuery.data.feeds.map((feed) => (
-                  <FeedGroupCard
-                    key={feed.feedId}
-                    feed={feed}
-                    query={submittedQuery}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="space-y-3">
+                  {groupedQuery.data.feeds.map((feed) => (
+                    <FeedGroupCard
+                      key={feed.feedId}
+                      feed={feed}
+                      query={submittedQuery}
+                    />
+                  ))}
+                </div>
+                {groupedTotalPages > 1 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                    >
+                      &larr; Previous
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Page {page} of {groupedTotalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.min(groupedTotalPages, p + 1))}
+                      disabled={page === groupedTotalPages}
+                    >
+                      Next &rarr;
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-16 space-y-2">
                 <p className="text-muted-foreground">

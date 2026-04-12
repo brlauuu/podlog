@@ -76,11 +76,11 @@ describe("GET /api/search", () => {
     expect(searchSegments).toHaveBeenCalledWith("test", ["id-1"], true, 1, 20, false, null);
   });
 
-  test("clamps pageSize to max 50", async () => {
+  test("clamps pageSize to max 100", async () => {
     searchSegments.mockResolvedValue(mockResult);
     const req = new NextRequest("http://localhost/api/search?q=test&pageSize=100");
     await GET(req);
-    expect(searchSegments).toHaveBeenCalledWith("test", null, false, 1, 50, false, null);
+    expect(searchSegments).toHaveBeenCalledWith("test", null, false, 1, 100, false, null);
   });
 
   test("returns 500 on search error", async () => {

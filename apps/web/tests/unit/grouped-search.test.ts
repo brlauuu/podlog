@@ -74,7 +74,7 @@ describe("GET /api/search/grouped", () => {
     expect(searchGrouped).toHaveBeenCalledWith("test", [feedId], false, 1, 20, false, null);
   });
 
-  test("clamps pageSize to max 50", async () => {
+  test("clamps pageSize to max 100", async () => {
     searchGrouped.mockResolvedValue({
       feeds: [],
       totalFeeds: 0,
@@ -86,7 +86,7 @@ describe("GET /api/search/grouped", () => {
       "http://localhost/api/search/grouped?q=test&pageSize=100"
     );
     await GET(req);
-    expect(searchGrouped).toHaveBeenCalledWith("test", null, false, 1, 50, false, null);
+    expect(searchGrouped).toHaveBeenCalledWith("test", null, false, 1, 100, false, null);
   });
 
   test("parses comma-separated feedId into array", async () => {

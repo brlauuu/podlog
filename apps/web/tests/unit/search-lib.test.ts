@@ -16,7 +16,7 @@ jest.mock("@/lib/searchHybrid", () => ({
 import pool from "@/lib/db";
 import { searchSegments } from "@/lib/search";
 
-const mockQuery = (pool as { query: jest.Mock }).query;
+const mockQuery = (pool as unknown as { query: jest.Mock }).query;
 
 describe("search.ts feed filtering", () => {
   beforeEach(() => {
@@ -49,5 +49,47 @@ describe("search.ts feed filtering", () => {
     expect(sql).toContain("f.id = ANY($2::uuid[])");
     expect(sql).toContain("e.feed_id IS NULL");
     expect(params).toEqual(["hello", ["feed-1"], 100]);
+  });
+
+  test("uses metadata-only episode query for title scoped search", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] }) // metadata rows
+      .mockResolvedValueOnce({ rows: [{ total: 0 }] }) // metadata count
+      .mockResolvedValueOnce({ rows: [{ processed: 0, total: 0 }] }); // coverage
+
+    await searchSegments("title:iran", null, false, 1, 20, false);
+
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("FROM episodes e");
+    expect(sql).not.toContain("FROM speaker_turns t");
+    expect(params).toEqual(["%iran%", 20, 0]);
+  });
+
+  test("uses metadata-only episode query for description scoped search", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] }) // metadata rows
+      .mockResolvedValueOnce({ rows: [{ total: 0 }] }) // metadata count
+      .mockResolvedValueOnce({ rows: [{ processed: 0, total: 0 }] }); // coverage
+
+    await searchSegments("description:geopolitics", null, false, 1, 20, false);
+
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("FROM episodes e");
+    expect(sql).toContain("COALESCE(e.description, '') ILIKE");
+    expect(sql).not.toContain("FROM speaker_turns t");
+    expect(params).toEqual(["%geopolitics%", 20, 0]);
+  });
+
+  test("applies case-insensitive speaker scoped filter in transcript mode", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] }) // fts
+      .mockResolvedValueOnce({ rows: [{ count: "0" }] }) // count
+      .mockResolvedValueOnce({ rows: [{ processed: 0, total: 0 }] }); // coverage
+
+    await searchSegments("crisis in Iran speaker: jacob", null, false, 1, 20, false);
+
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("ILIKE");
+    expect(params).toEqual(["crisis in Iran", "%jacob%", 100]);
   });
 });
