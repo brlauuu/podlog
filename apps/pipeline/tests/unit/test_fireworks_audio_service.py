@@ -8,6 +8,7 @@ import pytest
 from app.services.fireworks_audio import (
     FireworksTranscriptionError,
     _classify_http_error,
+    _is_sentence_end,
     diarization_segments_from_transcription,
     assign_segment_speakers_from_words,
     rebuild_segments_from_words,
@@ -146,6 +147,74 @@ class TestRebuildSegmentsFromWords:
         )
         result = rebuild_segments_from_words(raw)
         assert result[0]["speaker"] == "SPEAKER_02"
+
+    def test_splits_on_sentence_ending_punctuation(self):
+        """Same speaker, same Fireworks segment → still splits at sentence boundaries."""
+        raw = _make_raw(
+            words=[
+                {"word": "First", "start": 0.0, "end": 0.3, "speaker_id": "0"},
+                {"word": "sentence.", "start": 0.3, "end": 0.8, "speaker_id": "0"},
+                {"word": "Second", "start": 0.9, "end": 1.3, "speaker_id": "0"},
+                {"word": "sentence.", "start": 1.3, "end": 1.8, "speaker_id": "0"},
+                {"word": "A", "start": 1.9, "end": 2.0, "speaker_id": "0"},
+                {"word": "question?", "start": 2.0, "end": 2.5, "speaker_id": "0"},
+                {"word": "Yes!", "start": 2.6, "end": 3.0, "speaker_id": "0"},
+            ],
+            segments=[{"start": 0.0, "end": 3.0}],
+        )
+        result = rebuild_segments_from_words(raw)
+        assert len(result) == 4
+        assert result[0]["text"] == "First sentence."
+        assert result[1]["text"] == "Second sentence."
+        assert result[2]["text"] == "A question?"
+        assert result[3]["text"] == "Yes!"
+        assert all(s["speaker"] == "SPEAKER_00" for s in result)
+
+    def test_does_not_split_on_decimal_numbers(self):
+        """Periods in decimal numbers like '3.5' should not trigger a split."""
+        raw = _make_raw(
+            words=[
+                {"word": "About", "start": 0.0, "end": 0.3, "speaker_id": "0"},
+                {"word": "3.5", "start": 0.3, "end": 0.6, "speaker_id": "0"},
+                {"word": "million", "start": 0.6, "end": 1.0, "speaker_id": "0"},
+                {"word": "people.", "start": 1.0, "end": 1.5, "speaker_id": "0"},
+                {"word": "Wow", "start": 1.6, "end": 2.0, "speaker_id": "0"},
+            ],
+            segments=[{"start": 0.0, "end": 2.0}],
+        )
+        result = rebuild_segments_from_words(raw)
+        assert len(result) == 2
+        assert result[0]["text"] == "About 3.5 million people."
+        assert result[1]["text"] == "Wow"
+
+
+class TestIsSentenceEnd:
+    def test_period(self):
+        assert _is_sentence_end("sentence.") is True
+
+    def test_question_mark(self):
+        assert _is_sentence_end("question?") is True
+
+    def test_exclamation(self):
+        assert _is_sentence_end("wow!") is True
+
+    def test_no_punctuation(self):
+        assert _is_sentence_end("word") is False
+
+    def test_comma(self):
+        assert _is_sentence_end("word,") is False
+
+    def test_decimal_number(self):
+        assert _is_sentence_end("3.5") is False
+
+    def test_number_with_period(self):
+        assert _is_sentence_end("1.") is False
+
+    def test_empty_string(self):
+        assert _is_sentence_end("") is False
+
+    def test_trailing_whitespace(self):
+        assert _is_sentence_end("sentence. ") is True
 
 
 def test_classify_http_error_marks_429_and_5xx_as_retryable():

@@ -206,12 +206,15 @@ def rebuild_segments_from_words(raw: dict) -> list[dict]:
     Rebuild sentence-level segments from Fireworks word-level speaker data.
 
     Mirrors the WhisperX word-level alignment path used by the local provider:
-    groups consecutive same-speaker words within the same original Fireworks
-    segment boundary into a single DB segment, splitting on speaker changes.
+    groups consecutive same-speaker words into sentence-level DB segments,
+    splitting on speaker changes, Fireworks segment boundaries, AND sentence-
+    ending punctuation (``.`` ``?`` ``!``).
 
-    This ensures the Fireworks path produces the same granularity of segments
-    as the local path — one per sentence fragment per speaker — so per-sentence
-    timestamps are shown in the transcript view.
+    WhisperX aligned_segments are already sentence-level, so the local path
+    gets fine granularity for free.  Fireworks segments are much coarser
+    (often minutes long), so this function must detect sentence boundaries
+    itself to produce the same ~5-15 second segments that the local path
+    yields.
 
     Returns list of {"start": float, "end": float, "text": str, "speaker": str}.
     Returns empty list if word-level speaker data is unavailable (caller falls back).
@@ -271,8 +274,11 @@ def rebuild_segments_from_words(raw: dict) -> list[dict]:
         if w["speaker"] is None:
             w["speaker"] = first_known
 
-    # Rebuild segments: split on speaker change OR original segment boundary —
-    # same logic as alignment.assign_speakers_wordlevel for the local path.
+    # Rebuild segments: split on speaker change, original segment boundary,
+    # OR sentence-ending punctuation. The local WhisperX path gets sentence-
+    # level granularity because WhisperX aligned_segments are already per-
+    # sentence. Fireworks segments are much coarser (minutes), so we must
+    # detect sentence boundaries ourselves via terminal punctuation.
     rebuilt: list[dict] = []
     cur = tagged[0]
     c_speaker = cur["speaker"]
@@ -281,31 +287,49 @@ def rebuild_segments_from_words(raw: dict) -> list[dict]:
     c_end = cur["end"]
     c_words: list[str] = [cur["word"]]
 
+    def _flush() -> None:
+        rebuilt.append({
+            "start": c_start,
+            "end": c_end,
+            "text": " ".join(w.strip() for w in c_words),
+            "speaker": c_speaker,
+        })
+
     for tw in tagged[1:]:
-        if tw["speaker"] == c_speaker and tw["seg_idx"] == c_seg:
+        same_speaker = tw["speaker"] == c_speaker
+        same_seg = tw["seg_idx"] == c_seg
+        sentence_ended = _is_sentence_end(c_words[-1])
+
+        if same_speaker and same_seg and not sentence_ended:
             c_end = tw["end"]
             c_words.append(tw["word"])
         else:
-            rebuilt.append({
-                "start": c_start,
-                "end": c_end,
-                "text": " ".join(w.strip() for w in c_words),
-                "speaker": c_speaker,
-            })
+            _flush()
             c_speaker = tw["speaker"]
             c_seg = tw["seg_idx"]
             c_start = tw["start"]
             c_end = tw["end"]
             c_words = [tw["word"]]
 
-    rebuilt.append({
-        "start": c_start,
-        "end": c_end,
-        "text": " ".join(w.strip() for w in c_words),
-        "speaker": c_speaker,
-    })
+    _flush()
 
     return rebuilt
+
+
+def _is_sentence_end(word: str) -> bool:
+    """Detect likely sentence-ending punctuation on a word.
+
+    Returns True for words like ``"sentence."`` or ``"question?"`` but
+    False for decimal numbers like ``"3.5"`` where the period is not a
+    sentence terminator.
+    """
+    stripped = word.rstrip()
+    if not stripped or stripped[-1] not in ".?!":
+        return False
+    # Avoid false positives on decimal numbers (e.g. "3.5", "1.")
+    if len(stripped) >= 2 and stripped[-2].isdigit():
+        return False
+    return True
 
 
 def _normalize_speaker(raw_speaker: str) -> str:
