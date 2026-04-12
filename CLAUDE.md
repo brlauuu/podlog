@@ -46,9 +46,9 @@ podlog/
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # unit, integration, e2e
 │   └── web/                        # Next.js 16 (App Router)
-│       ├── src/app/                # Pages: /, /about, /podcasts, /episodes/[id], /queue, /feeds, /ask, /search, /notifications
-│       ├── src/app/api/            # API routes: search, search/grouped, search/mentions, feeds, queue, audio, ask, ask/coverage, episodes (ingest, upload, retry, speakers, merge), wizard, notifications, pipeline proxy
-│       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, SetupWizard, etc.
+│       ├── src/app/                # Pages: /, /about, /podcasts, /episodes/[id], /queue, /feeds, /ask, /search, /notifications, /docs
+│       ├── src/app/api/            # API routes: search, search/grouped, search/mentions, feeds, queue, audio, ask, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, pipeline proxy
+│       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, DocsClient, etc.
 │       └── src/lib/                # db.ts, search.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx
 ├── docs/                           # User-facing documentation and guides
 ├── scripts/                        # Operational scripts (nightly audit, health check)
@@ -112,7 +112,7 @@ Services: web (:3000), pipeline API (:8000), ollama (:11434).
 - Automated test suites for pipeline and web are maintained in-repo
 - Alembic migration history is maintained under `apps/pipeline/alembic/versions/`
 - shadcn/ui component set is installed and used in the web app
-- Setup wizard for first-run onboarding
+- Docs tab for user documentation
 - RAG-based Ask AI feature via Ollama
 - Speaker merge/rename UI
 - Notification settings
