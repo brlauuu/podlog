@@ -420,7 +420,7 @@ export default function EpisodesList({ episodes, feedId }: Props) {
                 )}
 
                 {/* Reprocess button - last item in tag row */}
-                <span className="relative z-10">
+                <span className="relative z-10 pointer-events-auto">
                   <ReprocessButton episodeId={ep.id} status={ep.status} />
                 </span>
               </div>
