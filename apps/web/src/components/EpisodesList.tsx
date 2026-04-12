@@ -272,9 +272,10 @@ export default function EpisodesList({ episodes, feedId }: Props) {
 
   const filteredAndSorted = useMemo(() => {
     // First filter by search query
+    const normalizedQuery = searchQuery.toLowerCase();
     const filtered = searchQuery
       ? episodes.filter((ep) =>
-          ep.title?.toLowerCase().includes(searchQuery.toLowerCase())
+          ep.title?.toLowerCase().includes(normalizedQuery)
         )
       : episodes;
 
