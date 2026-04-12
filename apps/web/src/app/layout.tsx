@@ -7,8 +7,7 @@ import MainContent from "@/components/MainContent";
 import Footer from "@/components/Footer";
 import { AudioPlayerProvider } from "@/components/AudioPlayerContext";
 import QueryProvider from "@/components/QueryProvider";
-import WizardProvider from "@/components/WizardProvider";
-import SetupWizard from "@/components/SetupWizard";
+
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -28,16 +27,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} min-h-screen bg-background flex flex-col`}>
         <QueryProvider>
           <AudioPlayerProvider>
-            <WizardProvider>
-              <Navbar />
-              <MainContent>
-                {children}
-              </MainContent>
-              <Footer />
-              {/* Global persistent player — fixed to bottom, persists across navigation */}
-              <AudioPlayer />
-              <SetupWizard />
-            </WizardProvider>
+            <Navbar />
+            <MainContent>
+              {children}
+            </MainContent>
+            <Footer />
+            {/* Global persistent player — fixed to bottom, persists across navigation */}
+            <AudioPlayer />
           </AudioPlayerProvider>
         </QueryProvider>
       </body>
