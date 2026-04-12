@@ -269,3 +269,53 @@ def test_digest_telegram_shows_new_metrics_when_legacy_absent():
     assert "40m 00s" in md
     assert "Processing factor" in md
     assert "1.5x" in md
+
+@patch("app.services.digest.SessionLocal")
+@patch("app.services.digest._send_digest")
+@patch("app.services.digest.compute_avg_duration", return_value=None)
+@patch("app.services.digest.compute_avg_processing_stats", return_value=(None, None, None))
+@patch("app.services.digest.estimate_queue_status", return_value=(0, None, None))
+@patch("app.services.digest.get_notification_settings")
+def test_send_digest_maps_diarize_step_durations(
+    mock_get_ns,
+    mock_estimate,
+    mock_avg_stats,
+    mock_avg_dur,
+    mock_send_digest,
+    mock_session_cls,
+):
+    mock_get_ns.return_value = {
+        "notification_frequency": "daily",
+        "email_configured": False,
+        "telegram_configured": False,
+    }
+
+    db = MagicMock()
+    mock_session_cls.return_value = db
+
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    log_row = MagicMock()
+    log_row.event_type = "episode.done"
+    log_row.payload = json.dumps({
+        "episode_title": "Test Ep",
+        "podcast_title": "Pod",
+        "duration_secs": 3600,
+        "total_duration_secs": 200.0,
+        "diarize_step_durations": {
+            "provider_diarization_secs": 42.0,
+            "speaker_assignment_secs": 13.0,
+        },
+    })
+    log_row.sent = False
+    db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [log_row]
+
+    now = datetime(2026, 3, 15, 8, 30, tzinfo=timezone.utc)
+    send_digest_if_due(now=now)
+
+    digest = mock_send_digest.call_args[0][0]
+    assert len(digest.items) == 1
+    assert digest.items[0].diarize_step_durations == {
+        "provider_diarization_secs": 42.0,
+        "speaker_assignment_secs": 13.0,
+    }

@@ -55,6 +55,9 @@ def retry_job(episode_id: str, db: Session = Depends(get_db)) -> dict:
     episode.retry_count = 0
     episode.diarization_error = None
     episode.has_diarization = False
+    episode.transcribe_duration_secs = None
+    episode.diarize_duration_secs = None
+    episode.diarize_step_durations = None
     db.commit()
 
     enqueue_episode_ingest(db, str(episode.id))
