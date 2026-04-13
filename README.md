@@ -169,7 +169,18 @@ make help            # List all available commands
 
 ## Credits
 
-Built by [@brlauuu](https://github.com/brlauuu) and [Claude](https://claude.ai) (Anthropic).
+Built by [@brlauuu](https://github.com/brlauuu) with support from:
+
+Agents:
+
+- [Claude](https://claude.ai)
+- [Gemini](https://gemini.google.com)
+- [OpenCode](https://opencode.ai) (running [Kimi K2.5](https://platform.kimi.com/docs/guide/kimi-k2-5-quickstart) and [Big Pickle](https://opencode.ai))
+
+Platforms:
+
+- [Omnara](https://omnara.cc)
+- [Fireworks AI](https://fireworks.ai) (optional remote inference for Podlog)
 
 ## License
 
