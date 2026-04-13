@@ -1,20 +1,37 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, Toast } from "./NotificationSettingsSections";
 import NotificationSection from "./NotificationSection";
 import RemoteInferenceSection from "./RemoteInferenceSection";
 
+const INFERENCE_FIELDS = new Set<keyof Settings>([
+  "inference_provider",
+  "fireworks_api_key",
+  "fireworks_audio_base_url",
+  "fireworks_stt_model",
+  "fireworks_stt_diarize",
+  "fireworks_chat_base_url",
+  "fireworks_chat_model",
+  "fireworks_stt_cost_per_minute_usd",
+  "embedding_provider",
+  "embedding_model",
+  "fireworks_embedding_base_url",
+  "fireworks_embedding_model",
+]);
+
 export default function NotificationSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [savingInference, setSavingInference] = useState(false);
   const [testing, setTesting] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
-  const [dirty, setDirty] = useState<Partial<Settings>>({});
+  const [dirtyNotifications, setDirtyNotifications] = useState<Partial<Settings>>({});
+  const [dirtyInference, setDirtyInference] = useState<Partial<Settings>>({});
 
   useEffect(() => {
     fetch("/api/notifications/settings")
@@ -40,27 +57,53 @@ export default function NotificationSettings() {
     value: string | number | boolean | null
   ) {
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
-    setDirty((prev) => ({ ...prev, [field]: value }));
+    if (INFERENCE_FIELDS.has(field)) {
+      setDirtyInference((prev) => ({ ...prev, [field]: value }));
+    } else {
+      setDirtyNotifications((prev) => ({ ...prev, [field]: value }));
+    }
   }
 
-  async function handleSave() {
-    if (Object.keys(dirty).length === 0) return;
-    setSaving(true);
+  async function handleSaveNotifications() {
+    if (Object.keys(dirtyNotifications).length === 0) return;
+    setSavingNotifications(true);
     try {
       const resp = await fetch("/api/notifications/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(dirty),
+        body: JSON.stringify(dirtyNotifications),
       });
       if (resp.ok) {
         const updated = await resp.json();
         setSettings(updated);
-        setDirty({});
+        setDirtyNotifications({});
+        setToast({ message: "Settings saved", type: "success" });
+      } else {
+        const err = await resp.json();
+        setToast({ message: err.error || "Failed to save", type: "error" });
+      }
+    } catch {
+      setToast({ message: "Network error", type: "error" });
+    } finally {
+      setSavingNotifications(false);
+    }
+  }
+
+  async function handleSaveInference() {
+    if (Object.keys(dirtyInference).length === 0) return;
+    setSavingInference(true);
+    try {
+      const resp = await fetch("/api/notifications/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dirtyInference),
+      });
+      if (resp.ok) {
+        const updated = await resp.json();
+        setSettings(updated);
+        setDirtyInference({});
         if (updated.fireworks_key_warning) {
-          setToast({
-            message: updated.fireworks_key_warning,
-            type: "error",
-          });
+          setToast({ message: updated.fireworks_key_warning, type: "error" });
           return;
         }
         setToast({ message: "Settings saved", type: "success" });
@@ -71,7 +114,7 @@ export default function NotificationSettings() {
     } catch {
       setToast({ message: "Network error", type: "error" });
     } finally {
-      setSaving(false);
+      setSavingInference(false);
     }
   }
 
@@ -108,43 +151,43 @@ export default function NotificationSettings() {
         </p>
       </div>
 
-      {/* Section 1: Notifications */}
-      <section>
-        <h2 className="text-lg font-semibold mb-1">Notifications</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Configure how and when Podlog sends you notifications about processed
-          episodes and system health.
-        </p>
-        <NotificationSection
-          settings={settings}
-          onChange={handleChange}
-          onTest={handleTest}
-          testing={testing}
-        />
-      </section>
+      <Tabs defaultValue="notifications">
+        <TabsList className="mb-6">
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="inference">Remote Inference</TabsTrigger>
+        </TabsList>
 
-      <Separator className="my-8" />
+        <TabsContent value="notifications">
+          <NotificationSection
+            settings={settings}
+            onChange={handleChange}
+            onTest={handleTest}
+            testing={testing}
+          />
+          <div className="flex gap-3 mt-8 mb-4">
+            <button
+              className={actionButtonClass}
+              onClick={handleSaveNotifications}
+              disabled={savingNotifications || Object.keys(dirtyNotifications).length === 0}
+            >
+              {savingNotifications ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </TabsContent>
 
-      {/* Section 2: Remote Inference */}
-      <section>
-        <h2 className="text-lg font-semibold mb-1">Remote Inference</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Configure which pipeline steps run locally and which use a remote
-          provider for faster processing.
-        </p>
-        <RemoteInferenceSection settings={settings} onChange={handleChange} />
-      </section>
-
-      {/* Single Save button */}
-      <div className="flex gap-3 mt-8 mb-4">
-        <button
-          className={actionButtonClass}
-          onClick={handleSave}
-          disabled={saving || Object.keys(dirty).length === 0}
-        >
-          {saving ? "Saving..." : "Save"}
-        </button>
-      </div>
+        <TabsContent value="inference">
+          <RemoteInferenceSection settings={settings} onChange={handleChange} />
+          <div className="flex gap-3 mt-8 mb-4">
+            <button
+              className={actionButtonClass}
+              onClick={handleSaveInference}
+              disabled={savingInference || Object.keys(dirtyInference).length === 0}
+            >
+              {savingInference ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {toast && <Toast message={toast.message} type={toast.type} />}
     </div>

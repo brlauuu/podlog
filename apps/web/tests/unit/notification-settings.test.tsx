@@ -3,6 +3,7 @@
  */
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import NotificationSettings from "@/components/NotificationSettings";
 
 // Mock fetch globally
@@ -66,15 +67,15 @@ beforeEach(() => {
 });
 
 describe("NotificationSettings", () => {
-  it("renders both sections", async () => {
+  it("renders both tab triggers", async () => {
     render(<NotificationSettings />);
     await waitFor(() => {
-      expect(screen.getByText("Notifications")).toBeInTheDocument();
-      expect(screen.getByText("Remote Inference")).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Notifications" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Remote Inference" })).toBeInTheDocument();
     });
   });
 
-  it("shows telegram fields", async () => {
+  it("shows telegram fields in Notifications tab (default)", async () => {
     render(<NotificationSettings />);
     await waitFor(() => {
       expect(screen.getByLabelText(/bot token/i)).toBeInTheDocument();
@@ -82,7 +83,7 @@ describe("NotificationSettings", () => {
     });
   });
 
-  it("shows email fields", async () => {
+  it("shows email fields in Notifications tab (default)", async () => {
     render(<NotificationSettings />);
     await waitFor(() => {
       expect(screen.getByText(/send to/i)).toBeInTheDocument();
@@ -90,25 +91,30 @@ describe("NotificationSettings", () => {
     });
   });
 
-  it("shows general settings", async () => {
+  it("shows general settings in Notifications tab (default)", async () => {
     render(<NotificationSettings />);
     await waitFor(() => {
       expect(screen.getByLabelText(/notification frequency/i)).toBeInTheDocument();
     });
   });
 
-  it("shows pipeline step cards", async () => {
+  it("shows pipeline step cards in Remote Inference tab", async () => {
+    const user = userEvent.setup();
     render(<NotificationSettings />);
-    await waitFor(() => {
-      expect(screen.getByText("Transcription")).toBeInTheDocument();
-      expect(screen.getByText("Diarization")).toBeInTheDocument();
-      expect(screen.getByText("Speaker Inference")).toBeInTheDocument();
-      expect(screen.getByText("Embedding")).toBeInTheDocument();
-      expect(screen.getByText("RAG / Ask")).toBeInTheDocument();
-    });
+    // Wait for tabs to be available
+    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    await user.click(inferenceTab);
+    // Wait for the Remote Inference section to load with pipeline steps
+    const transcription = await screen.findByText("Transcription");
+    expect(transcription).toBeInTheDocument();
+    expect(screen.getByText("Diarization")).toBeInTheDocument();
+    expect(screen.getByText("Speaker Inference")).toBeInTheDocument();
+    expect(screen.getByText("Embedding")).toBeInTheDocument();
+    expect(screen.getByText("RAG / Ask")).toBeInTheDocument();
   });
 
-  it("calls PUT on save", async () => {
+  it("calls PUT on save in Notifications tab", async () => {
+    const user = userEvent.setup();
     mockFetch.mockImplementation((url: string) => {
       if (url === "/api/hardware") {
         return Promise.resolve({
@@ -123,12 +129,14 @@ describe("NotificationSettings", () => {
     });
 
     render(<NotificationSettings />);
-    await waitFor(() => screen.getByLabelText(/bot token/i));
+    const tokenInput = await screen.findByLabelText(/bot token/i);
 
-    fireEvent.change(screen.getByLabelText(/bot token/i), {
-      target: { value: "123:ABC" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    await user.clear(tokenInput);
+    await user.type(tokenInput, "123:ABC");
+
+    // Click the Save button in the active (Notifications) tab
+    const saveButtons = screen.getAllByRole("button", { name: /save/i });
+    await user.click(saveButtons[0]);
 
     await waitFor(() => {
       const putCall = mockFetch.mock.calls.find(
@@ -146,15 +154,29 @@ describe("NotificationSettings", () => {
     });
   });
 
-  it("shows fireworks API key field", async () => {
+  it("shows fireworks API key field in Remote Inference tab", async () => {
+    const user = userEvent.setup();
     render(<NotificationSettings />);
-    await waitFor(() => {
-      expect(screen.getByText(/fireworks api key/i)).toBeInTheDocument();
-    });
+    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    await user.click(inferenceTab);
+    // The API key field should be available after the tab content is rendered
+    const apiKeyLabel = await screen.findByText(/fireworks api key/i);
+    expect(apiKeyLabel).toBeInTheDocument();
   });
 
-  it("save button is disabled when no changes", async () => {
+  it("Notifications Save button is disabled when no changes", async () => {
     render(<NotificationSettings />);
+    await waitFor(() => screen.getByLabelText(/bot token/i));
+    const saveButtons = screen.getAllByRole("button", { name: /save/i });
+    expect(saveButtons[0]).toBeDisabled();
+  });
+
+  it("Remote Inference Save button is disabled when no changes", async () => {
+    const user = userEvent.setup();
+    render(<NotificationSettings />);
+    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    await user.click(inferenceTab);
+    // After clicking Remote Inference tab, the Save button should be visible and disabled (no changes made)
     await waitFor(() => {
       const saveBtn = screen.getByRole("button", { name: /save/i });
       expect(saveBtn).toBeDisabled();

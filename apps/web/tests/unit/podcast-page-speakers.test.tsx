@@ -4,7 +4,7 @@
 import React from "react";
 
 const mockQuery = jest.fn();
-const mockEpisodesList = jest.fn(() => <div data-testid="episodes-list" />);
+const mockEpisodesList = jest.fn((_props?: unknown) => <div data-testid="episodes-list" />);
 
 jest.mock("@/lib/db", () => ({
   __esModule: true,
