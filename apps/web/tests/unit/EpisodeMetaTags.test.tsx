@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import EpisodeMetaTags from "@/components/EpisodeMetaTags";
 
@@ -78,5 +79,50 @@ describe("EpisodeMetaTags", () => {
   it("does not render Fireworks tag when inferenceProviderUsed is not fireworks", () => {
     render(<EpisodeMetaTags {...baseProps} inferenceProviderUsed="local" />);
     expect(screen.queryByText(/Fireworks STT/)).not.toBeInTheDocument();
+  });
+
+  it("renders Fireworks STT cost tag when provider is fireworks", () => {
+    render(
+      <EpisodeMetaTags
+        {...baseProps}
+        inferenceProviderUsed="fireworks"
+        fireworksSttCostUsd={0.0312}
+        fireworksAudioMinutes={6.2}
+      />
+    );
+    expect(screen.getByText(/Fireworks STT: \$0\.03/)).toBeInTheDocument();
+  });
+
+  it("shows diarization step tags when Diarized tag is clicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <EpisodeMetaTags
+        {...baseProps}
+        diarizeStepDurations={{ load_model_secs: 5, run_pipeline_secs: 83 }}
+      />
+    );
+    expect(screen.queryByText(/Load model:/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Diarized:/ }));
+    expect(screen.getByText(/Load model:/)).toBeInTheDocument();
+    expect(screen.getByText(/Run pipeline:/)).toBeInTheDocument();
+  });
+
+  it("hides diarization step tags when Diarized tag is clicked again", async () => {
+    const user = userEvent.setup();
+    render(
+      <EpisodeMetaTags
+        {...baseProps}
+        diarizeStepDurations={{ load_model_secs: 5, run_pipeline_secs: 83 }}
+      />
+    );
+    const btn = screen.getByRole("button", { name: /Diarized:/ });
+    await user.click(btn);
+    await user.click(btn);
+    expect(screen.queryByText(/Load model:/)).not.toBeInTheDocument();
+  });
+
+  it("renders ReprocessButton", () => {
+    render(<EpisodeMetaTags {...baseProps} />);
+    expect(screen.getByRole("button", { name: /Reprocess/i })).toBeInTheDocument();
   });
 });
