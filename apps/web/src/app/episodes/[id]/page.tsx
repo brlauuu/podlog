@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ChevronLeft, ChevronRight, Info, Loader2, XCircle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Info, XCircle } from "lucide-react";
 import pool from "@/lib/db";
 import type { Segment } from "@/lib/types";
 import { formatTimestamp } from "@/lib/timestamp";
@@ -10,36 +10,10 @@ import { Separator } from "@/components/ui/separator";
 import EpisodeDescription from "@/components/EpisodeDescription";
 import TranscriptSection from "@/components/TranscriptSection";
 import BackToSearchLink from "@/components/BackToSearchLink";
-import ReprocessButton from "@/components/ReprocessButton";
 import EpisodeChat from "@/components/EpisodeChat";
-import { Badge } from "@/components/ui/badge";
+import EpisodeMetaTags from "@/components/EpisodeMetaTags";
 
 export const dynamic = "force-dynamic";
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === "done") return null;
-
-  const isFailed = status === "failed";
-  const label = isFailed ? "Failed" : status.charAt(0).toUpperCase() + status.slice(1);
-
-  return (
-    <Badge
-      variant="outline"
-      className={
-        isFailed
-          ? "text-red-700 border-red-300 dark:text-red-300 dark:border-red-700 gap-1"
-          : "text-blue-700 border-blue-300 dark:text-blue-300 dark:border-blue-700 gap-1"
-      }
-    >
-      {isFailed ? (
-        <XCircle size={12} />
-      ) : (
-        <Loader2 size={12} className="animate-spin" />
-      )}
-      {label}
-    </Badge>
-  );
-}
 
 interface Episode {
   id: string;
@@ -71,18 +45,6 @@ interface Episode {
   feed_website_url: string | null;
   created_at: string;
   feed_url: string | null;
-}
-
-const STEP_ABBREVIATIONS: Record<string, string> = {
-  io: "I/O", api: "API", stt: "STT", url: "URL",
-};
-
-function formatDiarizeStepLabel(key: string): string {
-  const words = key.replace(/_secs$/, "").split("_").filter(Boolean);
-  if (!words.length) return key;
-  const formatted = words.map(w => STEP_ABBREVIATIONS[w.toLowerCase()] ?? w.toLowerCase());
-  const label = formatted.join(" ");
-  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 interface AdjacentEpisode {
@@ -187,51 +149,19 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         )}
         <div className="mt-2 space-y-2">
           <h1 className="text-xl font-semibold">{episode.title ?? "Untitled Episode"}</h1>
-          <div className="flex items-center gap-3">
-            <StatusBadge status={episode.status} />
-            <ReprocessButton episodeId={episode.id} status={episode.status} />
-          </div>
+          <EpisodeMetaTags
+            status={episode.status}
+            publishedAt={episode.published_at}
+            durationSecs={episode.duration_secs}
+            transcribeDurationSecs={episode.transcribe_duration_secs}
+            diarizeDurationSecs={episode.diarize_duration_secs}
+            diarizeStepDurations={episode.diarize_step_durations}
+            inferenceProviderUsed={episode.inference_provider_used}
+            fireworksSttCostUsd={episode.fireworks_stt_cost_usd}
+            fireworksAudioMinutes={episode.fireworks_audio_minutes}
+            episodeId={episode.id}
+          />
         </div>
-        <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-          {episode.published_at && (
-            <span>{new Date(episode.published_at).toLocaleDateString()}</span>
-          )}
-          {episode.duration_secs && <span>{formatTimestamp(episode.duration_secs)}</span>}
-        </div>
-        {(episode.transcribe_duration_secs || episode.diarize_duration_secs) && (
-          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-            {episode.transcribe_duration_secs != null && (
-              <span>Transcription: {formatTimestamp(episode.transcribe_duration_secs)}</span>
-            )}
-            {episode.diarize_duration_secs != null && (
-              <span>Diarization: {formatTimestamp(episode.diarize_duration_secs)}</span>
-            )}
-          </div>
-        )}
-        {episode.diarize_step_durations && Object.keys(episode.diarize_step_durations).length > 0 && (
-          <div className="mt-1 text-xs text-muted-foreground">
-            <span className="mr-1">Diarization steps:</span>
-            {Object.entries(episode.diarize_step_durations).map(([step, secs], idx) => (
-              <span key={step}>
-                {idx > 0 ? " · " : ""}
-                {formatDiarizeStepLabel(step)}: {formatTimestamp(secs)}
-              </span>
-            ))}
-          </div>
-        )}
-        {episode.inference_provider_used === "fireworks" && (
-          <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-muted-foreground">
-            {episode.fireworks_audio_minutes != null && (
-              <span>Fireworks audio: {episode.fireworks_audio_minutes.toFixed(2)} min</span>
-            )}
-            {episode.fireworks_stt_cost_usd != null && (
-              <span>Est. Fireworks STT cost: ${episode.fireworks_stt_cost_usd.toFixed(4)}</span>
-            )}
-            {episode.fireworks_stt_cost_per_minute_usd != null && (
-              <span>Rate: ${episode.fireworks_stt_cost_per_minute_usd.toFixed(4)}/min</span>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Episode navigation */}
