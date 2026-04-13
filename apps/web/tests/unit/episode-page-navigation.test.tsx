@@ -202,6 +202,9 @@ describe("Episode page navigation", () => {
     expect(screen.queryByRole("link", { name: /next episode/i })).not.toBeInTheDocument();
 
     expect(prevLink).toHaveClass("flex-1", "max-w-[50%]");
+
+    const firstElement = prevLink.firstElementChild;
+    expect(firstElement?.tagName.toLowerCase()).toBe("svg");
   });
 
   it("renders only next button as half-width and left-aligned when no previous episode", async () => {
@@ -218,6 +221,9 @@ describe("Episode page navigation", () => {
     expect(screen.queryByRole("link", { name: /previous episode/i })).not.toBeInTheDocument();
 
     expect(nextLink).toHaveClass("flex-1", "max-w-[50%]");
+
+    const lastElement = nextLink.lastElementChild;
+    expect(lastElement?.tagName.toLowerCase()).toBe("svg");
   });
 
   it("truncates long episode titles in single-button layout", async () => {
