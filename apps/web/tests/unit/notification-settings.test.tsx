@@ -114,6 +114,7 @@ describe("NotificationSettings", () => {
   });
 
   it("calls PUT on save in Notifications tab", async () => {
+    const user = userEvent.setup();
     mockFetch.mockImplementation((url: string) => {
       if (url === "/api/hardware") {
         return Promise.resolve({
@@ -128,15 +129,14 @@ describe("NotificationSettings", () => {
     });
 
     render(<NotificationSettings />);
-    await waitFor(() => screen.getByLabelText(/bot token/i));
+    const tokenInput = await screen.findByLabelText(/bot token/i);
 
-    fireEvent.change(screen.getByLabelText(/bot token/i), {
-      target: { value: "123:ABC" },
-    });
+    await user.clear(tokenInput);
+    await user.type(tokenInput, "123:ABC");
 
     // Click the Save button in the active (Notifications) tab
     const saveButtons = screen.getAllByRole("button", { name: /save/i });
-    fireEvent.click(saveButtons[0]);
+    await user.click(saveButtons[0]);
 
     await waitFor(() => {
       const putCall = mockFetch.mock.calls.find(
