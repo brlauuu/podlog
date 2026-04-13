@@ -3,6 +3,7 @@
  */
 import React from "react";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 
 const mockQuery = jest.fn();
@@ -156,7 +157,12 @@ describe("Episode page navigation", () => {
 
     render(await EpisodePage({ params: Promise.resolve({ id: "ep-current" }) }));
 
-    expect(screen.getByText(/Diarization steps:/i)).toBeInTheDocument();
+    // Steps are collapsed by default; the Diarized toggle button should be present
+    const diarizeBtn = screen.getByRole("button", { name: /Diarized:/i });
+    expect(diarizeBtn).toBeInTheDocument();
+
+    // After clicking, step breakdown tags appear
+    await userEvent.click(diarizeBtn);
     expect(screen.getByText(/Provider diarization/i)).toBeInTheDocument();
     expect(screen.getByText(/Speaker assignment/i)).toBeInTheDocument();
   });
