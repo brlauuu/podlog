@@ -114,11 +114,11 @@ function ProviderTag({ provider }: { provider: string }) {
     <Tag
       className={
         isRemote
-          ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
-          : "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200"
+          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+          : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
       }
     >
-      {isRemote ? "Remote" : "Local"}
+      {isRemote ? "Remote inference" : "Local inference"}
     </Tag>
   );
 }
@@ -487,7 +487,7 @@ export default function EpisodesList({ episodes, feedId }: Props) {
                       key={sn.display_name}
                       className={
                         sn.confirmed_by_user
-                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                          ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
                           : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
                       }
                     >

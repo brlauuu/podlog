@@ -101,6 +101,30 @@ describe("EpisodesList", () => {
     expect(fireworksTags.length).toBe(1);
   });
 
+  it("renders local/remote inference tags with updated labels", () => {
+    render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
+
+    expect(screen.getByText("Remote inference")).toBeInTheDocument();
+    expect(screen.getByText("Local inference")).toBeInTheDocument();
+  });
+
+  it("renders confirmed speakers in blue and non-confirmed speakers in orange", () => {
+    const episodesWithSpeakerTags: EnrichedEpisode[] = [
+      {
+        ...mockEpisodes[0],
+        speaker_name_tags: [
+          { display_name: "Alice", inferred: false, confirmed_by_user: true },
+          { display_name: "Bob", inferred: true, confirmed_by_user: false },
+        ],
+      },
+    ];
+
+    render(<EpisodesList episodes={episodesWithSpeakerTags} feedId="feed-1" />);
+
+    expect(screen.getByText("Alice")).toHaveClass("bg-blue-100", "text-blue-800");
+    expect(screen.getByText("Bob")).toHaveClass("bg-orange-100", "text-orange-800");
+  });
+
   it("renders ReprocessButton in list rows for all episodes", () => {
     render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
 
