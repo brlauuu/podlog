@@ -15,6 +15,54 @@ interface DocsClientProps {
   docs: DocEntry[];
 }
 
+const REPO_BLOB_BASE_URL = "https://github.com/brlauuu/podlog/blob/main";
+
+function isExternalUrl(href: string): boolean {
+  return /^https?:\/\//i.test(href);
+}
+
+function resolveRelativePath(baseParts: string[], relativePath: string): string[] | null {
+  const resolved = [...baseParts];
+  const pathParts = relativePath.split("/").filter(Boolean);
+
+  for (const part of pathParts) {
+    if (part === ".") continue;
+    if (part === "..") {
+      if (resolved.length === 0) return null;
+      resolved.pop();
+      continue;
+    }
+    resolved.push(part);
+  }
+
+  return resolved;
+}
+
+export function resolveMarkdownHref(href: string | undefined, docs: DocEntry[]): string | undefined {
+  if (!href) return href;
+  if (href.startsWith("#")) return href;
+  if (isExternalUrl(href) || href.startsWith("/")) return href;
+
+  const [rawPath, hash = ""] = href.split("#");
+  const normalizedPath = rawPath.replace(/\\/g, "/");
+
+  if (!normalizedPath.endsWith(".md")) return href;
+
+  const resolvedParts = resolveRelativePath(["docs", "guide"], normalizedPath);
+  if (!resolvedParts || resolvedParts.length === 0) return href;
+
+  const repoPath = resolvedParts.join("/");
+  const filename = resolvedParts[resolvedParts.length - 1];
+  const slug = filename.replace(/\.md$/, "");
+  const hashSuffix = hash ? `#${hash}` : "";
+
+  if (repoPath.startsWith("docs/guide/") && docs.some((doc) => doc.name === slug)) {
+    return `/docs?page=${encodeURIComponent(slug)}${hashSuffix}`;
+  }
+
+  return `${REPO_BLOB_BASE_URL}/${repoPath}${hashSuffix}`;
+}
+
 export default function DocsClient({ docs }: DocsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -42,13 +90,6 @@ export default function DocsClient({ docs }: DocsClientProps) {
     };
     fetchContent();
   }, [currentPage]);
-
-  // Transform internal .md links to ?page= query params
-  const transformLink = (href: string | undefined): string | undefined => {
-    if (!href || !href.endsWith(".md")) return href;
-    const name = href.replace(/\.md$/, "");
-    return `?page=${name}`;
-  };
 
   return (
     <div className="flex gap-6 max-w-6xl mx-auto px-4 py-6">
@@ -82,11 +123,19 @@ export default function DocsClient({ docs }: DocsClientProps) {
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
               components={{
-                a: ({ href, children }) => (
-                  <a href={transformLink(href as string | undefined)}>
-                    {children}
-                  </a>
-                ),
+                a: ({ href, children }) => {
+                  const resolvedHref = resolveMarkdownHref(href as string | undefined, docs);
+                  const external = typeof resolvedHref === "string" && isExternalUrl(resolvedHref);
+                  return (
+                    <a
+                      href={resolvedHref}
+                      target={external ? "_blank" : undefined}
+                      rel={external ? "noopener noreferrer" : undefined}
+                    >
+                      {children}
+                    </a>
+                  );
+                },
               }}
             >
               {content}

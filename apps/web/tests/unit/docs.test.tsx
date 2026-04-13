@@ -21,6 +21,7 @@ jest.mock("next/navigation", () => ({
 }));
 
 import DocsClient from "@/app/docs/DocsClient";
+import { resolveMarkdownHref } from "@/app/docs/DocsClient";
 
 describe("DocsClient", () => {
   const mockDocs = [
@@ -87,5 +88,35 @@ describe("DocsClient", () => {
     await waitFor(() => {
       expect(screen.getByText("Could not load the requested page.")).toBeInTheDocument();
     });
+  });
+});
+
+describe("resolveMarkdownHref", () => {
+  const docs = [
+    { name: "README", title: "README" },
+    { name: "01-installation", title: "Installation" },
+    { name: "08-queue", title: "Queue" },
+  ];
+
+  it("maps guide markdown links to in-app docs routes", () => {
+    expect(resolveMarkdownHref("01-installation.md", docs)).toBe("/docs?page=01-installation");
+    expect(resolveMarkdownHref("./08-queue.md#pipeline-stages", docs)).toBe(
+      "/docs?page=08-queue#pipeline-stages"
+    );
+  });
+
+  it("maps non-guide markdown links to GitHub blob URLs", () => {
+    expect(resolveMarkdownHref("../configuration.md", docs)).toBe(
+      "https://github.com/brlauuu/podlog/blob/main/docs/configuration.md"
+    );
+    expect(resolveMarkdownHref("../../README.md", docs)).toBe(
+      "https://github.com/brlauuu/podlog/blob/main/README.md"
+    );
+  });
+
+  it("leaves external, absolute, and hash links unchanged", () => {
+    expect(resolveMarkdownHref("https://example.com", docs)).toBe("https://example.com");
+    expect(resolveMarkdownHref("/search", docs)).toBe("/search");
+    expect(resolveMarkdownHref("#top", docs)).toBe("#top");
   });
 });
