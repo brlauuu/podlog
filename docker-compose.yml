@@ -90,6 +90,7 @@ services:
       PIPELINE_API_URL: http://pipeline:8000
     volumes:
       - audio_data:/data/audio:ro
+      - ./docs/guide:/docs/guide:ro
     depends_on:
       db:
         condition: service_healthy
