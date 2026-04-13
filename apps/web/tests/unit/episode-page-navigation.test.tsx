@@ -182,7 +182,7 @@ describe("Episode page navigation", () => {
     expect(nextLink).toHaveClass("flex-1");
   });
 
-  it("renders only previous button at natural width when no next episode", async () => {
+  it("renders only previous button as half-width and left-aligned when no next episode", async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [currentEpisode] })
       .mockResolvedValueOnce({ rows: [] })
@@ -195,11 +195,10 @@ describe("Episode page navigation", () => {
     expect(prevLink).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /next episode/i })).not.toBeInTheDocument();
 
-    // Should NOT have flex-1 when alone
-    expect(prevLink).not.toHaveClass("flex-1");
+    expect(prevLink).toHaveClass("flex-1", "max-w-[50%]");
   });
 
-  it("renders only next button at natural width when no previous episode", async () => {
+  it("renders only next button as half-width and left-aligned when no previous episode", async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [currentEpisode] })
       .mockResolvedValueOnce({ rows: [] })
@@ -212,8 +211,7 @@ describe("Episode page navigation", () => {
     expect(nextLink).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /previous episode/i })).not.toBeInTheDocument();
 
-    // Should NOT have flex-1 when alone
-    expect(nextLink).not.toHaveClass("flex-1");
+    expect(nextLink).toHaveClass("flex-1", "max-w-[50%]");
   });
 
   it("truncates long episode titles in single-button layout", async () => {
@@ -232,8 +230,7 @@ describe("Episode page navigation", () => {
     // Should have min-w-0 for proper truncation context
     expect(nextLink).toHaveClass("min-w-0");
 
-    // Should NOT have max-w-[50%] when single button
-    expect(nextLink).not.toHaveClass("max-w-[50%]");
+    expect(nextLink).toHaveClass("max-w-[50%]");
 
     // Title span should have truncation classes
     const titleSpan = nextLink.querySelector("span.truncate");
