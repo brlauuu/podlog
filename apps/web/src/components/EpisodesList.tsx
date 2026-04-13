@@ -108,14 +108,14 @@ function StatusTag({ status }: { status: string }) {
   return <Tag className={colors[status] ?? colors.pending}>{label}</Tag>;
 }
 
-function ProviderTag({ provider }: { provider: string }) {
+function ProviderTag({ provider }: { provider: string | null }) {
   const isRemote = provider === "fireworks";
   return (
     <Tag
       className={
         isRemote
-          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-          : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+          ? "bg-[#dcfce7] text-[#166534]"
+          : "bg-[#dbeafe] text-[#1e3a8a]"
       }
     >
       {isRemote ? "Remote inference" : "Local inference"}
@@ -450,9 +450,7 @@ export default function EpisodesList({ episodes, feedId }: Props) {
                   </Tag>
                 )}
 
-                {ep.inference_provider_used && (
-                  <ProviderTag provider={ep.inference_provider_used} />
-                )}
+                <ProviderTag provider={ep.inference_provider_used} />
 
                 {ep.status === "done" && ep.transcribe_duration_secs != null && ep.transcribe_duration_secs > 0 && (
                   <Tag className="bg-muted text-muted-foreground">
