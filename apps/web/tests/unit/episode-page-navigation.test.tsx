@@ -207,7 +207,7 @@ describe("Episode page navigation", () => {
     expect(firstElement?.tagName.toLowerCase()).toBe("svg");
   });
 
-  it("renders only next button as half-width and left-aligned when no previous episode", async () => {
+  it("renders only next button as half-width and right-aligned when no previous episode", async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [currentEpisode] })
       .mockResolvedValueOnce({ rows: [] })
@@ -221,6 +221,7 @@ describe("Episode page navigation", () => {
     expect(screen.queryByRole("link", { name: /previous episode/i })).not.toBeInTheDocument();
 
     expect(nextLink).toHaveClass("flex-1", "max-w-[50%]");
+    expect(nextLink.parentElement).toHaveClass("justify-end");
 
     const lastElement = nextLink.lastElementChild;
     expect(lastElement?.tagName.toLowerCase()).toBe("svg");

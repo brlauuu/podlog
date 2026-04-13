@@ -166,7 +166,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
 
       {/* Episode navigation */}
       {(prev || next) && (
-        <div className="flex gap-2">
+        <div className={`flex gap-2 ${!prev && next ? "justify-end" : ""}`}>
           {prev && (
             <Link
               href={`/episodes/${prev.id}`}
