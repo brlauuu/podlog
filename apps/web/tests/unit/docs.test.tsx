@@ -29,6 +29,8 @@ describe("DocsClient", () => {
     { name: "01-installation", title: "Installation" },
     { name: "02-first-run", title: "First Run" },
   ];
+  const mockPush = jest.fn();
+  const mockReplace = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -36,7 +38,8 @@ describe("DocsClient", () => {
       get: () => "README",
     });
     mockUseRouter.mockReturnValue({
-      push: jest.fn(),
+      push: mockPush,
+      replace: mockReplace,
     });
     global.fetch = jest.fn();
   });
@@ -49,9 +52,9 @@ describe("DocsClient", () => {
 
     render(<DocsClient docs={mockDocs} />);
 
-    expect(screen.getByText("README")).toBeInTheDocument();
-    expect(screen.getByText("Installation")).toBeInTheDocument();
-    expect(screen.getByText("First Run")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "README" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Installation" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "First Run" })).toBeInTheDocument();
   });
 
   it("renders markdown content", async () => {
@@ -87,6 +90,28 @@ describe("DocsClient", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Could not load the requested page.")).toBeInTheDocument();
+    });
+  });
+
+  it("shows empty state when docs list is empty", async () => {
+    render(<DocsClient docs={[]} />);
+    expect(screen.getByText("No markdown docs were found.")).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("redirects invalid page query to default docs page", async () => {
+    mockUseSearchParams.mockReturnValue({
+      get: () => "not-a-doc",
+    });
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve("# README"),
+    });
+
+    render(<DocsClient docs={mockDocs} />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/docs?page=README");
     });
   });
 });
