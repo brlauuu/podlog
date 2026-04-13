@@ -50,6 +50,12 @@ async function getEpisodes(feedId: string): Promise<EnrichedEpisode[]> {
        ) FILTER (WHERE sn.id IS NOT NULL) AS speaker_name_tags
        FROM speaker_names sn
        WHERE sn.episode_id = e.id
+         AND EXISTS (
+           SELECT 1
+           FROM segments s2
+           WHERE s2.episode_id = e.id
+             AND s2.speaker_label = sn.speaker_label
+         )
      ) sn_agg ON true
      WHERE e.feed_id = $1
      ORDER BY e.published_at DESC NULLS LAST`,
