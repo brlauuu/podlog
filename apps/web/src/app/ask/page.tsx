@@ -216,12 +216,6 @@ export default function AskPage() {
   }
 
   const isProcessing = status === "connecting" || status === "streaming";
-  const helpSummary = useMemo(() => {
-    if (!helpCoverageSnapshot) return null;
-    const remaining = Math.max(0, helpCoverageSnapshot.total - helpCoverageSnapshot.processed);
-    return `Analyzing ${helpCoverageSnapshot.processed} processed episodes (${remaining} still processing)`;
-  }, [helpCoverageSnapshot]);
-
   const processingCount = coverage
     ? Math.max(0, coverage.total - coverage.processed)
     : 0;
@@ -236,9 +230,6 @@ export default function AskPage() {
             <p>
               Retrieval-augmented analysis across your transcripts. Finds the 8 most relevant transcript excerpts and generates an answer grounded in their content.
             </p>
-            {helpSummary && (
-              <p className="mt-2 text-muted-foreground">{helpSummary}</p>
-            )}
           </HelpPopover>
 
           {/* Ask input */}
