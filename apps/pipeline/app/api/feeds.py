@@ -1,13 +1,11 @@
 """
 Feed management API — control-plane endpoints.
 
+GET    /api/feeds             List feeds with episode counts
 GET    /api/feeds/preview     Preview a feed URL (returns metadata + episodes, no DB writes)
 POST   /api/feeds             Add a new RSS feed (with validation — GAP-02)
 DELETE /api/feeds/{id}        Remove a feed (optionally delete episodes)
 POST   /api/feeds/{id}/poll   Trigger immediate re-poll
-
-Feed listing (GET /api/feeds) is served directly by the Next.js web app
-via PostgreSQL queries (no proxy needed).
 """
 import logging
 from datetime import datetime
@@ -15,6 +13,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -61,6 +60,39 @@ class FeedPreviewResponse(BaseModel):
     image_url: Optional[str]
     website_url: Optional[str]
     episodes: list[EpisodePreview]
+
+
+class FeedListItem(BaseModel):
+    id: str
+    url: str
+    title: Optional[str]
+    mode: str
+    last_polled_at: Optional[datetime]
+    episode_count: int
+
+
+@router.get("/feeds", response_model=list[FeedListItem])
+def list_feeds(db: Session = Depends(get_db)) -> list[FeedListItem]:
+    """
+    Return feeds with episode counts for the web feed-management UI.
+    """
+    rows = (
+        db.execute(
+            text(
+                """
+                SELECT f.id, f.url, f.title, f.mode, f.last_polled_at,
+                       COUNT(e.id)::int AS episode_count
+                FROM feeds f
+                LEFT JOIN episodes e ON e.feed_id = f.id
+                GROUP BY f.id
+                ORDER BY f.created_at DESC
+                """
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [FeedListItem.model_validate(dict(row)) for row in rows]
 
 
 @router.get("/feeds/preview", response_model=FeedPreviewResponse)
