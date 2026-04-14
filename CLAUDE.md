@@ -46,7 +46,7 @@ podlog/
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # unit, integration, e2e
 │   └── web/                        # Next.js 16 (App Router)
-│       ├── src/app/                # Pages: /, /about, /podcasts, /episodes/[id], /queue, /feeds, /ask, /search, /notifications, /docs
+│       ├── src/app/                # Pages: /, /about, /podcasts, /episodes/[id], /queue, /feeds, /ask, /search, /settings, /docs (and /notifications redirects to /settings)
 │       ├── src/app/api/            # API routes: search, search/grouped, search/mentions, feeds, queue, audio, ask, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, pipeline proxy
 │       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, DocsClient, etc.
 │       └── src/lib/                # db.ts, search.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx
@@ -68,7 +68,7 @@ podlog/
 | ORM | SQLAlchemy 2.0 + Alembic | Migrations auto-run on pipeline startup |
 | Web app | Next.js 16 (App Router) | `output: 'standalone'` for Docker |
 | Styling | Tailwind CSS + shadcn/ui | Dark mode via `class` strategy; shadcn/ui component set is installed |
-| Data fetching | TanStack React Query | Polling for queue status |
+| Data fetching | TanStack React Query + fetch/setInterval | React Query for search/coverage data; queue status uses `fetch` polling in `QueueStatus.tsx` |
 | DB client (web) | `pg` (node-postgres) raw SQL | Direct PostgreSQL queries for search |
 
 ## Key Architectural Decisions
@@ -86,7 +86,7 @@ cp .env.example .env   # Edit: set POSTGRES_PASSWORD and HF_TOKEN
 make build             # Build Docker images
 make up                # Start all 5 services
 make logs              # Follow logs
-make test-unit         # Run unit tests
+make test-unit         # Run pipeline unit tests + host healthcheck test (no web unit tests)
 make shell-db          # Open psql shell
 ```
 

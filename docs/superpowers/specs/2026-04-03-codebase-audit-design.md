@@ -157,7 +157,9 @@ Each subagent's findings are appended to the report and committed as they comple
 
 ### Report File
 
-**Location:** `docs/audit/YYYY-MM-DD-audit.md`
+**Location:** `docs/audit/YYYY-MM-DD/codex/summary.md`
+
+Section artifacts are written alongside it in the same folder (for example `architecture.md`, `docs.md`, `tests.md`, `dead-code.md`, `wizard.md`, `claude.md`, and `deps.md`).
 
 **Structure:**
 
@@ -229,7 +231,7 @@ Auto-created for CRITICAL and WARNING findings. Each issue gets:
 
   ## Source
 
-  From [codebase audit report](docs/audit/YYYY-MM-DD-audit.md), section: <section name>
+  From [codebase audit report](docs/audit/YYYY-MM-DD/codex/summary.md), section: <section name>
   ```
 
 Issues are created via `gh issue create`. The `codebase-audit` label is created if it doesn't exist.
@@ -306,7 +308,7 @@ An interrupted report also implicitly shows which checks are missing — only co
 ```
 
 **Where to check:**
-1. **The report file on GitHub** — `docs/audit/YYYY-MM-DD-audit.md`, status line is the first thing you see
+1. **The report file on GitHub** — `docs/audit/YYYY-MM-DD/codex/summary.md`, status line is the first thing you see
 2. **The log file** — `/tmp/audit-YYYY-MM-DD.log` captures all stdout including the final status
 
 ## Error Handling
