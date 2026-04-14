@@ -93,6 +93,25 @@ describe("EpisodeMetaTags", () => {
     expect(screen.getByText(/Fireworks STT: \$0\.03/)).toBeInTheDocument();
   });
 
+  it("uses consistent chip sizing classes for standard, diarized, and Fireworks tags", () => {
+    render(
+      <EpisodeMetaTags
+        {...baseProps}
+        inferenceProviderUsed="fireworks"
+        fireworksSttCostUsd={0.0312}
+        fireworksAudioMinutes={6.2}
+      />
+    );
+
+    const dateTag = screen.getByText(/2024/);
+    const diarizedTag = screen.getByRole("button", { name: /Diarized:/ });
+    const fireworksTag = screen.getByText(/Fireworks STT: \$0\.03/);
+
+    expect(dateTag).toHaveClass("inline-flex", "h-5", "items-center", "leading-none");
+    expect(diarizedTag).toHaveClass("inline-flex", "h-5", "items-center", "leading-none");
+    expect(fireworksTag).toHaveClass("inline-flex", "h-5", "items-center", "leading-none");
+  });
+
   it("shows diarization step tags when Diarized tag is clicked", async () => {
     const user = userEvent.setup();
     render(
