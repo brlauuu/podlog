@@ -109,8 +109,8 @@ describe("EpisodesList", () => {
 
     expect(remote).toBeInTheDocument();
     expect(local).toBeInTheDocument();
-    expect(remote).toHaveClass("bg-[#dcfce7]", "text-[#166534]");
-    expect(local).toHaveClass("bg-[#dbeafe]", "text-[#1e3a8a]");
+    expect(remote).toHaveClass("bg-violet-100", "text-violet-800");
+    expect(local).toHaveClass("bg-teal-100", "text-teal-800");
   });
 
   it("renders local inference tag when provider is missing", () => {
