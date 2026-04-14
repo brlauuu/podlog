@@ -31,15 +31,21 @@ export default function AboutPage() {
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">About Podlog</h1>
         <p className="text-muted-foreground">
-          Podlog is a self-hosted podcast transcription and search application.
-          It downloads episodes from RSS feeds, transcribes them locally using
-          Whisper, identifies speakers with pyannote, and provides full-text and
-          semantic search across all your transcripts.
+          Podlog is a self-hosted podcast transcription and search application. It
+          downloads episodes from RSS feeds, transcribes them locally using Whisper,
+          identifies speakers with pyannote, and provides full-text and semantic search
+          across all your transcripts.
         </p>
         <p className="text-muted-foreground">
-          Everything runs on your hardware. No audio leaves your machine, no
-          transcripts are sent to external services, and no telemetry is
-          collected.
+          Key features include sentence-level timestamps, a persistent audio
+          player with clickable timestamps, semantic vector search powered by
+          pgvector, and an AI-powered Ask feature for natural language
+          queries about your podcasts.
+        </p>
+        <p className="text-muted-foreground">
+          Everything runs on your hardware. No audio leaves your machine,
+          transcripts stay local, and no telemetry is collected.
+          Optional remote inference via Fireworks AI is available.
         </p>
       </div>
 
