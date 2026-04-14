@@ -14,6 +14,7 @@ interface PodcastFilterProps {
   selectedFeedIds: Set<string>;
   onSelectionChange: (next: Set<string>) => void;
   hasManualUploads?: boolean;
+  loading?: boolean;
 }
 
 export default function PodcastFilter({
@@ -21,6 +22,7 @@ export default function PodcastFilter({
   selectedFeedIds,
   onSelectionChange,
   hasManualUploads = false,
+  loading = false,
 }: PodcastFilterProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -35,7 +37,7 @@ export default function PodcastFilter({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  if (feeds.length === 0 && !hasManualUploads) return null;
+  const hasAnyOptions = feeds.length > 0 || hasManualUploads;
 
   function toggle(id: string) {
     const next = new Set(selectedFeedIds);
@@ -49,12 +51,15 @@ export default function PodcastFilter({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        disabled={loading && !hasAnyOptions}
         className="flex items-center gap-1.5 text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground hover:bg-accent/30 transition-colors"
       >
         <span className="text-muted-foreground">Source:</span>
-        {selectedFeedIds.size === 0
-          ? "All"
-          : `${selectedFeedIds.size} selected`}
+        {loading && !hasAnyOptions
+          ? "Loading..."
+          : selectedFeedIds.size === 0
+            ? "All"
+            : `${selectedFeedIds.size} selected`}
         <ChevronDown size={14} className="text-muted-foreground" />
       </button>
       {open && (
@@ -69,20 +74,24 @@ export default function PodcastFilter({
             All sources
           </button>
           <div className="border-t border-border my-1" />
-          {feeds.map((f) => (
-            <label
-              key={f.id}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={selectedFeedIds.has(f.id)}
-                onChange={() => toggle(f.id)}
-                className="rounded"
-              />
-              <span className="truncate">{f.title || "Untitled"}</span>
-            </label>
-          ))}
+          {loading && !hasAnyOptions ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">Loading sources...</div>
+          ) : (
+            feeds.map((f) => (
+              <label
+                key={f.id}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent/30 transition-colors cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedFeedIds.has(f.id)}
+                  onChange={() => toggle(f.id)}
+                  className="rounded"
+                />
+                <span className="truncate">{f.title || "Untitled"}</span>
+              </label>
+            ))
+          )}
           {hasManualUploads && (
             <>
               <div className="border-t border-border my-1" />
@@ -96,6 +105,11 @@ export default function PodcastFilter({
                 <span>Manual uploads</span>
               </label>
             </>
+          )}
+          {!loading && !hasAnyOptions && (
+            <div className="px-3 py-2 text-xs text-muted-foreground">
+              No sources available.
+            </div>
           )}
         </div>
       )}

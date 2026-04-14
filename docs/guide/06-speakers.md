@@ -20,6 +20,8 @@ Inferred names show an "AI" badge to distinguish them from user-confirmed names.
 
 User-confirmed names take priority over AI-inferred names and won't be overwritten by future inference runs.
 
+Confirmed names are also what populate the **Speaker** filter on the `/search` page.
+
 ## Merging Speakers
 
 Sometimes pyannote splits one real speaker into multiple labels (e.g., SPEAKER_00 and SPEAKER_02 are both the host). To fix this:

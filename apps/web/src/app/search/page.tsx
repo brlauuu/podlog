@@ -86,26 +86,41 @@ function SearchPageContent() {
     totalMentions: number;
   } | null>(null);
 
-  // Fetch stats for the info line below search — uses coverage endpoint
-  // to include manual uploads (episodes with no feed_id)
-  const statsQuery = useQuery<{ feedCount: number; episodeCount: number; processing: number }>({
-    queryKey: ["search-stats"],
+  // Load feeds independently so Source filter can show even if coverage endpoint is slower.
+  const feedsQuery = useQuery<Feed[]>({
+    queryKey: ["search-feeds"],
     queryFn: async () => {
-      const [feedsResp, coverageResp] = await Promise.all([
-        fetch("/api/feeds"),
-        fetch("/api/ask/coverage"),
-      ]);
-      const feedsData = feedsResp.ok ? await feedsResp.json() : [];
-      const feedCount = Array.isArray(feedsData) ? feedsData.length : 0;
-      if (Array.isArray(feedsData)) setFeeds(feedsData);
-      const covData = coverageResp.ok ? await coverageResp.json() : {};
-      const episodeCount = covData.processed ?? 0;
-      const processing = Math.max(0, (covData.total ?? 0) - (covData.processed ?? 0));
-      setHasManualUploads(covData.has_manual_uploads ?? false);
-      return { feedCount, episodeCount, processing };
+      const resp = await fetch("/api/feeds");
+      if (!resp.ok) return [];
+      const data = await resp.json();
+      return Array.isArray(data) ? data : [];
     },
     staleTime: 60_000,
   });
+
+  // Coverage powers the processed/total info line and manual-upload marker.
+  const coverageQuery = useQuery<{ processed: number; total: number; has_manual_uploads: boolean }>({
+    queryKey: ["search-coverage"],
+    queryFn: async () => {
+      const resp = await fetch("/api/ask/coverage");
+      if (!resp.ok) return { processed: 0, total: 0, has_manual_uploads: false };
+      const data = await resp.json();
+      return {
+        processed: data.processed ?? 0,
+        total: data.total ?? 0,
+        has_manual_uploads: data.has_manual_uploads ?? false,
+      };
+    },
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (feedsQuery.data) setFeeds(feedsQuery.data);
+  }, [feedsQuery.data]);
+
+  useEffect(() => {
+    if (coverageQuery.data) setHasManualUploads(coverageQuery.data.has_manual_uploads);
+  }, [coverageQuery.data]);
 
   // Sync state when URL ?q= param changes (e.g. browser back/forward)
   useEffect(() => {
@@ -281,14 +296,14 @@ function SearchPageContent() {
           />
 
           {/* Stats below search bar */}
-          {!submittedQuery && statsQuery.data && (
+          {!submittedQuery && coverageQuery.data && (
             <p className="text-center text-xs text-muted-foreground">
-              Searching across {statsQuery.data.feedCount} podcast
-              {statsQuery.data.feedCount !== 1 ? "s" : ""} and{" "}
-              {statsQuery.data.episodeCount} episode
-              {statsQuery.data.episodeCount !== 1 ? "s" : ""}
-              {statsQuery.data.processing > 0 && (
-                <> ({statsQuery.data.processing} still processing)</>
+              Searching across {feeds.length} podcast
+              {feeds.length !== 1 ? "s" : ""} and{" "}
+              {coverageQuery.data.processed} episode
+              {coverageQuery.data.processed !== 1 ? "s" : ""}
+              {coverageQuery.data.total > coverageQuery.data.processed && (
+                <> ({coverageQuery.data.total - coverageQuery.data.processed} still processing)</>
               )}
             </p>
           )}
@@ -300,6 +315,7 @@ function SearchPageContent() {
               selectedFeedIds={selectedFeedIds}
               onSelectionChange={(next) => { setSelectedFeedIds(next); setSelectedSpeaker(null); setPage(1); }}
               hasManualUploads={hasManualUploads}
+              loading={feedsQuery.isLoading && feeds.length === 0 && !hasManualUploads}
             />
             <SpeakerFilter
               feedIds={Array.from(selectedFeedIds)}

@@ -11,10 +11,7 @@ jest.mock("@/lib/db", () => ({ query: mockQuery }));
 
 import { NextRequest } from "next/server";
 
-const mockRows = [
-  { speaker_label: "SPEAKER_00", display_name: "Alice" },
-  { speaker_label: "SPEAKER_01", display_name: "Bob" },
-];
+const mockRows = [{ display_name: "Alice" }, { display_name: "Bob" }];
 
 describe("GET /api/search/speakers", () => {
   let GET: (req: NextRequest) => Promise<Response>;
@@ -32,10 +29,15 @@ describe("GET /api/search/speakers", () => {
     const resp = await GET(req);
     expect(resp.status).toBe(200);
     const data = await resp.json();
-    expect(data).toEqual(mockRows);
+    expect(data).toEqual([
+      { speaker_label: "Alice", display_name: "Alice" },
+      { speaker_label: "Bob", display_name: "Bob" },
+    ]);
     // No feed params — WHERE clause should use TRUE
     const sql: string = mockQuery.mock.calls[0][0];
     expect(sql).toContain("TRUE");
+    expect(sql).toContain("sn.confirmed_by_user = true");
+    expect(sql).toContain("NULLIF(BTRIM(sn.display_name), '') IS NOT NULL");
     expect(mockQuery.mock.calls[0][1]).toEqual([]);
   });
 
