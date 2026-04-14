@@ -86,9 +86,11 @@ function formatDuration(secs: number): string {
   return `${s}s`;
 }
 
+const CHIP_BASE_CLASS = "inline-flex h-5 items-center rounded px-1.5 text-xs font-medium leading-none";
+
 function Tag({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${className ?? ""}`}>
+    <span className={`${CHIP_BASE_CLASS} ${className ?? ""}`}>
       {children}
     </span>
   );
@@ -139,7 +141,7 @@ function FireworksCostTag({ costUsd, audioMinutes }: { costUsd: number; audioMin
 
   return (
     <div
-      className="relative inline-block pointer-events-auto"
+      className="relative inline-flex items-center pointer-events-auto"
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
