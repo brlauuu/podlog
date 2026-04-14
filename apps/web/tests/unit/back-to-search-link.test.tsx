@@ -45,6 +45,14 @@ describe("BackToSearchLink", () => {
 
     const link = screen.getByRole("link", { name: /back to search results/i });
     expect(link).toHaveAttribute("href", "/search?q=john%20doe%20%26%20jane");
-    expect(link).toHaveClass("fixed", "left-3", "sm:left-4", "top-20", "z-40");
+    expect(link).toHaveClass(
+      "fixed",
+      "bottom-6",
+      "left-6",
+      "z-40",
+      "bg-action",
+      "text-action-foreground",
+      "hover:bg-action/90"
+    );
   });
 });

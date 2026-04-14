@@ -17,7 +17,7 @@ export default function BackToSearchLink() {
   return (
     <Link
       href={`/search?q=${encodeURIComponent(query)}`}
-      className="fixed left-3 sm:left-4 top-20 z-40 inline-flex items-center gap-1 rounded-full border border-input bg-background/95 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80 hover:bg-accent hover:text-foreground transition-colors"
+      className="fixed bottom-6 left-6 z-40 inline-flex items-center gap-2 rounded-full bg-action px-4 py-3 text-sm font-medium text-action-foreground shadow-lg hover:bg-action/90 transition-colors"
     >
       <ArrowLeft size={14} />
       Back to search results
