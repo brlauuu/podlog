@@ -3,7 +3,6 @@
 import { Suspense, useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
-  Search,
   List,
   Layers,
 } from "lucide-react";
@@ -12,11 +11,8 @@ import SearchResult from "@/components/SearchResult";
 import FeedGroupCard from "@/components/FeedGroupCard";
 import DownloadReportButton from "@/components/DownloadReportButton";
 import { Button } from "@/components/ui/button";
-import SearchInput from "@/components/SearchInput";
-import HelpPopover from "@/components/HelpPopover";
 import SearchSpinner from "@/components/SearchSpinner";
-import PodcastFilter from "@/components/PodcastFilter";
-import SpeakerFilter from "@/components/SpeakerFilter";
+import SearchTopPanel from "@/components/SearchTopPanel";
 import type { SearchPage as SearchPageType, GroupedSearchResult } from "@/lib/search";
 import { loadSearchSnapshot, saveSearchSnapshot } from "@/lib/page-state";
 
@@ -271,61 +267,29 @@ function SearchPageContent() {
 
   return (
     <div className="space-y-6">
-      {/* Centered header + search bar */}
-      <div className={`flex flex-col items-center ${submittedQuery ? "pt-2" : "pt-16"} transition-all`}>
-        <div className="w-full max-w-2xl space-y-3">
-          {/* Title + help popover */}
-          <HelpPopover title="Search">
-            <p className="font-medium mb-1">Search tips</p>
-            <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
-              <li>Use quotes for exact phrases: &quot;machine learning&quot;</li>
-              <li>Exclude words with minus: climate -politics</li>
-              <li>Combine terms: AI regulation ethics</li>
-              <li>Field search: title:, description:, speaker: (case-insensitive; speaker supports partial matching)</li>
-            </ul>
-          </HelpPopover>
-
-          {/* Search input */}
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            onSubmit={handleSubmit}
-            onClear={handleClear}
-            placeholder="Search transcripts, titles, descriptions..."
-            icon={<Search size={18} />}
-          />
-
-          {/* Stats below search bar */}
-          {!submittedQuery && coverageQuery.data && (
-            <p className="text-center text-xs text-muted-foreground">
-              Searching across {feeds.length} podcast
-              {feeds.length !== 1 ? "s" : ""} and{" "}
-              {coverageQuery.data.processed} episode
-              {coverageQuery.data.processed !== 1 ? "s" : ""}
-              {coverageQuery.data.total > coverageQuery.data.processed && (
-                <> ({coverageQuery.data.total - coverageQuery.data.processed} still processing)</>
-              )}
-            </p>
-          )}
-
-          {/* Filters: podcast + speaker */}
-          <div className="flex justify-center gap-2 flex-wrap">
-            <PodcastFilter
-              feeds={feeds}
-              selectedFeedIds={selectedFeedIds}
-              onSelectionChange={(next) => { setSelectedFeedIds(next); setSelectedSpeaker(null); setPage(1); }}
-              hasManualUploads={hasManualUploads}
-              loading={feedsQuery.isLoading && feeds.length === 0 && !hasManualUploads}
-            />
-            <SpeakerFilter
-              feedIds={Array.from(selectedFeedIds)}
-              includeManualUploads={includeManualUploads}
-              selectedSpeaker={selectedSpeaker}
-              onSelectionChange={(s) => { setSelectedSpeaker(s); setPage(1); }}
-            />
-          </div>
-        </div>
-      </div>
+      <SearchTopPanel
+        submittedQuery={submittedQuery}
+        query={query}
+        onQueryChange={setQuery}
+        onSubmit={handleSubmit}
+        onClear={handleClear}
+        coverage={coverageQuery.data ? { processed: coverageQuery.data.processed, total: coverageQuery.data.total } : null}
+        feeds={feeds}
+        selectedFeedIds={selectedFeedIds}
+        onFeedSelectionChange={(next) => {
+          setSelectedFeedIds(next);
+          setSelectedSpeaker(null);
+          setPage(1);
+        }}
+        hasManualUploads={hasManualUploads}
+        feedsLoading={feedsQuery.isLoading}
+        includeManualUploads={includeManualUploads}
+        selectedSpeaker={selectedSpeaker}
+        onSpeakerSelectionChange={(s) => {
+          setSelectedSpeaker(s);
+          setPage(1);
+        }}
+      />
 
       {/* Search spinner */}
       {submittedQuery && isLoading && (
