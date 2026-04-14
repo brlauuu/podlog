@@ -11,9 +11,18 @@ const TECH_STACK = [
 ];
 
 const CREDITS = [
-  { name: "@brlauuu", url: "https://brlauuu.github.io" },
-  { name: "Claude (Anthropic)", url: "https://www.anthropic.com" },
-  { name: "Codex (OpenAI)", url: "https://openai.com" },
+  { name: "@brlauuu", url: "https://github.com/brlauuu", label: "Author" },
+];
+
+const AGENTS = [
+  { name: "Claude", url: "https://claude.ai", label: " Anthropic" },
+  { name: "Gemini", url: "https://gemini.google.com", label: " Google" },
+  { name: "OpenCode", url: "https://opencode.ai", label: " Kimi K2.5" },
+];
+
+const PLATFORMS = [
+  { name: "Omnara", url: "https://omnara.cc" },
+  { name: "Fireworks AI", url: "https://fireworks.ai", label: " (optional remote inference)" },
 ];
 
 export default function AboutPage() {
@@ -45,20 +54,61 @@ export default function AboutPage() {
       {/* Credits */}
       <div className="space-y-2">
         <h2 className="text-lg font-semibold">Credits</h2>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          {CREDITS.map((credit) => (
+        <p className="text-sm text-muted-foreground">
+          Built by{" "}
+          {CREDITS.map((credit, i) => (
             <a
               key={credit.name}
               href={credit.url}
-              className="text-muted-foreground underline hover:text-foreground"
+              className="underline hover:text-foreground"
               target="_blank"
               rel="noopener noreferrer"
             >
               {credit.name}
             </a>
           ))}
+          {" with support from:"}
+        </p>
+
+        <div className="text-sm">
+          <p className="font-medium text-muted-foreground">Agents</p>
+          <ul className="list-disc list-inside space-y-0.5">
+            {AGENTS.map((agent) => (
+              <li key={agent.name}>
+                <a
+                  href={agent.url}
+                  className="underline hover:text-foreground"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {agent.name}
+                </a>
+                {agent.label}
+              </li>
+            ))}
+          </ul>
         </div>
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+
+        <div className="text-sm">
+          <p className="font-medium text-muted-foreground">Platforms</p>
+          <ul className="list-disc list-inside space-y-0.5">
+            {PLATFORMS.map((platform) => (
+              <li key={platform.name}>
+                <a
+                  href={platform.url}
+                  className="underline hover:text-foreground"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {platform.name}
+                </a>
+                {platform.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground PT-2">
           <ExternalLink size={13} />
           <a
             href="https://github.com/brlauuu/podlog"
