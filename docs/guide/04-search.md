@@ -35,6 +35,25 @@ Toggle between views using the buttons above the results.
 
 Use the feed filter dropdown to narrow results to a specific podcast. Useful when you remember which show discussed a topic but not which episode.
 
+## Filtering by Speaker
+
+The **Speaker** filter is populated from **user-confirmed speaker names** only (not raw `SPEAKER_00` labels, and not unconfirmed AI guesses).
+
+How it works:
+
+- The list is scoped to the currently selected **Source** filter.
+- If no source is selected, speaker options come from all processed episodes.
+- If one or more sources are selected, speaker options are limited to those sources.
+- If manual uploads are included in Source, confirmed speakers from uploads are included too.
+
+Why a name may not appear:
+
+- The speaker has not been confirmed yet on any matching episode.
+- The episode is not in `Done` status yet.
+- The currently selected source filter excludes that episode.
+
+Tip: if you confirm a speaker name on an episode page, return to `/search` and the name will become available in speaker filtering for relevant sources.
+
 ## Exporting Results
 
 Click the download button to export search results:
