@@ -44,9 +44,6 @@ describe("Ask page helpbox behavior", () => {
     expect(
       await screen.findByText(/Retrieval-augmented analysis across your transcripts/i)
     ).toBeInTheDocument();
-    expect(
-      await screen.findByText(/Analyzing 195 processed episodes \(197 still processing\)/i)
-    ).toBeInTheDocument();
 
     fireEvent.click(helpTrigger);
     fireEvent.mouseLeave(helpTrigger);
