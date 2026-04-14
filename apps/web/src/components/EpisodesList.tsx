@@ -114,8 +114,8 @@ function ProviderTag({ provider }: { provider: string | null }) {
     <Tag
       className={
         isRemote
-          ? "bg-[#dcfce7] text-[#166534]"
-          : "bg-[#dbeafe] text-[#1e3a8a]"
+          ? "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200"
+          : "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200"
       }
     >
       {isRemote ? "Remote inference" : "Local inference"}
