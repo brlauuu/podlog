@@ -46,8 +46,7 @@ describe("SpeakerPanel", () => {
       />
     );
 
-    const aliceLabel = screen.getByText("Alice");
-    fireEvent.doubleClick(aliceLabel);
+    fireEvent.click(screen.getByRole("button", { name: /edit alice/i }));
 
     const input = await screen.findByDisplayValue("Alice");
     fireEvent.change(input, { target: { value: "Alice Cooper" } });
@@ -62,6 +61,49 @@ describe("SpeakerPanel", () => {
         })
       );
       expect(onRenamed).toHaveBeenCalledWith("SPEAKER_00", "Alice Cooper");
+    });
+  });
+
+  test("confirms inferred speaker without requiring a name change", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+    const onRenamed = jest.fn();
+
+    const segments: Segment[] = [
+      makeSegment({
+        id: 1,
+        speaker_label: "SPEAKER_00",
+        display_name: "Alice",
+        inferred: true,
+        confirmed_by_user: false,
+      }),
+    ];
+
+    render(
+      <SpeakerPanel
+        episodeId="ep-1"
+        segments={segments}
+        onRenamed={onRenamed}
+        onMerged={jest.fn()}
+        activeSpeaker={null}
+        onFilterSpeaker={jest.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /confirm alice/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/episodes/ep-1/speakers",
+        expect.objectContaining({
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            speaker_label: "SPEAKER_00",
+            display_name: "Alice",
+          }),
+        })
+      );
+      expect(onRenamed).toHaveBeenCalledWith("SPEAKER_00", "Alice");
     });
   });
 
