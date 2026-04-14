@@ -82,13 +82,9 @@ function SpeakerCard({
   const initials = getSpeakerInitials(speaker.displayName, speaker.speakerLabel);
   const slot = getSpeakerSlot(speaker.speakerLabel);
   const hasCustomName = speaker.displayName !== speaker.speakerLabel;
+  const isInferredUnconfirmed = speaker.inferred && !speaker.confirmedByUser;
 
-  async function save() {
-    const trimmed = value.trim();
-    if (!trimmed || trimmed === speaker.displayName) {
-      setEditing(false);
-      return;
-    }
+  async function persistDisplayName(trimmed: string) {
     setSaving(true);
     try {
       const resp = await fetch(`/api/episodes/${episodeId}/speakers`, {
@@ -111,12 +107,34 @@ function SpeakerCard({
     }
   }
 
+  async function save() {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setValue(speaker.displayName);
+      setEditing(false);
+      return;
+    }
+
+    // Allow explicit confirmation without forcing users to edit unchanged inferred names.
+    if (trimmed === speaker.displayName && !isInferredUnconfirmed) {
+      setEditing(false);
+      return;
+    }
+
+    await persistDisplayName(trimmed);
+  }
+
+  async function confirmInferredName() {
+    const trimmed = speaker.displayName.trim();
+    if (!trimmed || saving) return;
+    await persistDisplayName(trimmed);
+  }
+
   return (
     <div
-      className={`relative rounded-lg p-3 cursor-pointer transition-colors ${editing ? "" : "hover:brightness-110"} ${mergeMode && selected ? "ring-2 ring-indigo-500" : ""} ${active ? "ring-2 ring-primary" : ""}`}
+      className={`relative rounded-lg p-3 transition-colors ${mergeMode ? "cursor-pointer hover:brightness-110" : "cursor-default"} ${mergeMode && selected ? "ring-2 ring-indigo-500" : ""} ${active ? "ring-2 ring-primary" : ""}`}
       style={{ background: color.bg, border: `1px solid ${color.border}` }}
-      onClick={() => { if (mergeMode) { onToggleSelect(); } else if (!editing) { onFilter(); } }}
-      onDoubleClick={() => { if (!mergeMode) { setEditing(true); } }}
+      onClick={() => { if (mergeMode) onToggleSelect(); }}
     >
       {mergeMode && (
         <div
@@ -172,7 +190,7 @@ function SpeakerCard({
                 {slot === 0 ? "Host" : "Guest"}
               </span>
             )}
-            {speaker.inferred && !speaker.confirmedByUser && (
+            {isInferredUnconfirmed && (
               <span className="text-[10px] px-1.5 py-0 rounded bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300">
                 Inferred
               </span>
@@ -186,6 +204,42 @@ function SpeakerCard({
               {speaker.segmentCount} segment{speaker.segmentCount !== 1 ? "s" : ""}
             </span>
           </div>
+          {!mergeMode && !editing && (
+            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+                className="text-[10px] px-2 py-0.5 rounded border border-input text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+                aria-label={`Edit ${speaker.displayName}`}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFilter();
+                }}
+                className="text-[10px] px-2 py-0.5 rounded border border-input text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+                aria-label={`${active ? "Hide" : "Show"} segments for ${speaker.displayName}`}
+              >
+                {active ? "Hide segments" : "Show segments"}
+              </button>
+              {isInferredUnconfirmed && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void confirmInferredName();
+                  }}
+                  className="text-[10px] px-2 py-0.5 rounded border border-green-300 text-green-700 dark:text-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
+                  aria-label={`Confirm ${speaker.displayName}`}
+                >
+                  Confirm
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -251,7 +305,7 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged,
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Speakers</div>
           {!mergeMode && (
             <div className="text-[10px] text-muted-foreground/60">
-              {activeSpeaker ? "Click to filter / double-click to edit" : "Click to filter / double-click to edit"}
+              Use action buttons to edit and show/hide segments
             </div>
           )}
         </div>
