@@ -21,6 +21,7 @@ interface EpisodeMetaTagsProps {
 const STEP_ABBREVIATIONS: Record<string, string> = {
   io: "I/O", api: "API", stt: "STT", url: "URL",
 };
+const CHIP_BASE_CLASS = "inline-flex h-5 items-center rounded px-1.5 text-xs font-medium leading-none";
 
 function formatDiarizeStepLabel(key: string): string {
   const words = key.replace(/_secs$/, "").split("_").filter(Boolean);
@@ -32,7 +33,7 @@ function formatDiarizeStepLabel(key: string): string {
 
 function Tag({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${className ?? "bg-muted text-muted-foreground"}`}>
+    <span className={`${CHIP_BASE_CLASS} ${className ?? "bg-muted text-muted-foreground"}`}>
       {children}
     </span>
   );
@@ -43,7 +44,7 @@ function StatusTag({ status }: { status: string }) {
   const label = isFailed ? "Failed" : status.charAt(0).toUpperCase() + status.slice(1);
   return (
     <span
-      className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium border ${
+      className={`${CHIP_BASE_CLASS} gap-1 border ${
         isFailed
           ? "text-red-700 border-red-300 dark:text-red-300 dark:border-red-700"
           : "text-blue-700 border-blue-300 dark:text-blue-300 dark:border-blue-700"
@@ -66,7 +67,7 @@ function FireworksCostTag({
 
   return (
     <div
-      className="relative inline-block"
+      className="relative inline-flex items-center"
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
@@ -125,7 +126,7 @@ export default function EpisodeMetaTags({
         {diarizeDurationSecs != null && (
           <button
             onClick={() => setStepsExpanded(v => !v)}
-            className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+            className={`${CHIP_BASE_CLASS} gap-0.5 bg-muted text-muted-foreground hover:bg-muted/80 transition-colors`}
             aria-label={`Diarized: ${formatTimestamp(diarizeDurationSecs)}`}
           >
             Diarized: {formatTimestamp(diarizeDurationSecs)}
