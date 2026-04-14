@@ -50,6 +50,7 @@ export default function AskPage() {
   const [errorMsg, setErrorMsg] = useState(initialSnapshot?.errorMsg || "");
   const [model, setModel] = useState(initialSnapshot?.model || getStoredModel);
   const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [feedsLoading, setFeedsLoading] = useState(true);
   const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(
     new Set(initialSnapshot?.selectedFeedIds || [])
   );
@@ -84,12 +85,14 @@ export default function AskPage() {
 
   // Fetch feeds and coverage stats
   useEffect(() => {
+    setFeedsLoading(true);
     fetch("/api/feeds")
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setFeeds(data);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setFeedsLoading(false));
 
     fetch("/api/ask/coverage")
       .then((r) => r.json())
@@ -294,6 +297,7 @@ export default function AskPage() {
               selectedFeedIds={selectedFeedIds}
               onSelectionChange={setSelectedFeedIds}
               hasManualUploads={hasManualUploads}
+              loading={feedsLoading && feeds.length === 0 && !hasManualUploads}
             />
           </div>
 

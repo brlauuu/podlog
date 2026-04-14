@@ -141,7 +141,8 @@ export async function searchSegments(
           SELECT 1
           FROM speaker_names sn
           WHERE sn.episode_id = e.id
-            AND sn.speaker_label = $${idx}
+            AND sn.confirmed_by_user = true
+            AND sn.display_name = $${idx}
         )`
       );
       params.push(speakerLabel);
@@ -224,7 +225,7 @@ export async function searchSegments(
   let ftsIdx = feedFilter.nextIdx;
 
   if (speakerLabel) {
-    ftsExtraClauses.push(`t.speaker_label = $${ftsIdx}`);
+    ftsExtraClauses.push(`sn.confirmed_by_user = true AND sn.display_name = $${ftsIdx}`);
     ftsParams.push(speakerLabel);
     ftsIdx++;
   }
@@ -285,7 +286,7 @@ export async function searchSegments(
   let vecIdx = vecFeedFilter.nextIdx;
 
   if (speakerLabel) {
-    vecExtraClauses.push(`s.speaker_label = $${vecIdx}`);
+    vecExtraClauses.push(`sn.confirmed_by_user = true AND sn.display_name = $${vecIdx}`);
     vecParams.push(speakerLabel);
     vecIdx++;
   }
@@ -345,7 +346,7 @@ export async function searchSegments(
   let countIdx = countFeedFilter.nextIdx;
 
   if (speakerLabel) {
-    countExtraClauses.push(`t.speaker_label = $${countIdx}`);
+    countExtraClauses.push(`sn.confirmed_by_user = true AND sn.display_name = $${countIdx}`);
     countParams.push(speakerLabel);
     countIdx++;
   }
@@ -452,7 +453,8 @@ export async function searchGrouped(
           SELECT 1
           FROM speaker_names sn
           WHERE sn.episode_id = e.id
-            AND sn.speaker_label = $${idx}
+            AND sn.confirmed_by_user = true
+            AND sn.display_name = $${idx}
         )`
       );
       params.push(speakerLabel);
@@ -517,7 +519,7 @@ export async function searchGrouped(
   let rowsIdx = feedFilter.nextIdx;
 
   if (speakerLabel) {
-    rowsExtraClauses.push(`t.speaker_label = $${rowsIdx}`);
+    rowsExtraClauses.push(`sn.confirmed_by_user = true AND sn.display_name = $${rowsIdx}`);
     rowsParams.push(speakerLabel);
     rowsIdx++;
   }
@@ -571,7 +573,7 @@ export async function searchGrouped(
   let countIdx = grpCountFilter.nextIdx;
 
   if (speakerLabel) {
-    countExtraClauses.push(`t.speaker_label = $${countIdx}`);
+    countExtraClauses.push(`sn.confirmed_by_user = true AND sn.display_name = $${countIdx}`);
     countParams.push(speakerLabel);
     countIdx++;
   }
