@@ -2,17 +2,13 @@
 
 import { Suspense, useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import {
-  List,
-  Layers,
-} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import SearchResult from "@/components/SearchResult";
 import FeedGroupCard from "@/components/FeedGroupCard";
-import DownloadReportButton from "@/components/DownloadReportButton";
 import { Button } from "@/components/ui/button";
 import SearchSpinner from "@/components/SearchSpinner";
 import SearchTopPanel from "@/components/SearchTopPanel";
+import SearchResultsToolbar from "@/components/SearchResultsToolbar";
 import type { SearchPage as SearchPageType, GroupedSearchResult } from "@/lib/search";
 import { loadSearchSnapshot, saveSearchSnapshot } from "@/lib/page-state";
 
@@ -298,88 +294,38 @@ function SearchPageContent() {
 
       {submittedQuery && !isLoading && (
         <div className="space-y-4">
-          {/* View mode toggle */}
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              {viewMode === "grouped" && groupedQuery.data
+          <SearchResultsToolbar
+            viewMode={viewMode}
+            onViewModeChange={(mode) => {
+              setViewMode(mode);
+              setPage(1);
+            }}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(isValidPageSize(next) ? next : DEFAULT_PAGE_SIZE);
+              setPage(1);
+            }}
+            summaryText={
+              viewMode === "grouped" && groupedQuery.data
                 ? `Found in ${groupedQuery.data.totalFeeds} podcast${groupedQuery.data.totalFeeds !== 1 ? "s" : ""}, ${groupedQuery.data.totalEpisodes} episode${groupedQuery.data.totalEpisodes !== 1 ? "s" : ""} (${groupedQuery.data.totalMentions} mention${groupedQuery.data.totalMentions !== 1 ? "s" : ""})`
                 : viewMode === "flat" && flatQuery.data
                   ? `Page ${page} of ${totalPages} · ${flatQuery.data.total} results`
-                  : ""}
-              {(() => {
-                const cov =
-                  viewMode === "grouped"
-                    ? groupedQuery.data?.coverage
-                    : flatQuery.data?.coverage;
-                if (cov && cov.total > 0 && cov.processed < cov.total) {
-                  return ` · Searching ${cov.processed} of ${cov.total} episodes`;
-                }
-                return null;
-              })()}
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <span>Per page</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    const next = Number.parseInt(e.target.value, 10);
-                    setPageSize(isValidPageSize(next) ? next : DEFAULT_PAGE_SIZE);
-                    setPage(1);
-                  }}
-                  className="bg-background border border-input rounded-md px-2 py-1 text-xs"
-                >
-                  {PAGE_SIZE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <DownloadReportButton
-                query={submittedQuery}
-                viewMode={viewMode}
-                flatResults={
-                  viewMode === "flat" ? flatQuery.data?.results : undefined
-                }
-                groupedResults={
-                  viewMode === "grouped" ? groupedQuery.data : undefined
-                }
-              />
-              <div className="flex items-center border border-border rounded-lg overflow-hidden">
-                <button
-                  onClick={() => {
-                    setViewMode("grouped");
-                    setPage(1);
-                  }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
-                    viewMode === "grouped"
-                      ? "bg-action text-action-foreground"
-                      : "hover:bg-accent/30"
-                  }`}
-                  title="Grouped view"
-                >
-                  <Layers size={13} />
-                  Grouped
-                </button>
-                <button
-                  onClick={() => {
-                    setViewMode("flat");
-                    setPage(1);
-                  }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
-                    viewMode === "flat"
-                      ? "bg-action text-action-foreground"
-                      : "hover:bg-accent/30"
-                  }`}
-                  title="Flat view"
-                >
-                  <List size={13} />
-                  Flat
-                </button>
-              </div>
-            </div>
-          </div>
+                  : ""
+            }
+            coverageText={(() => {
+              const cov =
+                viewMode === "grouped"
+                  ? groupedQuery.data?.coverage
+                  : flatQuery.data?.coverage;
+              if (cov && cov.total > 0 && cov.processed < cov.total) {
+                return ` · Searching ${cov.processed} of ${cov.total} episodes`;
+              }
+              return null;
+            })()}
+            submittedQuery={submittedQuery}
+            flatData={flatQuery.data}
+            groupedData={groupedQuery.data}
+          />
 
           {viewMode === "grouped" ? (
             groupedQuery.data && groupedQuery.data.feeds.length > 0 ? (
