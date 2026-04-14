@@ -3,6 +3,8 @@ import { join } from "path";
 import { Suspense } from "react";
 import DocsClient from "./DocsClient";
 
+export const dynamic = "force-dynamic";
+
 function filenameToTitle(filename: string): string {
   return filename
     .replace(/^\d+-/, "")
