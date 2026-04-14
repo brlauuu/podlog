@@ -104,8 +104,27 @@ describe("EpisodesList", () => {
   it("renders local/remote inference tags with updated labels", () => {
     render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
 
-    expect(screen.getByText("Remote inference")).toBeInTheDocument();
+    const remote = screen.getByText("Remote inference");
+    const local = screen.getByText("Local inference");
+
+    expect(remote).toBeInTheDocument();
+    expect(local).toBeInTheDocument();
+    expect(remote).toHaveClass("bg-[#dcfce7]", "text-[#166534]");
+    expect(local).toHaveClass("bg-[#dbeafe]", "text-[#1e3a8a]");
+  });
+
+  it("renders local inference tag when provider is missing", () => {
+    const episodesWithoutProvider: EnrichedEpisode[] = [
+      {
+        ...mockEpisodes[0],
+        id: "ep-no-provider",
+        inference_provider_used: null,
+      },
+    ];
+
+    render(<EpisodesList episodes={episodesWithoutProvider} feedId="feed-1" />);
     expect(screen.getByText("Local inference")).toBeInTheDocument();
+    expect(screen.queryByText("Remote inference")).not.toBeInTheDocument();
   });
 
   it("renders confirmed speakers in blue and non-confirmed speakers in orange", () => {
