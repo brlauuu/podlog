@@ -1,4 +1,4 @@
-.PHONY: up up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill
+.PHONY: up up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated
 
 up:             ## Start full stack
 	docker compose up -d
@@ -81,6 +81,13 @@ backfill:       ## Run chunk+embed backfill (stops worker, runs backfill, restar
 
 version:        ## Show current version
 	@cat VERSION
+
+env-check:      ## Validate local Node runtime against apps/web requirement
+	@bash scripts/check-web-node-version.sh
+
+deps-outdated:  ## Check npm outdated packages with resilient network handling
+	@bash scripts/check-web-node-version.sh
+	@bash scripts/check-npm-outdated.sh
 
 help:           ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
