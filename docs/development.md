@@ -35,7 +35,7 @@ podlog/
 ### Prerequisites
 
 - Python 3.11+ with [Poetry](https://python-poetry.org/)
-- Node.js 20.9.0+ with npm (see `.nvmrc` for the pinned local dev version)
+- Node.js 20.9.0+ with npm (see `.nvmrc` / `.node-version` for pinned local version)
 - Docker and Docker Compose (for the database)
 
 ### Pipeline (Python)
@@ -61,6 +61,9 @@ poetry run ruff format --check .
 
 ```bash
 cd apps/web
+
+# Ensure correct Node runtime (required before npm install/test/lint)
+nvm use
 
 # Install dependencies
 npm install
@@ -168,6 +171,8 @@ make shell-web          Open web container shell
 make health-check       Run health check once
 make health-install     Install health check cron job (every 15 min)
 make health-uninstall   Remove health check cron job
+make env-check          Validate local Node runtime for apps/web
+make deps-outdated      Run npm outdated with resilient network handling
 make help               List all available commands
 ```
 
