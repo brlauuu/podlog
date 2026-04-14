@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw, Trash2, FlaskConical, ListChecks } from "lucide-react";
+import { Plus, FlaskConical, ListChecks } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import FeedCard from "@/components/FeedCard";
 
 interface Feed {
   id: string;
@@ -370,76 +370,23 @@ export default function FeedsPage() {
       ) : (
         <div className="space-y-2">
           {feeds.map((feed) => (
-            <Card key={feed.id} className="hover:bg-accent/30 transition-colors">
-              <CardContent className="p-4 flex items-center justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium truncate">{feed.title ?? feed.url}</p>
-                    {feed.mode === "test" && (
-                      <Badge variant="outline" className="shrink-0 text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-1">
-                        <FlaskConical size={10} />
-                        Test
-                      </Badge>
-                    )}
-                    {feed.mode === "selective" && (
-                      <Badge variant="outline" className="shrink-0 text-sky-700 border-sky-300 dark:text-sky-300 dark:border-sky-700 gap-1">
-                        <ListChecks size={10} />
-                        Selective
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {feed.episode_count} episodes ·{" "}
-                    {feed.last_polled_at
-                      ? `Last polled ${new Date(feed.last_polled_at).toLocaleString()}`
-                      : "Never polled"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {(feed.mode === "test" || feed.mode === "selective") && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm("Promote this feed to full mode? All remaining episodes will be ingested.")) {
-                          promoteFeed.mutate({ url: feed.url });
-                        }
-                      }}
-                      className="h-8 text-xs"
-                    >
-                      Promote to Full
-                    </Button>
-                  )}
-                  {feed.mode !== "selective" && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => pollFeed.mutate(feed.id)}
-                      disabled={pollFeed.isPending && pollFeed.variables === feed.id}
-                      title="Poll now"
-                      className="h-8 w-8"
-                    >
-                      <RefreshCw size={14} className={pollFeed.isPending && pollFeed.variables === feed.id ? "animate-spin" : ""} />
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      const deleteEps = confirm(
-                        "Also delete all episodes and transcripts for this feed?"
-                      );
-                      deleteFeed.mutate({ id: feed.id, deleteEpisodes: deleteEps });
-                    }}
-                    title="Remove feed"
-                    className="h-8 w-8 hover:text-destructive"
-                  >
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <FeedCard
+              key={feed.id}
+              feed={feed}
+              pollPending={pollFeed.isPending && pollFeed.variables === feed.id}
+              onPromote={(url) => {
+                if (confirm("Promote this feed to full mode? All remaining episodes will be ingested.")) {
+                  promoteFeed.mutate({ url });
+                }
+              }}
+              onPoll={(feedId) => pollFeed.mutate(feedId)}
+              onDelete={(feedId) => {
+                const deleteEps = confirm(
+                  "Also delete all episodes and transcripts for this feed?"
+                );
+                deleteFeed.mutate({ id: feedId, deleteEpisodes: deleteEps });
+              }}
+            />
           ))}
         </div>
       )}
