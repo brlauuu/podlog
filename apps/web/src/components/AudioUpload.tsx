@@ -8,10 +8,11 @@ import { Card, CardContent } from "@/components/ui/card";
 const ALLOWED_TYPES = new Set([
   "audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/flac",
   "audio/opus", "audio/aac", "audio/x-m4a", "audio/webm", "audio/x-wav",
+  "video/mp4",
 ]);
 
 const ALLOWED_EXTENSIONS = new Set([
-  ".mp3", ".m4a", ".wav", ".ogg", ".flac", ".opus", ".aac", ".wma", ".webm",
+  ".mp3", ".m4a", ".wav", ".ogg", ".flac", ".opus", ".aac", ".wma", ".webm", ".mp4",
 ]);
 
 function isValidAudio(file: File): boolean {
@@ -121,7 +122,7 @@ export default function AudioUpload({ onUploaded }: AudioUploadProps) {
           <input
             ref={inputRef}
             type="file"
-            accept="audio/*"
+            accept="audio/*,video/mp4,.mp4"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -134,7 +135,7 @@ export default function AudioUpload({ onUploaded }: AudioUploadProps) {
             Drop an audio file here, or click to browse
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            MP3, M4A, WAV, OGG, FLAC, OPUS, AAC, WebM
+            MP3, M4A, MP4, WAV, OGG, FLAC, OPUS, AAC, WebM
           </p>
         </div>
 

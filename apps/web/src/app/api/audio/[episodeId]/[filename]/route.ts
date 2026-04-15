@@ -8,6 +8,7 @@ const AUDIO_DIRS = ["/data/audio/archive", "/data/audio/raw"];
 const MIME_TYPES: Record<string, string> = {
   ".mp3": "audio/mpeg",
   ".m4a": "audio/mp4",
+  ".mp4": "audio/mp4",
   ".ogg": "audio/ogg",
   ".wav": "audio/wav",
   ".flac": "audio/flac",
