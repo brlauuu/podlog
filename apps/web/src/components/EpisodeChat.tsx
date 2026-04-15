@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { BrainCircuit, Send, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { renderAnswerWithCitations, type Source, type OnCitationClick } from "@/lib/citations";
 
 type StreamStatus = "idle" | "connecting" | "streaming" | "done" | "error";
@@ -19,6 +20,8 @@ interface EpisodeChatProps {
 }
 
 export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProps) {
+  const { state: playerState } = useAudioPlayer();
+  const playerVisible = !!playerState.src;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -140,7 +143,9 @@ export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProp
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-action px-4 py-3 text-action-foreground shadow-lg hover:bg-action/90 transition-colors"
+        className={`fixed right-6 z-[60] flex items-center gap-2 rounded-full bg-action px-4 py-3 text-action-foreground shadow-lg hover:bg-action/90 transition-all ${
+          playerVisible ? "bottom-24" : "bottom-6"
+        }`}
         aria-label="Ask about this episode"
       >
         <BrainCircuit size={18} />
@@ -151,7 +156,9 @@ export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProp
 
   // Chat panel
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col w-[calc(100vw-2rem)] sm:w-96 h-[min(28rem,calc(100vh-4rem))] rounded-xl border bg-background shadow-2xl">
+    <div className={`fixed right-6 z-[60] flex flex-col w-[calc(100vw-2rem)] sm:w-96 h-[min(28rem,calc(100vh-4rem))] rounded-xl border bg-background shadow-2xl ${
+      playerVisible ? "bottom-24" : "bottom-6"
+    }`}>
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b shrink-0">
         <div className="flex items-center gap-2 min-w-0">
