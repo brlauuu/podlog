@@ -291,6 +291,28 @@ class TestRetrieveChunks:
         assert "episode_id" in query_str
         assert params["episode_id"] == "ep-42"
 
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_episode_scoped_skips_similarity_threshold(self, mock_embed):
+        """Generic questions scoped to one episode must return chunks even
+        when every candidate's similarity is below SIMILARITY_THRESHOLD."""
+        low_row = MagicMock()
+        low_row.chunk_id = 1
+        low_row.episode_id = "ep-42"
+        low_row.episode_title = "Scoped"
+        low_row.speaker_label = None
+        low_row.start_time = 0.0
+        low_row.end_time = 5.0
+        low_row.text = "Below-threshold but still relevant within episode"
+        low_row.similarity = 0.1  # Below SIMILARITY_THRESHOLD (0.3)
+
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = [low_row]
+
+        from app.services.rag import retrieve_chunks
+        results = retrieve_chunks(mock_db, "what is this about?", episode_id="ep-42")
+        assert len(results) == 1
+        assert results[0].similarity == 0.1
+
 
 class TestCheckModelAvailable:
     def test_model_found(self):

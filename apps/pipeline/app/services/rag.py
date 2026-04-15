@@ -106,6 +106,11 @@ def retrieve_chunks(
     """)
 
     rows = db.execute(query, params).fetchall()
+    # When scoped to a single episode the caller has already narrowed the
+    # candidate set. Apply the similarity threshold only for broader
+    # searches, where it protects against low-quality matches across
+    # thousands of chunks; for episode-scoped asks, return top-K as-is so
+    # generic questions ("what is this about?") still work.
     return [
         ChunkResult(
             chunk_id=row.chunk_id,
@@ -119,7 +124,7 @@ def retrieve_chunks(
             similarity=row.similarity,
         )
         for row in rows
-        if row.similarity >= SIMILARITY_THRESHOLD
+        if episode_id is not None or row.similarity >= SIMILARITY_THRESHOLD
     ]
 
 
