@@ -5,10 +5,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import SearchResult from "@/components/SearchResult";
 import FeedGroupCard from "@/components/FeedGroupCard";
-import { Button } from "@/components/ui/button";
 import SearchSpinner from "@/components/SearchSpinner";
 import SearchTopPanel from "@/components/SearchTopPanel";
 import SearchResultsToolbar from "@/components/SearchResultsToolbar";
+import SearchPagination from "@/components/SearchPagination";
+import SearchNoResults from "@/components/SearchNoResults";
 import type { SearchPage as SearchPageType, GroupedSearchResult } from "@/lib/search";
 import { loadSearchSnapshot, saveSearchSnapshot } from "@/lib/page-state";
 
@@ -339,39 +340,14 @@ function SearchPageContent() {
                     />
                   ))}
                 </div>
-                {groupedTotalPages > 1 && (
-                  <div className="flex items-center justify-between pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                    >
-                      &larr; Previous
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      Page {page} of {groupedTotalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.min(groupedTotalPages, p + 1))}
-                      disabled={page === groupedTotalPages}
-                    >
-                      Next &rarr;
-                    </Button>
-                  </div>
-                )}
+                <SearchPagination
+                  page={page}
+                  totalPages={groupedTotalPages}
+                  onPageChange={setPage}
+                />
               </>
             ) : (
-              <div className="text-center py-16 space-y-2">
-                <p className="text-muted-foreground">
-                  No results for &ldquo;{submittedQuery}&rdquo;
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Try checking your spelling, or use broader search terms.
-                </p>
-              </div>
+              <SearchNoResults query={submittedQuery} />
             )
           ) : flatQuery.data && flatQuery.data.results.length > 0 ? (
             <>
@@ -385,39 +361,14 @@ function SearchPageContent() {
                 ))}
               </div>
 
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                  >
-                    &larr; Previous
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Page {page} of {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                  >
-                    Next &rarr;
-                  </Button>
-                </div>
-              )}
+              <SearchPagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+              />
             </>
           ) : (
-            <div className="text-center py-16 space-y-2">
-              <p className="text-muted-foreground">
-                No results for &ldquo;{submittedQuery}&rdquo;
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Try checking your spelling, or use broader search terms.
-              </p>
-            </div>
+            <SearchNoResults query={submittedQuery} />
           )}
         </div>
       )}
