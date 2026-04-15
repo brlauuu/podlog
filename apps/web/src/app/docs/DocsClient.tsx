@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { type ReactNode, useState, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -13,6 +13,12 @@ interface DocEntry {
 
 interface DocsClientProps {
   docs: DocEntry[];
+}
+
+export interface TocItem {
+  id: string;
+  text: string;
+  level: 2 | 3;
 }
 
 const REPO_BLOB_BASE_URL = "https://github.com/brlauuu/podlog/blob/main";
@@ -63,11 +69,58 @@ export function resolveMarkdownHref(href: string | undefined, docs: DocEntry[]):
   return `${REPO_BLOB_BASE_URL}/${repoPath}${hashSuffix}`;
 }
 
+export function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
+function makeUniqueSlugger() {
+  const slugCounts = new Map<string, number>();
+  return (text: string) => {
+    const base = slugifyHeading(text) || "section";
+    const count = slugCounts.get(base) ?? 0;
+    slugCounts.set(base, count + 1);
+    return count === 0 ? base : `${base}-${count}`;
+  };
+}
+
+export function extractTocItems(markdown: string): TocItem[] {
+  const getUniqueSlug = makeUniqueSlugger();
+  const items: TocItem[] = [];
+  for (const line of markdown.split("\n")) {
+    const match = line.match(/^(##|###)\s+(.+)$/);
+    if (!match) continue;
+    const level = match[1] === "##" ? 2 : 3;
+    const text = match[2].trim();
+    if (!text) continue;
+    items.push({
+      id: getUniqueSlug(text),
+      text,
+      level,
+    });
+  }
+  return items;
+}
+
+function textFromNode(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textFromNode).join("");
+  if (node && typeof node === "object" && "props" in node) {
+    return textFromNode((node as { props?: { children?: ReactNode } }).props?.children);
+  }
+  return "";
+}
+
 export default function DocsClient({ docs }: DocsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
 
   const requestedPage = searchParams.get("page");
   const defaultPage = docs.find((doc) => doc.name === "README")?.name ?? docs[0]?.name ?? null;
@@ -87,6 +140,7 @@ export default function DocsClient({ docs }: DocsClientProps) {
     if (!currentPage) {
       setContent(null);
       setLoading(false);
+      setActiveHeadingId(null);
       return;
     }
 
@@ -108,11 +162,49 @@ export default function DocsClient({ docs }: DocsClientProps) {
     fetchContent();
   }, [currentPage]);
 
+  const tocItems = useMemo(
+    () => (content ? extractTocItems(content) : []),
+    [content]
+  );
+
+  useEffect(() => {
+    if (!tocItems.length) {
+      setActiveHeadingId(null);
+      return;
+    }
+
+    const updateActiveHeading = () => {
+      const topOffset = 120;
+      let active = tocItems[0]?.id ?? null;
+      for (const item of tocItems) {
+        const el = document.getElementById(item.id);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top - topOffset <= 0) {
+          active = item.id;
+        } else {
+          break;
+        }
+      }
+      setActiveHeadingId(active);
+    };
+
+    updateActiveHeading();
+    window.addEventListener("scroll", updateActiveHeading, { passive: true });
+    window.addEventListener("resize", updateActiveHeading);
+    return () => {
+      window.removeEventListener("scroll", updateActiveHeading);
+      window.removeEventListener("resize", updateActiveHeading);
+    };
+  }, [tocItems]);
+
+  const renderHeadingId = makeUniqueSlugger();
+
   return (
-    <div className="flex flex-col gap-4 md:flex-row md:gap-6 max-w-6xl mx-auto px-4 py-6">
+    <div className="mx-auto w-full max-w-[1360px] px-4 py-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_240px]">
       {/* Sidebar / mobile navigator */}
-      <aside className="w-full md:w-52 md:shrink-0">
-        <h2 className="text-sm font-semibold text-muted-foreground mb-2 px-1">Guide</h2>
+      <aside className="w-full md:w-[220px] md:shrink-0">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted-foreground">Knowledge base</h2>
         <div className="md:hidden">
           <label htmlFor="docs-page-select" className="sr-only">Choose document</label>
           <select
@@ -133,7 +225,7 @@ export default function DocsClient({ docs }: DocsClientProps) {
             )}
           </select>
         </div>
-        <nav className="hidden md:block space-y-1">
+        <nav className="hidden space-y-1 md:block md:sticky md:top-20">
           {docs.map((doc) => (
             <button
               key={doc.name}
@@ -164,11 +256,21 @@ export default function DocsClient({ docs }: DocsClientProps) {
         ) : loading ? (
           <div className="text-muted-foreground">Loading...</div>
         ) : content ? (
-          <article className="prose prose-sm max-w-none dark:prose-invert">
+          <article className="prose prose-sm dark:prose-invert mx-auto max-w-[75ch] leading-7">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
               components={{
+                h2: ({ children }) => {
+                  const text = textFromNode(children).trim();
+                  const id = renderHeadingId(text);
+                  return <h2 id={id}>{children}</h2>;
+                },
+                h3: ({ children }) => {
+                  const text = textFromNode(children).trim();
+                  const id = renderHeadingId(text);
+                  return <h3 id={id}>{children}</h3>;
+                },
                 a: ({ href, children }) => {
                   const resolvedHref = resolveMarkdownHref(href as string | undefined, docs);
                   const external = typeof resolvedHref === "string" && isExternalUrl(resolvedHref);
@@ -203,6 +305,34 @@ export default function DocsClient({ docs }: DocsClientProps) {
           </div>
         )}
       </main>
+
+      <aside className="hidden xl:block">
+        <div className="sticky top-20">
+          <h2 className="mb-2 text-sm font-semibold text-muted-foreground">On this page</h2>
+          {tocItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No sections</p>
+          ) : (
+            <nav className="space-y-1">
+              {tocItems.map((item) => (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  className={`block text-sm transition-colors hover:text-foreground ${
+                    item.level === 3 ? "ml-3 text-muted-foreground" : ""
+                  } ${
+                    activeHeadingId === item.id
+                      ? "font-medium text-foreground"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {item.text}
+                </a>
+              ))}
+            </nav>
+          )}
+        </div>
+      </aside>
+      </div>
     </div>
   );
 }

@@ -22,6 +22,7 @@ jest.mock("next/navigation", () => ({
 
 import DocsClient from "@/app/docs/DocsClient";
 import { resolveMarkdownHref } from "@/app/docs/DocsClient";
+import { extractTocItems, slugifyHeading } from "@/app/docs/DocsClient";
 
 describe("DocsClient", () => {
   const mockDocs = [
@@ -44,7 +45,7 @@ describe("DocsClient", () => {
     global.fetch = jest.fn();
   });
 
-  it("renders sidebar with all docs", async () => {
+  it("renders knowledge base sidebar with all docs", async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       text: () => Promise.resolve("# Test Doc\n\nHello world"),
@@ -52,6 +53,7 @@ describe("DocsClient", () => {
 
     render(<DocsClient docs={mockDocs} />);
 
+    expect(screen.getByText("Knowledge base")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "README" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Installation" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "First Run" })).toBeInTheDocument();
@@ -114,6 +116,25 @@ describe("DocsClient", () => {
       expect(mockReplace).toHaveBeenCalledWith("/docs?page=README");
     });
   });
+
+  it("renders right-side table of contents from h2/h3 headings", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve(
+        "# Test Doc\n\n## Overview\n\n### Quick Start\n\n## Troubleshooting"
+      ),
+    });
+
+    render(<DocsClient docs={mockDocs} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("On this page")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("link", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Quick Start" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Troubleshooting" })).toBeInTheDocument();
+  });
 });
 
 describe("resolveMarkdownHref", () => {
@@ -143,5 +164,21 @@ describe("resolveMarkdownHref", () => {
     expect(resolveMarkdownHref("https://example.com", docs)).toBe("https://example.com");
     expect(resolveMarkdownHref("/search", docs)).toBe("/search");
     expect(resolveMarkdownHref("#top", docs)).toBe("#top");
+  });
+});
+
+describe("docs heading helpers", () => {
+  it("slugifies heading text", () => {
+    expect(slugifyHeading("Quick Start!")).toBe("quick-start");
+    expect(slugifyHeading("  Many   Spaces ")).toBe("many-spaces");
+  });
+
+  it("extracts unique h2/h3 toc items", () => {
+    const toc = extractTocItems("## Overview\n### Setup\n## Overview");
+    expect(toc).toEqual([
+      { id: "overview", level: 2, text: "Overview" },
+      { id: "setup", level: 3, text: "Setup" },
+      { id: "overview-1", level: 2, text: "Overview" },
+    ]);
   });
 });
