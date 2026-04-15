@@ -201,9 +201,9 @@ export default function DocsClient({ docs }: DocsClientProps) {
 
   return (
     <div className="w-full py-6">
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_240px]">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_minmax(0,1fr)] xl:grid-cols-[auto_minmax(0,1fr)_auto]">
       {/* Sidebar / mobile navigator */}
-      <aside className="w-full md:w-[220px] md:shrink-0">
+      <aside className="w-full md:w-auto md:shrink-0">
         <h2 className="mb-2 px-1 text-sm font-semibold text-muted-foreground">Knowledge base</h2>
         <div className="md:hidden">
           <label htmlFor="docs-page-select" className="sr-only">Choose document</label>
@@ -230,7 +230,7 @@ export default function DocsClient({ docs }: DocsClientProps) {
             <button
               key={doc.name}
               onClick={() => router.push(`/docs?page=${encodeURIComponent(doc.name)}`)}
-              className={`w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
+              className={`w-full text-left px-2 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors ${
                 currentPage === doc.name
                   ? "bg-accent text-accent-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent"
