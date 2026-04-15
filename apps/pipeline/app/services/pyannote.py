@@ -76,16 +76,20 @@ def diarize(audio_path: str) -> list[dict]:
     Run speaker diarization. Returns list of:
       {"speaker": "SPEAKER_00", "start": float, "end": float}
     """
-    import torchaudio
+    import soundfile as sf
+    import torch
     from pathlib import Path
 
     load_pipeline()
 
-    # torchaudio may not have a backend for non-WAV formats (MP3, M4A, etc.)
-    # so convert to WAV first using ffmpeg.
+    # Always feed pyannote a preloaded waveform dict so we don't depend on
+    # torchaudio's backend dispatcher (which registers nothing by default on
+    # torchaudio >=2.8 and is slated for removal in 2.9).
     wav_path, is_temp = _ensure_wav(audio_path)
     try:
-        waveform, sample_rate = torchaudio.load(wav_path)
+        data, sample_rate = sf.read(wav_path, dtype="float32", always_2d=True)
+        # soundfile returns (frames, channels); pyannote expects (channel, time).
+        waveform = torch.from_numpy(data.T).contiguous()
     finally:
         if is_temp:
             try:
