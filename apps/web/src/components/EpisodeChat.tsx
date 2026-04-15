@@ -144,7 +144,7 @@ export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProp
       <button
         onClick={() => setIsOpen(true)}
         className={`fixed right-6 z-[60] flex items-center gap-2 rounded-full bg-action px-4 py-3 text-action-foreground shadow-lg hover:bg-action/90 transition-all ${
-          playerVisible ? "bottom-24" : "bottom-6"
+          playerVisible ? "bottom-40" : "bottom-6"
         }`}
         aria-label="Ask about this episode"
       >
@@ -157,7 +157,7 @@ export default function EpisodeChat({ episodeId, episodeTitle }: EpisodeChatProp
   // Chat panel
   return (
     <div className={`fixed right-6 z-[60] flex flex-col w-[calc(100vw-2rem)] sm:w-96 h-[min(28rem,calc(100vh-4rem))] rounded-xl border bg-background shadow-2xl ${
-      playerVisible ? "bottom-24" : "bottom-6"
+      playerVisible ? "bottom-40" : "bottom-6"
     }`}>
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b shrink-0">

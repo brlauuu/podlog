@@ -5,6 +5,7 @@ import { ArrowUp } from "lucide-react";
 import SpeakerPanel from "@/components/SpeakerPanel";
 import TranscriptView from "@/components/TranscriptView";
 import TranscriptExportButton from "@/components/TranscriptExportButton";
+import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import type { Segment } from "@/lib/types";
 
 interface Props {
@@ -45,6 +46,8 @@ export default function TranscriptSection({
   const [segments, setSegments] = useState(initial);
   const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const { state: playerState } = useAudioPlayer();
+  const playerVisible = !!playerState.src;
 
   useEffect(() => {
     function handleScroll() {
@@ -138,7 +141,9 @@ export default function TranscriptSection({
       {showBackToTop && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          className="fixed bottom-20 right-6 z-40 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+          className={`fixed right-6 z-[60] p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-all ${
+            playerVisible ? "bottom-24" : "bottom-20"
+          }`}
           title="Back to top"
         >
           <ArrowUp size={18} />
