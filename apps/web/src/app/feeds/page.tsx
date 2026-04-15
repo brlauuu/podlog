@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, FlaskConical, ListChecks } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import FeedCard from "@/components/FeedCard";
+import FeedsListSection from "@/components/FeedsListSection";
 
 interface Feed {
   id: string;
@@ -345,51 +343,28 @@ export default function FeedsPage() {
         </Dialog>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-4 space-y-2">
-                <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="h-3 w-3/4" />
-                <Skeleton className="h-3 w-1/3" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : feeds.length === 0 ? (
-        <div className="text-center py-20">
-          <p className="text-muted-foreground">No feeds yet.</p>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="mt-2 text-sm text-link underline"
-          >
-            Add your first RSS feed
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {feeds.map((feed) => (
-            <FeedCard
-              key={feed.id}
-              feed={feed}
-              pollPending={pollFeed.isPending && pollFeed.variables === feed.id}
-              onPromote={(url) => {
-                if (confirm("Promote this feed to full mode? All remaining episodes will be ingested.")) {
-                  promoteFeed.mutate({ url });
-                }
-              }}
-              onPoll={(feedId) => pollFeed.mutate(feedId)}
-              onDelete={(feedId) => {
-                const deleteEps = confirm(
-                  "Also delete all episodes and transcripts for this feed?"
-                );
-                deleteFeed.mutate({ id: feedId, deleteEpisodes: deleteEps });
-              }}
-            />
-          ))}
-        </div>
-      )}
+      <FeedsListSection
+        isLoading={isLoading}
+        feeds={feeds}
+        pollPendingId={
+          pollFeed.isPending && typeof pollFeed.variables === "string"
+            ? pollFeed.variables
+            : null
+        }
+        onAddFirstFeed={() => setShowAddModal(true)}
+        onPromote={(url) => {
+          if (confirm("Promote this feed to full mode? All remaining episodes will be ingested.")) {
+            promoteFeed.mutate({ url });
+          }
+        }}
+        onPoll={(feedId) => pollFeed.mutate(feedId)}
+        onDelete={(feedId) => {
+          const deleteEps = confirm(
+            "Also delete all episodes and transcripts for this feed?"
+          );
+          deleteFeed.mutate({ id: feedId, deleteEpisodes: deleteEps });
+        }}
+      />
     </div>
   );
 }
