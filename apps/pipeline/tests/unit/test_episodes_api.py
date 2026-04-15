@@ -127,6 +127,42 @@ class TestUploadEndpoint:
         finally:
             _cleanup_db()
 
+    def test_upload_valid_mp4(self):
+        """MP4 files (often containing audio) should be accepted for upload. Issue #441"""
+        mock_db = MagicMock()
+        mock_db.flush.return_value = None
+
+        def refresh_side_effect(obj):
+            obj.id = "ep-upload-mp4"
+
+        mock_db.refresh.side_effect = refresh_side_effect
+        _override_db(mock_db)
+        try:
+            with patch("app.api.episodes.settings") as mock_settings, \
+                 patch("app.api.episodes.job_queue") as mock_jq, \
+                 patch("builtins.open", create=True), \
+                 patch("shutil.copyfileobj"), \
+                 patch("shutil.disk_usage") as mock_disk, \
+                 patch("pathlib.Path.mkdir"):
+                mock_settings.data_dir = "/tmp/test-data"
+                mock_settings.disk_headroom_bytes = 0
+                mock_settings.audio_raw_dir = "/tmp/test-data/audio/raw"
+                mock_disk.return_value = MagicMock(free=10_000_000_000)
+
+                resp = client.post(
+                    "/api/episodes/upload",
+                    files={"file": ("video_podcast.mp4", io.BytesIO(b"fake mp4 video with audio"), "video/mp4")},
+                    data={"title": "Video Podcast Episode"},
+                )
+
+            assert resp.status_code == 202
+            assert "episode_id" in resp.json()
+            mock_db.add.assert_called_once()
+            mock_db.commit.assert_called_once()
+            mock_jq.enqueue.assert_called_once()
+        finally:
+            _cleanup_db()
+
     def test_upload_rejects_unsupported_extension(self):
         mock_db = MagicMock()
         _override_db(mock_db)

@@ -25,7 +25,7 @@ from app.services.pipeline_commands import enqueue_episode_ingest
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-ALLOWED_EXTENSIONS = {".mp3", ".m4a", ".wav", ".ogg", ".flac", ".opus", ".aac", ".wma", ".webm"}
+ALLOWED_EXTENSIONS = {".mp3", ".m4a", ".wav", ".ogg", ".flac", ".opus", ".aac", ".wma", ".webm", ".mp4"}
 
 
 class IngestEpisodeRequest(BaseModel):
