@@ -27,7 +27,7 @@ const PLATFORMS = [
 
 export default function AboutPage() {
   return (
-    <div className="max-w-2xl mx-auto space-y-8 py-4">
+    <div className="space-y-8 py-4">
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">About Podlog</h1>
         <p className="text-muted-foreground">
