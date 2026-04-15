@@ -58,6 +58,8 @@ def retry_job(episode_id: str, db: Session = Depends(get_db)) -> dict:
     episode.transcribe_duration_secs = None
     episode.diarize_duration_secs = None
     episode.diarize_step_durations = None
+    # Clear inference provider so fresh config is picked up on reprocess (Issue #436)
+    episode.inference_provider_used = None
     db.commit()
 
     enqueue_episode_ingest(db, str(episode.id))
