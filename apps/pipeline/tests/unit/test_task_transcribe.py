@@ -35,7 +35,7 @@ class TestTranscribeEpisode:
             patch("app.services.whisper.transcribe", return_value=(segments_data, "en", aligned_result)),
             patch("app.tasks.transcribe.settings") as mock_settings,
             patch("builtins.open", MagicMock()),
-            patch("app.tasks.transcribe.json"),
+            patch("app.tasks.transcribe_helpers.json"),
         ):
             mock_settings.whisper_model = "large-v3-turbo"
             mock_settings.transcript_dir = "/data/transcripts"
@@ -158,7 +158,7 @@ class TestTranscribeEpisode:
             ),
             patch("app.tasks.transcribe.settings") as mock_settings,
             patch("builtins.open", MagicMock()),
-            patch("app.tasks.transcribe.json"),
+            patch("app.tasks.transcribe_helpers.json"),
         ):
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
@@ -376,7 +376,7 @@ class TestTranscribeEpisode:
             ),
             patch("app.tasks.transcribe.settings") as mock_settings,
             patch("builtins.open", MagicMock()),
-            patch("app.tasks.transcribe.json"),
+            patch("app.tasks.transcribe_helpers.json"),
         ):
             # Non-zero default must not override explicit runtime 0.
             mock_settings.fireworks_stt_cost_per_minute_usd = 0.006

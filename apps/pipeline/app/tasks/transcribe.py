@@ -10,7 +10,6 @@ Transcription task -- PRD-01 S5.3, S5.4, Issue #222
 - Both paths persist segments and queue diarization.
 """
 import gc
-import json
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -21,6 +20,12 @@ from app.database import SessionLocal
 from app.models import Episode, Segment
 from app.services.notification_settings import get_runtime_inference_settings
 from app.tasks.helpers import mark_failed as _mark_failed, update_episode
+from app.tasks.transcribe_helpers import (
+    compute_fireworks_cost,
+    estimate_fireworks_usage,
+    persist_transcription_artifacts,
+    remove_artifacts,
+)
 from app import job_queue
 
 logger = logging.getLogger(__name__)
@@ -31,23 +36,6 @@ def _load_fireworks_service():
     from app.services import fireworks_audio
 
     return fireworks_audio
-
-
-def _estimate_fireworks_usage(segments_data: list[dict], fallback_duration_secs: int | None) -> float:
-    """
-    Estimate billed audio seconds for Fireworks STT.
-
-    Prefer transcript segment bounds; fall back to episode metadata.
-    """
-    max_end = 0.0
-    for seg in segments_data:
-        try:
-            max_end = max(max_end, float(seg.get("end", 0.0) or 0.0))
-        except Exception:
-            continue
-    if max_end > 0:
-        return max_end
-    return float(fallback_duration_secs or 0)
 
 
 def transcribe_episode(episode_id: str) -> str:
@@ -78,12 +66,7 @@ def transcribe_episode(episode_id: str) -> str:
         fireworks_result: dict | None = None
 
         # Defensive cleanup of stale artifacts from previous failed attempts.
-        for artifact in (alignment_path, fireworks_path):
-            if artifact.exists():
-                try:
-                    artifact.unlink()
-                except Exception:
-                    pass
+        remove_artifacts(alignment_path, fireworks_path)
 
         runtime = get_runtime_inference_settings(db)
         provider = runtime.get("inference_provider") or "local"
@@ -112,8 +95,7 @@ def transcribe_episode(episode_id: str) -> str:
                     diarize=bool(runtime.get("fireworks_stt_diarize", True)),
                 )
                 transcribe_secs = round(time.monotonic() - t0, 1)
-                audio_secs = _estimate_fireworks_usage(segments_data, episode.duration_secs)
-                audio_minutes = round(audio_secs / 60.0, 3) if audio_secs > 0 else 0.0
+                audio_secs = estimate_fireworks_usage(segments_data, episode.duration_secs)
                 runtime_rate = runtime.get("fireworks_stt_cost_per_minute_usd")
                 configured_rate = (
                     runtime_rate
@@ -121,7 +103,7 @@ def transcribe_episode(episode_id: str) -> str:
                     else settings.fireworks_stt_cost_per_minute_usd
                 )
                 stt_rate = float(configured_rate if configured_rate is not None else 0.0)
-                stt_cost_usd = round(audio_minutes * stt_rate, 4)
+                audio_minutes, stt_cost_usd = compute_fireworks_cost(audio_secs, stt_rate)
 
                 update_episode(
                     db,
@@ -213,12 +195,13 @@ def transcribe_episode(episode_id: str) -> str:
         try:
             out_dir = Path(settings.transcript_dir)
             out_dir.mkdir(parents=True, exist_ok=True)
-            if aligned_result is not None:
-                with open(alignment_path, "w") as f:
-                    json.dump(aligned_result, f)
-            if fireworks_result is not None:
-                with open(fireworks_path, "w") as f:
-                    json.dump(fireworks_result, f)
+            if aligned_result is not None or fireworks_result is not None:
+                persist_transcription_artifacts(
+                    settings.transcript_dir,
+                    episode_id,
+                    aligned_result=aligned_result,
+                    fireworks_result=fireworks_result,
+                )
         except Exception as exc:
             logger.warning(
                 '"action": "alignment_save_failed", "episode_id": "%s", "error": "%s"',
@@ -254,12 +237,7 @@ def transcribe_episode(episode_id: str) -> str:
     finally:
         if not queued_next:
             # If we failed before enqueueing diarize, remove intermediate artifacts.
-            for artifact in (alignment_path, fireworks_path):
-                if artifact.exists():
-                    try:
-                        artifact.unlink()
-                    except Exception:
-                        pass
+            remove_artifacts(alignment_path, fireworks_path)
         db.close()
 
 
