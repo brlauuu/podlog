@@ -16,7 +16,7 @@ All modes auto-poll for new episodes (default: every 24 hours, configurable via 
 
 ## Adding a Feed
 
-1. Go to `/feeds` and click **Add Feed**
+1. Open **Sources** (`/podcasts`) and click **Manage feeds**, or go directly to `/feeds`. Click **Add Feed**.
 2. Paste the RSS feed URL
 3. Choose a mode:
    - **Test** — click Add, the latest episode is queued immediately

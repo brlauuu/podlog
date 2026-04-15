@@ -28,9 +28,9 @@ In the browser, the queue page at `/queue` will show stage counts and be ready t
 
 ## Adding Your First Feed
 
-1. Go to **http://localhost:3000/feeds**
-2. Click **Add Feed**
-3. Paste an RSS feed URL
+1. Open **Sources** from the navbar (http://localhost:3000/podcasts)
+2. Click **Manage feeds** — this opens `/feeds`
+3. Click **Add Feed**, paste an RSS feed URL
 4. Choose **Test mode** — this ingests only the latest episode, so you get results fast
 5. Click **Add**
 
@@ -40,8 +40,8 @@ In the browser, the queue page at `/queue` will show stage counts and be ready t
 
 If you don't have an RSS feed handy, you can ingest local files directly:
 
-1. Go to **http://localhost:3000/podcasts**
-2. In **Manual uploads**, choose an audio file (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.opus`, `.aac`, `.wma`, `.webm`)
+1. Open **Sources** from the navbar
+2. In **Manual uploads**, choose an audio file (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.opus`, `.aac`, `.wma`, `.webm`, `.mp4`)
 3. Submit the upload and monitor progress from `/queue`
 
 ## Watching Progress

@@ -20,17 +20,16 @@
 
 ## Features
 
-- **Audio transcription** - transcribe audio files or podcasts from provided RSS feeds (full, single or test) using Whisper
-- **Speaker diarization** — automatic speaker labeling using pyannote and speaker name inference using spaCy (with capability to easily correct speaker assignment through the UI)
-- **Granular timestamps** — sentence-level timestamps within speaker sections, clickable to play audio from any point
-- **Persistent audio player** — click any timestamp to play; player continues across page navigation
-- **Comprehensive search** — full-text keyword search with phrase matching (`"exact quotes"`, `OR`, `-exclude`) plus semantic vector search powered by pgvector
-- **Export full transcripts or search results** — download search reports as Markdown, plain text, or print-friendly PDF
-- **RAG enabled search** - ask comprehensive questions about your transcription database and get semantic answers including direct references to episodes
-- **Queue dashboard** — live processing status, filter by stage, error classification with auto-retry
-- **Notification options** - get notified via Telegram or email when new episodes get processed and are ready for search and analysis
-- **No cloud dependencies** — podlog is designed to run locally on your machine with models chosen to run on CPUs
-- **Advanced option to run model inference remotely** -  if your machine really sucks and you don't mind spending some $$, there is a built-in option to run all or selected inference steps using Fireworks AI platform.
+- **Audio ingestion** — pull episodes from RSS feeds (full, selective, or test mode) or upload audio files (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.opus`, `.aac`, `.wma`, `.webm`, `.mp4`) directly from the web UI.
+- **Speech-to-text** — WhisperX with `large-v3-turbo` by default, tunable down to `tiny` for low-RAM machines.
+- **Speaker diarization** — pyannote `speaker-diarization-3.1` assigns `SPEAKER_NN` labels; spaCy NER proposes real names from episode metadata, and you can rename or merge speakers in the UI.
+- **Hybrid search** — full-text keyword search (`"exact phrase"`, `OR`, `-exclude`) combined with pgvector semantic similarity, merged via Reciprocal Rank Fusion.
+- **Persistent audio player** — click any timestamp to play; the player keeps going while you navigate other pages.
+- **Ask AI (RAG)** — ask natural-language questions and get streamed, citation-backed answers drawn from your transcript library (local Ollama by default, Fireworks optional).
+- **Export** — download search results or full transcripts as Markdown, plain text, or print-friendly PDF.
+- **Queue dashboard** — per-stage status, error classification, auto-retry for transient failures, manual retry for the rest.
+- **Notifications** — Telegram and email alerts when episodes finish or fail, with optional daily/weekly digest.
+- **Local-first** — no accounts, no cloud, no telemetry; optional Fireworks AI profile for users who prefer remote inference.
 
 
 ## Quick Start
@@ -49,7 +48,7 @@ make build
 make up
 ```
 
-Open **http://localhost:3000** — that's the home page. Search lives at `/search` and Ask lives at `/ask`.
+Open **http://localhost:3000**. From the navbar you can reach Search (`/search`), Ask (`/ask`), Sources (`/podcasts`, where you add feeds or upload audio), Queue (`/queue`), Settings (`/settings`), Docs (`/docs`) and About (`/about`).
 
 > **First run:** The worker downloads Whisper and pyannote model weights (~3 GB). Jobs are queued during this phase and start processing once models are cached.
 
@@ -108,8 +107,7 @@ This uses `docker-compose.remote.yml` on top of the default compose file.
                         └──────────────────────────────────────────────┘
 ```
 
-Default profile: 5 containers. Remote-inference profile: 4 containers (no `ollama`).
-No Redis, no Celery — the job queue is PostgreSQL-backed.
+Default profile: 5 containers (`db`, `pipeline`, `worker`, `ollama`, `web`). Remote-inference profile: 4 containers (Ollama is disabled unless you opt in with the `local-ask` Compose profile). No Redis, no Celery — the job queue is PostgreSQL-backed using `FOR UPDATE SKIP LOCKED`.
 
 ## Configuration
 
@@ -135,6 +133,7 @@ See [docs/configuration.md](docs/configuration.md) for the full list of all envi
 | [Hardware Guide](docs/hardware.md) | System requirements, processing benchmarks, tested machine specs |
 | [Development](docs/development.md) | Local development setup, running tests, architecture notes, and Codex/Claude audit workflows |
 | [Audit Workflows](docs/development.md#audit-workflows) | How Codex (`nightly-audit`) and Claude (`/codebase-audit`) audits are run, what they produce, and safety constraints |
+| [Episode Lifecycle](docs/episode-lifecycle.md) | Pipeline stages, data produced at each step, and which features depend on which data |
 
 ## Common Commands
 

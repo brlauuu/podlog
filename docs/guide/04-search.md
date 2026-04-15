@@ -12,9 +12,8 @@ Type keywords into the search bar on the search page (`/search`). Podlog support
 | Exact phrase | `"carbon neutral"` | Exact phrase only |
 | OR | `renewable OR solar` | Either term |
 | Exclude | `emissions -diesel` | "emissions" but not "diesel" |
-| Prefix | `econ*` | Words starting with "econ" (economics, economy, etc.) |
 
-Operators can be combined: `"machine learning" OR deep -neural`.
+Operators can be combined: `"machine learning" OR deep -neural`. Under the hood Podlog uses PostgreSQL's `websearch_to_tsquery`, so syntax follows the same conventions as common web search engines.
 
 ## Semantic Search
 
