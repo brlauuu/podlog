@@ -200,7 +200,7 @@ export default function DocsClient({ docs }: DocsClientProps) {
   const renderHeadingId = makeUniqueSlugger();
 
   return (
-    <div className="mx-auto w-full max-w-[1360px] px-4 py-6">
+    <div className="w-full py-6">
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_240px]">
       {/* Sidebar / mobile navigator */}
       <aside className="w-full md:w-[220px] md:shrink-0">
@@ -256,7 +256,7 @@ export default function DocsClient({ docs }: DocsClientProps) {
         ) : loading ? (
           <div className="text-muted-foreground">Loading...</div>
         ) : content ? (
-          <article className="prose prose-sm dark:prose-invert mx-auto max-w-[75ch] leading-7">
+          <article className="prose prose-sm dark:prose-invert max-w-none leading-7">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
