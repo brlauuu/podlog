@@ -62,7 +62,7 @@ Then retry the failed episode from the queue page. See [Configuration](10-config
 
 **Common causes:**
 
-1. **`Name or service not known`** — the Docker container can't reach the mail server. Check that `docker-compose.yml` includes `extra_hosts: host.docker.internal:host-gateway` for the pipeline service (added in PR #103).
+1. **`Name or service not known`** — the Docker container can't reach the mail server. `docker-compose.yml` ships with `extra_hosts: host.docker.internal:host-gateway` on the pipeline service, which is what lets the container talk to a Postfix running on the host. If you've customised the compose file, re-add it.
 
 2. **`Relay access denied`** — Postfix isn't allowing relay from Docker. Add the Docker subnet to `mynetworks`:
    ```bash
@@ -84,17 +84,27 @@ See [Notifications](09-notifications.md) for full setup instructions.
 2. **No matching content** — try broader search terms or different keywords.
 3. **Embeddings not generated** — semantic search requires embeddings. Check `make shell-db` then `SELECT COUNT(*) FROM segments WHERE embedding IS NOT NULL;`
 
-## Queue shows 0 active while worker is processing
+## Container health
 
-**Symptom:** The queue page shows no active jobs, but the worker logs show it's working.
+**Symptom:** `/api/health` reports `DOWN` for a service, or `make logs` shows repeated restarts.
 
-**Cause:** This was a known issue (fixed in PR #99) where the queue API read from `episodes.status` instead of the `job_queue` table. If you're seeing this, make sure you're running the latest version:
+**Diagnosis:**
 
 ```bash
-git pull origin main
-make build
-docker compose up -d web
+docker compose ps                 # check container state
+make logs                         # tail logs for all services
+curl -s http://localhost:8000/api/health | python3 -m json.tool
 ```
+
+The host-level health check (`make health-install`) runs the same probes every 15 minutes and can send Telegram alerts on state transitions — see [Notifications](09-notifications.md#health-monitoring).
+
+## Stuck or zombie episodes
+
+**Symptom:** An episode sits in a non-terminal state with no active worker activity, or logs show it running far longer than expected.
+
+**Cause:** A container restart interrupted the job, or the worker is genuinely wedged (usually OOM-adjacent).
+
+**Fix:** The worker's zombie detector will eventually mark it `SYSTEM_ERROR` and free the slot. You can retry from the queue page, or reprocess from the episode detail page.
 
 ---
 

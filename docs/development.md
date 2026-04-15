@@ -17,15 +17,16 @@ podlog/
 │   │   │   ├── models.py           # SQLAlchemy ORM (feeds, episodes, segments)
 │   │   │   ├── database.py         # Engine + session factory
 │   │   │   ├── job_queue.py        # DB-backed job queue (FOR UPDATE SKIP LOCKED)
-│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications)
-│   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, diarize, chunk, embed, infer, archive, cleanup, prewarm)
-│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, notifications, digest, events)
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware)
+│   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, notifications, digest, events, fireworks_audio, …)
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # Unit, integration, e2e tests
 │   └── web/                        # Next.js 16.2.2 (App Router)
-│       ├── src/app/                # Pages: /, /podcasts, /episodes/[id], /queue, /feeds, /ask, /settings (/notifications redirects here)
-│       ├── src/components/         # React components
-│       └── src/lib/                # Utilities (db, search, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest)
+│       ├── src/app/                # Pages: /, /search, /ask, /podcasts, /episodes/[id], /queue, /feeds, /settings, /docs, /about (/notifications redirects to /settings)
+│       │   └── api/                # Route handlers: search, search/grouped, search/mentions, feeds, queue, audio, ask, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, hardware, wizard, pipeline proxy
+│       ├── src/components/         # React components (Navbar, AudioPlayer, SearchResult, QueueStatus, DocsClient, …)
+│       └── src/lib/                # Utilities (db, search, searchHybrid, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest, citations, …)
 ├── docs/                           # User-facing documentation
 └── prds/                           # Internal design specs and risk register
 ```
