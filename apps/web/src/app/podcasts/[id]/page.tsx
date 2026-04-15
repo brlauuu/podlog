@@ -1,8 +1,10 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, ExternalLink } from "lucide-react";
 import pool from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import EpisodesList, { type EnrichedEpisode } from "@/components/EpisodesList";
 
 export const dynamic = "force-dynamic";
@@ -10,13 +12,17 @@ export const dynamic = "force-dynamic";
 interface Feed {
   id: string;
   title: string | null;
+  description: string | null;
   image_url: string | null;
   website_url: string | null;
   mode: string;
 }
 
 async function getFeed(id: string): Promise<Feed | null> {
-  const result = await pool.query("SELECT * FROM feeds WHERE id = $1", [id]);
+  const result = await pool.query(
+    "SELECT id, title, description, image_url, website_url, mode FROM feeds WHERE id = $1",
+    [id]
+  );
   return result.rows[0] ?? null;
 }
 
@@ -76,15 +82,58 @@ export default async function PodcastPage({ params }: { params: Promise<{ id: st
         <Link href="/podcasts" className="text-sm text-muted-foreground hover:text-foreground">
           ← Podcasts
         </Link>
-        <div className="flex items-center gap-2 mt-2">
-          <h1 className="text-2xl font-semibold">{feed.title ?? "Untitled podcast"}</h1>
-          {feed.mode === "test" && (
-            <Badge variant="outline" className="text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-1">
-              <FlaskConical size={12} />
-              Test
-            </Badge>
-          )}
-        </div>
+
+        <Card className="mt-4 overflow-hidden">
+          <CardContent className="p-0">
+            <div className="flex flex-col sm:flex-row gap-4 p-4">
+              {/* Podcast Image */}
+              {feed.image_url ? (
+                <Image
+                  src={feed.image_url}
+                  alt={feed.title ?? "Podcast"}
+                  width={150}
+                  height={150}
+                  className="w-32 h-32 sm:w-36 sm:h-36 object-cover rounded-md shrink-0"
+                />
+              ) : (
+                <div className="w-32 h-32 sm:w-36 sm:h-36 bg-muted flex items-center justify-center text-4xl rounded-md shrink-0">
+                  🎙
+                </div>
+              )}
+
+              {/* Podcast Info */}
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-xl sm:text-2xl font-semibold">{feed.title ?? "Untitled podcast"}</h1>
+                  {feed.mode === "test" && (
+                    <Badge variant="outline" className="text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-1">
+                      <FlaskConical size={12} />
+                      Test
+                    </Badge>
+                  )}
+                </div>
+
+                {feed.website_url && (
+                  <a
+                    href={feed.website_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-link hover:underline"
+                  >
+                    <ExternalLink size={14} />
+                    {new URL(feed.website_url).hostname.replace(/^www\./, "")}
+                  </a>
+                )}
+
+                {feed.description && (
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {feed.description}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <EpisodesList episodes={episodes} feedId={feed.id} />

@@ -41,7 +41,7 @@ describe("Podcast page speaker metadata", () => {
   it("filters speaker_name_tags to labels that still exist in episode segments", async () => {
     mockQuery
       .mockResolvedValueOnce({
-        rows: [{ id: "feed-1", title: "Feed One", image_url: null, website_url: null, mode: "live" }],
+        rows: [{ id: "feed-1", title: "Feed One", description: null, image_url: null, website_url: null, mode: "live" }],
       })
       .mockResolvedValueOnce({ rows: [] });
 
