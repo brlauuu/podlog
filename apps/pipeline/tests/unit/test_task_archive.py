@@ -64,7 +64,7 @@ class TestArchiveEpisode:
 
         with (
             patch("app.tasks.archive.settings") as mock_settings,
-            patch("app.tasks.archive._compress_audio", return_value="/data/audio/archive/ep1.mp3"),
+            patch("app.tasks.archive._compress_audio", return_value=__import__("pathlib").Path("/data/audio/archive/ep1.mp3")),
             patch("app.tasks.archive._write_transcript", return_value="/data/transcripts/ep1.txt"),
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.unlink"),
@@ -144,6 +144,46 @@ class TestArchiveEpisode:
         with pytest.raises(RuntimeError, match="not found"):
             archive_episode("ep1")
 
+
+    @patch("app.tasks.archive.emit_episode_done_event")
+    @patch("app.tasks.archive.update_episode")
+    @patch("app.tasks.archive.SessionLocal")
+    def test_rerun_on_already_archived_does_not_delete_archive(
+        self, mock_session_cls, mock_update, mock_emit_done, tmp_path
+    ):
+        """Re-running archive when audio_local_path already points at the
+        archive file must not delete that file (regression test)."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_file = archive_dir / "ep1.mp3"
+        archive_file.write_bytes(b"real-archive-bytes")
+
+        ep = _make_episode(audio_path=str(archive_file))
+        seg = _make_segment()
+        sn = _make_speaker_name()
+        db = MagicMock()
+
+        verified_ep = MagicMock()
+        verified_ep.status = "done"
+        db.query.return_value.filter.return_value.first.side_effect = [ep, verified_ep]
+        db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [seg]
+        db.query.return_value.filter.return_value.all.return_value = [sn]
+        mock_session_cls.return_value = db
+
+        with (
+            patch("app.tasks.archive.settings") as mock_settings,
+            patch("app.tasks.archive._write_transcript", return_value="/data/transcripts/ep1.txt"),
+        ):
+            mock_settings.archive_audio = True
+            mock_settings.audio_archive_dir = str(archive_dir)
+            mock_settings.audio_archive_bitrate = "64k"
+
+            from app.tasks.archive import archive_episode
+
+            archive_episode("ep1")
+
+        assert archive_file.exists(), "archive file must not be deleted on re-run"
+        assert archive_file.read_bytes() == b"real-archive-bytes"
 
     def test_compress_skips_when_already_in_archive_dir(self, tmp_path):
         """_compress_audio should skip ffmpeg when source is already the dest."""

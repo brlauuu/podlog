@@ -93,8 +93,15 @@ def archive_episode(episode_id: str) -> str:
         # Delegate payload construction and event emission to notification runtime.
         emit_episode_done_event(db, episode)
 
-        # Safe to delete raw audio now that status is confirmed
-        if raw_path and raw_path.exists():
+        # Safe to delete raw audio now that status is confirmed.
+        # Skip when the "raw" path is actually the archive path itself
+        # (happens when archive re-runs on an already-compressed episode —
+        # otherwise we'd delete the archive file we just kept).
+        if (
+            raw_path
+            and raw_path.exists()
+            and (archived_path is None or raw_path.resolve() != archived_path.resolve())
+        ):
             raw_path.unlink()
 
         logger.info('"action": "archive_complete", "episode_id": "%s"', episode_id)
