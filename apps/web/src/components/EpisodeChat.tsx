@@ -318,7 +318,7 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
                   <Download size={16} />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-48 z-[70]">
                 <DropdownMenuItem onClick={() => handleExport("markdown")} className="gap-2">
                   <FileText size={14} />
                   <span className="text-sm">Markdown (.md)</span>
