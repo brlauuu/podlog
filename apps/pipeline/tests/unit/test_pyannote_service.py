@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Ensure pyannote.audio and torchaudio are mockable
+# Ensure pyannote.audio, torchaudio, torch, and soundfile are mockable
 if "pyannote" not in sys.modules:
     sys.modules["pyannote"] = MagicMock()
     sys.modules["pyannote.audio"] = MagicMock()
@@ -13,6 +13,10 @@ if "torchaudio" not in sys.modules:
 if "torch" not in sys.modules:
     sys.modules["torch"] = MagicMock()
     sys.modules["torch.cuda"] = MagicMock()
+# diarize() imports soundfile at call time; always use a mock so the tests
+# don't touch the real libsndfile on environments where it's installed.
+_soundfile_mock = MagicMock()
+sys.modules["soundfile"] = _soundfile_mock
 
 import app.services.pyannote as pyannote_mod
 
@@ -95,8 +99,8 @@ class TestDiarize:
 
         pyannote_mod._pipeline = mock_pipeline
 
-        torchaudio = sys.modules["torchaudio"]
-        torchaudio.load = MagicMock(return_value=(MagicMock(), 16000))
+        sf = sys.modules["soundfile"]
+        sf.read = MagicMock(return_value=(MagicMock(), 16000))
 
         result = pyannote_mod.diarize("/path/to/audio.wav")
 
@@ -114,8 +118,8 @@ class TestDiarize:
 
         pyannote_mod._pipeline = mock_pipeline
 
-        torchaudio = sys.modules["torchaudio"]
-        torchaudio.load = MagicMock(return_value=(MagicMock(), 16000))
+        sf = sys.modules["soundfile"]
+        sf.read = MagicMock(return_value=(MagicMock(), 16000))
 
         with pytest.raises(TypeError, match="itertracks"):
             pyannote_mod.diarize("/path/to/audio.wav")

@@ -4,6 +4,11 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
+
+jest.mock("@/components/AudioPlayerContext", () => ({
+  useAudioPlayer: () => ({ state: { src: null } }),
+}));
+
 import EpisodeChat from "@/components/EpisodeChat";
 
 describe("EpisodeChat trigger icon", () => {
