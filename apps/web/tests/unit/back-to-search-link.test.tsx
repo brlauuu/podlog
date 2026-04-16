@@ -19,6 +19,10 @@ jest.mock("next/link", () => {
   );
 });
 
+jest.mock("@/components/AudioPlayerContext", () => ({
+  useAudioPlayer: () => ({ state: { src: null } }),
+}));
+
 import BackToSearchLink from "@/components/BackToSearchLink";
 
 describe("BackToSearchLink", () => {
@@ -49,7 +53,7 @@ describe("BackToSearchLink", () => {
       "fixed",
       "bottom-6",
       "left-6",
-      "z-40",
+      "z-[60]",
       "bg-action",
       "text-action-foreground",
       "hover:bg-action/90"
