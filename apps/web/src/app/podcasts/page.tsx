@@ -92,16 +92,26 @@ async function getUploadedEpisodes(): Promise<{
 export default async function SourcesPage() {
   const [feeds, uploads] = await Promise.all([getFeeds(), getUploadedEpisodes()]);
 
+  const feedEpisodeTotal = feeds.reduce((sum, f) => sum + f.episode_count, 0);
+  const feedEpisodeProcessed = feeds.reduce((sum, f) => sum + f.processed_count, 0);
+
   return (
     <div className="space-y-6">
       {/* Podcasts section */}
       {feeds.length > 0 && (
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl font-semibold">Podcasts</h2>
-            <Button size="sm" className="gap-1.5" asChild>
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <h2 className="text-xl font-semibold">
+              Podcasts
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                ({feedEpisodeTotal > 0 && feedEpisodeProcessed < feedEpisodeTotal
+                  ? `${feedEpisodeProcessed} / ${feedEpisodeTotal} episodes processed`
+                  : `${feeds.length} podcast${feeds.length !== 1 ? "s" : ""}`})
+              </span>
+            </h2>
+            <Button className="h-7 px-2.5 text-xs gap-1.5 [&_svg]:size-3" asChild>
               <Link href="/feeds">
-                <Rss size={14} />
+                <Rss />
                 Manage feeds
               </Link>
             </Button>

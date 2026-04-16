@@ -89,8 +89,11 @@ export default function UploadsSection({ uploads, processed, total }: Props) {
             </span>
           )}
         </h2>
-        <Button onClick={() => setDialogOpen(true)} size="sm" className="gap-1.5">
-          <Upload size={14} />
+        <Button
+          onClick={() => setDialogOpen(true)}
+          className="h-7 px-2.5 text-xs gap-1.5 [&_svg]:size-3"
+        >
+          <Upload />
           Upload audio
         </Button>
       </div>
