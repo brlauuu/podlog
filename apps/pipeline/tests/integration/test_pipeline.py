@@ -43,7 +43,7 @@ class TestTranscription:
 
         # Mock Whisper to return known segments, mock ffmpeg conversion, mock diarize chain
         with patch("app.tasks.transcribe._convert_to_wav") as mock_convert, \
-             patch("app.services.whisper.transcribe", return_value=(self.MOCK_SEGMENTS, "en")), \
+             patch("app.services.whisper.transcribe", return_value=(self.MOCK_SEGMENTS, "en", None)), \
              patch("app.tasks.transcribe._unload_whisper"), \
              patch("app.tasks.transcribe.SessionLocal", return_value=db_session), \
              patch("app.tasks.diarize.diarize_episode") as mock_diarize:

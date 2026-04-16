@@ -34,14 +34,24 @@ def engine():
 
 @pytest.fixture
 def db_session(engine) -> Session:
-    """Per-test DB session wrapped in a transaction that rolls back after each test."""
+    """Per-test DB session wrapped in a transaction that rolls back after each test.
+
+    Pipeline tasks (transcribe/diarize/archive) call ``db.close()`` in their
+    ``finally`` blocks. When ``SessionLocal`` is patched to return this shared
+    session, that call would detach every instance from the session and break
+    the test's post-task ``session.refresh(...)`` assertions. We intercept
+    ``close`` so the task's cleanup is a no-op; the real close still runs at
+    teardown.
+    """
     connection = engine.connect()
     transaction = connection.begin()
     session = sessionmaker(bind=connection)()
+    real_close = session.close
+    session.close = lambda: None
 
     yield session
 
-    session.close()
+    real_close()
     transaction.rollback()
     connection.close()
 
