@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, Rss } from "lucide-react";
 import pool from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -99,8 +99,11 @@ export default async function SourcesPage() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xl font-semibold">Podcasts</h2>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/feeds">Manage feeds</Link>
+            <Button size="sm" className="gap-1.5" asChild>
+              <Link href="/feeds">
+                <Rss size={14} />
+                Manage feeds
+              </Link>
             </Button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
