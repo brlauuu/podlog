@@ -189,3 +189,58 @@ class TestFeedsEndpoint:
             assert resp.json() == mock_rows
         finally:
             app.dependency_overrides.clear()
+
+
+class TestDeleteEpisodeEndpoint:
+    """Issue #454: manually uploaded episodes need a delete endpoint."""
+
+    def test_delete_unknown_episode_returns_404(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        from app.database import get_db
+
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            resp = client.delete("/api/episodes/does-not-exist")
+            assert resp.status_code == 404
+            assert resp.json()["detail"] == "Episode not found"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_delete_feed_linked_episode_returns_403(self):
+        mock_db = MagicMock()
+        mock_episode = MagicMock()
+        mock_episode.feed_id = "feed-uuid"
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_episode
+
+        from app.database import get_db
+
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            resp = client.delete("/api/episodes/some-episode-id")
+            assert resp.status_code == 403
+            assert "Feed-linked" in resp.json()["detail"]
+            mock_db.delete.assert_not_called()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_delete_manual_upload_returns_204(self):
+        mock_db = MagicMock()
+        mock_episode = MagicMock()
+        mock_episode.feed_id = None
+        mock_episode.audio_local_path = None
+        mock_episode.transcript_path = None
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_episode
+
+        from app.database import get_db
+
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            with patch("app.api.episodes._remove_episode_files"):
+                resp = client.delete("/api/episodes/some-episode-id")
+            assert resp.status_code == 204
+            mock_db.delete.assert_called_once_with(mock_episode)
+            mock_db.commit.assert_called_once()
+        finally:
+            app.dependency_overrides.clear()

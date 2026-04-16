@@ -1,12 +1,13 @@
 import Link from "next/link";
 import Image from "next/image";
-import { FlaskConical, FileAudio, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { FlaskConical } from "lucide-react";
 import pool from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import AudioUpload from "@/components/AudioUpload";
+import UploadedEpisodeCard from "@/components/UploadedEpisodeCard";
 
 export const dynamic = "force-dynamic";
 
@@ -143,26 +144,13 @@ export default async function SourcesPage() {
         {uploads.episodes.length > 0 && (
           <div className="mt-4 space-y-2">
             {uploads.episodes.map((ep) => (
-              <Link key={ep.id} href={`/episodes/${ep.id}`}>
-                <Card className="hover:bg-accent/30 transition-colors">
-                  <CardContent className="p-3 flex items-center gap-3">
-                    <FileAudio size={16} className="text-muted-foreground shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{ep.title ?? "Untitled"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(ep.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    {ep.status === "done" ? (
-                      <CheckCircle2 size={14} className="text-green-600 dark:text-green-400 shrink-0" />
-                    ) : ep.status === "failed" ? (
-                      <XCircle size={14} className="text-red-600 dark:text-red-400 shrink-0" />
-                    ) : (
-                      <Loader2 size={14} className="text-blue-600 dark:text-blue-400 animate-spin shrink-0" />
-                    )}
-                  </CardContent>
-                </Card>
-              </Link>
+              <UploadedEpisodeCard
+                key={ep.id}
+                id={ep.id}
+                title={ep.title}
+                status={ep.status}
+                created_at={ep.created_at}
+              />
             ))}
           </div>
         )}

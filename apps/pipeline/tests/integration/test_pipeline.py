@@ -373,3 +373,104 @@ class TestFeedsListEndpoint:
         feed = next(f for f in body if f["url"] == sample_feed.url)
         assert feed["id"] == sample_feed.id
         assert isinstance(feed["id"], str)
+
+
+class TestDeleteEpisodeEndpoint:
+    """Issue #454: DELETE /api/episodes/{id} removes a manually uploaded episode."""
+
+    def test_delete_removes_row_cascades_children_and_cleans_files(
+        self, db_session, tmp_path
+    ):
+        from fastapi.testclient import TestClient
+        from unittest.mock import patch
+        from app.database import get_db
+        from app.main import app
+        from app.models import Chunk, Episode, Segment, SpeakerName
+
+        # Match the layout computed by Settings.audio_raw_dir / audio_archive_dir / transcript_dir
+        raw_dir = tmp_path / "audio" / "raw"
+        archive_dir = tmp_path / "audio" / "archive"
+        transcript_dir = tmp_path / "transcripts"
+        raw_dir.mkdir(parents=True)
+        archive_dir.mkdir(parents=True)
+        transcript_dir.mkdir(parents=True)
+
+        episode = Episode(
+            id=str(uuid.uuid4()),
+            feed_id=None,
+            guid=f"upload:test-{uuid.uuid4().hex[:8]}",
+            title="Manual Upload",
+            audio_url="local://sample.mp3",
+            status="done",
+        )
+        db_session.add(episode)
+        db_session.flush()
+
+        seg = Segment(
+            episode_id=episode.id, start_time=0.0, end_time=1.0, text="hello"
+        )
+        db_session.add(seg)
+        db_session.flush()
+        chunk = Chunk(
+            episode_id=episode.id,
+            start_time=0.0,
+            end_time=1.0,
+            text="hello",
+            segment_ids=[seg.id],
+        )
+        db_session.add(chunk)
+        db_session.add(
+            SpeakerName(episode_id=episode.id, speaker_label="SPEAKER_00", display_name="Alice")
+        )
+
+        # On-disk artifacts
+        audio_file = raw_dir / f"{episode.id}.mp3"
+        audio_file.write_bytes(b"audio")
+        archived_file = archive_dir / f"{episode.id}.mp3"
+        archived_file.write_bytes(b"archived")
+        transcript_file = transcript_dir / f"{episode.id}.txt"
+        transcript_file.write_text("transcript")
+
+        episode.audio_local_path = str(audio_file)
+        episode.transcript_path = str(transcript_file)
+        db_session.flush()
+
+        app.dependency_overrides[get_db] = lambda: db_session
+        try:
+            with (
+                patch("app.api.episodes.settings.data_dir", str(tmp_path)),
+            ):
+                client = TestClient(app)
+                resp = client.delete(f"/api/episodes/{episode.id}")
+        finally:
+            app.dependency_overrides.clear()
+
+        assert resp.status_code == 204
+        assert db_session.query(Episode).filter(Episode.id == episode.id).first() is None
+        assert db_session.query(Segment).filter(Segment.episode_id == episode.id).count() == 0
+        assert db_session.query(Chunk).filter(Chunk.episode_id == episode.id).count() == 0
+        assert (
+            db_session.query(SpeakerName).filter(SpeakerName.episode_id == episode.id).count() == 0
+        )
+        assert not audio_file.exists()
+        assert not archived_file.exists()
+        assert not transcript_file.exists()
+
+    def test_delete_refuses_feed_linked_episode(self, db_session, sample_episode):
+        from fastapi.testclient import TestClient
+
+        from app.database import get_db
+        from app.main import app
+        from app.models import Episode
+
+        assert sample_episode.feed_id is not None  # sanity
+
+        app.dependency_overrides[get_db] = lambda: db_session
+        try:
+            client = TestClient(app)
+            resp = client.delete(f"/api/episodes/{sample_episode.id}")
+        finally:
+            app.dependency_overrides.clear()
+
+        assert resp.status_code == 403
+        assert db_session.query(Episode).filter(Episode.id == sample_episode.id).first() is not None
