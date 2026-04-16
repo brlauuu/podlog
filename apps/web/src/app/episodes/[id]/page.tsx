@@ -297,6 +297,8 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
           key={episode.id}
           episodeId={episode.id}
           episodeTitle={episode.title ?? "Untitled Episode"}
+          feedTitle={episode.feed_title}
+          episodeDescription={episode.description}
         />
       )}
     </div>
