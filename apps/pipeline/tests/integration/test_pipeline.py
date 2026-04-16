@@ -349,3 +349,27 @@ class TestArchive:
         assert sample_episode.error_class == "DISK_FULL"
         # Raw file is preserved (not deleted)
         assert audio_dest.exists()
+
+
+class TestFeedsListEndpoint:
+    """Issue #455: GET /api/feeds must return feeds as JSON (id serialized as string)."""
+
+    def test_list_feeds_returns_rows_with_string_id(self, db_session, sample_feed):
+        from fastapi.testclient import TestClient
+
+        from app.database import get_db
+        from app.main import app
+
+        app.dependency_overrides[get_db] = lambda: db_session
+        try:
+            client = TestClient(app)
+            resp = client.get("/api/feeds")
+        finally:
+            app.dependency_overrides.clear()
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert isinstance(body, list) and len(body) >= 1
+        feed = next(f for f in body if f["url"] == sample_feed.url)
+        assert feed["id"] == sample_feed.id
+        assert isinstance(feed["id"], str)

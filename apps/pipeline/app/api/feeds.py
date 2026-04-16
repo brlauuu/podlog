@@ -80,7 +80,7 @@ def list_feeds(db: Session = Depends(get_db)) -> list[FeedListItem]:
         db.execute(
             text(
                 """
-                SELECT f.id, f.url, f.title, f.mode, f.last_polled_at,
+                SELECT f.id::text AS id, f.url, f.title, f.mode, f.last_polled_at,
                        COUNT(e.id)::int AS episode_count
                 FROM feeds f
                 LEFT JOIN episodes e ON e.feed_id = f.id
