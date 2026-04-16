@@ -6,8 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import AudioUpload from "@/components/AudioUpload";
-import UploadedEpisodeCard from "@/components/UploadedEpisodeCard";
+import UploadsSection, { type UploadedEpisode } from "@/components/UploadsSection";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +18,6 @@ interface Feed {
   episode_count: number;
   processed_count: number;
   last_polled_at: string | null;
-}
-
-interface UploadedEpisode {
-  id: string;
-  title: string | null;
-  status: string;
-  created_at: string;
 }
 
 async function getFeeds(): Promise<Feed[]> {
@@ -46,13 +38,52 @@ async function getFeeds(): Promise<Feed[]> {
   return result.rows;
 }
 
-async function getUploadedEpisodes(): Promise<{ episodes: UploadedEpisode[]; processed: number; total: number }> {
-  const result = await pool.query(`
-    SELECT id, title, status, created_at
-    FROM episodes
-    WHERE feed_id IS NULL
-    ORDER BY created_at DESC
-  `);
+async function getUploadedEpisodes(): Promise<{
+  episodes: UploadedEpisode[];
+  processed: number;
+  total: number;
+}> {
+  const result = await pool.query(
+    `SELECT
+       e.id, e.title, e.description,
+       e.published_at, e.processed_at,
+       e.duration_secs, e.language, e.status, e.has_diarization,
+       e.diarization_error, e.error_class, e.error_message,
+       COALESCE(e.retry_count, 0) AS retry_count,
+       COALESCE(e.retry_max, 3) AS retry_max,
+       e.transcribe_duration_secs, e.diarize_duration_secs,
+       e.inference_provider_used,
+       e.fireworks_audio_minutes,
+       e.fireworks_stt_cost_usd,
+       e.created_at,
+       COALESCE(agg.speaker_count, 0)::int AS speaker_count,
+       COALESCE(sn_agg.speaker_name_tags, '[]'::json) AS speaker_name_tags
+     FROM episodes e
+     LEFT JOIN LATERAL (
+       SELECT COUNT(DISTINCT s.speaker_label)::int AS speaker_count
+       FROM segments s
+       WHERE s.episode_id = e.id
+     ) agg ON true
+     LEFT JOIN LATERAL (
+       SELECT json_agg(
+         json_build_object(
+           'display_name', sn.display_name,
+           'inferred', sn.inferred,
+           'confirmed_by_user', sn.confirmed_by_user
+         ) ORDER BY sn.display_name
+       ) FILTER (WHERE sn.id IS NOT NULL) AS speaker_name_tags
+       FROM speaker_names sn
+       WHERE sn.episode_id = e.id
+         AND EXISTS (
+           SELECT 1
+           FROM segments s2
+           WHERE s2.episode_id = e.id
+             AND s2.speaker_label = sn.speaker_label
+         )
+     ) sn_agg ON true
+     WHERE e.feed_id IS NULL
+     ORDER BY e.created_at DESC`
+  );
   const episodes: UploadedEpisode[] = result.rows;
   const processed = episodes.filter((e) => e.status === "done").length;
   return { episodes, processed, total: episodes.length };
@@ -124,37 +155,11 @@ export default async function SourcesPage() {
 
       <Separator />
 
-      {/* Uploads section */}
-      <div>
-        <h2 className="text-xl font-semibold mb-3">
-          Manual uploads
-          {uploads.total > 0 && (
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
-              ({uploads.processed === uploads.total
-                ? `${uploads.total} file${uploads.total !== 1 ? "s" : ""}`
-                : `${uploads.processed} / ${uploads.total} processed`})
-            </span>
-          )}
-        </h2>
-
-        <div className="max-w-md">
-          <AudioUpload />
-        </div>
-
-        {uploads.episodes.length > 0 && (
-          <div className="mt-4 space-y-2">
-            {uploads.episodes.map((ep) => (
-              <UploadedEpisodeCard
-                key={ep.id}
-                id={ep.id}
-                title={ep.title}
-                status={ep.status}
-                created_at={ep.created_at}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      <UploadsSection
+        uploads={uploads.episodes}
+        processed={uploads.processed}
+        total={uploads.total}
+      />
     </div>
   );
 }
