@@ -1,4 +1,4 @@
-"""Unit tests for app.worker — DB-backed job worker."""
+"""Unit tests for app.worker and app.task_registry."""
 import signal
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -13,105 +13,104 @@ class TestHandleSignal:
         w._shutdown = False
         w._handle_signal(signal.SIGTERM, None)
         assert w._shutdown is True
-        w._shutdown = False  # reset
+        w._shutdown = False
 
 
-class TestWorkerRegistry:
+class TestTaskRegistry:
     def test_resolves_known_module(self):
-        import app.worker as w
+        from app.task_registry import _resolve
         from app.tasks.chunk import chunk_episode
 
-        assert w._resolve_handler("app.tasks.chunk:chunk_episode") is chunk_episode
+        assert _resolve("app.tasks.chunk:chunk_episode") is chunk_episode
 
     def test_raises_on_bad_path(self):
-        import app.worker as w
+        from app.task_registry import _resolve
 
         with pytest.raises(ModuleNotFoundError):
-            w._resolve_handler("nonexistent.module:func")
+            _resolve("nonexistent.module:func")
 
-    def test_worker_registries_are_callable(self):
-        import app.worker as w
+    def test_task_handlers_are_callable(self):
+        from app.task_registry import TASK_HANDLERS
 
-        for name, handler in w.TASK_HANDLERS.items():
+        for name, handler in TASK_HANDLERS.items():
             assert callable(handler), f"task handler for {name} is not callable"
 
-        for name, handler, _ in w.PERIODIC_TASKS:
-            assert callable(handler), f"periodic handler for {name} is not callable"
+    def test_periodic_tasks_are_runnable(self):
+        from app.task_registry import PERIODIC_TASKS
 
-    def test_validate_worker_wiring_raises_for_non_callable_task(self):
-        import app.worker as w
+        for task in PERIODIC_TASKS:
+            assert callable(task.run), f"periodic task {task.name} is not runnable"
 
-        with patch.dict(w.TASK_HANDLERS, {"chunk": object()}):
+    def test_validate_wiring_raises_for_broken_import(self):
+        from app.task_registry import validate_wiring
+
+        with patch("app.task_registry._resolve") as mock_resolve:
+            def side_effect(path: str):
+                if path == "app.tasks.chunk:chunk_episode":
+                    raise ModuleNotFoundError("broken import")
+                return MagicMock()
+
+            mock_resolve.side_effect = side_effect
+
             with pytest.raises(RuntimeError, match="Invalid worker registry wiring"):
-                w._validate_worker_wiring()
-
-    def test_validate_worker_wiring_raises_for_non_callable_periodic(self):
-        import app.worker as w
-
-        with patch.object(w, "PERIODIC_TASKS", [("poll_all_feeds", object(), None)]):
-            with pytest.raises(RuntimeError, match="Invalid worker registry wiring"):
-                w._validate_worker_wiring()
-
-    @patch("app.worker._resolve_handler")
-    def test_validate_worker_wiring_raises_for_broken_import_target(self, mock_resolve):
-        import app.worker as w
-
-        def side_effect(path: str):
-            if path == "app.tasks.chunk:chunk_episode":
-                raise ModuleNotFoundError("broken import")
-            return MagicMock()
-
-        mock_resolve.side_effect = side_effect
-
-        with pytest.raises(RuntimeError, match="Invalid worker registry wiring"):
-            w._validate_worker_wiring()
+                validate_wiring()
 
 
 class TestRunPeriodicTasks:
-    @patch("app.worker.settings")
+    @patch("app.task_registry.settings")
     def test_runs_task_when_due(self, mock_settings):
         import app.worker as w
+        from app.task_registry import PeriodicTask
 
         mock_settings.feed_poll_interval_hours = 1
-        mock_handler = MagicMock()
-        with patch.object(w, "PERIODIC_TASKS", [("poll_all_feeds", mock_handler, None)]):
+        mock_run = MagicMock()
+        task = PeriodicTask("poll_all_feeds", "app.tasks.ingest:poll_all_feeds", None)
+        task.run = mock_run
+
+        with patch.object(w, "PERIODIC_TASKS", [task]):
             last_run = {}
             now = datetime.now(timezone.utc)
             w._run_periodic_tasks(last_run, now)
 
-        mock_handler.assert_called_once()
+        mock_run.assert_called_once()
         assert "poll_all_feeds" in last_run
 
-    @patch("app.worker.settings")
+    @patch("app.task_registry.settings")
     def test_skips_task_when_not_due(self, mock_settings):
         import app.worker as w
+        from app.task_registry import PeriodicTask
 
         mock_settings.feed_poll_interval_hours = 1
-        mock_handler = MagicMock()
-        with patch.object(w, "PERIODIC_TASKS", [("poll_all_feeds", mock_handler, None)]):
+        mock_run = MagicMock()
+        task = PeriodicTask("poll_all_feeds", "app.tasks.ingest:poll_all_feeds", None)
+        task.run = mock_run
+
+        with patch.object(w, "PERIODIC_TASKS", [task]):
             now = datetime.now(timezone.utc)
             last_run = {"poll_all_feeds": now - timedelta(minutes=30)}
             w._run_periodic_tasks(last_run, now)
 
-        mock_handler.assert_not_called()
+        mock_run.assert_not_called()
 
-    @patch("app.worker.settings")
+    @patch("app.task_registry.settings")
     def test_failure_still_updates_last_run(self, mock_settings):
         import app.worker as w
+        from app.task_registry import PeriodicTask
 
         mock_settings.feed_poll_interval_hours = 1
-        crashing_handler = MagicMock(side_effect=RuntimeError("boom"))
-        with patch.object(w, "PERIODIC_TASKS", [("poll_all_feeds", crashing_handler, None)]):
+        task = PeriodicTask("poll_all_feeds", "app.tasks.ingest:poll_all_feeds", None)
+        task.run = MagicMock(side_effect=RuntimeError("boom"))
+
+        with patch.object(w, "PERIODIC_TASKS", [task]):
             last_run = {}
             now = datetime.now(timezone.utc)
             w._run_periodic_tasks(last_run, now)
 
-        # Should still mark as run to avoid immediate retry
         assert "poll_all_feeds" in last_run
 
 
 class TestMainLoop:
-    @patch("app.worker._validate_worker_wiring")
+    @patch("app.worker.validate_wiring")
     @patch("app.worker.time")
     @patch("app.worker._run_periodic_tasks")
     @patch("app.worker.job_queue")
