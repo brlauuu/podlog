@@ -211,12 +211,6 @@ apps/pipeline/
     unit/
       test_inference.py     ← NEW: unit tests for extraction and classification logic
     fixtures/
-      sample_descriptions/  ← NEW: fixture text files for unit tests
-        solo_host.txt
-        host_guest.txt
-        multi_guest.txt
-        no_names.txt
-        feed_title_host.txt
 ```
 
 **`pyproject.toml` additions:**
