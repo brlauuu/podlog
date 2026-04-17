@@ -45,6 +45,9 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# Oh-my-codex
+.omx/*
+
 # Test results
 apps/web/test-results/
 
