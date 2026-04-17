@@ -1,6 +1,13 @@
 import pool from "@/lib/db";
 import { PIPELINE_API } from "@/lib/pipeline";
 import { buildFeedFilter } from "@/lib/search/feedFilter";
+import {
+  appendFilterSql,
+  buildLikePattern,
+  buildMetadataFilters,
+  buildSegmentFilters,
+  buildSpeakerTurnFilters,
+} from "@/lib/search/filters";
 import { groupRowsByFeed } from "@/lib/search/grouping";
 import { parseSearchQuery } from "@/lib/search/queryParser";
 import { SPEAKER_TURNS_CTE } from "@/lib/search/speakerTurns";
@@ -26,10 +33,6 @@ export type {
   SearchResult,
 } from "@/lib/search/types";
 
-/**
- * Get embedding for a search query from the pipeline's embed API.
- * Returns null if embedding service is unavailable (graceful degradation to FTS-only).
- */
 async function getQueryEmbedding(text: string): Promise<number[] | null> {
   try {
     const resp = await fetch(`${PIPELINE_API}/api/embed`, {
@@ -43,11 +46,6 @@ async function getQueryEmbedding(text: string): Promise<number[] | null> {
   } catch {
     return null;
   }
-}
-
-function buildLikePattern(value: string | null): string | null {
-  if (!value) return null;
-  return `%${value}%`;
 }
 
 function buildCoverage(skipCount: boolean): Promise<{ rows: Array<{ processed: number; total: number }> } | null> {
@@ -85,15 +83,13 @@ function buildMetadataSnippet(
   return row.episode_title ?? "Episode match";
 }
 
-/**
- * Hybrid search: FTS + vector similarity with Reciprocal Rank Fusion.
- *
- * Runs keyword search (websearch_to_tsquery on speaker turns) and semantic
- * search (pgvector cosine similarity on segments) in parallel. Results are
- * merged using RRF so keyword-exact matches rank high while semantically
- * similar content is also surfaced. Falls back to FTS-only if embeddings
- * are unavailable.
- */
+interface FilterOpts {
+  speakerLabel: string | null;
+  speakerLike: string | null;
+  titleFilter: string | null;
+  descriptionFilter: string | null;
+}
+
 export async function searchSegments(
   query: string,
   feedIds: string[] | null,
@@ -105,145 +101,120 @@ export async function searchSegments(
 ): Promise<SearchPage> {
   const parsed = parseSearchQuery(query);
   const speakerLike = buildLikePattern(parsed.speakerFilter);
+  const filterOpts: FilterOpts = {
+    speakerLabel,
+    speakerLike,
+    titleFilter: parsed.titleFilter,
+    descriptionFilter: parsed.descriptionFilter,
+  };
 
   if (parsed.mode === "metadata_only") {
-    const offset = (page - 1) * pageSize;
-    const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 1);
-    const whereClauses: string[] = ["e.status = 'done'", feedFilter.clause];
-    const params: unknown[] = [...feedFilter.params];
-    let idx = feedFilter.nextIdx;
-
-    if (parsed.titleFilter) {
-      whereClauses.push(`COALESCE(e.title, '') ILIKE $${idx}`);
-      params.push(buildLikePattern(parsed.titleFilter));
-      idx++;
-    }
-    if (parsed.descriptionFilter) {
-      whereClauses.push(`COALESCE(e.description, '') ILIKE $${idx}`);
-      params.push(buildLikePattern(parsed.descriptionFilter));
-      idx++;
-    }
-    if (speakerLike) {
-      whereClauses.push(
-        `EXISTS (
-          SELECT 1
-          FROM speaker_names sn
-          WHERE sn.episode_id = e.id
-            AND (COALESCE(sn.display_name, sn.speaker_label) ILIKE $${idx} OR sn.speaker_label ILIKE $${idx})
-        )`
-      );
-      params.push(speakerLike);
-      idx++;
-    }
-    if (speakerLabel) {
-      whereClauses.push(
-        `EXISTS (
-          SELECT 1
-          FROM speaker_names sn
-          WHERE sn.episode_id = e.id
-            AND sn.confirmed_by_user = true
-            AND sn.display_name = $${idx}
-        )`
-      );
-      params.push(speakerLabel);
-      idx++;
-    }
-
-    const whereSql = whereClauses.join("\n      AND ");
-    const rowsPromise = pool.query(
-      `SELECT
-        ROW_NUMBER() OVER (ORDER BY COALESCE(e.published_at, e.created_at) DESC, e.id DESC)::int AS id,
-        0::double precision AS start_time,
-        0::double precision AS end_time,
-        NULL::text AS speaker_label,
-        NULL::text AS speaker_display,
-        e.id AS episode_id,
-        e.title AS episode_title,
-        e.description AS episode_description,
-        e.audio_url,
-        e.audio_local_path,
-        e.episode_url,
-        e.has_diarization,
-        e.diarization_error,
-        COALESCE(f.title, 'Manual episode') AS feed_title,
-        COALESCE(f.mode, 'full') AS feed_mode,
-        f.id AS feed_id
-      FROM episodes e
-      LEFT JOIN feeds f ON e.feed_id = f.id
-      WHERE ${whereSql}
-      ORDER BY COALESCE(e.published_at, e.created_at) DESC, e.id DESC
-      LIMIT $${idx} OFFSET $${idx + 1}`,
-      [...params, pageSize, offset]
-    );
-
-    const countPromise = skipCount
-      ? Promise.resolve(null)
-      : pool.query(
-          `SELECT COUNT(*)::int AS total
-          FROM episodes e
-          LEFT JOIN feeds f ON e.feed_id = f.id
-          WHERE ${whereSql}`,
-          params
-        );
-
-    const [rowsResult, countResult, coverageResult] = await Promise.all([
-      rowsPromise,
-      countPromise,
-      buildCoverage(skipCount),
-    ]);
-
-    const results: SearchResult[] = rowsResult.rows.map((row) => ({
-      id: row.id,
-      startTime: 0,
-      endTime: 0,
-      speakerLabel: null,
-      speakerDisplay: null,
-      snippet: buildMetadataSnippet(row, parsed),
-      rank: 1,
-      episodeId: row.episode_id,
-      episodeTitle: row.episode_title,
-      audioUrl: row.audio_url,
-      audioLocalPath: row.audio_local_path,
-      episodeUrl: row.episode_url,
-      hasDiarization: row.has_diarization,
-      diarizationError: row.diarization_error,
-      feedTitle: row.feed_title,
-      feedMode: row.feed_mode,
-      feedId: row.feed_id ?? "__manual__",
-    }));
-
-    const total = countResult ? parseInt(String(countResult.rows[0].total), 10) : -1;
-    return { results, total, page, pageSize, coverage: toCoverage(coverageResult) };
+    return searchSegmentsMetadata(filterOpts, feedIds, includeManualUploads, page, pageSize, skipCount, parsed);
   }
 
   const baseQuery = parsed.freeText || query.trim();
+  return searchSegmentsHybrid(baseQuery, filterOpts, feedIds, includeManualUploads, page, pageSize, skipCount);
+}
+
+async function searchSegmentsMetadata(
+  filterOpts: FilterOpts,
+  feedIds: string[] | null,
+  includeManualUploads: boolean,
+  page: number,
+  pageSize: number,
+  skipCount: boolean,
+  parsed: ReturnType<typeof parseSearchQuery>,
+): Promise<SearchPage> {
+  const offset = (page - 1) * pageSize;
+  const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 1);
+  const metaFilters = buildMetadataFilters(filterOpts, feedFilter.nextIdx);
+
+  const whereClauses = ["e.status = 'done'", feedFilter.clause, ...metaFilters.clauses];
+  const params = [...feedFilter.params, ...metaFilters.params];
+  const idx = metaFilters.nextIdx;
+  const whereSql = whereClauses.join("\n      AND ");
+
+  const rowsPromise = pool.query(
+    `SELECT
+      ROW_NUMBER() OVER (ORDER BY COALESCE(e.published_at, e.created_at) DESC, e.id DESC)::int AS id,
+      0::double precision AS start_time,
+      0::double precision AS end_time,
+      NULL::text AS speaker_label,
+      NULL::text AS speaker_display,
+      e.id AS episode_id,
+      e.title AS episode_title,
+      e.description AS episode_description,
+      e.audio_url,
+      e.audio_local_path,
+      e.episode_url,
+      e.has_diarization,
+      e.diarization_error,
+      COALESCE(f.title, 'Manual episode') AS feed_title,
+      COALESCE(f.mode, 'full') AS feed_mode,
+      f.id AS feed_id
+    FROM episodes e
+    LEFT JOIN feeds f ON e.feed_id = f.id
+    WHERE ${whereSql}
+    ORDER BY COALESCE(e.published_at, e.created_at) DESC, e.id DESC
+    LIMIT $${idx} OFFSET $${idx + 1}`,
+    [...params, pageSize, offset]
+  );
+
+  const countPromise = skipCount
+    ? Promise.resolve(null)
+    : pool.query(
+        `SELECT COUNT(*)::int AS total
+        FROM episodes e
+        LEFT JOIN feeds f ON e.feed_id = f.id
+        WHERE ${whereSql}`,
+        params
+      );
+
+  const [rowsResult, countResult, coverageResult] = await Promise.all([
+    rowsPromise,
+    countPromise,
+    buildCoverage(skipCount),
+  ]);
+
+  const results: SearchResult[] = rowsResult.rows.map((row) => ({
+    id: row.id,
+    startTime: 0,
+    endTime: 0,
+    speakerLabel: null,
+    speakerDisplay: null,
+    snippet: buildMetadataSnippet(row, parsed),
+    rank: 1,
+    episodeId: row.episode_id,
+    episodeTitle: row.episode_title,
+    audioUrl: row.audio_url,
+    audioLocalPath: row.audio_local_path,
+    episodeUrl: row.episode_url,
+    hasDiarization: row.has_diarization,
+    diarizationError: row.diarization_error,
+    feedTitle: row.feed_title,
+    feedMode: row.feed_mode,
+    feedId: row.feed_id ?? "__manual__",
+  }));
+
+  const total = countResult ? parseInt(String(countResult.rows[0].total), 10) : -1;
+  return { results, total, page, pageSize, coverage: toCoverage(coverageResult) };
+}
+
+async function searchSegmentsHybrid(
+  baseQuery: string,
+  filterOpts: FilterOpts,
+  feedIds: string[] | null,
+  includeManualUploads: boolean,
+  page: number,
+  pageSize: number,
+  skipCount: boolean,
+): Promise<SearchPage> {
   const FETCH_LIMIT = 100;
 
-  const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
-  const ftsExtraClauses: string[] = [];
-  const ftsParams: unknown[] = [baseQuery, ...feedFilter.params];
-  let ftsIdx = feedFilter.nextIdx;
-
-  if (speakerLabel) {
-    ftsExtraClauses.push(`sn.confirmed_by_user = true AND sn.display_name = $${ftsIdx}`);
-    ftsParams.push(speakerLabel);
-    ftsIdx++;
-  }
-  if (speakerLike) {
-    ftsExtraClauses.push(`(COALESCE(sn.display_name, t.speaker_label) ILIKE $${ftsIdx} OR t.speaker_label ILIKE $${ftsIdx})`);
-    ftsParams.push(speakerLike);
-    ftsIdx++;
-  }
-  if (parsed.titleFilter) {
-    ftsExtraClauses.push(`COALESCE(e.title, '') ILIKE $${ftsIdx}`);
-    ftsParams.push(buildLikePattern(parsed.titleFilter));
-    ftsIdx++;
-  }
-  if (parsed.descriptionFilter) {
-    ftsExtraClauses.push(`COALESCE(e.description, '') ILIKE $${ftsIdx}`);
-    ftsParams.push(buildLikePattern(parsed.descriptionFilter));
-    ftsIdx++;
-  }
+  // FTS query
+  const ftsFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
+  const ftsFilters = buildSpeakerTurnFilters(filterOpts, ftsFeedFilter.nextIdx);
+  const ftsParams = [baseQuery, ...ftsFeedFilter.params, ...ftsFilters.params];
 
   const ftsPromise = pool.query(
     `WITH ${SPEAKER_TURNS_CTE}
@@ -272,39 +243,18 @@ export async function searchSegments(
       websearch_to_tsquery('english', $1) AS query
     WHERE to_tsvector('english', t.full_text) @@ query
       AND e.status = 'done'
-      AND ${feedFilter.clause}
-      ${ftsExtraClauses.length ? `AND ${ftsExtraClauses.join(" AND ")}` : ""}
+      AND ${ftsFeedFilter.clause}
+      ${appendFilterSql(ftsFilters.clauses)}
     ORDER BY rank DESC
-    LIMIT $${ftsIdx}`,
+    LIMIT $${ftsFilters.nextIdx}`,
     [...ftsParams, FETCH_LIMIT]
   );
 
+  // Vector query
   const embedding = await getQueryEmbedding(baseQuery);
   const vecFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
-  const vecParams: unknown[] = [`[${embedding?.join(",")}]`, ...vecFeedFilter.params];
-  const vecExtraClauses: string[] = [];
-  let vecIdx = vecFeedFilter.nextIdx;
-
-  if (speakerLabel) {
-    vecExtraClauses.push(`sn.confirmed_by_user = true AND sn.display_name = $${vecIdx}`);
-    vecParams.push(speakerLabel);
-    vecIdx++;
-  }
-  if (speakerLike) {
-    vecExtraClauses.push(`(COALESCE(sn.display_name, s.speaker_label) ILIKE $${vecIdx} OR s.speaker_label ILIKE $${vecIdx})`);
-    vecParams.push(speakerLike);
-    vecIdx++;
-  }
-  if (parsed.titleFilter) {
-    vecExtraClauses.push(`COALESCE(e.title, '') ILIKE $${vecIdx}`);
-    vecParams.push(buildLikePattern(parsed.titleFilter));
-    vecIdx++;
-  }
-  if (parsed.descriptionFilter) {
-    vecExtraClauses.push(`COALESCE(e.description, '') ILIKE $${vecIdx}`);
-    vecParams.push(buildLikePattern(parsed.descriptionFilter));
-    vecIdx++;
-  }
+  const vecFilters = buildSegmentFilters(filterOpts, vecFeedFilter.nextIdx);
+  const vecParams = [`[${embedding?.join(",")}]`, ...vecFeedFilter.params, ...vecFilters.params];
 
   const vecPromise = embedding
     ? pool.query(
@@ -333,38 +283,17 @@ export async function searchSegments(
         WHERE s.embedding IS NOT NULL
           AND e.status = 'done'
           AND ${vecFeedFilter.clause}
-          ${vecExtraClauses.length ? `AND ${vecExtraClauses.join(" AND ")}` : ""}
+          ${appendFilterSql(vecFilters.clauses)}
         ORDER BY s.embedding <=> $1::vector
-        LIMIT $${vecIdx}`,
+        LIMIT $${vecFilters.nextIdx}`,
         [...vecParams, FETCH_LIMIT]
       )
     : Promise.resolve({ rows: [] });
 
+  // Count query
   const countFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
-  const countParams: unknown[] = [baseQuery, ...countFeedFilter.params];
-  const countExtraClauses: string[] = [];
-  let countIdx = countFeedFilter.nextIdx;
-
-  if (speakerLabel) {
-    countExtraClauses.push(`sn.confirmed_by_user = true AND sn.display_name = $${countIdx}`);
-    countParams.push(speakerLabel);
-    countIdx++;
-  }
-  if (speakerLike) {
-    countExtraClauses.push(`(COALESCE(sn.display_name, t.speaker_label) ILIKE $${countIdx} OR t.speaker_label ILIKE $${countIdx})`);
-    countParams.push(speakerLike);
-    countIdx++;
-  }
-  if (parsed.titleFilter) {
-    countExtraClauses.push(`COALESCE(e.title, '') ILIKE $${countIdx}`);
-    countParams.push(buildLikePattern(parsed.titleFilter));
-    countIdx++;
-  }
-  if (parsed.descriptionFilter) {
-    countExtraClauses.push(`COALESCE(e.description, '') ILIKE $${countIdx}`);
-    countParams.push(buildLikePattern(parsed.descriptionFilter));
-    countIdx++;
-  }
+  const countFilters = buildSpeakerTurnFilters(filterOpts, countFeedFilter.nextIdx);
+  const countParams = [baseQuery, ...countFeedFilter.params, ...countFilters.params];
 
   const countPromise = skipCount
     ? Promise.resolve(null)
@@ -379,7 +308,7 @@ export async function searchSegments(
         WHERE to_tsvector('english', t.full_text) @@ query
           AND e.status = 'done'
           AND ${countFeedFilter.clause}
-          ${countExtraClauses.length ? `AND ${countExtraClauses.join(" AND ")}` : ""}`,
+          ${appendFilterSql(countFilters.clauses)}`,
         countParams
       );
 
@@ -402,10 +331,6 @@ export async function searchSegments(
   return { results: merged.results, total: merged.total, page, pageSize, coverage: toCoverage(coverageResult) };
 }
 
-/**
- * Grouped search — returns results grouped by feed -> episode with mention counts.
- * Counts are based on deduplicated speaker turns, not raw segments.
- */
 export async function searchGrouped(
   query: string,
   feedIds: string[] | null,
@@ -417,127 +342,100 @@ export async function searchGrouped(
 ): Promise<GroupedSearchResult> {
   const parsed = parseSearchQuery(query);
   const speakerLike = buildLikePattern(parsed.speakerFilter);
+  const filterOpts: FilterOpts = {
+    speakerLabel,
+    speakerLike,
+    titleFilter: parsed.titleFilter,
+    descriptionFilter: parsed.descriptionFilter,
+  };
   const offset = (page - 1) * pageSize;
 
   if (parsed.mode === "metadata_only") {
-    const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 1);
-    const whereClauses: string[] = ["e.status = 'done'", feedFilter.clause];
-    const params: unknown[] = [...feedFilter.params];
-    let idx = feedFilter.nextIdx;
-
-    if (parsed.titleFilter) {
-      whereClauses.push(`COALESCE(e.title, '') ILIKE $${idx}`);
-      params.push(buildLikePattern(parsed.titleFilter));
-      idx++;
-    }
-    if (parsed.descriptionFilter) {
-      whereClauses.push(`COALESCE(e.description, '') ILIKE $${idx}`);
-      params.push(buildLikePattern(parsed.descriptionFilter));
-      idx++;
-    }
-    if (speakerLike) {
-      whereClauses.push(
-        `EXISTS (
-          SELECT 1
-          FROM speaker_names sn
-          WHERE sn.episode_id = e.id
-            AND (COALESCE(sn.display_name, sn.speaker_label) ILIKE $${idx} OR sn.speaker_label ILIKE $${idx})
-        )`
-      );
-      params.push(speakerLike);
-      idx++;
-    }
-    if (speakerLabel) {
-      whereClauses.push(
-        `EXISTS (
-          SELECT 1
-          FROM speaker_names sn
-          WHERE sn.episode_id = e.id
-            AND sn.confirmed_by_user = true
-            AND sn.display_name = $${idx}
-        )`
-      );
-      params.push(speakerLabel);
-      idx++;
-    }
-
-    const whereSql = whereClauses.join("\n      AND ");
-    const rowsPromise = pool.query(
-      `SELECT
-        f.id AS feed_id,
-        COALESCE(f.title, 'Manual episode') AS feed_title,
-        COALESCE(f.mode, 'full') AS feed_mode,
-        e.id AS episode_id,
-        e.title AS episode_title,
-        e.audio_url,
-        e.audio_local_path,
-        e.episode_url,
-        1::int AS mention_count,
-        1::double precision AS best_rank
-      FROM episodes e
-      LEFT JOIN feeds f ON e.feed_id = f.id
-      WHERE ${whereSql}
-      ORDER BY COALESCE(e.published_at, e.created_at) DESC, e.id DESC
-      LIMIT $${idx} OFFSET $${idx + 1}`,
-      [...params, pageSize, offset]
-    );
-
-    const countPromise = skipCount
-      ? Promise.resolve(null)
-      : pool.query(
-          `SELECT
-            COUNT(*)::int AS total_episodes,
-            COUNT(DISTINCT f.id)::int AS total_feeds,
-            COUNT(*)::int AS total_mentions,
-            BOOL_OR(e.feed_id IS NULL)::bool AS has_manual
-          FROM episodes e
-          LEFT JOIN feeds f ON e.feed_id = f.id
-          WHERE ${whereSql}`,
-          params
-        );
-
-    const [rowsResult, countResult, coverageResult] = await Promise.all([
-      rowsPromise,
-      countPromise,
-      buildCoverage(skipCount),
-    ]);
-
-    const counts = countResult?.rows[0];
-    return {
-      feeds: groupRowsByFeed(rowsResult.rows),
-      totalFeeds: (counts?.total_feeds ?? -1) + (counts?.has_manual ? 1 : 0),
-      totalEpisodes: counts?.total_episodes ?? -1,
-      totalMentions: counts?.total_mentions ?? -1,
-      coverage: toCoverage(coverageResult),
-    };
+    return searchGroupedMetadata(filterOpts, feedIds, includeManualUploads, pageSize, offset, skipCount);
   }
 
   const baseQuery = parsed.freeText || query.trim();
-  const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
-  const rowsParams: unknown[] = [baseQuery, ...feedFilter.params];
-  const rowsExtraClauses: string[] = [];
-  let rowsIdx = feedFilter.nextIdx;
+  return searchGroupedFts(baseQuery, filterOpts, feedIds, includeManualUploads, pageSize, offset, skipCount);
+}
 
-  if (speakerLabel) {
-    rowsExtraClauses.push(`sn.confirmed_by_user = true AND sn.display_name = $${rowsIdx}`);
-    rowsParams.push(speakerLabel);
-    rowsIdx++;
-  }
-  if (speakerLike) {
-    rowsExtraClauses.push(`(COALESCE(sn.display_name, t.speaker_label) ILIKE $${rowsIdx} OR t.speaker_label ILIKE $${rowsIdx})`);
-    rowsParams.push(speakerLike);
-    rowsIdx++;
-  }
-  if (parsed.titleFilter) {
-    rowsExtraClauses.push(`COALESCE(e.title, '') ILIKE $${rowsIdx}`);
-    rowsParams.push(buildLikePattern(parsed.titleFilter));
-    rowsIdx++;
-  }
-  if (parsed.descriptionFilter) {
-    rowsExtraClauses.push(`COALESCE(e.description, '') ILIKE $${rowsIdx}`);
-    rowsParams.push(buildLikePattern(parsed.descriptionFilter));
-    rowsIdx++;
-  }
+async function searchGroupedMetadata(
+  filterOpts: FilterOpts,
+  feedIds: string[] | null,
+  includeManualUploads: boolean,
+  pageSize: number,
+  offset: number,
+  skipCount: boolean,
+): Promise<GroupedSearchResult> {
+  const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 1);
+  const metaFilters = buildMetadataFilters(filterOpts, feedFilter.nextIdx);
+
+  const whereClauses = ["e.status = 'done'", feedFilter.clause, ...metaFilters.clauses];
+  const params = [...feedFilter.params, ...metaFilters.params];
+  const idx = metaFilters.nextIdx;
+  const whereSql = whereClauses.join("\n      AND ");
+
+  const rowsPromise = pool.query(
+    `SELECT
+      f.id AS feed_id,
+      COALESCE(f.title, 'Manual episode') AS feed_title,
+      COALESCE(f.mode, 'full') AS feed_mode,
+      e.id AS episode_id,
+      e.title AS episode_title,
+      e.audio_url,
+      e.audio_local_path,
+      e.episode_url,
+      1::int AS mention_count,
+      1::double precision AS best_rank
+    FROM episodes e
+    LEFT JOIN feeds f ON e.feed_id = f.id
+    WHERE ${whereSql}
+    ORDER BY COALESCE(e.published_at, e.created_at) DESC, e.id DESC
+    LIMIT $${idx} OFFSET $${idx + 1}`,
+    [...params, pageSize, offset]
+  );
+
+  const countPromise = skipCount
+    ? Promise.resolve(null)
+    : pool.query(
+        `SELECT
+          COUNT(*)::int AS total_episodes,
+          COUNT(DISTINCT f.id)::int AS total_feeds,
+          COUNT(*)::int AS total_mentions,
+          BOOL_OR(e.feed_id IS NULL)::bool AS has_manual
+        FROM episodes e
+        LEFT JOIN feeds f ON e.feed_id = f.id
+        WHERE ${whereSql}`,
+        params
+      );
+
+  const [rowsResult, countResult, coverageResult] = await Promise.all([
+    rowsPromise,
+    countPromise,
+    buildCoverage(skipCount),
+  ]);
+
+  const counts = countResult?.rows[0];
+  return {
+    feeds: groupRowsByFeed(rowsResult.rows),
+    totalFeeds: (counts?.total_feeds ?? -1) + (counts?.has_manual ? 1 : 0),
+    totalEpisodes: counts?.total_episodes ?? -1,
+    totalMentions: counts?.total_mentions ?? -1,
+    coverage: toCoverage(coverageResult),
+  };
+}
+
+async function searchGroupedFts(
+  baseQuery: string,
+  filterOpts: FilterOpts,
+  feedIds: string[] | null,
+  includeManualUploads: boolean,
+  pageSize: number,
+  offset: number,
+  skipCount: boolean,
+): Promise<GroupedSearchResult> {
+  const feedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
+  const rowsFilters = buildSpeakerTurnFilters(filterOpts, feedFilter.nextIdx);
+  const rowsParams = [baseQuery, ...feedFilter.params, ...rowsFilters.params];
 
   const rowsPromise = pool.query(
     `WITH ${SPEAKER_TURNS_CTE}
@@ -560,38 +458,16 @@ export async function searchGrouped(
     WHERE to_tsvector('english', t.full_text) @@ query
       AND e.status = 'done'
       AND ${feedFilter.clause}
-      ${rowsExtraClauses.length ? `AND ${rowsExtraClauses.join(" AND ")}` : ""}
+      ${appendFilterSql(rowsFilters.clauses)}
     GROUP BY f.id, f.title, f.mode, e.id, e.title, e.audio_url, e.audio_local_path, e.episode_url
     ORDER BY best_rank DESC, mention_count DESC
-    LIMIT $${rowsIdx} OFFSET $${rowsIdx + 1}`,
+    LIMIT $${rowsFilters.nextIdx} OFFSET $${rowsFilters.nextIdx + 1}`,
     [...rowsParams, pageSize, offset]
   );
 
-  const grpCountFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
-  const countParams: unknown[] = [baseQuery, ...grpCountFilter.params];
-  const countExtraClauses: string[] = [];
-  let countIdx = grpCountFilter.nextIdx;
-
-  if (speakerLabel) {
-    countExtraClauses.push(`sn.confirmed_by_user = true AND sn.display_name = $${countIdx}`);
-    countParams.push(speakerLabel);
-    countIdx++;
-  }
-  if (speakerLike) {
-    countExtraClauses.push(`(COALESCE(sn.display_name, t.speaker_label) ILIKE $${countIdx} OR t.speaker_label ILIKE $${countIdx})`);
-    countParams.push(speakerLike);
-    countIdx++;
-  }
-  if (parsed.titleFilter) {
-    countExtraClauses.push(`COALESCE(e.title, '') ILIKE $${countIdx}`);
-    countParams.push(buildLikePattern(parsed.titleFilter));
-    countIdx++;
-  }
-  if (parsed.descriptionFilter) {
-    countExtraClauses.push(`COALESCE(e.description, '') ILIKE $${countIdx}`);
-    countParams.push(buildLikePattern(parsed.descriptionFilter));
-    countIdx++;
-  }
+  const countFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
+  const countFilters = buildSpeakerTurnFilters(filterOpts, countFeedFilter.nextIdx);
+  const countParams = [baseQuery, ...countFeedFilter.params, ...countFilters.params];
 
   const countPromise = skipCount
     ? Promise.resolve(null)
@@ -609,8 +485,8 @@ export async function searchGrouped(
           websearch_to_tsquery('english', $1) AS query
         WHERE to_tsvector('english', t.full_text) @@ query
           AND e.status = 'done'
-          AND ${grpCountFilter.clause}
-          ${countExtraClauses.length ? `AND ${countExtraClauses.join(" AND ")}` : ""}`,
+          AND ${countFeedFilter.clause}
+          ${appendFilterSql(countFilters.clauses)}`,
         countParams
       );
 
@@ -630,10 +506,6 @@ export async function searchGrouped(
   };
 }
 
-/**
- * Fetch matching speaker turns for one episode with surrounding context.
- * Returns 1-2 turns before and after each match for dialogue context.
- */
 export async function searchMentions(
   query: string,
   episodeId: string
