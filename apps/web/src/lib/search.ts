@@ -90,6 +90,10 @@ interface FilterOpts {
   descriptionFilter: string | null;
 }
 
+/**
+ * Hybrid search: FTS + vector similarity with Reciprocal Rank Fusion.
+ * Falls back to FTS-only if embeddings are unavailable.
+ */
 export async function searchSegments(
   query: string,
   feedIds: string[] | null,
