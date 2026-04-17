@@ -37,8 +37,8 @@ jobs:
           poetry config virtualenvs.create false
           poetry install --with dev --without ml --no-interaction --no-ansi --no-root
 
-      - name: Run all pipeline unit tests
-        run: pytest tests/unit -q
+      - name: Run all pipeline unit tests with coverage
+        run: pytest tests/unit -q --cov=app --cov-fail-under=82
 
   web-unit-full:
     name: Web Unit Full
@@ -61,5 +61,5 @@ jobs:
       - name: Install web dependencies
         run: npm ci
 
-      - name: Run all web unit tests
-        run: npm test -- --runInBand --testPathPattern=tests/unit
+      - name: Run all web unit tests with coverage
+        run: npm test -- --runInBand --coverage --testPathPattern=tests/unit

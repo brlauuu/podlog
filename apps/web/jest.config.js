@@ -11,6 +11,14 @@ const config = createJestConfig({
     "!src/**/__tests__/**",
     "!src/**/__mocks__/**",
   ],
+  coverageThreshold: {
+    global: {
+      statements: 45,
+      branches: 35,
+      functions: 38,
+      lines: 45,
+    },
+  },
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
   },
