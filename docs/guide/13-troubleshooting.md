@@ -86,7 +86,7 @@ See [Notifications](09-notifications.md) for full setup instructions.
 
 ## Container health
 
-**Symptom:** `/api/health` reports `DOWN` for a service, or `make logs` shows repeated restarts.
+**Symptom:** `/api/health` reports `DEGRADED` for a service, or `make logs` shows repeated restarts.
 
 **Diagnosis:**
 

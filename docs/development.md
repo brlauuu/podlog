@@ -24,8 +24,8 @@ podlog/
 │   │   └── tests/                  # Unit, integration, e2e tests
 │   └── web/                        # Next.js 16.2.2 (App Router)
 │       ├── src/app/                # Pages: /, /search, /ask, /podcasts, /episodes/[id], /queue, /feeds, /settings, /docs, /about (/notifications redirects to /settings)
-│       │   └── api/                # Route handlers: search, search/grouped, search/mentions, feeds, queue, audio, ask, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, hardware, wizard, pipeline proxy
-│       ├── src/components/         # React components (Navbar, AudioPlayer, SearchResult, QueueStatus, DocsClient, …)
+│       │   └── api/                # Route handlers: search, search/grouped, search/mentions, feeds, queue, audio, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, hardware, pipeline proxy
+│       ├── src/components/         # React components (Navbar, AudioPlayer, SearchResult, QueueStatus, …)
 │       └── src/lib/                # Utilities (db, search, searchHybrid, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest, citations, …)
 ├── docs/                           # User-facing documentation
 └── prds/                           # Internal design specs and risk register
