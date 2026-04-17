@@ -39,7 +39,6 @@ TASK_HANDLERS: dict[str, Callable[[str], None]] = {
 
 
 class PeriodicTask:
-    __slots__ = ("name", "target", "interval_seconds")
 
     def __init__(self, name: str, target: str, interval_seconds: int | None):
         self.name = name
