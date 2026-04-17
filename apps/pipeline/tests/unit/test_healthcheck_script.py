@@ -5,8 +5,20 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import sys
-# Import scripts/healthcheck.py from repository root
-REPO_ROOT = Path(__file__).resolve().parents[4]
+
+# Import scripts/healthcheck.py from repository root.
+# Walk upward from this file looking for the scripts/ directory,
+# since the depth varies between host and Docker environments.
+_here = Path(__file__).resolve()
+REPO_ROOT = None
+for parent in _here.parents:
+    if (parent / "scripts" / "healthcheck.py").exists():
+        REPO_ROOT = parent
+        break
+
+if REPO_ROOT is None:
+    pytest.skip("Cannot locate repo root with scripts/healthcheck.py", allow_module_level=True)
+
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import healthcheck
 

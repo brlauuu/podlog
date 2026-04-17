@@ -118,7 +118,6 @@ podlog/
 │       │   │   ├── AudioPlayerContext.tsx
 │       │   │   ├── DarkModeToggle.tsx
 │       │   │   ├── QueueStatus.tsx
-│       │   │   ├── SetupWizard.tsx
 │       │   │   ├── SpeakerPanel.tsx
 │       │   │   ├── MergeBar.tsx
 │       │   │   ├── NotificationSettings.tsx

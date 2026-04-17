@@ -19,7 +19,6 @@ jest.mock("next/navigation", () => ({
 
 // Mock child components
 jest.mock("@/components/DarkModeToggle", () => () => <div data-testid="dark-mode-toggle" />);
-jest.mock("@/components/HelpMenu", () => () => <div data-testid="help-menu" />);
 
 import Navbar from "@/components/Navbar";
 
