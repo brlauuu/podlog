@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Single user, local only. Production runs in Docker Compose; development can run services natively (see `docs/development.md`).
+Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Supports local-only operation or remote inference via Fireworks AI. Production runs in Docker Compose; development can run services natively (see `docs/development.md`).
 
 **Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. The repo has an active automated test suite and Alembic migration history. Web UI serves search, queue dashboard, feed management, and an Ask AI feature.
 
@@ -39,15 +39,15 @@ podlog/
 │   │   │   ├── config.py           # pydantic-settings, all env vars
 │   │   │   ├── models.py           # SQLAlchemy ORM (feeds, episodes, segments, speaker_names)
 │   │   │   ├── database.py         # Engine + session factory
-│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications)
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, diarize, chunk, embed, infer, archive, cleanup, prewarm)
 │   │   │   ├── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, notifications, digest, events)
 │   │   │   └── worker.py           # Background job worker
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # unit, integration, e2e
 │   └── web/                        # Next.js 16 (App Router)
-│       ├── src/app/                # Pages: /, /about, /podcasts, /episodes/[id], /queue, /feeds, /ask, /search, /settings, /docs (and /notifications redirects to /settings)
-│       ├── src/app/api/            # API routes: search, search/grouped, search/mentions, feeds, queue, audio, ask, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, pipeline proxy
+│       ├── src/app/                # Pages: /, /about, /podcasts, /podcasts/[id], /episodes/[id], /queue, /feeds, /ask, /search, /search/print, /settings, /docs (and /notifications redirects to /settings)
+│       ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll), queue, audio, ask/coverage, episodes ([id], ingest, upload, retry, speakers, speakers/merge), docs, hardware, notifications (settings, test), pipeline (ask, embed, health, queue/retry)
 │       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, DocsClient, etc.
 │       └── src/lib/                # db.ts, search.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx
 ├── docs/                           # User-facing documentation and guides
@@ -63,7 +63,7 @@ podlog/
 | Task queue | PostgreSQL-backed job queue | Sequential processing (concurrency=1) to avoid OOM |
 | Transcription | WhisperX (CTranslate2 backend), default `large-v3-turbo` | Explicit unload before diarization — mandatory |
 | Diarization | `pyannote/speaker-diarization-3.1` | Requires HF_TOKEN; graceful failure path |
-| LLM inference | Ollama (local) | RAG-based Ask AI feature; model is selected in the Ask UI and sent per request (no `OLLAMA_MODEL` env var) |
+| LLM inference | Ollama (local) or Fireworks AI (remote) | RAG-based Ask AI feature; provider selected via `inference_provider` config; model selected in Ask UI per request |
 | Database | PostgreSQL 15 (pgvector/pgvector:pg15) | FTS via `to_tsvector` + GIN index, vector HNSW index |
 | ORM | SQLAlchemy 2.0 + Alembic | Migrations auto-run on pipeline startup |
 | Web app | Next.js 16 (App Router) | `output: 'standalone'` for Docker |
@@ -113,10 +113,10 @@ Services: web (:3000), pipeline API (:8000), ollama (:11434).
 - Alembic migration history is maintained under `apps/pipeline/alembic/versions/`
 - shadcn/ui component set is installed and used in the web app
 - Docs tab for user documentation
-- RAG-based Ask AI feature via Ollama
+- RAG-based Ask AI feature via Ollama (local) or Fireworks AI (remote)
 - Speaker merge/rename UI
 - Notification settings
 
 **Not yet done:**
-- Some integration and e2e test bodies still stubbed or skipped
 - Full end-to-end pipeline smoke test in CI
+- Test coverage thresholds not yet enforced in CI
