@@ -40,7 +40,11 @@ jobs:
       - name: Run pipeline unit tests (stable subset)
         run: |
           pytest tests/unit/test_api.py \
-                 tests/unit/test_rag.py \
+                 tests/unit/test_rag_helpers.py \
+                 tests/unit/test_rag_endpoint.py \
+                 tests/unit/test_rag_retrieval.py \
+                 tests/unit/test_rag_models.py \
+                 tests/unit/test_rag_streaming.py \
                  tests/unit/test_notification_settings.py \
                  tests/unit/test_embed_service.py -q
 
