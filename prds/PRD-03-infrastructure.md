@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-03 — Infrastructure & DevOps  
-**Version:** 1.4
+**Version:** 1.5
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.5 — Repo tree counts refreshed (12 Alembic migrations, 13 shadcn/ui components). Removed stale references to `api/wizard/` (retired in #361). Test-stack snippet now uses `pgvector/pgvector:pg15` to match the actual compose file. Removed the "web_test disabled" note — `web_test` and `pipeline_test` are both live in `docker-compose.test.yml`. Makefile section extended with `up-remote`, `down-remote`, `logs-remote`, `backfill`, `version`, `env-check`, `deps-outdated`, `test-healthcheck`. CI/CD section replaced with the current three-workflow split (`ci.yml`, `ci-full-unit.yml`, `ci-slow.yml`). Added `Dockerfile.test` to the web repo tree. `.env.example` retry comment corrected to `30s → 60s → 120s`.
 - v1.4 — Added optional Fireworks inference provider configuration (env + DB-backed Settings UI overrides). Updated `.env.example` with inference-provider variables. Updated web navigation from Notifications page to broader Settings page.
 - v1.3 — Major update to match actual implementation: Celery/Redis/Flower/Beat removed; PostgreSQL-backed job queue with worker.py. Redis service and volumes removed from docker-compose. Single Dockerfile replaced by Dockerfile.control and Dockerfile.worker. Repo structure updated with actual files (removed scheduler.py, celery_app.py, SearchBar.tsx, SpeakerLabel.tsx; added worker.py and current component list). Test stack updated (no redis_test). License corrected to O'Saasy. Makefile updated with all current targets. Ollama service added. .env.example updated to match actual vars.
 - v1.2 — Renamed project from PodSearch to Podlog. Database name changed to `podlog`. Added `redis_test` service to `docker-compose.test.yml`. Changed `beat` dependency from `- worker` to `pipeline: service_healthy`. Added `CELERY_CONCURRENCY` env var interpolation in worker command. Added `DISK_HEADROOM_BYTES` to `.env.example`. Repository root directory renamed from `podsearch/` to `podlog/`.
@@ -40,7 +41,7 @@ podlog/
 │   │   ├── poetry.lock
 │   │   ├── alembic/
 │   │   │   ├── env.py
-│   │   │   └── versions/           # 10 migrations
+│   │   │   └── versions/           # 12 migrations
 │   │   ├── app/
 │   │   │   ├── main.py
 │   │   │   ├── config.py
@@ -85,6 +86,7 @@ podlog/
 │   │
 │   └── web/
 │       ├── Dockerfile
+│       ├── Dockerfile.test         # Built by docker-compose.test.yml for the web_test runner
 │       ├── package.json
 │       ├── package-lock.json
 │       ├── next.config.ts
@@ -101,17 +103,21 @@ podlog/
 │       │   │   ├── search/
 │       │   │   ├── settings/
 │       │   │   └── api/
-│       │   │       ├── search/     # grouped + mentions routes
+│       │   │       ├── search/     # search, grouped, mentions, speakers
 │       │   │       ├── feeds/
 │       │   │       ├── queue/
-│       │   │       ├── wizard/
+│       │   │       ├── episodes/
+│       │   │       ├── ask/
+│       │   │       ├── docs/
+│       │   │       ├── hardware/
 │       │   │       ├── notifications/
+│       │   │       ├── pipeline/
 │       │   │       └── audio/
 │       │   │           └── [episodeId]/
 │       │   │               └── [filename]/
 │       │   │                   └── route.ts  # Path-validated audio serving
 │       │   ├── components/
-│       │   │   ├── ui/             # 12 shadcn/ui components
+│       │   │   ├── ui/             # 13 shadcn/ui components
 │       │   │   ├── Navbar.tsx
 │       │   │   ├── SearchResult.tsx
 │       │   │   ├── AudioPlayer.tsx
@@ -277,7 +283,7 @@ services:
 ```yaml
 services:
   db_test:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15   # pgvector required for vector-column tests
     environment:
       POSTGRES_DB: podlog_test
       POSTGRES_USER: postgres
@@ -295,6 +301,25 @@ services:
     volumes:
       - ./apps/pipeline/tests/fixtures:/usr/share/nginx/html:ro
 
+  pipeline_test:
+    build:
+      context: ./apps/pipeline
+      dockerfile: Dockerfile.worker
+      args:
+        INSTALL_DEV: "true"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
+      HF_TOKEN: ${HF_TOKEN:-}
+    depends_on:
+      db_test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   test:
     build:
       context: ./apps/pipeline
@@ -305,6 +330,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
       TEST_DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
+      PIPELINE_API_URL: http://pipeline_test:8000
       MOCK_RSS_URL: http://mock_rss/feed.xml
       HF_TOKEN: ${HF_TOKEN:-}
     depends_on:
@@ -312,9 +338,22 @@ services:
         condition: service_healthy
       mock_rss:
         condition: service_started
-```
+      pipeline_test:
+        condition: service_healthy
 
-**Note:** `web_test` service is currently disabled pending a pipeline_test service in the test stack (see issue #104).
+  web_test:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.test
+    environment:
+      DATABASE_URL: postgresql://postgres:test@db_test:5432/podlog_test
+      PIPELINE_API_URL: http://pipeline_test:8000
+    depends_on:
+      db_test:
+        condition: service_healthy
+      pipeline_test:
+        condition: service_healthy
+```
 
 ---
 
@@ -338,7 +377,7 @@ FEED_POLL_INTERVAL_HOURS=24
 
 # ── Retry configuration ───────────────────────────────────
 RETRY_MAX=3                        # Max retries for transient failures
-RETRY_BACKOFF_BASE=30              # Base backoff in seconds (30s → 2m → 10m)
+RETRY_BACKOFF_BASE=30              # Base backoff in seconds; delays = base * 2^(attempt-1) → 30s → 60s → 120s
 
 # ── Disk space guard (GAP-06) ─────────────────────────────
 DISK_HEADROOM_BYTES=2147483648     # 2 GB minimum free space before download starts
@@ -362,34 +401,50 @@ OLLAMA_URL=http://ollama:11434     # Ollama API endpoint for LLM inference
 ## 5. Makefile
 
 ```makefile
-.PHONY: up down build logs test test-unit test-integration test-e2e migrate \
+.PHONY: up up-remote down down-remote build logs logs-remote test test-unit \
+        test-healthcheck test-e2e test-integration migrate \
         shell-db shell-pipeline shell-web web ollama-pull \
-        health-check health-install health-uninstall help
+        health-check health-install health-uninstall \
+        backfill version env-check deps-outdated help
 
 up:               ## Start full stack
 	docker compose up -d
 
+up-remote:        ## Start remote-inference profile (Fireworks providers, no Ollama)
+	docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d
+
 down:             ## Stop all services
 	docker compose down
 
-build:            ## Rebuild all images
-	docker compose build
+down-remote:      ## Stop remote-inference profile stack
+	docker compose -f docker-compose.yml -f docker-compose.remote.yml down
+
+build:            ## Rebuild all images (reads version from VERSION file)
+	docker compose build --build-arg APP_VERSION=$$(cat VERSION)
 
 logs:             ## Follow logs for all services
 	docker compose logs -f
 
+logs-remote:      ## Follow logs for remote-inference profile stack
+	docker compose -f docker-compose.yml -f docker-compose.remote.yml logs -f
+
 migrate:          ## Run database migrations manually (also runs on pipeline startup)
 	docker compose exec pipeline alembic upgrade head
 
-test:             ## Run all tests (unit + e2e)
+test:             ## Run all tests (unit + e2e + host healthcheck)
 	docker compose -f docker-compose.test.yml run --rm test
 	docker compose -f docker-compose.test.yml run --rm web_test
+	python3 -m pytest apps/pipeline/tests/unit/test_healthcheck_script.py -v
 
 test-unit:        ## Run unit tests only (fast, no Docker required for ML models)
 	docker compose -f docker-compose.test.yml run --rm test pytest tests/unit/ -v
+	python3 -m pytest apps/pipeline/tests/unit/test_healthcheck_script.py -v
+
+test-healthcheck: ## Run host healthcheck script tests
+	python3 -m pytest apps/pipeline/tests/unit/test_healthcheck_script.py -v
 
 test-integration: ## Run integration tests (requires HF_TOKEN for pyannote)
-	...
+	docker compose -f docker-compose.test.yml run --rm test pytest tests/integration/ -v
 
 test-e2e:         ## Run Playwright end-to-end tests
 	docker compose -f docker-compose.test.yml run --rm web_test
@@ -407,16 +462,30 @@ web:              ## Open web app in browser
 	open http://localhost:3000
 
 ollama-pull:      ## Pull default Ollama model (Qwen2.5-3B Q4)
-	...
+	docker compose exec ollama ollama pull qwen2.5:3b
 
-health-check:     ## Run health check once
-	...
+health-check:     ## Run health check once (requires python3, pg_isready, docker)
+	python3 scripts/healthcheck.py
 
 health-install:   ## Install health check cron job (every 15 min)
-	...
+	bash scripts/healthcheck-install.sh
 
 health-uninstall: ## Remove health check cron job
-	...
+	crontab -l 2>/dev/null | grep -vF "healthcheck.py" | crontab -
+
+backfill:         ## Run chunk+embed backfill (stops worker, runs backfill, restarts worker)
+	docker compose stop worker
+	curl -s -X POST http://localhost:8000/api/backfill/chunks?embed=true | python3 -m json.tool
+
+version:          ## Show current version
+	cat VERSION
+
+env-check:        ## Validate local Node runtime against apps/web requirement
+	bash scripts/check-web-node-version.sh
+
+deps-outdated:    ## Check npm outdated packages with resilient network handling
+	bash scripts/check-web-node-version.sh
+	bash scripts/check-npm-outdated.sh
 
 help:             ## Show this help
 	...
@@ -502,43 +571,15 @@ docker compose exec pipeline alembic current
 
 ## 8. CI/CD (GitHub Actions)
 
-```yaml
-name: CI
-on: [push, pull_request]
+CI is split across three workflows, each with a different speed/scope tradeoff:
 
-jobs:
-  test-pipeline:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run pipeline unit tests
-        run: |
-          docker compose -f docker-compose.test.yml run --rm test pytest tests/unit/ -v --cov=app
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+| Workflow | Purpose | Scope |
+|---|---|---|
+| `.github/workflows/ci.yml` | Fast gate on every push/PR | Lint (Python + TypeScript), web unit tests, pipeline smoke-level unit tests |
+| `.github/workflows/ci-full-unit.yml` | Full unit suite | Complete pipeline unit tests with coverage; complete web Jest suite |
+| `.github/workflows/ci-slow.yml` | Heavy suites | Integration and slower end-to-end checks that require HF_TOKEN or significant CPU time |
 
-  test-web:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
-      - run: cd apps/web && npm ci && npm test
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Lint Python
-        run: cd apps/pipeline && pip install ruff && ruff check .
-      - name: Lint TypeScript
-        run: cd apps/web && npm ci && npm run lint
-```
-
-Integration and E2E tests are not run in CI (slow, require HF_TOKEN with pyannote access). Run locally before merging significant changes.
+README badges reflect the status of each. Integration and E2E tests that depend on pyannote model access remain manual / gated by the slow workflow — they are not guaranteed on every PR.
 
 ---
 

@@ -25,13 +25,21 @@ When making decisions, reference PRD sections (e.g. "per PRD-01 §5.4") rather t
 ```
 podlog/
 ├── docker-compose.yml              # Production-like local stack (5 services)
-├── docker-compose.test.yml         # Test stack with db_test, mock_rss, test runner
+├── docker-compose.remote.yml       # Overlay for remote-inference (Fireworks) profile
+├── docker-compose.test.yml         # Test stack (db_test, mock_rss, pipeline_test, web_test, test runner)
 ├── .env.example                    # All config vars documented
 ├── Makefile                        # make up / down / build / test / etc.
 ├── AGENTS.md
 ├── README.md
 ├── VERSION
 ├── LICENSE
+├── .node-version                   # Node version for local dev
+├── .nvmrc                          # Node version for nvm users
+├── .github/                        # GitHub Actions workflows (ci, ci-full-unit, ci-slow)
+├── .agents/                        # Agent configuration
+├── .superpowers/                   # Superpowers metadata (gitignored)
+├── .omx/                           # Oh-my-codex metadata (gitignored)
+├── issues/                         # Local issue drafts / notes
 ├── apps/
 │   ├── pipeline/                   # Python 3.11 — FastAPI + DB-backed job queue
 │   │   ├── app/
@@ -39,17 +47,21 @@ podlog/
 │   │   │   ├── config.py           # pydantic-settings, all env vars
 │   │   │   ├── models.py           # SQLAlchemy ORM (feeds, episodes, segments, speaker_names)
 │   │   │   ├── database.py         # Engine + session factory
+│   │   │   ├── job_queue.py        # PostgreSQL-backed job queue (enqueue, claim, complete)
+│   │   │   ├── task_registry.py    # Maps pipeline stages to task functions + next-stage routing
+│   │   │   ├── worker.py           # Background job worker + feed polling loop
 │   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware)
-│   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, diarize, chunk, embed, infer, archive, cleanup, prewarm)
-│   │   │   ├── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, notifications, digest, events)
-│   │   │   └── worker.py           # Background job worker
-│   │   ├── alembic/                # Database migrations
+│   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, inference_helpers, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels)
+│   │   ├── alembic/                # Database migrations (12 versions)
 │   │   └── tests/                  # unit, integration, e2e
 │   └── web/                        # Next.js 16 (App Router)
+│       ├── Dockerfile              # Production image (standalone output)
+│       ├── Dockerfile.test         # Test image used by docker-compose.test.yml
 │       ├── src/app/                # Pages: /, /about, /podcasts, /podcasts/[id], /episodes/[id], /queue, /feeds, /ask, /search, /search/print, /settings, /docs (and /notifications redirects to /settings)
 │       ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll), queue, audio, ask/coverage, episodes ([id], ingest, upload, retry, speakers, speakers/merge), docs, hardware, notifications (settings, test), pipeline (ask, embed, health, queue/retry)
 │       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, DocsClient, etc.
-│       └── src/lib/                # db.ts, search.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx
+│       └── src/lib/                # db.ts, search.ts, search/ (feedFilter, filters, grouping, queryParser, speakerTurns, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, page-state.ts, queueStatus.ts
 ├── docs/                           # User-facing documentation and guides
 ├── scripts/                        # Operational scripts (nightly audit, health check)
 └── prds/                           # Specifications and risk register
