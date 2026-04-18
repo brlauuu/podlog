@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.4
+**Version:** 1.5
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.5 — §5.2 retry copy corrected to match code: backoff formula is `RETRY_BACKOFF_BASE * 2^(attempt-1)` (30s → 60s → 120s), and HTTP 4xx is clarified as classified `HTTP_ACCESS` with retry (not "non-transient and retried").
 - v1.4 — Added optional remote inference provider mode (Fireworks) for transcription and diarization while keeping local-first defaults. Runtime provider settings can be sourced from DB-backed Settings UI (env fallback remains). Added Fireworks configuration vars.
 - v1.3 — Updated tech stack to reflect actual implementation: Celery+Redis replaced by PostgreSQL-backed job queue; Whisper via transformers replaced by WhisperX (CTranslate2); Celery Beat replaced by polling loop in worker.py; Flower removed. Added Ollama for RAG inference. Updated architecture diagram. Removed stale env vars (REDIS_URL, CELERY_CONCURRENCY). Moved semantic search and faster Whisper from Future to Done. Updated default model to large-v3-turbo.
 - v1.2 — Renamed project from PodSearch to Podlog. Added `updated_at` field to episodes table (prerequisite for GAP-01 zombie job detection). Added `DISK_HEADROOM_BYTES` environment variable for disk space pre-check (GAP-06). Database name changed from `podsearch` to `podlog`.
@@ -78,7 +79,7 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 - Download progress is tracked and surfaced to the queue dashboard.
 - Files are saved to a configurable local volume path: `/data/audio/raw/`.
 - Supported formats: MP3, M4A, AAC, OGG, FLAC, WAV. Any format `ffmpeg` can decode is acceptable.
-- **Failure handling:** If a download fails due to a transient access error (network timeout, HTTP 5xx), the job is automatically retried up to 3 times with exponential backoff (30s, 2m, 10m) before being marked permanently failed. HTTP 4xx errors (e.g. 403, 404) are considered non-transient and are retried up to 3 times with the same backoff, as feeds sometimes return temporary 4xx responses. OOM errors, disk full errors, and local system failures are **not** retried — they are marked failed immediately with a clear error classification (see §5.9).
+- **Failure handling:** If a download fails due to a transient access error (network timeout, HTTP 5xx classified as `TRANSIENT_NETWORK`), the job is automatically retried up to 3 times with exponential backoff (`RETRY_BACKOFF_BASE * 2^(attempt-1)` — with the default base of 30s, the delays are 30s → 60s → 120s) before being marked permanently failed. HTTP 4xx errors (e.g. 403, 404) are classified as `HTTP_ACCESS` and are also retried up to 3 times with the same backoff, since feeds and CDNs sometimes return temporary 4xx responses. OOM errors, disk full errors, and local system failures are **not** retried — they are marked failed immediately with a clear error classification (see §5.9).
 - The retry count and last error are stored per episode and surfaced in the queue dashboard (see PRD-02 §5.6).
 
 ### 5.3 Audio Preprocessing

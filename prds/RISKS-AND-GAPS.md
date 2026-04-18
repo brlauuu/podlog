@@ -2,9 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** RISKS-AND-GAPS
-**Version:** 1.4
+**Version:** 1.5
 **Status:** Living document — update as risks are resolved or new ones are identified  
 **How to use:** When a risk is mitigated or a gap is closed, move it to the Resolved section at the bottom with a note on how it was addressed. Add new entries as they are discovered during development.
+
+**Changelog:**
+- v1.5 — RISK-04 and GAP-04 (word-level alignment) moved to Resolved. WhisperX CTranslate2 + wav2vec2 word-level alignment is the default transcription stack per PRD-01 §5.4.
 
 ---
 
@@ -150,17 +153,9 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
-### RISK-04: Diarization Alignment Quality
+### ~~RISK-04: Diarization Alignment Quality~~ → Resolved in v1.5
 
-**Severity:** Medium  
-**Component:** PRD-01 — `alignment.py`  
-**Description:** The majority-overlap alignment strategy assigns one speaker per Whisper segment. Whisper segments can be 5–30 seconds long. A segment spanning a speaker transition gets assigned to whichever speaker has more time in that segment — the other speaker's words are mis-attributed. There is no way to split a Whisper segment mid-word.  
-**Mitigation:**
-1. This is a known limitation of non-word-level alignment. It is acceptable for V1 — the transcript is still useful.
-2. In V1, explore using Whisper's word-level timestamps (`return_timestamps="word"`) to do word-level alignment against pyannote segments. This dramatically reduces mis-attribution at speaker transitions.
-3. Document in the README that diarization accuracy degrades on episodes with rapid back-and-forth dialogue.
-
-**Status:** Accepted for MVP. Word-level alignment is a V1 candidate.
+*Moved to Part 4: Resolved Items.*
 
 ---
 
@@ -229,12 +224,9 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
-### GAP-04: Word-Level Alignment Not Implemented
+### ~~GAP-04: Word-Level Alignment Not Implemented~~ → Resolved in v1.5
 
-**Component:** PRD-01 — `alignment.py`  
-**Description:** Whisper supports word-level timestamps (`return_timestamps="word"`), which would enable much more accurate speaker assignment at sentence transitions. The current majority-overlap strategy operates at segment level (5–30 second chunks). This is a known quality gap at speaker transitions.  
-**Proposed fix:** In V1, implement word-level alignment: for each word token, find the overlapping pyannote segment and assign that speaker. Then group consecutive words with the same speaker into display segments. This requires a change to how segments are stored (word tokens → display segments rather than Whisper's raw segments).  
-**Target phase:** V1
+*Moved to Part 4: Resolved Items.*
 
 ---
 
@@ -269,3 +261,5 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 | GAP-01 | Zombie job cleanup | Periodic task every 30 min — queries episodes stuck in non-terminal status for >2 h and marks them `failed` with `error_class=SYSTEM_ERROR` (`app/tasks/cleanup.py`) | v1.3 |
 | GAP-03 | No episode re-processing | Episode reprocessing implemented — resets status to `pending`, clears segments, re-enqueues through the pipeline | v1.3 |
 | RISK-07 | Celery Beat single point of failure | No longer applicable — Celery/Redis replaced by PostgreSQL-backed job queue with polling loop in `worker.py` | v1.3 |
+| RISK-04 | Diarization alignment quality (segment-level mis-attribution) | WhisperX with wav2vec2 word-level alignment shipped (see PRD-01 §5.4); `apps/pipeline/app/services/whisper.py` + `alignment.py` implement word-level speaker assignment | v1.5 |
+| GAP-04 | Word-level alignment not implemented | WhisperX CTranslate2 + wav2vec2 word-level timestamps align transcript words against pyannote segments, replacing majority-overlap at the segment level | v1.5 |

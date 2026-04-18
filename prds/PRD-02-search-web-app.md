@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-02 — Search Web Application  
-**Version:** 1.5
+**Version:** 1.6
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.6 — Updated tech stack row to Next.js 16 (matches `apps/web/package.json`).
 - v1.5 — Marked document status as Active and removed stale non-goal note claiming semantic/vector search was out of scope.
 - v1.4 — Added Ask AI (RAG) documentation (§5.10): retrieval pipeline, key parameters (TOP_K, SIMILARITY_THRESHOLD), model options, source filtering, speaker attribution, citation rendering, error handling.
 - v1.3 — Queue dashboard (§5.6) redesigned: replaced kanban/grouping modes with a Summary + Table hybrid layout. Worker warm-up banner removed (brief warm-up does not warrant persistent UI). Retry countdown timer removed; retry count shown as N/M instead. Stage progress bar added (horizontal bar showing per-stage episode counts). Search/filter input added (debounced, filters by episode title or podcast name). Done episodes collapsed by default in an expandable section. Responsiveness: Podcast and Retries columns hidden on screens narrower than 640 px. ASCII diagram in §9.3 updated to match new layout.
@@ -257,7 +258,7 @@ The Ask page lets users ask natural-language questions about their podcast trans
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Framework | Next.js 14 (App Router) | Full-stack React; SSR for fast initial load; API routes co-located |
+| Framework | Next.js 16 (App Router) | Full-stack React; SSR for fast initial load; API routes co-located |
 | Styling | Tailwind CSS | Rapid UI development; dark mode via `class` strategy |
 | Component library | shadcn/ui | Accessible, unstyled-by-default; dark mode via CSS variables |
 | Data fetching | React Query (TanStack Query) | Automatic caching, polling for queue status, clean loading/error states |

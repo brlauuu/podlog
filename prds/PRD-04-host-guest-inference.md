@@ -2,9 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-04 — Host & Guest Inference  
-**Version:** 1.1  
-**Status:** Draft  
+**Version:** 1.2
+**Status:** Active
 **Depends on:** PRD-01 v1.1, PRD-02 v1.1, PRD-03 v1.1
+
+**Changelog:**
+- v1.2 — Marked status Active (feature is shipped: `services/inference.py`, `tasks/infer.py`, `INFERRING` stage, spaCy `en_core_web_lg` bundled in `Dockerfile.worker`). Pipeline stage ordering in §4.6 updated to match actual code path (adds CHUNKING and EMBEDDING between DIARIZING and INFERRING).
 
 ---
 
@@ -106,10 +109,10 @@ pyannote outputs speaker labels in an arbitrary internal order. To enforce the i
 
 ### 4.6 Pipeline Integration
 
-Inference runs as a new pipeline stage **after** diarization and **before** archival:
+Inference runs as a pipeline stage **after** diarization and embedding, and **before** archival:
 
 ```
-DOWNLOADING → TRANSCRIBING → DIARIZING → INFERRING → ARCHIVING → DONE
+DOWNLOADING → TRANSCRIBING → DIARIZING → CHUNKING → EMBEDDING → INFERRING → ARCHIVING → DONE
 ```
 
 - New job state: `INFERRING`
