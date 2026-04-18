@@ -26,7 +26,9 @@ jest.mock("next/link", () => {
 });
 
 import AskPage from "@/app/ask/page";
-import { saveAskSnapshot, type AskPageSnapshot } from "@/lib/page-state";
+import { saveAskSnapshot } from "@/lib/page-state";
+
+type AskPageSnapshot = Parameters<typeof saveAskSnapshot>[0];
 
 describe("Ask page source card actions", () => {
   beforeEach(() => {

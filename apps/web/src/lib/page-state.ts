@@ -6,7 +6,7 @@ type AskStatus = "idle" | "connecting" | "streaming" | "done" | "error";
 const SEARCH_STORAGE_KEY = "podlog-search-page-state";
 const ASK_STORAGE_KEY = "podlog-ask-page-state";
 
-export interface SearchPageSnapshot {
+interface SearchPageSnapshot {
   query: string;
   submittedQuery: string;
   selectedFeedIds: string[];
@@ -16,7 +16,7 @@ export interface SearchPageSnapshot {
   viewMode: ViewMode;
 }
 
-export interface AskPageSnapshot {
+interface AskPageSnapshot {
   question: string;
   answer: string;
   sources: Source[];

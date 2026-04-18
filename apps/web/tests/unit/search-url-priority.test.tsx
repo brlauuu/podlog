@@ -21,7 +21,9 @@ jest.mock("next/link", () => {
 });
 
 import SearchPage from "@/app/search/page";
-import { saveSearchSnapshot, type SearchPageSnapshot } from "@/lib/page-state";
+import { saveSearchSnapshot } from "@/lib/page-state";
+
+type SearchPageSnapshot = Parameters<typeof saveSearchSnapshot>[0];
 
 describe("Search page URL query priority", () => {
   beforeEach(() => {

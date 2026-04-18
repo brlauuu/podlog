@@ -3,9 +3,10 @@ import {
   loadSearchSnapshot,
   saveAskSnapshot,
   saveSearchSnapshot,
-  type AskPageSnapshot,
-  type SearchPageSnapshot,
 } from "@/lib/page-state";
+
+type SearchPageSnapshot = Parameters<typeof saveSearchSnapshot>[0];
+type AskPageSnapshot = Parameters<typeof saveAskSnapshot>[0];
 
 function makeStorage(): Storage {
   const data = new Map<string, string>();
