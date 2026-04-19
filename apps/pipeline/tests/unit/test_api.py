@@ -191,6 +191,190 @@ class TestFeedsEndpoint:
             app.dependency_overrides.clear()
 
 
+class TestAddFeedEpisodesEndpoint:
+    """Issue #487: POST /api/feeds/{id}/episodes — add more episodes to a selective feed."""
+
+    def _setup_db(self, feed_mode: str | None, existing_guids: list[str]):
+        """
+        Build a mock DB whose `query(Feed)` returns the feed mock and
+        `query(Episode.guid)` returns the list of existing GUID rows.
+        feed_mode=None → feed not found.
+        """
+        from app.models import Episode, Feed
+
+        mock_db = MagicMock()
+
+        feed_mock = None
+        if feed_mode is not None:
+            feed_mock = MagicMock()
+            feed_mock.id = "feed-1"
+            feed_mock.mode = feed_mode
+
+        def _query(model):
+            q = MagicMock()
+            if model is Feed:
+                q.filter.return_value.first.return_value = feed_mock
+            elif model is Episode.guid:
+                q.filter.return_value.all.return_value = [(g,) for g in existing_guids]
+            else:
+                q.filter.return_value.first.return_value = None
+                q.filter.return_value.all.return_value = []
+            return q
+
+        mock_db.query.side_effect = _query
+        return mock_db
+
+    def _override_db(self, mock_db):
+        from app.database import get_db
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+    def test_feed_not_found_returns_404(self):
+        self._override_db(self._setup_db(feed_mode=None, existing_guids=[]))
+        try:
+            resp = client.post(
+                "/api/feeds/missing/episodes",
+                json={"selected_guids": ["a"]},
+            )
+            assert resp.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_non_selective_feed_returns_422(self):
+        self._override_db(self._setup_db(feed_mode="full", existing_guids=[]))
+        try:
+            resp = client.post(
+                "/api/feeds/feed-1/episodes",
+                json={"selected_guids": ["a"]},
+            )
+            assert resp.status_code == 422
+            assert "selective" in resp.json()["detail"].lower()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_empty_guids_returns_422(self):
+        self._override_db(self._setup_db(feed_mode="selective", existing_guids=[]))
+        try:
+            resp = client.post(
+                "/api/feeds/feed-1/episodes",
+                json={"selected_guids": []},
+            )
+            assert resp.status_code == 422
+            assert "selected_guids" in resp.json()["detail"]
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_all_guids_already_ingested_returns_zero_queued(self):
+        """No call to ingest_feed when every requested GUID already exists."""
+        self._override_db(
+            self._setup_db(feed_mode="selective", existing_guids=["ep-001", "ep-002"])
+        )
+        try:
+            with patch("app.api.feeds._ingest_feed") as mock_ingest:
+                resp = client.post(
+                    "/api/feeds/feed-1/episodes",
+                    json={"selected_guids": ["ep-001", "ep-002"]},
+                )
+            assert resp.status_code == 202
+            body = resp.json()
+            assert body == {"queued": 0, "skipped": 2}
+            mock_ingest.assert_not_called()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_new_guids_enqueued_existing_skipped(self):
+        """Only net-new GUIDs are passed to ingest_feed; already-ingested ones count as skipped."""
+        self._override_db(
+            self._setup_db(feed_mode="selective", existing_guids=["ep-001"])
+        )
+        try:
+            with patch(
+                "app.api.feeds._ingest_feed",
+                return_value={"new_episodes": 2},
+            ) as mock_ingest:
+                resp = client.post(
+                    "/api/feeds/feed-1/episodes",
+                    json={"selected_guids": ["ep-001", "ep-002", "ep-003"]},
+                )
+            assert resp.status_code == 202
+            assert resp.json() == {"queued": 2, "skipped": 1}
+            mock_ingest.assert_called_once_with(
+                "feed-1", selected_guids=["ep-002", "ep-003"]
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_invalid_guid_from_ingest_returns_422(self):
+        """If ingest_feed reports an invalid GUID, bubble up as 422."""
+        self._override_db(
+            self._setup_db(feed_mode="selective", existing_guids=[])
+        )
+        try:
+            with patch(
+                "app.api.feeds._ingest_feed",
+                return_value={"error": "selected_guids contains GUIDs not present in feed"},
+            ):
+                resp = client.post(
+                    "/api/feeds/feed-1/episodes",
+                    json={"selected_guids": ["not-in-feed"]},
+                )
+            assert resp.status_code == 422
+            assert "not present" in resp.json()["detail"]
+        finally:
+            app.dependency_overrides.clear()
+
+
+class TestListFeedEpisodeGuidsEndpoint:
+    """Issue #487: GET /api/feeds/{id}/episodes/guids."""
+
+    def test_returns_guids_for_feed(self):
+        from app.models import Episode, Feed
+
+        mock_db = MagicMock()
+        feed_mock = MagicMock()
+        feed_mock.id = "feed-1"
+        feed_mock.mode = "selective"
+
+        def _query(model):
+            q = MagicMock()
+            if model is Feed:
+                q.filter.return_value.first.return_value = feed_mock
+            elif model is Episode.guid:
+                q.filter.return_value.all.return_value = [("ep-001",), ("ep-002",)]
+            return q
+
+        mock_db.query.side_effect = _query
+
+        from app.database import get_db
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            resp = client.get("/api/feeds/feed-1/episodes/guids")
+            assert resp.status_code == 200
+            assert resp.json() == ["ep-001", "ep-002"]
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_unknown_feed_returns_404(self):
+        from app.models import Feed
+
+        mock_db = MagicMock()
+
+        def _query(model):
+            q = MagicMock()
+            if model is Feed:
+                q.filter.return_value.first.return_value = None
+            return q
+
+        mock_db.query.side_effect = _query
+
+        from app.database import get_db
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            resp = client.get("/api/feeds/missing/episodes/guids")
+            assert resp.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
+
 class TestDeleteEpisodeEndpoint:
     """Issue #454: manually uploaded episodes need a delete endpoint."""
 
