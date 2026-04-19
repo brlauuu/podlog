@@ -129,4 +129,40 @@ describe("<FeedCard>", () => {
     expect(onPoll).toHaveBeenCalledWith("feed-42");
     expect(onDelete).toHaveBeenCalledWith("feed-42");
   });
+
+  // Issue #487
+  it("renders 'Add episodes' only for selective feeds and invokes onAddMore", () => {
+    const onAddMore = jest.fn();
+    const { rerender } = render(
+      <FeedCard
+        feed={makeFeed({ mode: "full" })}
+        pollPending={false}
+        onPromote={jest.fn()}
+        onPoll={jest.fn()}
+        onDelete={jest.fn()}
+        onAddMore={onAddMore}
+      />
+    );
+    expect(screen.queryByRole("button", { name: /Add episodes/ })).not.toBeInTheDocument();
+
+    const selective = makeFeed({ mode: "selective", id: "feed-7" });
+    rerender(
+      <FeedCard
+        feed={selective}
+        pollPending={false}
+        onPromote={jest.fn()}
+        onPoll={jest.fn()}
+        onDelete={jest.fn()}
+        onAddMore={onAddMore}
+      />
+    );
+    const btn = screen.getByRole("button", { name: /Add episodes/ });
+    fireEvent.click(btn);
+    expect(onAddMore).toHaveBeenCalledWith(selective);
+  });
+
+  it("does not render 'Add episodes' for selective feeds when onAddMore is not supplied", () => {
+    renderCard(makeFeed({ mode: "selective" }));
+    expect(screen.queryByRole("button", { name: /Add episodes/ })).not.toBeInTheDocument();
+  });
 });

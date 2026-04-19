@@ -52,6 +52,15 @@ async function fetchPreview(url: string): Promise<FeedPreview> {
   return resp.json();
 }
 
+async function fetchFeedEpisodeGuids(feedId: string): Promise<string[]> {
+  const resp = await fetch(`/api/feeds/${feedId}/episodes/guids`);
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail ?? "Failed to load existing episodes");
+  }
+  return resp.json();
+}
+
 function formatDuration(secs: number | null): string {
   if (!secs) return "";
   const h = Math.floor(secs / 3600);
@@ -73,6 +82,12 @@ export default function FeedsPage() {
   const [selectedGuids, setSelectedGuids] = useState<Set<string>>(new Set());
   const [previewLoading, setPreviewLoading] = useState(false);
 
+  // Issue #487: adding more episodes to an existing selective feed.
+  // When set, the dialog is reused in "add more" mode: preview is reloaded for
+  // the feed's URL, and already-ingested GUIDs are shown checked+disabled.
+  const [addMoreFeed, setAddMoreFeed] = useState<Feed | null>(null);
+  const [existingGuids, setExistingGuids] = useState<Set<string>>(new Set());
+
   const { data: feeds = [], isLoading } = useQuery({ queryKey: ["feeds"], queryFn: fetchFeeds });
 
   function resetModal() {
@@ -83,6 +98,8 @@ export default function FeedsPage() {
     setPreviewStep(false);
     setPreview(null);
     setSelectedGuids(new Set());
+    setAddMoreFeed(null);
+    setExistingGuids(new Set());
   }
 
   const addFeed = useMutation({
@@ -112,6 +129,55 @@ export default function FeedsPage() {
     },
     onError: (err: Error) => setAddError(err.message),
   });
+
+  // Issue #487: add more episodes to an existing selective feed.
+  const addEpisodes = useMutation({
+    mutationFn: async ({
+      feedId,
+      selected_guids,
+    }: {
+      feedId: string;
+      selected_guids: string[];
+    }) => {
+      const resp = await fetch(`/api/feeds/${feedId}/episodes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selected_guids }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail ?? "Failed to add episodes");
+      }
+      return resp.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["feeds"] });
+      resetModal();
+    },
+    onError: (err: Error) => setAddError(err.message),
+  });
+
+  async function handleAddMore(feed: Feed) {
+    setAddMoreFeed(feed);
+    setShowAddModal(true);
+    setAddError(null);
+    setPreviewLoading(true);
+    try {
+      const [data, existing] = await Promise.all([
+        fetchPreview(feed.url),
+        fetchFeedEpisodeGuids(feed.id),
+      ]);
+      const existingSet = new Set(existing);
+      setPreview(data);
+      setExistingGuids(existingSet);
+      setSelectedGuids(new Set(existingSet));
+      setPreviewStep(true);
+    } catch (err: unknown) {
+      setAddError(err instanceof Error ? err.message : "Failed to load feed preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   const promoteFeed = useMutation({
     mutationFn: async ({ url }: { url: string }) => {
@@ -145,10 +211,20 @@ export default function FeedsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feeds"] }),
   });
 
-  // Issue #84: fetch episode list for selective mode before submitting
+  // Issue #84: fetch episode list for selective mode before submitting.
+  // Issue #487: in "add more" mode, submit only the newly-picked GUIDs.
   async function handleAddOrPreview(e: React.FormEvent) {
     e.preventDefault();
     setAddError(null);
+    if (addMoreFeed) {
+      const newPicks = Array.from(selectedGuids).filter((g) => !existingGuids.has(g));
+      if (newPicks.length === 0) {
+        setAddError("Select at least one new episode to add.");
+        return;
+      }
+      addEpisodes.mutate({ feedId: addMoreFeed.id, selected_guids: newPicks });
+      return;
+    }
     if (addMode === "selective" && !previewStep) {
       setPreviewLoading(true);
       try {
@@ -170,6 +246,8 @@ export default function FeedsPage() {
   }
 
   function toggleGuid(guid: string) {
+    // Issue #487: already-ingested episodes are locked in add-more mode
+    if (addMoreFeed && existingGuids.has(guid)) return;
     setSelectedGuids((prev) => {
       const next = new Set(prev);
       if (next.has(guid)) next.delete(guid);
@@ -181,6 +259,21 @@ export default function FeedsPage() {
   function toggleAll() {
     if (!preview) return;
     const allGuids = preview.episodes.map((e) => e.guid);
+    if (addMoreFeed) {
+      // Issue #487: preserve existing selections; toggle only the remaining episodes
+      const togglable = allGuids.filter((g) => !existingGuids.has(g));
+      const allTogglableSelected = togglable.every((g) => selectedGuids.has(g));
+      setSelectedGuids((prev) => {
+        const next = new Set(prev);
+        if (allTogglableSelected) {
+          togglable.forEach((g) => next.delete(g));
+        } else {
+          togglable.forEach((g) => next.add(g));
+        }
+        return next;
+      });
+      return;
+    }
     if (selectedGuids.size === allGuids.length) {
       setSelectedGuids(new Set());
     } else {
@@ -199,17 +292,24 @@ export default function FeedsPage() {
               Add Feed
             </Button>
           </DialogTrigger>
-          <DialogContent className={previewStep ? "max-w-2xl flex flex-col max-h-[90vh]" : undefined}>
+          <DialogContent className={previewStep || addMoreFeed ? "max-w-2xl flex flex-col max-h-[90vh]" : undefined}>
             <DialogHeader>
               <DialogTitle>
-                {previewStep
+                {addMoreFeed
+                  ? `Add episodes${preview?.title ? ` — ${preview.title}` : addMoreFeed.title ? ` — ${addMoreFeed.title}` : ""}`
+                  : previewStep
                   ? `Select episodes${preview?.title ? ` — ${preview.title}` : ""}`
                   : "Add RSS Feed"}
               </DialogTitle>
             </DialogHeader>
 
-            {/* Step 1: URL + mode */}
-            {!previewStep && (
+            {/* Loading state while fetching preview for add-more flow */}
+            {addMoreFeed && previewLoading && (
+              <p className="text-sm text-muted-foreground py-4">Loading episodes...</p>
+            )}
+
+            {/* Step 1: URL + mode (only when not in add-more flow) */}
+            {!previewStep && !addMoreFeed && (
               <form onSubmit={handleAddOrPreview} className="space-y-4">
                 <Input
                   type="url"
@@ -274,45 +374,70 @@ export default function FeedsPage() {
               </form>
             )}
 
-            {/* Step 2: Episode selection (selective mode only) */}
-            {previewStep && preview && (
+            {/* Step 2: Episode selection (selective add or add-more) */}
+            {(previewStep || addMoreFeed) && preview && (
               <form onSubmit={handleAddOrPreview} className="flex flex-col flex-1 overflow-hidden space-y-3 min-h-0">
                 <div className="flex items-center justify-between shrink-0">
                   <span className="text-sm text-muted-foreground">
                     {preview.episodes.length} episodes found
+                    {addMoreFeed && existingGuids.size > 0
+                      ? ` · ${existingGuids.size} already added`
+                      : null}
                   </span>
                   <button
                     type="button"
                     onClick={toggleAll}
                     className="text-xs text-link underline"
                   >
-                    {selectedGuids.size === preview.episodes.length ? "Deselect all" : "Select all"}
+                    {(() => {
+                      if (addMoreFeed) {
+                        const remaining = preview.episodes.filter((e) => !existingGuids.has(e.guid));
+                        const allRemainingSelected =
+                          remaining.length > 0 &&
+                          remaining.every((e) => selectedGuids.has(e.guid));
+                        return allRemainingSelected ? "Deselect all new" : "Select all new";
+                      }
+                      return selectedGuids.size === preview.episodes.length
+                        ? "Deselect all"
+                        : "Select all";
+                    })()}
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto overflow-x-hidden divide-y rounded-md border min-h-[80px]">
-                  {preview.episodes.map((ep) => (
-                    <label
-                      key={ep.guid}
-                      className="flex items-start gap-3 px-3 py-2 cursor-pointer hover:bg-accent/40 transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedGuids.has(ep.guid)}
-                        onChange={() => toggleGuid(ep.guid)}
-                        className="mt-0.5 shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{ep.title ?? ep.guid}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {ep.published_at
-                            ? new Date(ep.published_at).toLocaleDateString()
-                            : null}
-                          {ep.published_at && ep.duration_secs ? " · " : null}
-                          {formatDuration(ep.duration_secs)}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
+                  {preview.episodes.map((ep) => {
+                    const already = !!addMoreFeed && existingGuids.has(ep.guid);
+                    return (
+                      <label
+                        key={ep.guid}
+                        className={`flex items-start gap-3 px-3 py-2 transition-colors ${
+                          already
+                            ? "cursor-not-allowed opacity-60"
+                            : "cursor-pointer hover:bg-accent/40"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedGuids.has(ep.guid)}
+                          disabled={already}
+                          onChange={() => toggleGuid(ep.guid)}
+                          className="mt-0.5 shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{ep.title ?? ep.guid}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {ep.published_at
+                              ? new Date(ep.published_at).toLocaleDateString()
+                              : null}
+                            {ep.published_at && ep.duration_secs ? " · " : null}
+                            {formatDuration(ep.duration_secs)}
+                            {already ? (
+                              <span className="ml-2 italic">(already added)</span>
+                            ) : null}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
                 {addError && <p className="text-sm text-destructive shrink-0">{addError}</p>}
                 <div className="flex justify-end gap-2 shrink-0">
@@ -320,22 +445,44 @@ export default function FeedsPage() {
                     type="button"
                     variant="outline"
                     onClick={() => {
+                      if (addMoreFeed) {
+                        resetModal();
+                        return;
+                      }
                       setPreviewStep(false);
                       setPreview(null);
                       setSelectedGuids(new Set());
                       setAddError(null);
                     }}
                   >
-                    Back
+                    {addMoreFeed ? "Cancel" : "Back"}
                   </Button>
-                  <Button
-                    type="submit"
-                    disabled={selectedGuids.size === 0 || addFeed.isPending}
-                  >
-                    {addFeed.isPending
-                      ? "Adding..."
-                      : `Add (${selectedGuids.size})`}
-                  </Button>
+                  {addMoreFeed ? (
+                    (() => {
+                      const newCount = Array.from(selectedGuids).filter(
+                        (g) => !existingGuids.has(g),
+                      ).length;
+                      return (
+                        <Button
+                          type="submit"
+                          disabled={newCount === 0 || addEpisodes.isPending}
+                        >
+                          {addEpisodes.isPending
+                            ? "Adding..."
+                            : `Add ${newCount} episode${newCount === 1 ? "" : "s"}`}
+                        </Button>
+                      );
+                    })()
+                  ) : (
+                    <Button
+                      type="submit"
+                      disabled={selectedGuids.size === 0 || addFeed.isPending}
+                    >
+                      {addFeed.isPending
+                        ? "Adding..."
+                        : `Add (${selectedGuids.size})`}
+                    </Button>
+                  )}
                 </div>
               </form>
             )}
@@ -364,6 +511,7 @@ export default function FeedsPage() {
           );
           deleteFeed.mutate({ id: feedId, deleteEpisodes: deleteEps });
         }}
+        onAddMore={handleAddMore}
       />
     </div>
   );

@@ -1,11 +1,13 @@
 """
 Feed management API — control-plane endpoints.
 
-GET    /api/feeds             List feeds with episode counts
-GET    /api/feeds/preview     Preview a feed URL (returns metadata + episodes, no DB writes)
-POST   /api/feeds             Add a new RSS feed (with validation — GAP-02)
-DELETE /api/feeds/{id}        Remove a feed (optionally delete episodes)
-POST   /api/feeds/{id}/poll   Trigger immediate re-poll
+GET    /api/feeds                       List feeds with episode counts
+GET    /api/feeds/preview               Preview a feed URL (returns metadata + episodes, no DB writes)
+POST   /api/feeds                       Add a new RSS feed (with validation — GAP-02)
+DELETE /api/feeds/{id}                  Remove a feed (optionally delete episodes)
+POST   /api/feeds/{id}/poll             Trigger immediate re-poll
+GET    /api/feeds/{id}/episodes/guids   List GUIDs already ingested for a feed (#487)
+POST   /api/feeds/{id}/episodes         Add more episodes to a selective feed (#487)
 """
 import logging
 from datetime import datetime
@@ -17,7 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Feed
+from app.models import Episode, Feed
 from app.services import rss as rss_service
 from app.tasks.ingest import ingest_feed as _ingest_feed
 
@@ -232,3 +234,80 @@ def poll_feed(feed_id: str, db: Session = Depends(get_db)) -> dict:
         )
     _ingest_feed(feed.id)
     return {"queued": True}
+
+
+class AddEpisodesRequest(BaseModel):
+    selected_guids: list[str]
+
+
+class AddEpisodesResponse(BaseModel):
+    queued: int
+    skipped: int
+
+
+@router.get("/feeds/{feed_id}/episodes/guids", response_model=list[str])
+def list_feed_episode_guids(feed_id: str, db: Session = Depends(get_db)) -> list[str]:
+    """
+    Return the GUIDs of episodes already ingested for this feed.
+    Used by the web UI (#487) to mark already-selected episodes in the
+    "Add more episodes" preview dialog.
+    """
+    feed = db.query(Feed).filter(Feed.id == feed_id).first()
+    if not feed:
+        raise HTTPException(status_code=404, detail="Feed not found")
+    rows = db.query(Episode.guid).filter(Episode.feed_id == feed_id).all()
+    return [row[0] for row in rows]
+
+
+@router.post("/feeds/{feed_id}/episodes", response_model=AddEpisodesResponse, status_code=202)
+def add_feed_episodes(
+    feed_id: str,
+    body: AddEpisodesRequest,
+    db: Session = Depends(get_db),
+) -> AddEpisodesResponse:
+    """
+    Add more episodes to an existing selective feed (#487).
+
+    Only valid for selective-mode feeds. GUIDs already ingested are silently
+    skipped (idempotent). Unknown GUIDs (not present in the live feed) cause
+    a 422, matching the validation performed by ingest_feed itself.
+    """
+    feed = db.query(Feed).filter(Feed.id == feed_id).first()
+    if not feed:
+        raise HTTPException(status_code=404, detail="Feed not found")
+    if feed.mode != "selective":
+        raise HTTPException(
+            status_code=422,
+            detail="Only selective feeds support adding specific episodes. "
+                   "Full feeds auto-ingest all episodes; test feeds should be promoted first.",
+        )
+    if not body.selected_guids:
+        raise HTTPException(
+            status_code=422,
+            detail="selected_guids is required and must be non-empty",
+        )
+
+    existing_guids = {
+        row[0]
+        for row in db.query(Episode.guid).filter(Episode.feed_id == feed_id).all()
+    }
+    new_guids = [g for g in body.selected_guids if g not in existing_guids]
+    skipped = len(body.selected_guids) - len(new_guids)
+
+    if not new_guids:
+        logger.info(
+            '"action": "add_feed_episodes_noop", "feed_id": "%s", "skipped": %d',
+            feed_id, skipped,
+        )
+        return AddEpisodesResponse(queued=0, skipped=skipped)
+
+    result = _ingest_feed(feed_id, selected_guids=new_guids)
+    if isinstance(result, dict) and result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+
+    queued = int(result.get("new_episodes", 0)) if isinstance(result, dict) else 0
+    logger.info(
+        '"action": "feed_episodes_added", "feed_id": "%s", "queued": %d, "skipped": %d',
+        feed_id, queued, skipped,
+    )
+    return AddEpisodesResponse(queued=queued, skipped=skipped)

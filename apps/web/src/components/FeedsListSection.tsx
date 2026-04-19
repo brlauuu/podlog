@@ -19,6 +19,7 @@ interface FeedsListSectionProps {
   onPromote: (url: string) => void;
   onPoll: (feedId: string) => void;
   onDelete: (feedId: string) => void;
+  onAddMore?: (feed: Feed) => void;
 }
 
 export default function FeedsListSection({
@@ -29,6 +30,7 @@ export default function FeedsListSection({
   onPromote,
   onPoll,
   onDelete,
+  onAddMore,
 }: FeedsListSectionProps) {
   if (isLoading) {
     return (
@@ -70,6 +72,7 @@ export default function FeedsListSection({
           onPromote={onPromote}
           onPoll={onPoll}
           onDelete={onDelete}
+          onAddMore={onAddMore}
         />
       ))}
     </div>

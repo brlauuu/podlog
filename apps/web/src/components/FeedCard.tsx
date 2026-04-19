@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, Trash2, FlaskConical, ListChecks } from "lucide-react";
+import { Plus, RefreshCw, Trash2, FlaskConical, ListChecks } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ interface FeedCardProps {
   onPromote: (url: string) => void;
   onPoll: (feedId: string) => void;
   onDelete: (feedId: string) => void;
+  onAddMore?: (feed: FeedCardFeed) => void;
 }
 
 export default function FeedCard({
@@ -28,6 +29,7 @@ export default function FeedCard({
   onPromote,
   onPoll,
   onDelete,
+  onAddMore,
 }: FeedCardProps) {
   return (
     <Card className="hover:bg-accent/30 transition-colors">
@@ -57,6 +59,18 @@ export default function FeedCard({
           </p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {feed.mode === "selective" && onAddMore && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onAddMore(feed)}
+              className="h-8 text-xs gap-1"
+              title="Add more episodes from this feed"
+            >
+              <Plus size={12} />
+              Add episodes
+            </Button>
+          )}
           {(feed.mode === "test" || feed.mode === "selective") && (
             <Button
               variant="outline"
