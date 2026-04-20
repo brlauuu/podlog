@@ -31,6 +31,15 @@ MODEL_NUM_CTX = {
 }
 DEFAULT_NUM_CTX = 8192
 
+# Substring Ollama includes in its 500 body when its cgroup memory cap is
+# saturated (often by page cache of inactive model blobs). We detect this to
+# trigger a single unload+retry before surfacing a user-facing message.
+OLLAMA_OOM_MARKER = "requires more system memory"
+
+
+class OllamaOutOfMemory(RuntimeError):
+    """Preflight memory check in Ollama refused the request."""
+
 SYSTEM_PROMPT = """You are a helpful assistant that answers questions about podcast transcripts.
 
 RULES:
@@ -184,11 +193,36 @@ def chunks_to_sources(chunks: list[ChunkResult]) -> list[dict]:
     ]
 
 
-async def stream_ollama_response(
-    messages: list[dict],
-    model: str = DEFAULT_MODEL,
-):
-    """Stream chat completion from Ollama. Yields token strings."""
+async def _unload_loaded_ollama_models() -> None:
+    """Best-effort unload of currently resident Ollama models to free RAM."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{settings.ollama_url}/api/ps")
+            if resp.status_code != 200:
+                return
+            loaded = [m.get("name") for m in resp.json().get("models", []) if m.get("name")]
+            if not loaded:
+                return
+            for name in loaded:
+                try:
+                    await client.post(
+                        f"{settings.ollama_url}/api/generate",
+                        json={"model": name, "keep_alive": 0},
+                        timeout=30,
+                    )
+                except httpx.HTTPError:
+                    continue
+            logger.info(
+                '"action": "ollama_unload_cached", "count": %d, "models": "%s"',
+                len(loaded),
+                ",".join(loaded),
+            )
+    except httpx.HTTPError as exc:
+        logger.warning('"action": "ollama_unload_failed", "error": "%s"', exc)
+
+
+async def _stream_ollama_once(messages: list[dict], model: str):
+    """One chat attempt. Raises OllamaOutOfMemory on preflight memory refusal."""
     url = f"{settings.ollama_url}/api/chat"
     payload = {
         "model": model,
@@ -202,19 +236,59 @@ async def stream_ollama_response(
             async with client.stream("POST", url, json=payload) as resp:
                 if resp.status_code != 200:
                     body = await resp.aread()
-                    raise RuntimeError(f"Ollama returned {resp.status_code}: {body.decode()[:500]}")
+                    detail = body.decode(errors="ignore")[:500]
+                    if OLLAMA_OOM_MARKER in detail:
+                        raise OllamaOutOfMemory(detail)
+                    raise RuntimeError(f"Ollama returned {resp.status_code}: {detail}")
                 async for line in resp.aiter_lines():
                     if not line:
                         continue
                     data = json.loads(line)
-                    if data.get("error"):
-                        raise RuntimeError(f"Ollama error: {data['error']}")
+                    if err := data.get("error"):
+                        if OLLAMA_OOM_MARKER in err:
+                            raise OllamaOutOfMemory(err)
+                        raise RuntimeError(f"Ollama error: {err}")
                     if content := data.get("message", {}).get("content"):
                         yield content
                     if data.get("done"):
                         return
     except httpx.HTTPError as exc:
         raise RuntimeError(f"Ollama connection error: {type(exc).__name__}: {exc}") from exc
+
+
+async def stream_ollama_response(
+    messages: list[dict],
+    model: str = DEFAULT_MODEL,
+):
+    """Stream chat from Ollama; on memory-cap OOM, unload cached models and retry once."""
+    yielded_any = False
+    try:
+        async for token in _stream_ollama_once(messages, model):
+            yielded_any = True
+            yield token
+        return
+    except OllamaOutOfMemory as exc:
+        if yielded_any:
+            raise RuntimeError(
+                "Ollama ran out of memory mid-response. Run "
+                "`docker restart podlog-ollama-1` to free its memory cap, then try again."
+            ) from exc
+        logger.warning(
+            '"action": "ollama_oom_retry", "model": "%s", "detail": "%s"',
+            model,
+            str(exc)[:200],
+        )
+
+    await _unload_loaded_ollama_models()
+
+    try:
+        async for token in _stream_ollama_once(messages, model):
+            yield token
+    except OllamaOutOfMemory as exc:
+        raise RuntimeError(
+            "Ollama is out of memory. Run `docker restart podlog-ollama-1` "
+            "to free its memory cap, then try again."
+        ) from exc
 
 
 def _runtime_inference_value(runtime: dict | None, key: str, default):
