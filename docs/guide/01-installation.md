@@ -22,7 +22,7 @@ Podlog runs entirely on CPU. For detailed benchmarks and storage estimates by li
 
 2. **HuggingFace account** — [create one](https://huggingface.co/join) (free), then [generate an access token](https://huggingface.co/settings/tokens) (read access is sufficient)
 
-3. **Accept the pyannote license** — visit [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) and click "Agree and access repository." Without this, speaker diarization will silently fail.
+3. **Accept the pyannote license** — visit [pyannote/community-1](https://huggingface.co/pyannote/community-1) and click "Agree and access repository." Without this, speaker diarization will silently fail. (If you override `PYANNOTE_MODEL` to a different pyannote release, accept the license for that model instead.)
 
 4. **PostgreSQL client tools** (optional, for health monitoring) — needed by the host-level health check script:
    ```bash

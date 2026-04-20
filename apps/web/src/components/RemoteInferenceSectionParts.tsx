@@ -85,8 +85,8 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     providerField: null,
     localModels: [
       {
-        value: "speaker-diarization-3.1",
-        label: "pyannote speaker-diarization-3.1",
+        value: "community-1",
+        label: "pyannote community-1",
       },
     ],
     remoteModels: [],

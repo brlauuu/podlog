@@ -39,7 +39,7 @@ Podlog is designed to run on a single consumer machine without a GPU. The follow
 
 **RAM breakdown:**
 - Whisper large-v3: ~3.5 GB resident during transcription
-- pyannote speaker-diarization-3.1: ~2 GB resident during diarization
+- pyannote community-1: ~2 GB resident during diarization
 - The two models are never loaded simultaneously (per PRD-01 §5.4). Peak RAM usage is ~4 GB for Whisper. Total system RAM of 8 GB is functional but tight — 16 GB is strongly recommended to avoid the OS killing the worker process during transcription.
 - If RAM is limited, set `WHISPER_MODEL=medium` or `WHISPER_MODEL=small` in `.env`. This trades accuracy for a ~2x and ~4x reduction in memory use respectively.
 
