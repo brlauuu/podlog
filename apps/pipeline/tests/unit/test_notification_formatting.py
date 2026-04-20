@@ -209,7 +209,7 @@ def test_format_done_html_shows_new_metrics_when_legacy_absent():
     html = format_done_html(event)
     assert "Avg episode length" in html
     assert "40m 00s" in html  # 2400s
-    assert "Processing factor" in html
+    assert "Avg processing factor" in html
     assert "1.5x" in html
 
 
@@ -224,5 +224,46 @@ def test_format_done_telegram_shows_new_metrics_when_legacy_absent():
     md = format_done_telegram(event)
     assert "Avg ep. length" in md
     assert "40m 00s" in md
-    assert "Processing factor" in md
+    assert "Avg processing factor" in md
     assert "1.5x" in md
+
+
+def test_format_done_html_shows_provider_scoped_label_local():
+    event = _make_done_event()
+    event.inference_provider_used = "local"
+    event.avg_transcribe_secs = 100.0
+    html = format_done_html(event)
+    assert "Avg Processing Time (local episodes)" in html
+
+
+def test_format_done_html_shows_provider_scoped_label_remote():
+    event = _make_done_event()
+    event.inference_provider_used = "fireworks"
+    event.avg_transcribe_secs = 100.0
+    html = format_done_html(event)
+    assert "Avg Processing Time (remote episodes)" in html
+
+
+def test_format_done_telegram_shows_provider_scoped_label_local():
+    event = _make_done_event()
+    event.inference_provider_used = "local"
+    event.avg_transcribe_secs = 100.0
+    md = format_done_telegram(event)
+    assert "Avg Processing Time (local episodes)" in md
+
+
+def test_format_done_html_shows_episode_processing_factor():
+    """Per-episode processing factor appears alongside the per-episode times."""
+    event = _make_done_event()
+    event.episode_processing_factor = 0.3
+    html = format_done_html(event)
+    assert "Processing factor" in html
+    assert "0.3x" in html
+
+
+def test_format_done_telegram_shows_episode_processing_factor():
+    event = _make_done_event()
+    event.episode_processing_factor = 1.2
+    md = format_done_telegram(event)
+    assert "Processing factor" in md
+    assert "1.2x" in md

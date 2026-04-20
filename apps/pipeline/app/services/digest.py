@@ -12,6 +12,7 @@ from app.services.notification_events import EpisodeDoneEvent, EpisodeFailedEven
 from app.services.digest_formatters import format_digest_html, format_digest_telegram
 from app.services.notification_runtime import (
     compute_avg_duration,
+    compute_avg_processing_factor,
     compute_avg_processing_stats,
     estimate_queue_status,
 )
@@ -70,6 +71,20 @@ class DigestItem:
     retry_count: int | None
     retry_max: int | None
     diarize_step_durations: dict[str, float] | None = None
+    inference_provider_used: str | None = None
+    episode_processing_factor: float | None = None
+
+
+@dataclass
+class ProviderAverages:
+    """Averages scoped to episodes processed by a single inference provider."""
+
+    provider: str  # "local", "fireworks", etc.
+    avg_transcribe_secs: float | None = None
+    avg_diarize_secs: float | None = None
+    avg_total_secs: float | None = None
+    avg_duration_secs: float | None = None
+    processing_factor: float | None = None
 
 
 @dataclass
@@ -84,6 +99,7 @@ class DigestData:
     avg_total_secs: float | None = None
     avg_duration_secs: float | None = None
     processing_factor: float | None = None
+    provider_averages: list[ProviderAverages] = field(default_factory=list)
 
 
 def _serialize_event(event: Event) -> str:
@@ -173,8 +189,12 @@ def send_digest_if_due(now: datetime | None = None) -> None:
         avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
         avg_dur = compute_avg_duration(db)
         items = []
+        providers_seen: list[str] = []
         for row in unsent:
             payload = json.loads(row.payload)
+            provider = payload.get("inference_provider_used")
+            if provider and provider not in providers_seen:
+                providers_seen.append(provider)
             items.append(DigestItem(
                 event_type=row.event_type,
                 episode_title=payload.get("episode_title", ""),
@@ -185,6 +205,25 @@ def send_digest_if_due(now: datetime | None = None) -> None:
                 error_class=payload.get("error_class"),
                 retry_count=payload.get("retry_count"),
                 retry_max=payload.get("retry_max"),
+                inference_provider_used=provider,
+                episode_processing_factor=payload.get("episode_processing_factor"),
+            ))
+
+        provider_averages: list[ProviderAverages] = []
+        for provider in providers_seen:
+            p_t, p_d, p_total = compute_avg_processing_stats(db, provider=provider)
+            p_dur = compute_avg_duration(db, provider=provider)
+            p_factor = compute_avg_processing_factor(db, provider=provider)
+            if (p_t is None and p_d is None and p_total is None
+                    and p_dur is None and p_factor is None):
+                continue
+            provider_averages.append(ProviderAverages(
+                provider=provider,
+                avg_transcribe_secs=p_t,
+                avg_diarize_secs=p_d,
+                avg_total_secs=p_total,
+                avg_duration_secs=p_dur,
+                processing_factor=p_factor,
             ))
 
         if frequency == "weekly":
@@ -205,6 +244,7 @@ def send_digest_if_due(now: datetime | None = None) -> None:
             avg_total_secs=avg_total,
             avg_duration_secs=avg_dur,
             processing_factor=factor,
+            provider_averages=provider_averages,
         )
 
         _send_digest(digest, ns)

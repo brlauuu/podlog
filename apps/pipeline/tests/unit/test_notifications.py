@@ -8,6 +8,10 @@ from app.services.notifications import (
     compute_avg_processing_stats,
     estimate_queue_status,
 )
+from app.services.notification_runtime import (
+    _compute_episode_processing_factor,
+    compute_avg_processing_factor,
+)
 
 
 def test_episode_done_event_fields():
@@ -179,6 +183,65 @@ def test_compute_avg_processing_stats_partial_data():
     assert avg_t == 100.0
     assert avg_d is None  # no diarize data at all
     assert avg_total == 100.0  # transcribe only (diarize treated as 0)
+
+
+def test_compute_avg_processing_stats_filters_by_provider():
+    """When provider is passed, only matching episodes contribute to the avg."""
+    db = MagicMock()
+
+    query_mock = MagicMock()
+    query_mock.filter.return_value = query_mock
+
+    # Simulate: one local ep (100/50), one remote ep (10/5). Asking for local → 100/50 only.
+    query_mock.all.return_value = [MagicMock(transcribe_duration_secs=100.0, diarize_duration_secs=50.0)]
+    db.query.return_value = query_mock
+
+    avg_t, avg_d, avg_total = compute_avg_processing_stats(db, provider="local")
+    assert avg_t == 100.0
+    assert avg_d == 50.0
+    assert avg_total == 150.0
+
+    # The filter should have been called with an extra clause when provider is set.
+    # (we just verify it was called at least twice — once for status, once for provider)
+    assert query_mock.filter.call_count >= 2
+
+
+def test_compute_avg_processing_factor_returns_ratio():
+    """processing_secs / audio_secs is averaged across done episodes."""
+    db = MagicMock()
+
+    ep1 = MagicMock(
+        transcribe_duration_secs=600.0, diarize_duration_secs=300.0, duration_secs=1800
+    )  # 900 processing / 1800 audio = 0.5
+    ep2 = MagicMock(
+        transcribe_duration_secs=300.0, diarize_duration_secs=150.0, duration_secs=1800
+    )  # 450 / 1800 = 0.25
+
+    q = MagicMock()
+    q.filter.return_value = q
+    q.all.return_value = [ep1, ep2]
+    db.query.return_value = q
+
+    factor = compute_avg_processing_factor(db)
+    # duration-weighted: (900 + 450) / (1800 + 1800) = 1350 / 3600 = 0.375
+    assert factor == 0.375
+
+
+def test_compute_avg_processing_factor_no_data():
+    db = MagicMock()
+    q = MagicMock()
+    q.filter.return_value = q
+    q.all.return_value = []
+    db.query.return_value = q
+    assert compute_avg_processing_factor(db) is None
+
+
+def test_episode_processing_factor_helper():
+    """Per-episode factor is processing / duration, or None if missing."""
+    assert _compute_episode_processing_factor(900.0, 1800) == 0.5
+    assert _compute_episode_processing_factor(None, 1800) is None
+    assert _compute_episode_processing_factor(900.0, None) is None
+    assert _compute_episode_processing_factor(900.0, 0) is None
 
 
 def test_estimate_queue_status_no_history():

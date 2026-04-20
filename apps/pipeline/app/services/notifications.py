@@ -55,6 +55,17 @@ def _fmt_factor(factor: float | None) -> str:
     return f"{factor:.1f}x"
 
 
+def _provider_label(provider: str | None) -> str:
+    """Human label for an inference provider, used in averages section headers."""
+    if provider == "local":
+        return "local episodes"
+    if provider == "fireworks":
+        return "remote episodes"
+    if provider:
+        return f"{provider} episodes"
+    return "all episodes"
+
+
 def _fmt_diarize_steps_html(step_durations: dict[str, float] | None) -> str:
     if not step_durations:
         return ""
@@ -98,10 +109,11 @@ def _fmt_avg_section_html(event) -> str:
     if event.processing_factor is not None:
         factor_row = f"""\
     <tr style="background: #f9f9f9;">
-        <td style="padding: 4px 12px; color: #666;">Processing factor</td>
+        <td style="padding: 4px 12px; color: #666;">Avg processing factor</td>
         <td style="padding: 4px 12px; font-weight: 600;">{_fmt_factor(event.processing_factor)}</td></tr>"""
+    scope_label = _provider_label(getattr(event, "inference_provider_used", None))
     return f"""\
-  <h3 style="margin-top: 20px; margin-bottom: 8px;">Avg Processing Time (all episodes)</h3>
+  <h3 style="margin-top: 20px; margin-bottom: 8px;">Avg Processing Time ({scope_label})</h3>
   <table style="border-collapse: collapse; width: 100%;">
     <tr><td style="padding: 4px 12px; color: #666;">Avg transcription</td>
         <td style="padding: 4px 12px;">{_fmt_short_duration(event.avg_transcribe_secs)}</td></tr>
@@ -121,8 +133,9 @@ def _fmt_avg_section_telegram(event) -> str:
             and event.avg_total_secs is None and event.avg_duration_secs is None
             and event.processing_factor is None):
         return ""
+    scope_label = _provider_label(getattr(event, "inference_provider_used", None))
     lines = (
-        f"\n*Avg Processing Time (all episodes)*\n"
+        f"\n*Avg Processing Time ({scope_label})*\n"
         f"`Avg transcribe:  {_fmt_short_duration(event.avg_transcribe_secs)}`\n"
         f"`Avg diarize:     {_fmt_short_duration(event.avg_diarize_secs)}`\n"
         f"`Avg per episode: {_fmt_short_duration(event.avg_total_secs)}`\n"
@@ -130,13 +143,19 @@ def _fmt_avg_section_telegram(event) -> str:
     if event.avg_duration_secs is not None:
         lines += f"`Avg ep. length:  {_fmt_short_duration(event.avg_duration_secs)}`\n"
     if event.processing_factor is not None:
-        lines += f"`Processing factor: {_fmt_factor(event.processing_factor)}`\n"
+        lines += f"`Avg processing factor: {_fmt_factor(event.processing_factor)}`\n"
     return lines
 
 
 def format_done_html(event: EpisodeDoneEvent) -> str:
     avg_html = _fmt_avg_section_html(event)
     diarize_steps_html = _fmt_diarize_steps_html(event.diarize_step_durations)
+    episode_factor_row = ""
+    if event.episode_processing_factor is not None:
+        episode_factor_row = f"""\
+    <tr style="background: #f9f9f9;">
+        <td style="padding: 4px 12px; color: #666;">Processing factor</td>
+        <td style="padding: 4px 12px; font-weight: 600;">{_fmt_factor(event.episode_processing_factor)}</td></tr>"""
     return f"""\
 <html>
 <body style="font-family: -apple-system, Arial, sans-serif; color: #222; max-width: 520px; margin: 0 auto; padding: 16px;">
@@ -162,6 +181,7 @@ def format_done_html(event: EpisodeDoneEvent) -> str:
         <td style="padding: 4px 12px;">{_fmt_short_duration(event.diarize_duration_secs)}</td></tr>
     <tr><td style="padding: 4px 12px; color: #666;">Total</td>
         <td style="padding: 4px 12px; font-weight: 600;">{_fmt_short_duration(event.total_duration_secs)}</td></tr>
+{episode_factor_row}
   </table>
 {diarize_steps_html}
 {avg_html}
@@ -182,6 +202,11 @@ def format_done_html(event: EpisodeDoneEvent) -> str:
 def format_done_telegram(event: EpisodeDoneEvent) -> str:
     avg_section = _fmt_avg_section_telegram(event)
     diarize_steps_section = _fmt_diarize_steps_telegram(event.diarize_step_durations)
+    episode_factor_line = ""
+    if event.episode_processing_factor is not None:
+        episode_factor_line = (
+            f"`Processing factor: {_fmt_factor(event.episode_processing_factor)}`\n"
+        )
     return (
         f"*✅ Episode Processed*\n\n"
         f"*Podcast:* {event.podcast_title}\n"
@@ -192,6 +217,7 @@ def format_done_telegram(event: EpisodeDoneEvent) -> str:
         f"`Transcription:  {_fmt_short_duration(event.transcribe_duration_secs)}`\n"
         f"`Diarization:    {_fmt_short_duration(event.diarize_duration_secs)}`\n"
         f"`Total:          {_fmt_short_duration(event.total_duration_secs)}`\n"
+        f"{episode_factor_line}"
         f"{diarize_steps_section}"
         f"{avg_section}\n"
         f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate(event.queue_estimated_secs)}"
