@@ -12,6 +12,11 @@ import SearchInput from "@/components/SearchInput";
 import HelpPopover from "@/components/HelpPopover";
 import SearchSpinner from "@/components/SearchSpinner";
 import PodcastFilter from "@/components/PodcastFilter";
+import {
+  RAG_MODELS,
+  DEFAULT_RAG_MODEL,
+  formatModelOption,
+} from "@/lib/rag-models";
 
 interface Feed {
   id: string;
@@ -26,15 +31,11 @@ interface CoverageStats {
 
 type StreamStatus = "idle" | "connecting" | "streaming" | "done" | "error";
 
-const MODEL_OPTIONS = [
-  { value: "qwen2.5:1.5b", label: "Fast", hint: "6-8 tok/s, 8-15s" },
-  { value: "qwen2.5:3b", label: "Default", hint: "3-4 tok/s, 15-25s" },
-  { value: "phi3:mini", label: "Quality", hint: "2-3 tok/s, 20-40s" },
-];
-
 function getStoredModel(): string {
-  if (typeof window === "undefined") return "qwen2.5:3b";
-  return localStorage.getItem("podlog-ask-model") || "qwen2.5:3b";
+  if (typeof window === "undefined") return DEFAULT_RAG_MODEL;
+  const stored = localStorage.getItem("podlog-ask-model");
+  if (stored && RAG_MODELS.some((m) => m.value === stored)) return stored;
+  return DEFAULT_RAG_MODEL;
 }
 
 export default function AskPage() {
@@ -283,9 +284,9 @@ export default function AskPage() {
                 onChange={(e) => setModel(e.target.value)}
                 className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
               >
-                {MODEL_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label} &middot; {opt.value} ({opt.hint})
+                {RAG_MODELS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {formatModelOption(m)}
                   </option>
                 ))}
               </select>

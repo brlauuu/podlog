@@ -22,6 +22,15 @@ TOP_K = 8
 SIMILARITY_THRESHOLD = 0.3
 DEFAULT_MODEL = "qwen2.5:3b"
 
+# Per-model num_ctx sent to Ollama. Keep well below the model's max context
+# so prefill stays fast on CPU — see issue #138.
+MODEL_NUM_CTX = {
+    "qwen2.5:3b": 8192,
+    "phi3:mini": 16384,
+    "gemma4:e4b": 16384,
+}
+DEFAULT_NUM_CTX = 8192
+
 SYSTEM_PROMPT = """You are a helpful assistant that answers questions about podcast transcripts.
 
 RULES:
@@ -185,6 +194,7 @@ async def stream_ollama_response(
         "model": model,
         "messages": messages,
         "stream": True,
+        "options": {"num_ctx": MODEL_NUM_CTX.get(model, DEFAULT_NUM_CTX)},
     }
 
     try:

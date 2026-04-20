@@ -12,6 +12,11 @@ import {
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { renderAnswerWithCitations, type Source, type OnCitationClick } from "@/lib/citations";
 import { formatTimestamp } from "@/lib/timestamp";
+import {
+  RAG_MODELS,
+  DEFAULT_RAG_MODEL,
+  formatModelOption,
+} from "@/lib/rag-models";
 
 type StreamStatus = "idle" | "connecting" | "streaming" | "done" | "error";
 
@@ -152,8 +157,26 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<StreamStatus>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [model, setModel] = useState<string>(DEFAULT_RAG_MODEL);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Hydrate model selection from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("podlog-ask-model");
+      if (stored && RAG_MODELS.some((m) => m.value === stored)) {
+        setModel(stored);
+      }
+    } catch {}
+  }, []);
+
+  // Persist model selection
+  useEffect(() => {
+    try {
+      localStorage.setItem("podlog-ask-model", model);
+    } catch {}
+  }, [model]);
 
   // Auto-scroll on new content
   useEffect(() => {
@@ -192,7 +215,7 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
         const resp = await fetch("/api/pipeline/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: q, episode_id: episodeId }),
+          body: JSON.stringify({ question: q, episode_id: episodeId, model }),
           signal: controller.signal,
         });
 
@@ -258,7 +281,7 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
         setErrorMsg("Connection failed. Is the pipeline running?");
       }
     },
-    [input, episodeId]
+    [input, episodeId, model]
   );
 
   const isStreaming = status === "connecting" || status === "streaming";
@@ -338,6 +361,26 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
             <X size={16} />
           </button>
         </div>
+      </div>
+
+      {/* Model selector row */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0 text-xs">
+        <label htmlFor="episode-chat-model" className="text-muted-foreground">
+          Model:
+        </label>
+        <select
+          id="episode-chat-model"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          disabled={isStreaming}
+          className="flex-1 min-w-0 text-xs border border-input rounded-md px-2 py-1 bg-background text-foreground disabled:opacity-60"
+        >
+          {RAG_MODELS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {formatModelOption(m)}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Messages area */}
