@@ -24,7 +24,7 @@ The system retrieves relevant transcript chunks via semantic search (pgvector), 
 - **Provider-routed generation** — local [Ollama](https://ollama.ai) by default, optional Fireworks remote mode
 - **Local-first default** — no external API calls unless you enable Fireworks
 - **Streaming responses** — answers appear word-by-word via server-sent events
-- **Model selection** — chosen in the Ask page model selector and sent per request (default: `qwen2.5:3b`)
+- **Model selection** — chosen in the Ask page or the per-episode chat popup (both share the same preference via localStorage). Options: `qwen2.5:3b` (default), `phi3:mini`, `gemma4:e4b`. Each model runs with a bounded `num_ctx` (8K–16K) for fast CPU prefill; the dropdown shows both the configured value and the model's max context.
 - **Additional RAM:** ~2 GB when the LLM is active (auto-unloaded when idle)
 
 ## Prerequisites

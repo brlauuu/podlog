@@ -73,7 +73,8 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 Ask AI uses the model selected in the `/ask` page UI and sends it with each request. There is no `OLLAMA_MODEL` environment variable in Podlog.
 
 - For local Ask mode, `OLLAMA_URL` controls the Ollama endpoint that serves the selected model.
-- The Ask page defaults to `qwen2.5:3b` unless you choose another option in the UI.
+- The Ask page and per-episode chat popup default to `qwen2.5:3b` unless you choose another option. The full list is `qwen2.5:3b`, `phi3:mini`, and `gemma4:e4b` — all pulled by `make ollama-pull`.
+- Each model runs with a bounded `num_ctx` (8K–16K) to keep CPU prefill fast. The dropdown shows both the configured value and the model's maximum context.
 - When `INFERENCE_PROVIDER=fireworks`, `FIREWORKS_CHAT_MODEL` provides the default Ask model for remote generation.
 
 ### Deployment profiles

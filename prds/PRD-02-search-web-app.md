@@ -221,13 +221,15 @@ The Ask page lets users ask natural-language questions about their podcast trans
 | `SIMILARITY_THRESHOLD` | 0.3 | `rag.py` | Minimum cosine similarity for a chunk to be included. Chunks below this score are discarded even if fewer than TOP_K results remain. |
 | `DEFAULT_MODEL` | `qwen2.5:3b` | `rag.py` | The Ollama model used for generation. Configurable per-request from the UI. |
 
-**Model selection:** The UI offers three models with different speed/quality tradeoffs. The user's choice is persisted in `localStorage`.
+**Model selection:** The UI offers three models with different speed/quality tradeoffs, exposed both on the Ask page and in the per-episode chat popup. The user's choice is persisted in `localStorage` under `podlog-ask-model` and shared by both surfaces.
 
-| Model | Speed | Typical response time |
-|---|---|---|
-| `qwen2.5:1.5b` | Fast | 8-15s |
-| `qwen2.5:3b` | Default | 15-25s |
-| `phi3:mini` | Quality | 20-40s |
+| Model | Description | `num_ctx` | Max context |
+|---|---|---|---|
+| `qwen2.5:3b` | Default | 8K | 32K |
+| `phi3:mini` | Quality | 16K | 128K |
+| `gemma4:e4b` | Modern (Gemma 4) | 16K | 128K |
+
+Configured context (`num_ctx`) is kept well below each model's maximum to keep prefill fast on CPU. The dropdown surfaces both numbers so users see the ceiling and the value actually sent to Ollama.
 
 **Source feed filtering:** Users can filter which podcast feeds (or manual uploads) are searched, using a multi-select dropdown. When no filter is selected, all sources are searched.
 

@@ -145,6 +145,54 @@ class TestOllamaStreaming:
 
         assert asyncio.run(collect()) == ["Hello", " world"]
 
+    def test_stream_ollama_response_sets_num_ctx_per_model(self):
+        """Regression guard for issue #138: per-model num_ctx is sent to Ollama."""
+        from app.services.rag import stream_ollama_response, MODEL_NUM_CTX, DEFAULT_NUM_CTX
+
+        captured_payloads = []
+
+        class _Resp:
+            status_code = 200
+
+            async def aread(self):
+                return b""
+
+            async def aiter_lines(self):
+                yield '{"done": true}'
+
+        class _StreamCtx:
+            async def __aenter__(self):
+                return _Resp()
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class _Client:
+            def stream(self, method, url, json=None, **kwargs):
+                captured_payloads.append(json)
+                return _StreamCtx()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        async def run(model):
+            with patch("app.services.rag.httpx.AsyncClient", return_value=_Client()):
+                async for _ in stream_ollama_response(
+                    [{"role": "user", "content": "test"}], model=model
+                ):
+                    pass
+
+        asyncio.run(run("qwen2.5:3b"))
+        asyncio.run(run("gemma4:e4b"))
+        asyncio.run(run("unknown-model:foo"))
+
+        assert captured_payloads[0]["options"]["num_ctx"] == MODEL_NUM_CTX["qwen2.5:3b"]
+        assert captured_payloads[1]["options"]["num_ctx"] == MODEL_NUM_CTX["gemma4:e4b"]
+        assert captured_payloads[2]["options"]["num_ctx"] == DEFAULT_NUM_CTX
+
     def test_stream_ollama_response_non_200_raises(self):
         from app.services.rag import stream_ollama_response
 

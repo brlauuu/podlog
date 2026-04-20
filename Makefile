@@ -57,8 +57,10 @@ shell-web:      ## Open shell in web container
 web:            ## Open web app in browser
 	open http://localhost:3000
 
-ollama-pull:    ## Pull default Ollama model (Qwen2.5-3B Q4)
+ollama-pull:    ## Pull Ollama models used by the Ask feature
 	docker compose exec ollama ollama pull qwen2.5:3b
+	docker compose exec ollama ollama pull phi3:mini
+	docker compose exec ollama ollama pull gemma4:e4b
 
 health-check:   ## Run health check once (requires python3, pg_isready, docker)
 	python3 scripts/healthcheck.py
