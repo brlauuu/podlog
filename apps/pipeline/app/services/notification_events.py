@@ -16,6 +16,8 @@ class EpisodeDoneEvent(Event):
     diarize_duration_secs: float | None = None
     diarize_step_durations: dict[str, float] | None = None
     total_duration_secs: float | None = None
+    inference_provider_used: str | None = None
+    episode_processing_factor: float | None = None
     queue_remaining: int = 0
     queue_estimated_secs: float | None = None
     avg_transcribe_secs: float | None = None
@@ -36,6 +38,7 @@ class EpisodeFailedEvent(Event):
     error_message: str = ""
     retry_count: int = 0
     retry_max: int = 3
+    inference_provider_used: str | None = None
     queue_remaining: int = 0
     queue_estimated_secs: float | None = None
     avg_transcribe_secs: float | None = None

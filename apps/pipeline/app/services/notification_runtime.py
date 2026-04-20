@@ -6,16 +6,20 @@ from app.services.events import bus
 from app.services.notification_events import EpisodeDoneEvent, EpisodeFailedEvent
 
 
-def compute_avg_processing_stats(db: Session) -> tuple[float | None, float | None, float | None]:
-    """Compute average processing times across all completed episodes."""
-    done_episodes = (
-        db.query(Episode)
-        .filter(
-            Episode.status == "done",
-            Episode.processed_at.isnot(None),
-        )
-        .all()
+def compute_avg_processing_stats(
+    db: Session, provider: str | None = None
+) -> tuple[float | None, float | None, float | None]:
+    """Compute average processing times across done episodes.
+
+    If provider is set, only includes episodes with that inference_provider_used value.
+    """
+    q = db.query(Episode).filter(
+        Episode.status == "done",
+        Episode.processed_at.isnot(None),
     )
+    if provider is not None:
+        q = q.filter(Episode.inference_provider_used == provider)
+    done_episodes = q.all()
 
     if not done_episodes:
         return None, None, None
@@ -35,23 +39,58 @@ def compute_avg_processing_stats(db: Session) -> tuple[float | None, float | Non
     return avg_t, avg_d, avg_total
 
 
-def compute_avg_duration(db: Session) -> float | None:
-    """Compute average episode audio duration across all completed episodes."""
-    done_episodes = (
-        db.query(Episode)
-        .filter(
-            Episode.status == "done",
-            Episode.duration_secs.isnot(None),
-        )
-        .all()
+def compute_avg_duration(db: Session, provider: str | None = None) -> float | None:
+    """Compute average episode audio duration across done episodes.
+
+    If provider is set, only includes episodes with that inference_provider_used value.
+    """
+    q = db.query(Episode).filter(
+        Episode.status == "done",
+        Episode.duration_secs.isnot(None),
     )
+    if provider is not None:
+        q = q.filter(Episode.inference_provider_used == provider)
+    done_episodes = q.all()
     if not done_episodes:
         return None
     return sum(ep.duration_secs for ep in done_episodes) / len(done_episodes)
 
 
+def compute_avg_processing_factor(db: Session, provider: str | None = None) -> float | None:
+    """Compute avg processing factor (processing_secs / audio_secs) across done episodes.
+
+    If provider is set, only includes episodes with that inference_provider_used value.
+    """
+    q = db.query(Episode).filter(
+        Episode.status == "done",
+        Episode.processed_at.isnot(None),
+        Episode.duration_secs.isnot(None),
+    )
+    if provider is not None:
+        q = q.filter(Episode.inference_provider_used == provider)
+    done_episodes = q.all()
+
+    total_processing = 0.0
+    total_audio = 0.0
+    for ep in done_episodes:
+        processing_secs = (ep.transcribe_duration_secs or 0) + (ep.diarize_duration_secs or 0)
+        if processing_secs <= 0 or not ep.duration_secs:
+            continue
+        total_processing += processing_secs
+        total_audio += ep.duration_secs
+
+    if total_audio == 0:
+        return None
+    return total_processing / total_audio
+
+
 def estimate_queue_status(db: Session) -> tuple[int, float | None, float | None]:
-    """Return (remaining_count, estimated_seconds_to_complete, processing_factor)."""
+    """Return (remaining_count, estimated_seconds_to_complete, processing_factor).
+
+    processing_factor here reflects the duration-weighted rate of the 10 most
+    recent completed episodes regardless of provider — used for the queue ETA,
+    which processes whatever comes next.
+    """
     remaining = (
         db.query(Episode)
         .filter(Episode.status.in_(["pending", "downloading", "transcribing", "diarizing", "archiving"]))
@@ -107,12 +146,28 @@ def _compute_total_processing_duration_secs(episode: Episode) -> float | None:
     return sum(measured_durations) if measured_durations else None
 
 
+def _compute_episode_processing_factor(
+    total_processing_secs: float | None, duration_secs: int | None
+) -> float | None:
+    """Return processing_secs / audio_secs for a single episode."""
+    if total_processing_secs is None or not duration_secs:
+        return None
+    return total_processing_secs / duration_secs
+
+
 def emit_episode_done_event(db: Session, episode: Episode) -> None:
-    """Emit EpisodeDoneEvent using runtime queue/average stats."""
-    remaining, estimated, factor = estimate_queue_status(db)
-    avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
-    avg_dur = compute_avg_duration(db)
+    """Emit EpisodeDoneEvent using runtime queue/average stats.
+
+    Averages are scoped to the episode's inference provider so that fast remote
+    runs don't skew the average shown next to a slow local run (or vice versa).
+    """
+    provider = episode.inference_provider_used
+    remaining, estimated, _ = estimate_queue_status(db)
+    avg_t, avg_d, avg_total = compute_avg_processing_stats(db, provider=provider)
+    avg_dur = compute_avg_duration(db, provider=provider)
+    avg_factor = compute_avg_processing_factor(db, provider=provider)
     total_secs = _compute_total_processing_duration_secs(episode)
+    episode_factor = _compute_episode_processing_factor(total_secs, episode.duration_secs)
     bus.emit(
         EpisodeDoneEvent(
             episode_id=episode.id,
@@ -124,13 +179,15 @@ def emit_episode_done_event(db: Session, episode: Episode) -> None:
             diarize_duration_secs=episode.diarize_duration_secs,
             diarize_step_durations=episode.diarize_step_durations,
             total_duration_secs=total_secs,
+            inference_provider_used=provider,
+            episode_processing_factor=episode_factor,
             queue_remaining=remaining,
             queue_estimated_secs=estimated,
             avg_transcribe_secs=avg_t,
             avg_diarize_secs=avg_d,
             avg_total_secs=avg_total,
             avg_duration_secs=avg_dur,
-            processing_factor=factor,
+            processing_factor=avg_factor,
         )
     )
 
@@ -143,9 +200,11 @@ def emit_episode_failed_event(
     error_message: str,
 ) -> None:
     """Emit EpisodeFailedEvent using runtime queue/average stats."""
-    remaining, estimated, factor = estimate_queue_status(db)
-    avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
-    avg_dur = compute_avg_duration(db)
+    provider = episode.inference_provider_used
+    remaining, estimated, _ = estimate_queue_status(db)
+    avg_t, avg_d, avg_total = compute_avg_processing_stats(db, provider=provider)
+    avg_dur = compute_avg_duration(db, provider=provider)
+    avg_factor = compute_avg_processing_factor(db, provider=provider)
     bus.emit(
         EpisodeFailedEvent(
             episode_id=episode.id,
@@ -157,12 +216,13 @@ def emit_episode_failed_event(
             error_message=error_message,
             retry_count=episode.retry_count,
             retry_max=episode.retry_max,
+            inference_provider_used=provider,
             queue_remaining=remaining,
             queue_estimated_secs=estimated,
             avg_transcribe_secs=avg_t,
             avg_diarize_secs=avg_d,
             avg_total_secs=avg_total,
             avg_duration_secs=avg_dur,
-            processing_factor=factor,
+            processing_factor=avg_factor,
         )
     )
