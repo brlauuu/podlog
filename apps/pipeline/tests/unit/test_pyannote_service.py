@@ -52,6 +52,27 @@ class TestLoadPipeline:
 
         assert pyannote_mod._pipeline is sentinel
 
+    @patch("app.config.settings")
+    def test_uses_configured_model_id(self, mock_settings):
+        """Regression guard: the HF model id is read from settings.pyannote_model,
+        not hardcoded — see issue #515."""
+        mock_settings.hf_token = "test-token"
+        mock_settings.pyannote_model = "pyannote/community-1"
+
+        torch_mod = sys.modules["torch"]
+        torch_mod.cuda.is_available.return_value = False
+
+        from_pretrained_mock = MagicMock(return_value=MagicMock())
+        pyannote_audio = sys.modules["pyannote.audio"]
+        pyannote_audio.Pipeline = MagicMock(from_pretrained=from_pretrained_mock)
+
+        pyannote_mod.load_pipeline()
+
+        from_pretrained_mock.assert_called_once()
+        args, kwargs = from_pretrained_mock.call_args
+        assert args[0] == "pyannote/community-1"
+        assert kwargs.get("token") == "test-token"
+
 
 class TestUnloadPipeline:
     def test_clears_pipeline(self):

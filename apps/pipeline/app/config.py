@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # HuggingFace
     hf_token: str
 
+    # pyannote diarization model (gated on HuggingFace — user must accept license)
+    pyannote_model: str = "pyannote/community-1"
+
     # Whisper (WhisperX / CTranslate2 backend)
     whisper_model: str = "large-v3-turbo"
     whisper_compute_type: str = "int8"

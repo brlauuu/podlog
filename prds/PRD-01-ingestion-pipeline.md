@@ -102,7 +102,7 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 
 ### 5.5 Speaker Diarization
 
-- Local mode library: `pyannote/speaker-diarization-3.1` from HuggingFace.
+- Local mode library: `pyannote/community-1` from HuggingFace (configurable via `PYANNOTE_MODEL`).
 - Requires a HuggingFace access token set via environment variable `HF_TOKEN` for local mode. The user must accept the pyannote model license on HuggingFace.com independently.
 - Fireworks mode uses diarization metadata returned by Fireworks transcription responses when enabled.
 - Diarization produces speaker-labeled time segments: `{ speaker: "SPEAKER_00", start: 12.4, end: 18.1 }`.
@@ -276,7 +276,7 @@ CREATE TABLE speaker_names (
 | ---------------- | -------------------------------------------- | -------------------------------------------- |
 | Language         | Python 3.11                                  | Best ecosystem for ML/audio tooling          |
 | STT              | WhisperX (CTranslate2 + wav2vec2 alignment)  | Faster CPU inference; word-level timestamps  |
-| Diarization      | `pyannote/speaker-diarization-3.1`           | Industry standard; HuggingFace native        |
+| Diarization      | `pyannote/community-1`                       | Industry standard; HuggingFace native        |
 | Audio processing | `ffmpeg` (via `ffmpeg-python`)               | Universal format support                     |
 | Task queue       | PostgreSQL-backed job queue                   | No external broker needed; jobs in episodes table |
 | LLM inference    | Ollama (local)                               | RAG-based Ask AI feature; configurable model |

@@ -593,7 +593,7 @@ cd podlog
 # 2. Configure
 cp .env.example .env
 # Edit .env: set POSTGRES_PASSWORD and HF_TOKEN
-# Accept pyannote license at: https://huggingface.co/pyannote/speaker-diarization-3.1
+# Accept pyannote license at: https://huggingface.co/pyannote/community-1
 
 # 3. Build and start
 make build

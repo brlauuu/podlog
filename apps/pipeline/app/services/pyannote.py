@@ -26,7 +26,7 @@ def load_pipeline():
     logger.info('"action": "pyannote_load_start"')
 
     _pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1",
+        settings.pyannote_model,
         token=settings.hf_token,
     )
 
