@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-04 — Host & Guest Inference  
-**Version:** 1.2
+**Version:** 1.3
 **Status:** Active
 **Depends on:** PRD-01 v1.1, PRD-02 v1.1, PRD-03 v1.1
 
 **Changelog:**
+- v1.3 — `Dockerfile.worker` now downloads `en_core_web_trf` in addition to `en_core_web_lg`, and `SPACY_MODEL` default flipped to `en_core_web_trf` to match the spec in §4.1. `en_core_web_lg` remains installed as an automatic fallback and as the recommended override for memory-constrained hosts (issue #523).
 - v1.2 — Marked status Active (feature is shipped: `services/inference.py`, `tasks/infer.py`, `INFERRING` stage, spaCy `en_core_web_lg` bundled in `Dockerfile.worker`). Pipeline stage ordering in §4.6 updated to match actual code path (adds CHUNKING and EMBEDDING between DIARIZING and INFERRING).
 
 ---

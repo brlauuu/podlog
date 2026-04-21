@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir poetry \
        else \
          poetry install --with ml --without dev --no-root --no-interaction --no-ansi; \
        fi \
+    && python -m spacy download en_core_web_trf \
     && python -m spacy download en_core_web_lg
 
 COPY . .

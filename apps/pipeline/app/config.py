@@ -47,7 +47,9 @@ class Settings(BaseSettings):
 
     # Host/guest inference (PRD-04 S9)
     inference_enabled: bool = True
-    spacy_model: str = "en_core_web_lg"
+    # en_core_web_trf is the PRD-04 default (better NER accuracy, ~500 MB).
+    # inference.py falls back to en_core_web_lg if trf is not installed.
+    spacy_model: str = "en_core_web_trf"
 
     # Hardware profile override for cost estimates (Issue #322)
     hardware_profile: str | None = None
