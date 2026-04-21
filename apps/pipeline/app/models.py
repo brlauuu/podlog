@@ -48,6 +48,10 @@ class Feed(Base):
     # PRD-04 B1: RSS person tags used as HIGH-confidence host signals during inference
     itunes_author: Mapped[str | None] = mapped_column(Text)
     itunes_owner_name: Mapped[str | None] = mapped_column(Text)
+    # PRD-04 B2: Podcasting 2.0 <podcast:person> entries at channel level.
+    # JSONB list of {"name", "role", "group", "href"?, "img"?}. Refreshed on
+    # each poll; role="host" entries seed HIGH-confidence host candidates.
+    podcast_persons: Mapped[list | None] = mapped_column(JSONB)
     last_polled_at: Mapped[datetime | None] = mapped_column()
     # Issue #23: test | full — test mode limits to N most-recent episodes (default 1)
     # Issue #84: selective — only user-chosen episodes are ingested; not auto-polled
@@ -77,6 +81,10 @@ class Episode(Base):
     episode_url: Mapped[str | None] = mapped_column(Text)
     # PRD-04 B3: entry-level author (<dc:creator> / <itunes:author> / <author>)
     episode_author: Mapped[str | None] = mapped_column(Text)
+    # PRD-04 B2: item-level Podcasting 2.0 <podcast:person> entries. Same
+    # shape as Feed.podcast_persons. Overrides channel-level persons when
+    # present on a specific episode.
+    podcast_persons: Mapped[list | None] = mapped_column(JSONB)
     audio_local_path: Mapped[str | None] = mapped_column(Text)
     transcript_path: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str | None] = mapped_column(Text)

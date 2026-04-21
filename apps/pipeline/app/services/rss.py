@@ -7,7 +7,7 @@ preview_feed             — validate + fetch episodes in one HTTP call (used by
 """
 import logging
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 from email.utils import parsedate_to_datetime
@@ -17,6 +17,12 @@ import feedparser
 import httpx
 
 _ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
+# Podcasting 2.0 namespace (https://github.com/Podcastindex-org/podcast-namespace).
+_PODCAST_NS = "https://podcastindex.org/namespace/1.0"
+
+# Maximum number of <podcast:person> entries we will keep per feed or episode.
+# Capped to prevent a hostile or buggy feed from ballooning the JSONB column.
+_MAX_PODCAST_PERSONS = 64
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +43,11 @@ class FeedMeta:
     # PRD-04 B1: feedparser exposes <itunes:owner><itunes:name>...</itunes:name></itunes:owner>
     # as feed.publisher_detail.name.
     itunes_owner_name: Optional[str] = None
+    # PRD-04 B2: channel-level <podcast:person> entries (Podcasting 2.0 namespace).
+    # Each entry is a dict {"name", "role", "group", "href"?, "img"?}. Parsed
+    # directly from raw XML because feedparser's podcast_person handler only
+    # captures the last occurrence and drops text content at feed level.
+    podcast_persons: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -59,6 +70,10 @@ class EpisodeMeta:
     # rather than dc_creator because the actual XML tag is indistinguishable
     # after feedparser normalization.
     episode_author: Optional[str] = None
+    # PRD-04 B2: item-level <podcast:person> entries (Podcasting 2.0 namespace).
+    # Same shape as FeedMeta.podcast_persons; used to attach host/guest labels
+    # that the publisher asserts for a specific episode (overrides channel).
+    podcast_persons: list[dict] = field(default_factory=list)
 
 
 def _require_http_url(url: str) -> None:
@@ -104,6 +119,7 @@ def validate_and_parse_feed(url: str) -> FeedMeta:
         website_url=feed.get("link"),
         itunes_author=_extract_feed_author(feed, xml_text=content),
         itunes_owner_name=_extract_feed_owner_name(feed),
+        podcast_persons=_extract_channel_podcast_persons(content),
     )
 
 
@@ -117,6 +133,7 @@ def fetch_episodes(url: str) -> list[EpisodeMeta]:
         return []
 
     parsed = feedparser.parse(resp.text)
+    item_persons = _extract_item_podcast_persons(resp.text)
     episodes = []
 
     for entry in parsed.entries:
@@ -141,6 +158,7 @@ def fetch_episodes(url: str) -> list[EpisodeMeta]:
                 published_at=published_at,
                 duration_secs=duration_secs,
                 episode_author=_extract_entry_author(entry),
+                podcast_persons=item_persons.get(guid, []),
             )
         )
 
@@ -176,8 +194,10 @@ def fetch_feed_and_episodes(url: str) -> FeedPreview:
         website_url=feed_data.get("link"),
         itunes_author=_extract_feed_author(feed_data, xml_text=resp.text),
         itunes_owner_name=_extract_feed_owner_name(feed_data),
+        podcast_persons=_extract_channel_podcast_persons(resp.text),
     )
 
+    item_persons = _extract_item_podcast_persons(resp.text)
     episodes = []
     for entry in parsed.entries:
         audio_url = _extract_audio_url(entry)
@@ -195,6 +215,7 @@ def fetch_feed_and_episodes(url: str) -> FeedPreview:
                 published_at=_parse_date(entry.get("published")),
                 duration_secs=_parse_duration(entry.get("itunes_duration")),
                 episode_author=_extract_entry_author(entry),
+                podcast_persons=item_persons.get(guid, []),
             )
         )
 
@@ -233,8 +254,10 @@ def preview_feed(url: str) -> FeedPreview:
         website_url=feed_data.get("link"),
         itunes_author=_extract_feed_author(feed_data, xml_text=content),
         itunes_owner_name=_extract_feed_owner_name(feed_data),
+        podcast_persons=_extract_channel_podcast_persons(content),
     )
 
+    item_persons = _extract_item_podcast_persons(content)
     episodes = []
     for entry in parsed.entries:
         audio_url = _extract_audio_url(entry)
@@ -252,6 +275,7 @@ def preview_feed(url: str) -> FeedPreview:
                 published_at=_parse_date(entry.get("published")),
                 duration_secs=_parse_duration(entry.get("itunes_duration")),
                 episode_author=_extract_entry_author(entry),
+                podcast_persons=item_persons.get(guid, []),
             )
         )
 
@@ -307,6 +331,88 @@ def _extract_itunes_author_from_xml(xml_text: Optional[str]) -> Optional[str]:
     if node is None or not node.text:
         return None
     return node.text.strip() or None
+
+
+def _parse_podcast_persons_from_element(element) -> list[dict]:
+    """Extract <podcast:person> children from an XML element (PRD-04 B2).
+
+    The Podcasting 2.0 spec permits <podcast:person> on both <channel> and
+    <item>. Attributes: role (default 'host'), group (default 'cast'), plus
+    optional href/img. The tag's text is the person's name. Entries whose
+    text is empty are skipped; attribute values are normalized to lowercase
+    so downstream code can pattern-match without casing drift.
+    """
+    persons: list[dict] = []
+    for node in element.findall(f"{{{_PODCAST_NS}}}person"):
+        name = (node.text or "").strip()
+        if not name:
+            continue
+        entry: dict = {
+            "name": name,
+            "role": (node.get("role") or "host").strip().lower(),
+            "group": (node.get("group") or "cast").strip().lower(),
+        }
+        href = (node.get("href") or "").strip()
+        if href:
+            entry["href"] = href
+        img = (node.get("img") or "").strip()
+        if img:
+            entry["img"] = img
+        persons.append(entry)
+        if len(persons) >= _MAX_PODCAST_PERSONS:
+            break
+    return persons
+
+
+def _extract_channel_podcast_persons(xml_text: Optional[str]) -> list[dict]:
+    """Return channel-level <podcast:person> entries, or [] on parse failure."""
+    if not xml_text:
+        return []
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+    channel = root.find("channel")
+    if channel is None:
+        return []
+    return _parse_podcast_persons_from_element(channel)
+
+
+def _extract_item_podcast_persons(xml_text: Optional[str]) -> dict[str, list[dict]]:
+    """Return {guid: podcast_persons} mapping for every <item> in the feed.
+
+    feedparser only keeps the last <podcast:person> per entry and loses
+    attributes at item level, so we recover by walking the raw XML. Items
+    without a resolvable key (guid or enclosure URL) are skipped — those
+    same entries would be dropped by fetch_episodes for lacking audio.
+    """
+    if not xml_text:
+        return {}
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return {}
+    channel = root.find("channel")
+    if channel is None:
+        return {}
+
+    mapping: dict[str, list[dict]] = {}
+    for item in channel.findall("item"):
+        persons = _parse_podcast_persons_from_element(item)
+        if not persons:
+            continue
+        # Match fetch_episodes' fallback chain: prefer <guid>, fall back to the
+        # enclosure URL (same key feedparser uses for entry.id when guid is
+        # missing).
+        guid_node = item.find("guid")
+        key = guid_node.text.strip() if (guid_node is not None and guid_node.text) else ""
+        if not key:
+            enc = item.find("enclosure")
+            key = (enc.get("url") or "").strip() if enc is not None else ""
+        if not key:
+            continue
+        mapping[key] = persons
+    return mapping
 
 
 def _extract_feed_author(feed: dict, xml_text: Optional[str] = None) -> Optional[str]:

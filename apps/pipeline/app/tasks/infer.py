@@ -58,14 +58,17 @@ def infer_speakers(episode_id: str) -> str:
             feed_description = feed.description if feed else None
             itunes_author = feed.itunes_author if feed else None
             itunes_owner_name = feed.itunes_owner_name if feed else None
+            feed_podcast_persons = feed.podcast_persons if feed else None
 
-            # PRD-04 B1 + B3: pre-classified candidates from RSS person tags.
+            # PRD-04 B1/B2/B3: pre-classified candidates from RSS person tags.
             # These bypass NER entirely and seed the candidate list with
             # HIGH/MEDIUM host signals before heuristic rules run.
             metadata_candidates = extract_metadata_candidates(
                 itunes_author=itunes_author,
                 itunes_owner_name=itunes_owner_name,
                 episode_author=episode.episode_author,
+                feed_podcast_persons=feed_podcast_persons,
+                episode_podcast_persons=episode.podcast_persons,
             )
 
             # Step 1: NER extraction (episode title included per PRD-04 E1/E2)

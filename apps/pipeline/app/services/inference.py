@@ -24,12 +24,25 @@ from app.services.inference_helpers import (
     strip_html,
 )
 
-# Source tags for candidates that come from RSS metadata (PRD-04 B1 + B3)
+# Source tags for candidates that come from RSS metadata (PRD-04 B1/B2/B3)
 # rather than NER. classify_candidates honors their pre-assigned role and
 # confidence instead of re-running heuristic rules on them.
 METADATA_SOURCES = frozenset(
-    {"itunes_author", "itunes_owner", "episode_author"}
+    {
+        "itunes_author",
+        "itunes_owner",
+        "episode_author",
+        "podcast_person_feed",
+        "podcast_person_episode",
+    }
 )
+
+# <podcast:person> role values that map to host/guest. Everything else is
+# dropped rather than guessed — the Podcasting 2.0 role vocabulary is large
+# (narrator, camera, editor, etc.) and most of it is production crew, not
+# speakers in the audio.
+_PODCAST_HOST_ROLES = frozenset({"host", "cohost", "co-host", "guest host", "presenter"})
+_PODCAST_GUEST_ROLES = frozenset({"guest", "interviewee"})
 
 logger = logging.getLogger(__name__)
 
@@ -158,44 +171,91 @@ def _looks_like_person_name(name: str) -> bool:
     return 2 <= len(tokens) <= 4
 
 
+def _podcast_person_to_candidate(
+    entry: dict,
+    source: str,
+) -> Optional[CandidateName]:
+    """Turn one <podcast:person> dict into a CandidateName, or None to skip.
+
+    Role mapping (PRD-04 B2):
+      - host-like roles (host, cohost, presenter) → host HIGH
+      - guest-like roles (guest, interviewee)     → guest HIGH
+      - everything else (crew, narrator, editor, etc.) is dropped — those
+        roles are almost always production staff who don't appear in audio.
+
+    Episode-level tags outrank channel-level tags by carrying HIGH
+    confidence; the caller controls ordering via `source`. Non-string or
+    non-person strings (ACME Media LLC, single tokens) are dropped.
+    """
+    if not isinstance(entry, dict):
+        return None
+    name = (entry.get("name") or "").strip()
+    if not name or not _looks_like_person_name(name):
+        return None
+    role_raw = (entry.get("role") or "host").strip().lower()
+    if role_raw in _PODCAST_HOST_ROLES:
+        role = "host"
+    elif role_raw in _PODCAST_GUEST_ROLES:
+        role = "guest"
+    else:
+        return None
+    return CandidateName(name=name, source=source, role=role, confidence="HIGH")
+
+
 def extract_metadata_candidates(
     itunes_author: Optional[str],
     itunes_owner_name: Optional[str],
     episode_author: Optional[str],
+    feed_podcast_persons: Optional[list[dict]] = None,
+    episode_podcast_persons: Optional[list[dict]] = None,
 ) -> list[CandidateName]:
-    """Build pre-classified candidates from RSS person tags (PRD-04 B1 + B3).
+    """Build pre-classified candidates from RSS person tags (PRD-04 B1/B2/B3).
 
     These candidates bypass NER and the heuristic rules in classify_candidates:
     their role and confidence are taken directly from the RSS tag they came
     from. Duplicates (same normalized name) are deduped with the stronger
-    source winning. Strings that look like organizations (e.g. "ACME Media
-    LLC") are dropped rather than seeded as hosts.
+    source winning — earlier entries in the iteration order win.
 
     Ordering (strongest first):
-      - itunes:author → host, HIGH   (on-air author per Apple spec)
-      - itunes:owner  → host, MEDIUM (business contact; often a company)
-      - dc:creator / <author> at item level → host, MEDIUM
+      - <podcast:person> at item level       → role as declared, HIGH
+      - <podcast:person> at channel level    → role as declared, HIGH
+      - itunes:author                        → host, HIGH
+      - itunes:owner                         → host, MEDIUM
+      - dc:creator / <author> at item level  → host, MEDIUM
+
+    <podcast:person> is placed ahead of itunes:author because the publisher
+    explicitly tagged the person's role (host vs guest); the itunes tags only
+    distinguish "on-air author" from "business contact" and always map to
+    host, so they cannot contribute guests.
     """
     out: list[CandidateName] = []
     seen: set[str] = set()
 
-    ordered = [
+    def _add(candidate: Optional[CandidateName]) -> None:
+        if candidate is None:
+            return
+        norm = normalize_name(candidate.name)
+        if norm in seen:
+            return
+        seen.add(norm)
+        out.append(candidate)
+
+    for entry in episode_podcast_persons or []:
+        _add(_podcast_person_to_candidate(entry, "podcast_person_episode"))
+    for entry in feed_podcast_persons or []:
+        _add(_podcast_person_to_candidate(entry, "podcast_person_feed"))
+
+    itunes_ordered = [
         (itunes_author, "itunes_author", "host", "HIGH"),
         (itunes_owner_name, "itunes_owner", "host", "MEDIUM"),
         (episode_author, "episode_author", "host", "MEDIUM"),
     ]
-    for name, source, role, confidence in ordered:
+    for name, source, role, confidence in itunes_ordered:
         if not name or not name.strip():
             continue
         if not _looks_like_person_name(name):
             continue
-        norm = normalize_name(name)
-        if norm in seen:
-            continue
-        seen.add(norm)
-        out.append(
-            CandidateName(name=name.strip(), source=source, role=role, confidence=confidence)
-        )
+        _add(CandidateName(name=name.strip(), source=source, role=role, confidence=confidence))
     return out
 
 
@@ -250,22 +310,29 @@ def classify_candidates(
 
     for c in candidates:
         # Metadata candidates carry pre-assigned role/confidence from the
-        # RSS tag they came from (PRD-04 B1 + B3).
+        # RSS tag they came from (PRD-04 B1/B2/B3).
         if c.source in METADATA_SOURCES:
             if c.role == "host":
                 if host is None:
                     host = c
                 else:
-                    # Second metadata host candidate → secondary slot as guest
-                    # LOW. Don't mutate the caller's CandidateName in place;
-                    # return a fresh object so repeated classification calls
-                    # are idempotent.
+                    # Second metadata host candidate → secondary slot as
+                    # guest. For <podcast:person> the publisher explicitly
+                    # declared this person, so keep HIGH confidence (covers
+                    # cohost shows — L-02). For itunes:author/owner we demote
+                    # to LOW because the second slot is usually the owner
+                    # (a business contact, not an on-air voice). Don't mutate
+                    # the caller's CandidateName in place — return a fresh
+                    # object so repeated classification calls are idempotent.
+                    demoted_conf = (
+                        "HIGH" if c.source.startswith("podcast_person") else "LOW"
+                    )
                     guests.append(
                         CandidateName(
                             name=c.name,
                             source=c.source,
                             role="guest",
-                            confidence="LOW",
+                            confidence=demoted_conf,
                         )
                     )
             else:

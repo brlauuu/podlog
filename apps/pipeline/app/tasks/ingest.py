@@ -59,6 +59,12 @@ def ingest_feed(feed_id: str, selected_guids: Optional[list[str]] = None) -> dic
             feed.itunes_author = preview.feed.itunes_author
         if preview.feed.itunes_owner_name is not None:
             feed.itunes_owner_name = preview.feed.itunes_owner_name
+        # PRD-04 B2: refresh <podcast:person> tags. Empty list means the
+        # publisher dropped all tags on this poll — treat same as other
+        # person fields and preserve the last-known value rather than
+        # clearing it. Absence of tags has never been a positive signal.
+        if preview.feed.podcast_persons:
+            feed.podcast_persons = preview.feed.podcast_persons
 
         # Issue #84: in selective mode, restrict to the caller-supplied GUIDs.
         # Validate each requested GUID is present in the live feed to prevent injection.
@@ -107,6 +113,7 @@ def ingest_feed(feed_id: str, selected_guids: Optional[list[str]] = None) -> dic
                 audio_url=meta.audio_url,
                 episode_url=meta.episode_url,
                 episode_author=meta.episode_author,
+                podcast_persons=meta.podcast_persons or None,
                 status="pending",
             )
             db.add(episode)
