@@ -49,9 +49,11 @@ def ingest_feed(feed_id: str, selected_guids: Optional[list[str]] = None) -> dic
         preview = rss_service.fetch_feed_and_episodes(feed.url)
         episodes_meta = preview.episodes
 
-        # Refresh RSS-derived person tags on each poll. Feed publishers
-        # occasionally change hosts/owners and we want the latest values
-        # for speaker inference. Title/description are intentionally not
+        # Refresh RSS-derived person tags on each poll. When the publisher
+        # replaces the tag with a new value we overwrite; when the tag is
+        # absent from the new XML we keep the last-known-good value rather
+        # than clearing it (publishers sometimes strip these temporarily
+        # during site migrations). Title/description are intentionally not
         # refreshed here to preserve existing set-once behavior.
         if preview.feed.itunes_author is not None:
             feed.itunes_author = preview.feed.itunes_author

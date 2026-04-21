@@ -6,6 +6,7 @@ fetch_episodes           — return list of episode metadata from a feed URL
 preview_feed             — validate + fetch episodes in one HTTP call (used by preview endpoint)
 """
 import logging
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
@@ -14,6 +15,8 @@ from urllib.parse import urlparse
 
 import feedparser
 import httpx
+
+_ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +102,7 @@ def validate_and_parse_feed(url: str) -> FeedMeta:
         description=feed.get("subtitle") or feed.get("description"),
         image_url=_extract_image(feed),
         website_url=feed.get("link"),
-        itunes_author=_extract_feed_author(feed),
+        itunes_author=_extract_feed_author(feed, xml_text=content),
         itunes_owner_name=_extract_feed_owner_name(feed),
     )
 
@@ -153,6 +156,7 @@ def fetch_feed_and_episodes(url: str) -> FeedPreview:
     on transient fetch failures — it logs and returns an empty result so
     the periodic poller keeps going.
     """
+    _require_http_url(url)
     try:
         resp = httpx.get(url, follow_redirects=True, timeout=15.0)
         resp.raise_for_status()
@@ -170,7 +174,7 @@ def fetch_feed_and_episodes(url: str) -> FeedPreview:
         description=feed_data.get("subtitle") or feed_data.get("description"),
         image_url=_extract_image(feed_data),
         website_url=feed_data.get("link"),
-        itunes_author=_extract_feed_author(feed_data),
+        itunes_author=_extract_feed_author(feed_data, xml_text=resp.text),
         itunes_owner_name=_extract_feed_owner_name(feed_data),
     )
 
@@ -227,7 +231,7 @@ def preview_feed(url: str) -> FeedPreview:
         description=feed_data.get("subtitle") or feed_data.get("description"),
         image_url=_extract_image(feed_data),
         website_url=feed_data.get("link"),
-        itunes_author=_extract_feed_author(feed_data),
+        itunes_author=_extract_feed_author(feed_data, xml_text=content),
         itunes_owner_name=_extract_feed_owner_name(feed_data),
     )
 
@@ -281,12 +285,43 @@ def _parse_date(date_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def _extract_feed_author(feed: dict) -> Optional[str]:
+def _extract_itunes_author_from_xml(xml_text: Optional[str]) -> Optional[str]:
+    """Read <itunes:author> directly from the channel element (PRD-04 B1).
+
+    Works around a feedparser quirk: when <itunes:owner> appears after
+    <itunes:author> in the channel, feedparser overwrites author_detail with
+    the owner's name, silently losing the author. We read the raw XML to
+    recover the true author tag. Returns None on any parse failure.
+    """
+    if not xml_text:
+        return None
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return None
+    channel = root.find("channel")
+    if channel is None:
+        return None
+    # Only the channel-level <itunes:author>, not item-level ones.
+    node = channel.find(f"{{{_ITUNES_NS}}}author")
+    if node is None or not node.text:
+        return None
+    return node.text.strip() or None
+
+
+def _extract_feed_author(feed: dict, xml_text: Optional[str] = None) -> Optional[str]:
     """Extract <itunes:author> / <author> at the channel level (PRD-04 B1).
 
-    Prefer author_detail.name to strip 'email (Name)' wrappers that feedparser
-    preserves in the raw `author` string.
+    When the raw feed XML is supplied, a direct namespace-aware lookup takes
+    precedence over feedparser's author_detail — feedparser collapses
+    <itunes:author> into publisher_detail when <itunes:owner> follows it in
+    the channel, dropping the on-air author name. Fall back to feedparser's
+    author_detail.name (which strips 'email (Name)' wrappers) and finally to
+    the raw `author` string.
     """
+    raw_xml = _extract_itunes_author_from_xml(xml_text)
+    if raw_xml:
+        return raw_xml
     detail = feed.get("author_detail") or {}
     name = detail.get("name") if isinstance(detail, dict) else None
     if name:

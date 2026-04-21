@@ -10,6 +10,7 @@ same GC pattern as Whisper and pyannote (PRD-01 §5.4).
 """
 import gc
 import logging
+import re
 import sys
 from dataclasses import dataclass, field
 from typing import Optional
@@ -36,7 +37,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CandidateName:
     name: str
-    source: str  # "episode_description" | "feed_title" | "feed_description"
+    # NER sources: episode_description, episode_title, feed_title, feed_description.
+    # Metadata (RSS) sources: see METADATA_SOURCES — those bypass NER and carry
+    # pre-assigned role/confidence.
+    source: str
     role: str = "guest"  # "host" | "guest"
     confidence: str = "LOW"  # "HIGH" | "MEDIUM" | "LOW"
 
@@ -128,6 +132,32 @@ def extract_candidates(
     return candidates
 
 
+_ORG_SUFFIX_RE = re.compile(
+    r"\b(?:LLC|L\.L\.C\.|Inc\.?|Corp\.?|Co\.?|Ltd\.?|GmbH|SA|AG|Media|Network|"
+    r"Networks|Productions|Studios?|Podcasts?|Radio|Group|Company|Communications)\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_person_name(name: str) -> bool:
+    """Return False for strings that almost certainly name an organization.
+
+    Metadata sources (especially <itunes:owner>) often carry company or
+    network names. We only want to seed host candidates with plausible
+    person names. Heuristic — not NER — so false negatives are preferred
+    over false positives; an ambiguous string still goes to NER via the
+    episode description.
+    """
+    stripped = name.strip()
+    if not stripped:
+        return False
+    if _ORG_SUFFIX_RE.search(stripped):
+        return False
+    tokens = stripped.split()
+    # One-token or 5+ token strings are rarely on-air host names.
+    return 2 <= len(tokens) <= 4
+
+
 def extract_metadata_candidates(
     itunes_author: Optional[str],
     itunes_owner_name: Optional[str],
@@ -138,23 +168,26 @@ def extract_metadata_candidates(
     These candidates bypass NER and the heuristic rules in classify_candidates:
     their role and confidence are taken directly from the RSS tag they came
     from. Duplicates (same normalized name) are deduped with the stronger
-    source winning.
+    source winning. Strings that look like organizations (e.g. "ACME Media
+    LLC") are dropped rather than seeded as hosts.
 
     Ordering (strongest first):
-      - itunes:owner  → host, HIGH
-      - itunes:author → host, HIGH
+      - itunes:author → host, HIGH   (on-air author per Apple spec)
+      - itunes:owner  → host, MEDIUM (business contact; often a company)
       - dc:creator / <author> at item level → host, MEDIUM
     """
     out: list[CandidateName] = []
     seen: set[str] = set()
 
     ordered = [
-        (itunes_owner_name, "itunes_owner", "host", "HIGH"),
         (itunes_author, "itunes_author", "host", "HIGH"),
+        (itunes_owner_name, "itunes_owner", "host", "MEDIUM"),
         (episode_author, "episode_author", "host", "MEDIUM"),
     ]
     for name, source, role, confidence in ordered:
-        if not name:
+        if not name or not name.strip():
+            continue
+        if not _looks_like_person_name(name):
             continue
         norm = normalize_name(name)
         if norm in seen:
@@ -223,10 +256,18 @@ def classify_candidates(
                 if host is None:
                     host = c
                 else:
-                    # Second metadata host candidate → secondary slot as guest LOW
-                    c.role = "guest"
-                    c.confidence = "LOW"
-                    guests.append(c)
+                    # Second metadata host candidate → secondary slot as guest
+                    # LOW. Don't mutate the caller's CandidateName in place;
+                    # return a fresh object so repeated classification calls
+                    # are idempotent.
+                    guests.append(
+                        CandidateName(
+                            name=c.name,
+                            source=c.source,
+                            role="guest",
+                            confidence="LOW",
+                        )
+                    )
             else:
                 guests.append(c)
             continue

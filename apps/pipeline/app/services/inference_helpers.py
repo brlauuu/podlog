@@ -64,9 +64,30 @@ def strip_html(text: str) -> str:
     return stripper.get_text()
 
 
+_HONORIFICS = frozenset(
+    {"dr", "mr", "mrs", "ms", "mx", "prof", "sir", "madam", "rev", "fr", "sr", "st"}
+)
+
+
 def normalize_name(name: str) -> str:
-    """Lowercase and collapse whitespace for dedupe matching."""
-    return " ".join(name.lower().split())
+    """Lowercase, collapse whitespace, and strip leading honorifics for dedupe.
+
+    Makes "Dr. Jane Smith" and "Jane Smith" compare as the same person so the
+    metadata and NER candidate lists dedupe correctly.
+    """
+    lowered = " ".join(name.lower().split())
+    if not lowered:
+        return lowered
+    tokens = lowered.split(" ")
+    # Strip leading honorifics (possibly with trailing punctuation) until a
+    # non-honorific token remains. Leaves 1-token names alone.
+    while len(tokens) > 1:
+        head = tokens[0].rstrip(".,:")
+        if head in _HONORIFICS:
+            tokens.pop(0)
+        else:
+            break
+    return " ".join(tokens)
 
 
 def name_near_host_pattern(name_lower: str, feed_desc_lower: str) -> bool:
@@ -112,11 +133,13 @@ def name_after_colon_in_title(name: str, text: str) -> bool:
 
 
 def strip_episode_prefix(text: str) -> str:
-    """Remove leading 'Ep 42:' / '#42 —' / '42.' prefixes before NER (PRD-04 E2).
+    """Remove leading 'Ep 42:' / '#42 —' / '42 |' prefixes before NER (PRD-04 E2).
 
     Some transformer NER models treat these tokens as part of a preceding
     entity span, dropping the true name. Stripping the prefix before the
-    model sees the text reliably isolates the name.
+    model sees the text reliably isolates the name. Only `:`, `-`, `—`, `–`,
+    and `|` are treated as separators — `.` is intentionally excluded to
+    avoid over-stripping titles like "1984. Orwell revisited".
     """
     if not text:
         return text

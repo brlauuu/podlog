@@ -147,13 +147,34 @@ RSS_WITH_OWNER_ONLY = """<?xml version="1.0" encoding="UTF-8"?>
 </rss>"""
 
 
+RSS_WITH_AUTHOR_AND_OWNER = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Both Pod</title>
+    <link>https://example.com</link>
+    <description>A show</description>
+    <itunes:author>Host McHostface</itunes:author>
+    <itunes:owner>
+      <itunes:name>Olivia Owner</itunes:name>
+      <itunes:email>owner@example.com</itunes:email>
+    </itunes:owner>
+    <item>
+      <title>E1</title>
+      <guid>ep-001</guid>
+      <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>"""
+
+
 class TestRssAuthorTags:
     """PRD-04 B1 + B3: RSS person tags surfaced from the feed.
 
     Note: feedparser's itunes handler collapses ``<itunes:author>`` into
     ``publisher_detail`` when ``<itunes:owner>`` appears afterwards in the
-    channel. These tests keep the two tags in separate fixtures so each
-    field's extraction is verified independently.
+    channel, silently losing the author. ``_extract_itunes_author_from_xml``
+    reads the tag directly from raw XML to recover it. The mixed-tag
+    fixture below exercises the workaround.
     """
 
     def test_itunes_author_extracted(self):
@@ -187,6 +208,20 @@ class TestRssAuthorTags:
             episodes = fetch_episodes("https://example.com/feed.xml")
             assert len(episodes) == 1
             assert episodes[0].episode_author == "Jane Smith"
+
+    def test_author_and_owner_both_extracted_despite_feedparser_quirk(self):
+        """Regression: when <itunes:author> precedes <itunes:owner>, feedparser
+        overwrites the author field with the owner name. The direct XML read
+        must recover the true author."""
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = RSS_WITH_AUTHOR_AND_OWNER
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            assert meta.itunes_author == "Host McHostface"
+            assert meta.itunes_owner_name == "Olivia Owner"
 
     def test_missing_author_tags_return_none(self):
         """VALID_RSS has no author tags — fields must be None, not empty strings."""

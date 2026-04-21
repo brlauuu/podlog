@@ -219,22 +219,25 @@ class TestClassifyCandidates:
 # --- extract_metadata_candidates (PRD-04 B1 + B3) ---
 
 class TestExtractMetadataCandidates:
-    def test_owner_and_author_classified_host_high(self):
+    def test_author_is_host_high_owner_is_host_medium(self):
+        """PRD-04 B1: <itunes:author> is the on-air author (HIGH).
+        <itunes:owner> is the business contact — weaker (MEDIUM).
+        """
         out = extract_metadata_candidates(
             itunes_author="Jane Author",
-            itunes_owner_name="Owner McOwnerface",
+            itunes_owner_name="Olivia Owner",
             episode_author=None,
         )
         assert len(out) == 2
-        # Owner listed first (strongest signal)
-        assert out[0].name == "Owner McOwnerface"
-        assert out[0].source == "itunes_owner"
+        # Author listed first (strongest person signal per Apple spec)
+        assert out[0].name == "Jane Author"
+        assert out[0].source == "itunes_author"
         assert out[0].role == "host"
         assert out[0].confidence == "HIGH"
-        assert out[1].name == "Jane Author"
-        assert out[1].source == "itunes_author"
+        assert out[1].name == "Olivia Owner"
+        assert out[1].source == "itunes_owner"
         assert out[1].role == "host"
-        assert out[1].confidence == "HIGH"
+        assert out[1].confidence == "MEDIUM"
 
     def test_episode_author_is_host_medium(self):
         out = extract_metadata_candidates(None, None, "Host McHostface")
@@ -244,18 +247,57 @@ class TestExtractMetadataCandidates:
         assert out[0].confidence == "MEDIUM"
 
     def test_dedupes_by_normalized_name(self):
-        """Same name in owner + author → keep only the stronger entry."""
+        """Same name in author + owner → keep only the stronger (author)."""
         out = extract_metadata_candidates(
             itunes_author="jane smith",
             itunes_owner_name="Jane Smith",
             episode_author="JANE SMITH",
         )
         assert len(out) == 1
-        assert out[0].source == "itunes_owner"  # strongest wins
+        assert out[0].source == "itunes_author"  # strongest wins
 
     def test_empty_inputs_return_empty_list(self):
         assert extract_metadata_candidates(None, None, None) == []
         assert extract_metadata_candidates("", "", "") == []
+
+    def test_whitespace_only_inputs_are_dropped(self):
+        assert extract_metadata_candidates("   ", "\t\n", "  ") == []
+
+    def test_company_names_are_dropped(self):
+        """PRD-04 B1: owner tags frequently hold ORG names — filter them out."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name="Vox Media Podcast Network",
+            episode_author=None,
+        )
+        assert out == []
+
+    def test_company_name_in_author_is_dropped(self):
+        out = extract_metadata_candidates(
+            itunes_author="ACME Podcasts LLC",
+            itunes_owner_name=None,
+            episode_author=None,
+        )
+        assert out == []
+
+    def test_single_token_is_dropped(self):
+        """Single-token strings are rarely on-air host names."""
+        out = extract_metadata_candidates(
+            itunes_author="Bob",
+            itunes_owner_name=None,
+            episode_author=None,
+        )
+        assert out == []
+
+    def test_honorific_dedupes_with_bare_name(self):
+        """PRD-04 B1: 'Dr. Jane Smith' and 'Jane Smith' are the same person."""
+        out = extract_metadata_candidates(
+            itunes_author="Dr. Jane Smith",
+            itunes_owner_name="Jane Smith",
+            episode_author=None,
+        )
+        assert len(out) == 1
+        assert out[0].source == "itunes_author"
 
 
 # --- merge_candidates ---
@@ -411,14 +453,29 @@ class TestClassifyWithMetadata:
     def test_second_metadata_host_becomes_guest(self):
         """If two metadata entries both claim host, the second goes to guest LOW."""
         candidates = [
-            CandidateName(name="First", source="itunes_owner", role="host", confidence="HIGH"),
-            CandidateName(name="Second", source="itunes_author", role="host", confidence="HIGH"),
+            CandidateName(name="First", source="itunes_author", role="host", confidence="HIGH"),
+            CandidateName(name="Second", source="itunes_owner", role="host", confidence="MEDIUM"),
         ]
         result = classify_candidates(candidates, "", "", "")
         assert result.host is not None and result.host.name == "First"
         assert len(result.guests) == 1
         assert result.guests[0].name == "Second"
         assert result.guests[0].confidence == "LOW"
+
+    def test_classify_is_idempotent_for_metadata(self):
+        """Repeated calls on the same candidate list must produce the same result
+        — classify_candidates must not mutate input CandidateName objects."""
+        candidates = [
+            CandidateName(name="First", source="itunes_author", role="host", confidence="HIGH"),
+            CandidateName(name="Second", source="itunes_owner", role="host", confidence="MEDIUM"),
+        ]
+        first = classify_candidates(candidates, "", "", "")
+        second = classify_candidates(candidates, "", "", "")
+        assert first.host.name == second.host.name == "First"
+        assert first.host.confidence == second.host.confidence == "HIGH"
+        # Second candidate's original role/confidence untouched:
+        assert candidates[1].role == "host"
+        assert candidates[1].confidence == "MEDIUM"
 
     def test_episode_title_colon_rule(self):
         """E1: guest in episode title (not description) still tagged HIGH."""
@@ -528,8 +585,10 @@ class TestInferSpeakersTask:
         episode = MagicMock()
         episode.id = "ep-1"
         episode.has_diarization = True
-        episode.feed_id = "feed-1"
+        episode.feed_id = None  # skip feed lookup
         episode.description = "some text"
+        episode.title = None
+        episode.episode_author = None
         db.query.return_value.filter.return_value.first.return_value = episode
 
         with (
