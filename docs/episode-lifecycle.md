@@ -120,7 +120,7 @@ pending → download → transcribe → diarize → chunk → embed → infer �
 **Status:** `inferring`
 
 **What it does:**
-- Extracts host/guest names from episode title and description using spaCy NER (`en_core_web_lg`)
+- Extracts host/guest names from episode title and description using spaCy NER (`en_core_web_trf` by default, falls back to `en_core_web_lg` if unavailable)
 - Maps names to speaker labels (SPEAKER_00 = host, others = guests)
 - Pre-populates `speaker_names` table with inferred display names
 - Skipped if diarization failed or inference is disabled in config

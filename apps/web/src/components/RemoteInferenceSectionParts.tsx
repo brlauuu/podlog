@@ -102,7 +102,10 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     disabledReason:
       "Speaker name inference is currently supported locally only.",
     providerField: null,
-    localModels: [{ value: "en_core_web_lg", label: "spaCy en_core_web_lg" }],
+    localModels: [
+      { value: "en_core_web_trf", label: "spaCy en_core_web_trf (default, ~500 MB)" },
+      { value: "en_core_web_lg", label: "spaCy en_core_web_lg (~200 MB, low-memory)" },
+    ],
     remoteModels: [],
     modelField: null,
     remoteModelField: null,

@@ -49,7 +49,7 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | Variable | Default | Description |
 |---|---|---|
 | `INFERENCE_ENABLED` | `true` | Whether to run spaCy NER-based speaker name inference after diarization. |
-| `SPACY_MODEL` | `en_core_web_lg` | spaCy model for named entity recognition. `en_core_web_lg` gives best results. |
+| `SPACY_MODEL` | `en_core_web_trf` | spaCy NER model. `en_core_web_trf` (~500 MB, best accuracy) is the default; override to `en_core_web_lg` (~200 MB) on memory-constrained hosts. The worker image ships both and automatically falls back to `en_core_web_lg` at runtime if `trf` is unavailable. |
 
 ## Fireworks Provider
 
