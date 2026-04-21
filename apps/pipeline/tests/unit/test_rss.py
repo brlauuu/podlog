@@ -239,6 +239,189 @@ class TestRssAuthorTags:
             assert episodes[0].episode_author is None
 
 
+RSS_WITH_PODCAST_PERSON = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+     xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>Person-Tagged Pod</title>
+    <link>https://example.com</link>
+    <description>Hosts and guests declared via podcast:person</description>
+    <podcast:person role="host" href="https://example.com/tim" img="https://example.com/tim.jpg">Tim Ferriss</podcast:person>
+    <podcast:person role="cohost">Cohost McCohostface</podcast:person>
+    <podcast:person role="editor">Edith Editor</podcast:person>
+    <item>
+      <title>Ep 1: Andrew Huberman on Sleep</title>
+      <guid>ep-001</guid>
+      <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" length="12345"/>
+      <podcast:person role="guest">Andrew Huberman</podcast:person>
+      <podcast:person role="host">Tim Ferriss</podcast:person>
+    </item>
+    <item>
+      <title>Ep 2: Solo</title>
+      <guid>ep-002</guid>
+      <enclosure url="https://example.com/ep2.mp3" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>"""
+
+
+class TestPodcastPerson:
+    """PRD-04 B2: <podcast:person> tags from the Podcasting 2.0 namespace."""
+
+    def test_channel_level_persons_extracted(self):
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = RSS_WITH_PODCAST_PERSON
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+
+            assert len(meta.podcast_persons) == 3
+            assert meta.podcast_persons[0] == {
+                "name": "Tim Ferriss",
+                "role": "host",
+                "group": "cast",
+                "href": "https://example.com/tim",
+                "img": "https://example.com/tim.jpg",
+            }
+            assert meta.podcast_persons[1]["name"] == "Cohost McCohostface"
+            assert meta.podcast_persons[1]["role"] == "cohost"
+            assert meta.podcast_persons[2]["role"] == "editor"
+
+    def test_item_level_persons_attached_to_episode_by_guid(self):
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = RSS_WITH_PODCAST_PERSON
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            episodes = fetch_episodes("https://example.com/feed.xml")
+            assert len(episodes) == 2
+            assert episodes[0].guid == "ep-001"
+            assert len(episodes[0].podcast_persons) == 2
+            roles = {p["role"] for p in episodes[0].podcast_persons}
+            assert roles == {"host", "guest"}
+            # Second episode has no <podcast:person> tags
+            assert episodes[1].podcast_persons == []
+
+    def test_missing_namespace_returns_empty_list(self):
+        """RSS without the podcast namespace must not error or fabricate entries."""
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = VALID_RSS
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            episodes = fetch_episodes("https://example.com/feed.xml")
+
+            assert meta.podcast_persons == []
+            assert all(ep.podcast_persons == [] for ep in episodes)
+
+    def test_role_defaults_to_host_when_attribute_missing(self):
+        rss = RSS_WITH_PODCAST_PERSON.replace(
+            '<podcast:person role="host" href="https://example.com/tim" img="https://example.com/tim.jpg">Tim Ferriss</podcast:person>',
+            '<podcast:person>Tim Ferriss</podcast:person>',
+        )
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = rss
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            tim = meta.podcast_persons[0]
+            assert tim["name"] == "Tim Ferriss"
+            assert tim["role"] == "host"
+            assert tim["group"] == "cast"
+            # Optional attributes absent — keys should not be present rather than None
+            assert "href" not in tim
+            assert "img" not in tim
+
+    def test_legacy_http_namespace_also_matched(self):
+        """Many real-world feeds still use http:// rather than https://."""
+        rss = RSS_WITH_PODCAST_PERSON.replace(
+            'xmlns:podcast="https://podcastindex.org/namespace/1.0"',
+            'xmlns:podcast="http://podcastindex.org/namespace/1.0"',
+        )
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = rss
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            episodes = fetch_episodes("https://example.com/feed.xml")
+
+            assert len(meta.podcast_persons) == 3
+            assert meta.podcast_persons[0]["name"] == "Tim Ferriss"
+            # Item-level tags keyed by guid still resolve.
+            assert len(episodes[0].podcast_persons) == 2
+
+    def test_empty_role_defaults_to_host(self):
+        """Spec: absent or empty role attribute defaults to 'host'."""
+        rss = RSS_WITH_PODCAST_PERSON.replace(
+            '<podcast:person role="editor">Edith Editor</podcast:person>',
+            '<podcast:person role="   ">Whitespace Name</podcast:person>',
+        )
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = rss
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            third = meta.podcast_persons[2]
+            assert third["name"] == "Whitespace Name"
+            assert third["role"] == "host"
+
+    def test_item_without_guid_keyed_by_enclosure_url(self):
+        """Items missing <guid> fall back to enclosure URL, matching fetch_episodes."""
+        rss = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>No Guid Pod</title>
+    <link>https://example.com</link>
+    <description>d</description>
+    <item>
+      <title>No Guid</title>
+      <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg"/>
+      <podcast:person role="host">Jane Smith</podcast:person>
+    </item>
+  </channel>
+</rss>"""
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = rss
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            episodes = fetch_episodes("https://example.com/feed.xml")
+            assert len(episodes) == 1
+            assert episodes[0].guid == "https://example.com/ep1.mp3"
+            assert len(episodes[0].podcast_persons) == 1
+            assert episodes[0].podcast_persons[0]["name"] == "Jane Smith"
+
+    def test_empty_person_text_skipped(self):
+        rss = RSS_WITH_PODCAST_PERSON.replace(
+            '<podcast:person role="editor">Edith Editor</podcast:person>',
+            '<podcast:person role="editor"></podcast:person>',
+        )
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = rss
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            # The third channel-level person had empty text and must be dropped.
+            assert len(meta.podcast_persons) == 2
+            assert all(p["name"] for p in meta.podcast_persons)
+
+
 class TestFetchFeedAndEpisodes:
     def test_returns_feed_and_episodes_in_one_call(self):
         with patch("httpx.get") as mock_get:

@@ -299,6 +299,142 @@ class TestExtractMetadataCandidates:
         assert len(out) == 1
         assert out[0].source == "itunes_author"
 
+    def test_podcast_person_feed_host_and_guest(self):
+        """PRD-04 B2: channel-level <podcast:person> feeds host/guest with HIGH confidence."""
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[
+                {"name": "Tim Ferriss", "role": "host", "group": "cast"},
+                {"name": "Jane Guest", "role": "guest", "group": "cast"},
+            ],
+        )
+        assert len(out) == 2
+        host = next(c for c in out if c.name == "Tim Ferriss")
+        guest = next(c for c in out if c.name == "Jane Guest")
+        assert host.role == "host"
+        assert host.confidence == "HIGH"
+        assert host.source == "podcast_person_feed"
+        assert guest.role == "guest"
+        assert guest.confidence == "HIGH"
+
+    def test_podcast_person_episode_beats_channel(self):
+        """Episode-level persons are listed first so they win name collisions."""
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[
+                {"name": "Jane Smith", "role": "host"},
+            ],
+            episode_podcast_persons=[
+                {"name": "Jane Smith", "role": "guest"},
+            ],
+        )
+        assert len(out) == 1
+        assert out[0].source == "podcast_person_episode"
+        assert out[0].role == "guest"
+
+    def test_podcast_person_ranks_above_itunes(self):
+        """<podcast:person> is richer than itunes tags — should come first."""
+        out = extract_metadata_candidates(
+            itunes_author="Jane Author",
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_podcast_persons=[{"name": "Tim Ferriss", "role": "host"}],
+        )
+        assert out[0].name == "Tim Ferriss"
+        assert out[0].source == "podcast_person_feed"
+        assert out[1].name == "Jane Author"
+
+    def test_podcast_person_unknown_role_dropped(self):
+        """Production crew roles (editor, narrator, etc.) are not audio speakers."""
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[
+                {"name": "Edith Editor", "role": "editor"},
+                {"name": "Norma Narrator", "role": "narrator"},
+                {"name": "Jane Smith", "role": "host"},
+            ],
+        )
+        assert len(out) == 1
+        assert out[0].name == "Jane Smith"
+
+    def test_podcast_person_cohost_maps_to_host(self):
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[{"name": "Sarah Silverman", "role": "cohost"}],
+        )
+        assert len(out) == 1
+        assert out[0].role == "host"
+        assert out[0].confidence == "HIGH"
+
+    def test_podcast_person_role_case_insensitive(self):
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[{"name": "Jane Smith", "role": "HOST"}],
+        )
+        assert len(out) == 1
+        assert out[0].role == "host"
+
+    def test_podcast_person_interviewer_is_host(self):
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[{"name": "Ira Glass", "role": "interviewer"}],
+        )
+        assert len(out) == 1
+        assert out[0].role == "host"
+        assert out[0].confidence == "HIGH"
+
+    def test_podcast_person_subject_is_guest(self):
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[{"name": "Jane Smith", "role": "subject"}],
+        )
+        assert len(out) == 1
+        assert out[0].role == "guest"
+        assert out[0].confidence == "HIGH"
+
+    def test_podcast_person_empty_role_defaults_to_host(self):
+        """Spec: empty/missing role attribute defaults to 'host'."""
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[
+                {"name": "Jane Smith", "role": "   "},
+                {"name": "Tim Ferriss"},  # role key missing
+            ],
+        )
+        assert len(out) == 2
+        assert all(c.role == "host" for c in out)
+
+    def test_podcast_person_empty_name_dropped(self):
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[
+                {"name": "   ", "role": "host"},
+                {"role": "host"},  # name key missing entirely
+                {"name": "Bob", "role": "host"},  # single token → dropped
+            ],
+        )
+        assert out == []
+
+    def test_podcast_person_non_dict_entries_ignored(self):
+        """Defensive: JSONB columns can contain arbitrary data."""
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[
+                "not a dict",
+                None,
+                {"name": "Jane Smith", "role": "host"},
+            ],
+        )
+        assert len(out) == 1
+        assert out[0].name == "Jane Smith"
+
+    def test_podcast_person_org_name_dropped(self):
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[{"name": "ACME Media LLC", "role": "host"}],
+        )
+        assert out == []
+
 
 # --- merge_candidates ---
 
@@ -461,6 +597,31 @@ class TestClassifyWithMetadata:
         assert len(result.guests) == 1
         assert result.guests[0].name == "Second"
         assert result.guests[0].confidence == "LOW"
+
+    def test_second_podcast_person_host_keeps_high_confidence(self):
+        """Cohost shows: publisher declared two hosts — keep HIGH, not LOW.
+        Different behavior from itunes_owner (which often is a company)."""
+        candidates = [
+            CandidateName(name="First Host", source="podcast_person_feed", role="host", confidence="HIGH"),
+            CandidateName(name="Second Host", source="podcast_person_feed", role="host", confidence="HIGH"),
+        ]
+        result = classify_candidates(candidates, "", "", "")
+        assert result.host is not None and result.host.name == "First Host"
+        assert len(result.guests) == 1
+        assert result.guests[0].name == "Second Host"
+        assert result.guests[0].confidence == "HIGH"
+
+    def test_podcast_person_guest_classified_directly(self):
+        """role=guest candidates skip heuristics and land in guests with HIGH."""
+        candidates = [
+            CandidateName(name="Host", source="podcast_person_feed", role="host", confidence="HIGH"),
+            CandidateName(name="Declared Guest", source="podcast_person_episode", role="guest", confidence="HIGH"),
+        ]
+        result = classify_candidates(candidates, "", "", "")
+        assert result.host.name == "Host"
+        assert len(result.guests) == 1
+        assert result.guests[0].name == "Declared Guest"
+        assert result.guests[0].confidence == "HIGH"
 
     def test_classify_is_idempotent_for_metadata(self):
         """Repeated calls on the same candidate list must produce the same result
