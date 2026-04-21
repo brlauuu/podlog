@@ -153,6 +153,62 @@ class TestTestModeOrdering:
         mock_enqueue.assert_not_called()
 
 
+class TestPodcastPersonsRefresh:
+    """PRD-04 B2: channel-level <podcast:person> must be refreshed on poll
+    with keep-on-removal semantics (matches itunes_author/owner behavior).
+    """
+
+    def _preview_with_persons(self, persons: list[dict]) -> FeedPreview:
+        return FeedPreview(
+            feed=FeedMeta(
+                title=None,
+                description=None,
+                image_url=None,
+                website_url=None,
+                podcast_persons=persons,
+            ),
+            episodes=[],
+        )
+
+    def test_non_empty_persons_overwrites_stored_list(self):
+        """A poll returning new persons replaces the stored list."""
+        db, feed = _make_db(feed_mode="full")
+        feed.podcast_persons = [{"name": "Old Host", "role": "host"}]
+        new_persons = [
+            {"name": "New Host", "role": "host", "group": "cast"},
+            {"name": "Co Person", "role": "cohost", "group": "cast"},
+        ]
+        with (
+            patch("app.tasks.ingest.SessionLocal", return_value=db),
+            patch(
+                "app.tasks.ingest.rss_service.fetch_feed_and_episodes",
+                return_value=self._preview_with_persons(new_persons),
+            ),
+            patch("app.tasks.ingest.job_queue.enqueue"),
+        ):
+            ingest_feed("feed-1")
+
+        assert feed.podcast_persons == new_persons
+
+    def test_empty_persons_preserves_stored_list(self):
+        """Publisher dropped all <podcast:person> tags — keep last-known value."""
+        db, feed = _make_db(feed_mode="full")
+        stored = [{"name": "Tim Ferriss", "role": "host"}]
+        feed.podcast_persons = stored
+        with (
+            patch("app.tasks.ingest.SessionLocal", return_value=db),
+            patch(
+                "app.tasks.ingest.rss_service.fetch_feed_and_episodes",
+                return_value=self._preview_with_persons([]),
+            ),
+            patch("app.tasks.ingest.job_queue.enqueue"),
+        ):
+            ingest_feed("feed-1")
+
+        # The stored list must still be present (keep-on-removal).
+        assert feed.podcast_persons == stored
+
+
 class TestPreviewEndpoint:
     def test_preview_returns_feed_and_episodes(self):
         from fastapi.testclient import TestClient

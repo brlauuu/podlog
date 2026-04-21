@@ -40,9 +40,12 @@ METADATA_SOURCES = frozenset(
 # <podcast:person> role values that map to host/guest. Everything else is
 # dropped rather than guessed — the Podcasting 2.0 role vocabulary is large
 # (narrator, camera, editor, etc.) and most of it is production crew, not
-# speakers in the audio.
-_PODCAST_HOST_ROLES = frozenset({"host", "cohost", "co-host", "guest host", "presenter"})
-_PODCAST_GUEST_ROLES = frozenset({"guest", "interviewee"})
+# speakers in the audio. Roles here are drawn from the Podcast Namespace
+# group="cast" taxonomy.
+_PODCAST_HOST_ROLES = frozenset(
+    {"host", "cohost", "co-host", "guest host", "presenter", "interviewer"}
+)
+_PODCAST_GUEST_ROLES = frozenset({"guest", "interviewee", "subject"})
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +195,10 @@ def _podcast_person_to_candidate(
     name = (entry.get("name") or "").strip()
     if not name or not _looks_like_person_name(name):
         return None
-    role_raw = (entry.get("role") or "host").strip().lower()
+    # Defensive re-normalize in case the dict came from a source that did
+    # not run rss._parse_podcast_persons_from_element (e.g. unit tests).
+    # Empty/whitespace role defaults to "host" per Podcasting 2.0 spec.
+    role_raw = (entry.get("role") or "").strip().lower() or "host"
     if role_raw in _PODCAST_HOST_ROLES:
         role = "host"
     elif role_raw in _PODCAST_GUEST_ROLES:

@@ -18,7 +18,14 @@ import httpx
 
 _ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
 # Podcasting 2.0 namespace (https://github.com/Podcastindex-org/podcast-namespace).
-_PODCAST_NS = "https://podcastindex.org/namespace/1.0"
+# The spec URL is https:// but a large fraction of feeds in the wild still
+# declare it with http:// (the original form). Either is valid — we look up
+# <podcast:person> under both. xml.etree namespace matching is literal, so
+# we must check each URI explicitly.
+_PODCAST_NS_URIS = (
+    "https://podcastindex.org/namespace/1.0",
+    "http://podcastindex.org/namespace/1.0",
+)
 
 # Maximum number of <podcast:person> entries we will keep per feed or episode.
 # Capped to prevent a hostile or buggy feed from ballooning the JSONB column.
@@ -340,17 +347,25 @@ def _parse_podcast_persons_from_element(element) -> list[dict]:
     <item>. Attributes: role (default 'host'), group (default 'cast'), plus
     optional href/img. The tag's text is the person's name. Entries whose
     text is empty are skipped; attribute values are normalized to lowercase
-    so downstream code can pattern-match without casing drift.
+    so downstream code can pattern-match without casing drift. We also
+    tolerate whitespace-only role/group (spec says they default to
+    'host'/'cast' if absent OR empty).
     """
+    nodes: list = []
+    for ns in _PODCAST_NS_URIS:
+        nodes.extend(element.findall(f"{{{ns}}}person"))
+
     persons: list[dict] = []
-    for node in element.findall(f"{{{_PODCAST_NS}}}person"):
+    for node in nodes:
         name = (node.text or "").strip()
         if not name:
             continue
+        role_raw = (node.get("role") or "").strip().lower()
+        group_raw = (node.get("group") or "").strip().lower()
         entry: dict = {
             "name": name,
-            "role": (node.get("role") or "host").strip().lower(),
-            "group": (node.get("group") or "cast").strip().lower(),
+            "role": role_raw or "host",
+            "group": group_raw or "cast",
         }
         href = (node.get("href") or "").strip()
         if href:

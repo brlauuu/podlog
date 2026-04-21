@@ -340,6 +340,71 @@ class TestPodcastPerson:
             assert "href" not in tim
             assert "img" not in tim
 
+    def test_legacy_http_namespace_also_matched(self):
+        """Many real-world feeds still use http:// rather than https://."""
+        rss = RSS_WITH_PODCAST_PERSON.replace(
+            'xmlns:podcast="https://podcastindex.org/namespace/1.0"',
+            'xmlns:podcast="http://podcastindex.org/namespace/1.0"',
+        )
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = rss
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            episodes = fetch_episodes("https://example.com/feed.xml")
+
+            assert len(meta.podcast_persons) == 3
+            assert meta.podcast_persons[0]["name"] == "Tim Ferriss"
+            # Item-level tags keyed by guid still resolve.
+            assert len(episodes[0].podcast_persons) == 2
+
+    def test_empty_role_defaults_to_host(self):
+        """Spec: absent or empty role attribute defaults to 'host'."""
+        rss = RSS_WITH_PODCAST_PERSON.replace(
+            '<podcast:person role="editor">Edith Editor</podcast:person>',
+            '<podcast:person role="   ">Whitespace Name</podcast:person>',
+        )
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = rss
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            third = meta.podcast_persons[2]
+            assert third["name"] == "Whitespace Name"
+            assert third["role"] == "host"
+
+    def test_item_without_guid_keyed_by_enclosure_url(self):
+        """Items missing <guid> fall back to enclosure URL, matching fetch_episodes."""
+        rss = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>No Guid Pod</title>
+    <link>https://example.com</link>
+    <description>d</description>
+    <item>
+      <title>No Guid</title>
+      <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg"/>
+      <podcast:person role="host">Jane Smith</podcast:person>
+    </item>
+  </channel>
+</rss>"""
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = rss
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            episodes = fetch_episodes("https://example.com/feed.xml")
+            assert len(episodes) == 1
+            assert episodes[0].guid == "https://example.com/ep1.mp3"
+            assert len(episodes[0].podcast_persons) == 1
+            assert episodes[0].podcast_persons[0]["name"] == "Jane Smith"
+
     def test_empty_person_text_skipped(self):
         rss = RSS_WITH_PODCAST_PERSON.replace(
             '<podcast:person role="editor">Edith Editor</podcast:person>',

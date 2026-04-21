@@ -374,6 +374,36 @@ class TestExtractMetadataCandidates:
         assert len(out) == 1
         assert out[0].role == "host"
 
+    def test_podcast_person_interviewer_is_host(self):
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[{"name": "Ira Glass", "role": "interviewer"}],
+        )
+        assert len(out) == 1
+        assert out[0].role == "host"
+        assert out[0].confidence == "HIGH"
+
+    def test_podcast_person_subject_is_guest(self):
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[{"name": "Jane Smith", "role": "subject"}],
+        )
+        assert len(out) == 1
+        assert out[0].role == "guest"
+        assert out[0].confidence == "HIGH"
+
+    def test_podcast_person_empty_role_defaults_to_host(self):
+        """Spec: empty/missing role attribute defaults to 'host'."""
+        out = extract_metadata_candidates(
+            None, None, None,
+            feed_podcast_persons=[
+                {"name": "Jane Smith", "role": "   "},
+                {"name": "Tim Ferriss"},  # role key missing
+            ],
+        )
+        assert len(out) == 2
+        assert all(c.role == "host" for c in out)
+
     def test_podcast_person_empty_name_dropped(self):
         out = extract_metadata_candidates(
             None, None, None,
