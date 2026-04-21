@@ -45,7 +45,9 @@ def infer_speakers(episode_id: str) -> str:
                 assign_speaker_slots,
                 classify_candidates,
                 extract_candidates,
+                extract_metadata_candidates,
                 load_spacy_model,
+                merge_candidates,
                 unload_spacy_model,
                 write_speaker_names,
             )
@@ -54,15 +56,32 @@ def infer_speakers(episode_id: str) -> str:
             feed = db.query(Feed).filter(Feed.id == episode.feed_id).first() if episode.feed_id else None
             feed_title = feed.title if feed else None
             feed_description = feed.description if feed else None
+            itunes_author = feed.itunes_author if feed else None
+            itunes_owner_name = feed.itunes_owner_name if feed else None
 
-            # Step 1: NER extraction
+            # PRD-04 B1 + B3: pre-classified candidates from RSS person tags.
+            # These bypass NER entirely and seed the candidate list with
+            # HIGH/MEDIUM host signals before heuristic rules run.
+            metadata_candidates = extract_metadata_candidates(
+                itunes_author=itunes_author,
+                itunes_owner_name=itunes_owner_name,
+                episode_author=episode.episode_author,
+            )
+
+            # Step 1: NER extraction (episode title included per PRD-04 E1/E2)
             nlp = load_spacy_model()
             try:
-                candidates = extract_candidates(
-                    nlp, episode.description, feed_title, feed_description
+                ner_candidates = extract_candidates(
+                    nlp,
+                    episode.description,
+                    feed_title,
+                    feed_description,
+                    episode_title=episode.title,
                 )
             finally:
                 unload_spacy_model()
+
+            candidates = merge_candidates(metadata_candidates, ner_candidates)
 
             if not candidates:
                 # No names found -- still remap speaker slots by first appearance
@@ -84,7 +103,11 @@ def infer_speakers(episode_id: str) -> str:
             else:
                 # Step 2: classify
                 result = classify_candidates(
-                    candidates, episode.description, feed_title, feed_description
+                    candidates,
+                    episode.description,
+                    feed_title,
+                    feed_description,
+                    episode_title=episode.title,
                 )
 
                 # Step 3: remap speaker labels by first appearance

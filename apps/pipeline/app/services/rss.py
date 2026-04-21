@@ -28,6 +28,12 @@ class FeedMeta:
     description: Optional[str]
     image_url: Optional[str]
     website_url: Optional[str]
+    # PRD-04 B1: feedparser normalizes <itunes:author> and <author> to feed.author
+    # (use author_detail.name when available to strip "email (Name)" wrappers).
+    itunes_author: Optional[str] = None
+    # PRD-04 B1: feedparser exposes <itunes:owner><itunes:name>...</itunes:name></itunes:owner>
+    # as feed.publisher_detail.name.
+    itunes_owner_name: Optional[str] = None
 
 
 @dataclass
@@ -45,6 +51,11 @@ class EpisodeMeta:
     episode_url: Optional[str]
     published_at: Optional[datetime]
     duration_secs: Optional[int]
+    # PRD-04 B3: feedparser normalizes <dc:creator>, <itunes:author>, and <author>
+    # to entry.author at the episode level. The field is named episode_author
+    # rather than dc_creator because the actual XML tag is indistinguishable
+    # after feedparser normalization.
+    episode_author: Optional[str] = None
 
 
 def _require_http_url(url: str) -> None:
@@ -88,6 +99,8 @@ def validate_and_parse_feed(url: str) -> FeedMeta:
         description=feed.get("subtitle") or feed.get("description"),
         image_url=_extract_image(feed),
         website_url=feed.get("link"),
+        itunes_author=_extract_feed_author(feed),
+        itunes_owner_name=_extract_feed_owner_name(feed),
     )
 
 
@@ -124,10 +137,64 @@ def fetch_episodes(url: str) -> list[EpisodeMeta]:
                 episode_url=episode_url,
                 published_at=published_at,
                 duration_secs=duration_secs,
+                episode_author=_extract_entry_author(entry),
             )
         )
 
     return episodes
+
+
+def fetch_feed_and_episodes(url: str) -> FeedPreview:
+    """Fetch a feed once and return both feed metadata and episodes.
+
+    Same single-HTTP-call shape as preview_feed, but used by the pipeline
+    poll path so feed-level metadata (e.g. itunes_author) gets refreshed
+    alongside episode ingestion. Unlike preview_feed, this does not raise
+    on transient fetch failures — it logs and returns an empty result so
+    the periodic poller keeps going.
+    """
+    try:
+        resp = httpx.get(url, follow_redirects=True, timeout=15.0)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.error('"action": "feed_fetch_error", "url": "%s", "error": "%s"', url, exc)
+        return FeedPreview(
+            feed=FeedMeta(title=None, description=None, image_url=None, website_url=None),
+            episodes=[],
+        )
+
+    parsed = feedparser.parse(resp.text)
+    feed_data = parsed.feed
+    feed_meta = FeedMeta(
+        title=feed_data.get("title"),
+        description=feed_data.get("subtitle") or feed_data.get("description"),
+        image_url=_extract_image(feed_data),
+        website_url=feed_data.get("link"),
+        itunes_author=_extract_feed_author(feed_data),
+        itunes_owner_name=_extract_feed_owner_name(feed_data),
+    )
+
+    episodes = []
+    for entry in parsed.entries:
+        audio_url = _extract_audio_url(entry)
+        if not audio_url:
+            continue
+        guid = entry.get("id") or audio_url
+        raw_link = entry.get("link") or ""
+        episodes.append(
+            EpisodeMeta(
+                guid=guid,
+                title=entry.get("title"),
+                description=entry.get("summary"),
+                audio_url=audio_url,
+                episode_url=raw_link if raw_link.startswith(("http://", "https://")) else None,
+                published_at=_parse_date(entry.get("published")),
+                duration_secs=_parse_duration(entry.get("itunes_duration")),
+                episode_author=_extract_entry_author(entry),
+            )
+        )
+
+    return FeedPreview(feed=feed_meta, episodes=episodes)
 
 
 def preview_feed(url: str) -> FeedPreview:
@@ -160,6 +227,8 @@ def preview_feed(url: str) -> FeedPreview:
         description=feed_data.get("subtitle") or feed_data.get("description"),
         image_url=_extract_image(feed_data),
         website_url=feed_data.get("link"),
+        itunes_author=_extract_feed_author(feed_data),
+        itunes_owner_name=_extract_feed_owner_name(feed_data),
     )
 
     episodes = []
@@ -178,6 +247,7 @@ def preview_feed(url: str) -> FeedPreview:
                 episode_url=raw_link if raw_link.startswith(("http://", "https://")) else None,
                 published_at=_parse_date(entry.get("published")),
                 duration_secs=_parse_duration(entry.get("itunes_duration")),
+                episode_author=_extract_entry_author(entry),
             )
         )
 
@@ -209,6 +279,44 @@ def _parse_date(date_str: Optional[str]) -> Optional[datetime]:
         return parsedate_to_datetime(date_str).astimezone(timezone.utc)
     except Exception:
         return None
+
+
+def _extract_feed_author(feed: dict) -> Optional[str]:
+    """Extract <itunes:author> / <author> at the channel level (PRD-04 B1).
+
+    Prefer author_detail.name to strip 'email (Name)' wrappers that feedparser
+    preserves in the raw `author` string.
+    """
+    detail = feed.get("author_detail") or {}
+    name = detail.get("name") if isinstance(detail, dict) else None
+    if name:
+        return name.strip() or None
+    raw = feed.get("author")
+    return raw.strip() if raw else None
+
+
+def _extract_feed_owner_name(feed: dict) -> Optional[str]:
+    """Extract <itunes:owner><itunes:name>...</itunes:name></itunes:owner> (PRD-04 B1).
+
+    feedparser surfaces this as feed.publisher_detail.name.
+    """
+    detail = feed.get("publisher_detail") or {}
+    name = detail.get("name") if isinstance(detail, dict) else None
+    return name.strip() if name else None
+
+
+def _extract_entry_author(entry: dict) -> Optional[str]:
+    """Extract episode-level author (PRD-04 B3).
+
+    feedparser normalizes <dc:creator>, <itunes:author>, and <author> at the
+    <item> level into entry.author; author_detail.name is the cleaned name.
+    """
+    detail = entry.get("author_detail") or {}
+    name = detail.get("name") if isinstance(detail, dict) else None
+    if name:
+        return name.strip() or None
+    raw = entry.get("author")
+    return raw.strip() if raw else None
 
 
 def _parse_duration(duration_str: Optional[str]) -> Optional[int]:

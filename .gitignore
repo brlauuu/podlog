@@ -56,3 +56,4 @@ apps/web/test-results/
 .vscode/
 *.swp
 .superpowers/
+.omx/

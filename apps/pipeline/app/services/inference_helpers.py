@@ -33,6 +33,15 @@ HOST_DESCRIPTION_PATTERNS = [
     r"\bI'?m\b",
 ]
 
+# Episode-number prefixes stripped before NER (PRD-04 E2). The number is
+# followed by a separator (`:`, `-`, `—`, `–`, `|`) to avoid swallowing
+# title fragments like "1984 Orwell revisited". We match at the start of
+# the string only.
+_EPISODE_PREFIX_RE = re.compile(
+    r"^\s*(?:ep(?:isode)?\.?\s*\d+|#\s*\d+|\d+)\s*[:\-—–|]\s*",
+    re.IGNORECASE,
+)
+
 
 class _HTMLStripper(HTMLParser):
     """Minimal HTML tag stripper."""
@@ -86,10 +95,29 @@ def name_near_guest_signal(name_lower: str, ep_desc_lower: str) -> Optional[str]
     return None
 
 
-def name_after_colon_in_title(name: str, episode_description: str) -> bool:
-    """Check for 'Ep N: Name ...' pattern in the first line of description."""
-    first_line = episode_description.split("\n")[0]
+def name_after_colon_in_title(name: str, text: str) -> bool:
+    """Check for 'Ep N: Name ...' pattern in the first line of the given text.
+
+    Used against both the first line of the episode description (legacy) and
+    the episode title itself (PRD-04 E1 — many feeds carry the guest name
+    only in the title, never in the description body).
+    """
+    if not text:
+        return False
+    first_line = text.split("\n")[0]
     if ":" not in first_line:
         return False
     after_colon = first_line.split(":", 1)[1].strip()
     return name.lower() in after_colon.lower()
+
+
+def strip_episode_prefix(text: str) -> str:
+    """Remove leading 'Ep 42:' / '#42 —' / '42.' prefixes before NER (PRD-04 E2).
+
+    Some transformer NER models treat these tokens as part of a preceding
+    entity span, dropping the true name. Stripping the prefix before the
+    model sees the text reliably isolates the name.
+    """
+    if not text:
+        return text
+    return _EPISODE_PREFIX_RE.sub("", text, count=1)

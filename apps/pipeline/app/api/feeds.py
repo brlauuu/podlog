@@ -178,6 +178,8 @@ def add_feed(body: AddFeedRequest, db: Session = Depends(get_db)) -> FeedRespons
         description=feed_meta.description,
         image_url=feed_meta.image_url,
         website_url=feed_meta.website_url,
+        itunes_author=feed_meta.itunes_author,
+        itunes_owner_name=feed_meta.itunes_owner_name,
         mode=body.mode,
     )
     db.add(feed)

@@ -45,6 +45,9 @@ class Feed(Base):
     description: Mapped[str | None] = mapped_column(Text)
     image_url: Mapped[str | None] = mapped_column(Text)
     website_url: Mapped[str | None] = mapped_column(Text)
+    # PRD-04 B1: RSS person tags used as HIGH-confidence host signals during inference
+    itunes_author: Mapped[str | None] = mapped_column(Text)
+    itunes_owner_name: Mapped[str | None] = mapped_column(Text)
     last_polled_at: Mapped[datetime | None] = mapped_column()
     # Issue #23: test | full — test mode limits to N most-recent episodes (default 1)
     # Issue #84: selective — only user-chosen episodes are ingested; not auto-polled
@@ -72,6 +75,8 @@ class Episode(Base):
     duration_secs: Mapped[int | None] = mapped_column(Integer)
     audio_url: Mapped[str] = mapped_column(Text, nullable=False)
     episode_url: Mapped[str | None] = mapped_column(Text)
+    # PRD-04 B3: entry-level author (<dc:creator> / <itunes:author> / <author>)
+    episode_author: Mapped[str | None] = mapped_column(Text)
     audio_local_path: Mapped[str | None] = mapped_column(Text)
     transcript_path: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str | None] = mapped_column(Text)
