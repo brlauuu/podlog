@@ -5,20 +5,25 @@ import pytest
 
 
 def _make_episode(id_="ep1", has_diarization=True, description="With guest Jane Smith",
-                  feed_id="feed1"):
+                  feed_id="feed1", title=None, episode_author=None):
     ep = MagicMock()
     ep.id = id_
     ep.has_diarization = has_diarization
     ep.description = description
     ep.feed_id = feed_id
+    ep.title = title
+    ep.episode_author = episode_author
     return ep
 
 
-def _make_feed(id_="feed1", title="The Tim Ferriss Show", description="Interviews"):
+def _make_feed(id_="feed1", title="The Tim Ferriss Show", description="Interviews",
+               itunes_author=None, itunes_owner_name=None):
     feed = MagicMock()
     feed.id = id_
     feed.title = title
     feed.description = description
+    feed.itunes_author = itunes_author
+    feed.itunes_owner_name = itunes_owner_name
     return feed
 
 

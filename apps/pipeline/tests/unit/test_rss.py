@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 from app.services.rss import (
     validate_and_parse_feed,
     fetch_episodes,
+    fetch_feed_and_episodes,
     InvalidFeedError,
     _parse_duration,
     _parse_date,
@@ -106,6 +107,166 @@ class TestFetchEpisodes:
             episodes = fetch_episodes("https://example.com/feed.xml")
             # Should fall back to audio URL as GUID
             assert episodes[0].guid == "https://example.com/ep1.mp3"
+
+
+RSS_WITH_AUTHOR_ONLY = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Interview Pod</title>
+    <link>https://example.com</link>
+    <description>Interviews with people</description>
+    <itunes:author>Host McHostface</itunes:author>
+    <item>
+      <title>Ep 1: Jane Smith on AI</title>
+      <guid>ep-001</guid>
+      <dc:creator>Jane Smith</dc:creator>
+      <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" length="12345"/>
+    </item>
+  </channel>
+</rss>"""
+
+RSS_WITH_OWNER_ONLY = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Owned Pod</title>
+    <link>https://example.com</link>
+    <description>A show</description>
+    <itunes:owner>
+      <itunes:name>Owner McOwnerface</itunes:name>
+      <itunes:email>owner@example.com</itunes:email>
+    </itunes:owner>
+    <item>
+      <title>Episode 1</title>
+      <guid>ep-001</guid>
+      <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" length="12345"/>
+    </item>
+  </channel>
+</rss>"""
+
+
+RSS_WITH_AUTHOR_AND_OWNER = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Both Pod</title>
+    <link>https://example.com</link>
+    <description>A show</description>
+    <itunes:author>Host McHostface</itunes:author>
+    <itunes:owner>
+      <itunes:name>Olivia Owner</itunes:name>
+      <itunes:email>owner@example.com</itunes:email>
+    </itunes:owner>
+    <item>
+      <title>E1</title>
+      <guid>ep-001</guid>
+      <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>"""
+
+
+class TestRssAuthorTags:
+    """PRD-04 B1 + B3: RSS person tags surfaced from the feed.
+
+    Note: feedparser's itunes handler collapses ``<itunes:author>`` into
+    ``publisher_detail`` when ``<itunes:owner>`` appears afterwards in the
+    channel, silently losing the author. ``_extract_itunes_author_from_xml``
+    reads the tag directly from raw XML to recover it. The mixed-tag
+    fixture below exercises the workaround.
+    """
+
+    def test_itunes_author_extracted(self):
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = RSS_WITH_AUTHOR_ONLY
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            assert meta.itunes_author == "Host McHostface"
+            assert meta.itunes_owner_name is None
+
+    def test_itunes_owner_extracted(self):
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = RSS_WITH_OWNER_ONLY
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            assert meta.itunes_owner_name == "Owner McOwnerface"
+
+    def test_episode_author_from_dc_creator(self):
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = RSS_WITH_AUTHOR_ONLY
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            episodes = fetch_episodes("https://example.com/feed.xml")
+            assert len(episodes) == 1
+            assert episodes[0].episode_author == "Jane Smith"
+
+    def test_author_and_owner_both_extracted_despite_feedparser_quirk(self):
+        """Regression: when <itunes:author> precedes <itunes:owner>, feedparser
+        overwrites the author field with the owner name. The direct XML read
+        must recover the true author."""
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = RSS_WITH_AUTHOR_AND_OWNER
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            assert meta.itunes_author == "Host McHostface"
+            assert meta.itunes_owner_name == "Olivia Owner"
+
+    def test_missing_author_tags_return_none(self):
+        """VALID_RSS has no author tags — fields must be None, not empty strings."""
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = VALID_RSS
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            meta = validate_and_parse_feed("https://example.com/feed.xml")
+            episodes = fetch_episodes("https://example.com/feed.xml")
+
+            assert meta.itunes_author is None
+            assert meta.itunes_owner_name is None
+            assert episodes[0].episode_author is None
+
+
+class TestFetchFeedAndEpisodes:
+    def test_returns_feed_and_episodes_in_one_call(self):
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = RSS_WITH_AUTHOR_ONLY
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            preview = fetch_feed_and_episodes("https://example.com/feed.xml")
+
+            # Exactly one HTTP fetch for both feed and episode data.
+            assert mock_get.call_count == 1
+            assert preview.feed.title == "Interview Pod"
+            assert preview.feed.itunes_author == "Host McHostface"
+            assert len(preview.episodes) == 1
+            assert preview.episodes[0].episode_author == "Jane Smith"
+
+    def test_http_error_returns_empty_preview(self):
+        """Unlike preview_feed, the poll path must not raise on transient errors."""
+        import httpx
+
+        with patch("httpx.get") as mock_get:
+            mock_get.side_effect = httpx.ConnectError("Connection refused")
+            preview = fetch_feed_and_episodes("https://unreachable.example.com/feed.xml")
+
+            assert preview.episodes == []
+            assert preview.feed.title is None
+            assert preview.feed.itunes_author is None
 
 
 class TestParseDuration:

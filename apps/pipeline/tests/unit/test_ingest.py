@@ -7,7 +7,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.tasks.ingest import ingest_feed, TEST_MODE_MAX_EPISODES
-from app.services.rss import EpisodeMeta
+from app.services.rss import EpisodeMeta, FeedMeta, FeedPreview
+
+
+def _preview(episodes: list[EpisodeMeta]) -> FeedPreview:
+    """FeedPreview wrapper matching the fetch_feed_and_episodes return shape."""
+    return FeedPreview(
+        feed=FeedMeta(title=None, description=None, image_url=None, website_url=None),
+        episodes=episodes,
+    )
 
 
 def _make_episode_meta(guid: str, title: str = "") -> EpisodeMeta:
@@ -50,7 +58,7 @@ class TestSelectiveMode:
 
         with (
             patch("app.tasks.ingest.SessionLocal", return_value=db),
-            patch("app.tasks.ingest.rss_service.fetch_episodes", return_value=episodes),
+            patch("app.tasks.ingest.rss_service.fetch_feed_and_episodes", return_value=_preview(episodes)),
             patch("app.tasks.ingest.job_queue.enqueue") as mock_enqueue,
         ):
             result = ingest_feed("feed-1", selected_guids=["ep-001", "ep-003"])
@@ -65,7 +73,7 @@ class TestSelectiveMode:
 
         with (
             patch("app.tasks.ingest.SessionLocal", return_value=db),
-            patch("app.tasks.ingest.rss_service.fetch_episodes", return_value=episodes),
+            patch("app.tasks.ingest.rss_service.fetch_feed_and_episodes", return_value=_preview(episodes)),
             patch("app.tasks.ingest.job_queue.enqueue"),
         ):
             result = ingest_feed("feed-1", selected_guids=["ep-001", "ep-BOGUS"])
@@ -80,7 +88,7 @@ class TestSelectiveMode:
 
         with (
             patch("app.tasks.ingest.SessionLocal", return_value=db),
-            patch("app.tasks.ingest.rss_service.fetch_episodes") as mock_fetch,
+            patch("app.tasks.ingest.rss_service.fetch_feed_and_episodes") as mock_fetch,
         ):
             result = ingest_feed("feed-1", selected_guids=None)
 
@@ -95,7 +103,7 @@ class TestSelectiveMode:
 
         with (
             patch("app.tasks.ingest.SessionLocal", return_value=db),
-            patch("app.tasks.ingest.rss_service.fetch_episodes", return_value=episodes),
+            patch("app.tasks.ingest.rss_service.fetch_feed_and_episodes", return_value=_preview(episodes)),
             patch("app.tasks.ingest.job_queue.enqueue") as mock_enqueue,
         ):
             result = ingest_feed("feed-1", selected_guids=["ep-001", "ep-002"])
@@ -116,7 +124,7 @@ class TestTestModeOrdering:
 
         with (
             patch("app.tasks.ingest.SessionLocal", return_value=db),
-            patch("app.tasks.ingest.rss_service.fetch_episodes", return_value=episodes),
+            patch("app.tasks.ingest.rss_service.fetch_feed_and_episodes", return_value=_preview(episodes)),
             patch("app.tasks.ingest.job_queue.enqueue") as mock_enqueue,
         ):
             result = ingest_feed("feed-1")
@@ -136,7 +144,7 @@ class TestTestModeOrdering:
 
         with (
             patch("app.tasks.ingest.SessionLocal", return_value=db),
-            patch("app.tasks.ingest.rss_service.fetch_episodes", return_value=episodes),
+            patch("app.tasks.ingest.rss_service.fetch_feed_and_episodes", return_value=_preview(episodes)),
             patch("app.tasks.ingest.job_queue.enqueue") as mock_enqueue,
         ):
             result = ingest_feed("feed-1")

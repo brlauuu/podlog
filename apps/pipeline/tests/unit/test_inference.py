@@ -13,8 +13,14 @@ from app.services.inference import (
     assign_speaker_slots,
     classify_candidates,
     extract_candidates,
+    extract_metadata_candidates,
+    merge_candidates,
     strip_html,
     write_speaker_names,
+)
+from app.services.inference_helpers import (
+    name_after_colon_in_title,
+    strip_episode_prefix,
 )
 
 
@@ -210,6 +216,282 @@ class TestClassifyCandidates:
         assert unknown[0].confidence == "LOW"
 
 
+# --- extract_metadata_candidates (PRD-04 B1 + B3) ---
+
+class TestExtractMetadataCandidates:
+    def test_author_is_host_high_owner_is_host_medium(self):
+        """PRD-04 B1: <itunes:author> is the on-air author (HIGH).
+        <itunes:owner> is the business contact — weaker (MEDIUM).
+        """
+        out = extract_metadata_candidates(
+            itunes_author="Jane Author",
+            itunes_owner_name="Olivia Owner",
+            episode_author=None,
+        )
+        assert len(out) == 2
+        # Author listed first (strongest person signal per Apple spec)
+        assert out[0].name == "Jane Author"
+        assert out[0].source == "itunes_author"
+        assert out[0].role == "host"
+        assert out[0].confidence == "HIGH"
+        assert out[1].name == "Olivia Owner"
+        assert out[1].source == "itunes_owner"
+        assert out[1].role == "host"
+        assert out[1].confidence == "MEDIUM"
+
+    def test_episode_author_is_host_medium(self):
+        out = extract_metadata_candidates(None, None, "Host McHostface")
+        assert len(out) == 1
+        assert out[0].source == "episode_author"
+        assert out[0].role == "host"
+        assert out[0].confidence == "MEDIUM"
+
+    def test_dedupes_by_normalized_name(self):
+        """Same name in author + owner → keep only the stronger (author)."""
+        out = extract_metadata_candidates(
+            itunes_author="jane smith",
+            itunes_owner_name="Jane Smith",
+            episode_author="JANE SMITH",
+        )
+        assert len(out) == 1
+        assert out[0].source == "itunes_author"  # strongest wins
+
+    def test_empty_inputs_return_empty_list(self):
+        assert extract_metadata_candidates(None, None, None) == []
+        assert extract_metadata_candidates("", "", "") == []
+
+    def test_whitespace_only_inputs_are_dropped(self):
+        assert extract_metadata_candidates("   ", "\t\n", "  ") == []
+
+    def test_company_names_are_dropped(self):
+        """PRD-04 B1: owner tags frequently hold ORG names — filter them out."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name="Vox Media Podcast Network",
+            episode_author=None,
+        )
+        assert out == []
+
+    def test_company_name_in_author_is_dropped(self):
+        out = extract_metadata_candidates(
+            itunes_author="ACME Podcasts LLC",
+            itunes_owner_name=None,
+            episode_author=None,
+        )
+        assert out == []
+
+    def test_single_token_is_dropped(self):
+        """Single-token strings are rarely on-air host names."""
+        out = extract_metadata_candidates(
+            itunes_author="Bob",
+            itunes_owner_name=None,
+            episode_author=None,
+        )
+        assert out == []
+
+    def test_honorific_dedupes_with_bare_name(self):
+        """PRD-04 B1: 'Dr. Jane Smith' and 'Jane Smith' are the same person."""
+        out = extract_metadata_candidates(
+            itunes_author="Dr. Jane Smith",
+            itunes_owner_name="Jane Smith",
+            episode_author=None,
+        )
+        assert len(out) == 1
+        assert out[0].source == "itunes_author"
+
+
+# --- merge_candidates ---
+
+class TestMergeCandidates:
+    def test_metadata_list_appears_first(self):
+        metadata = [CandidateName(name="Host", source="itunes_author", role="host", confidence="HIGH")]
+        ner = [CandidateName(name="Guest", source="episode_description")]
+        merged = merge_candidates(metadata, ner)
+        assert merged[0].name == "Host"
+        assert merged[1].name == "Guest"
+
+    def test_metadata_wins_on_name_collision(self):
+        """NER entry with the same name is dropped — metadata carries better info."""
+        metadata = [CandidateName(name="Jane Smith", source="itunes_author", role="host", confidence="HIGH")]
+        ner = [CandidateName(name="Jane Smith", source="episode_description")]
+        merged = merge_candidates(metadata, ner)
+        assert len(merged) == 1
+        assert merged[0].source == "itunes_author"
+
+    def test_empty_lists(self):
+        assert merge_candidates([], []) == []
+
+
+# --- strip_episode_prefix (PRD-04 E2) ---
+
+class TestStripEpisodePrefix:
+    def test_strips_ep_number_colon(self):
+        assert strip_episode_prefix("Ep 42: Jane Smith on AI") == "Jane Smith on AI"
+
+    def test_strips_episode_word(self):
+        assert strip_episode_prefix("Episode 100: The Finale") == "The Finale"
+
+    def test_strips_hash_number(self):
+        assert strip_episode_prefix("#42 — Jane Smith") == "Jane Smith"
+
+    def test_strips_bare_number_with_separator(self):
+        assert strip_episode_prefix("42: Jane Smith") == "Jane Smith"
+
+    def test_case_insensitive(self):
+        assert strip_episode_prefix("EP 42: Jane") == "Jane"
+
+    def test_em_dash_separator(self):
+        assert strip_episode_prefix("Ep 42 — Jane Smith") == "Jane Smith"
+
+    def test_does_not_strip_numbers_in_body(self):
+        """'1984 Orwell revisited' — no separator, keep as-is."""
+        assert strip_episode_prefix("1984 Orwell revisited") == "1984 Orwell revisited"
+
+    def test_handles_empty_and_none(self):
+        assert strip_episode_prefix("") == ""
+        assert strip_episode_prefix(None) is None
+
+
+# --- name_after_colon_in_title (PRD-04 E1) ---
+
+class TestNameAfterColonInTitle:
+    def test_matches_name_in_title_after_colon(self):
+        assert name_after_colon_in_title("Jane Smith", "Ep 42: Jane Smith on AI")
+
+    def test_matches_case_insensitive(self):
+        assert name_after_colon_in_title("JANE SMITH", "Ep 42: jane smith")
+
+    def test_no_colon_returns_false(self):
+        assert not name_after_colon_in_title("Jane", "Jane Smith talks about AI")
+
+    def test_only_first_line_checked(self):
+        """Colon on line 2 must not match — first line only."""
+        assert not name_after_colon_in_title("Jane Smith", "No colon here\nBio: Jane Smith")
+
+    def test_empty_text_returns_false(self):
+        assert not name_after_colon_in_title("Jane", "")
+
+
+# --- extract_candidates with episode_title (PRD-04 E1/E2) ---
+
+class TestExtractCandidatesWithTitle:
+    def test_title_is_a_source(self):
+        """episode_title should be a NER source after strip_episode_prefix."""
+        call_count = 0
+
+        def nlp_side_effect(text):
+            nonlocal call_count
+            doc = MagicMock()
+            # episode_description, then episode_title, then feed_title, then feed_description
+            names = [
+                [],                          # episode_description
+                [("Jane Smith", "PERSON")],  # episode_title (after prefix strip)
+                [],                          # feed_title
+                [],                          # feed_description
+            ]
+            doc.ents = [_make_spacy_ent(n, l) for n, l in names[call_count]]
+            call_count += 1
+            return doc
+
+        nlp = MagicMock(side_effect=nlp_side_effect)
+        result = extract_candidates(
+            nlp,
+            "description text",
+            "feed title",
+            "feed desc",
+            episode_title="Ep 42: Jane Smith on AI",
+        )
+        assert len(result) == 1
+        assert result[0].source == "episode_title"
+        # The prefix was stripped before NER
+        nlp.assert_any_call("Jane Smith on AI")
+
+
+# --- classify_candidates: metadata short-circuit + title colon rule ---
+
+class TestClassifyWithMetadata:
+    def test_metadata_host_honored_without_heuristics(self):
+        """itunes_author candidate → host HIGH, regardless of description text."""
+        candidates = [
+            CandidateName(name="Jane", source="itunes_author", role="host", confidence="HIGH"),
+        ]
+        result = classify_candidates(
+            candidates,
+            episode_description="No mention of Jane anywhere useful",
+            feed_title="Random Show",
+            feed_description="",
+        )
+        assert result.host is not None
+        assert result.host.name == "Jane"
+        assert result.host.source == "itunes_author"
+        assert result.host.confidence == "HIGH"
+
+    def test_metadata_single_name_not_demoted(self):
+        """Single-name reclassification must NOT apply to metadata hosts (ground truth)."""
+        candidates = [
+            CandidateName(name="Jane", source="itunes_owner", role="host", confidence="HIGH"),
+        ]
+        result = classify_candidates(candidates, "no guests", "", "")
+        # Normally a lone host gets demoted to guest LOW — but metadata is ground truth.
+        assert result.host is not None
+        assert result.guests == []
+
+    def test_metadata_host_plus_ner_guest(self):
+        candidates = [
+            CandidateName(name="Host", source="itunes_author", role="host", confidence="HIGH"),
+            CandidateName(name="Guest", source="episode_description"),
+        ]
+        result = classify_candidates(
+            candidates,
+            "My guest today is Guest",
+            "",
+            "",
+        )
+        assert result.host is not None and result.host.name == "Host"
+        assert any(g.name == "Guest" for g in result.guests)
+
+    def test_second_metadata_host_becomes_guest(self):
+        """If two metadata entries both claim host, the second goes to guest LOW."""
+        candidates = [
+            CandidateName(name="First", source="itunes_author", role="host", confidence="HIGH"),
+            CandidateName(name="Second", source="itunes_owner", role="host", confidence="MEDIUM"),
+        ]
+        result = classify_candidates(candidates, "", "", "")
+        assert result.host is not None and result.host.name == "First"
+        assert len(result.guests) == 1
+        assert result.guests[0].name == "Second"
+        assert result.guests[0].confidence == "LOW"
+
+    def test_classify_is_idempotent_for_metadata(self):
+        """Repeated calls on the same candidate list must produce the same result
+        — classify_candidates must not mutate input CandidateName objects."""
+        candidates = [
+            CandidateName(name="First", source="itunes_author", role="host", confidence="HIGH"),
+            CandidateName(name="Second", source="itunes_owner", role="host", confidence="MEDIUM"),
+        ]
+        first = classify_candidates(candidates, "", "", "")
+        second = classify_candidates(candidates, "", "", "")
+        assert first.host.name == second.host.name == "First"
+        assert first.host.confidence == second.host.confidence == "HIGH"
+        # Second candidate's original role/confidence untouched:
+        assert candidates[1].role == "host"
+        assert candidates[1].confidence == "MEDIUM"
+
+    def test_episode_title_colon_rule(self):
+        """E1: guest in episode title (not description) still tagged HIGH."""
+        candidates = [CandidateName(name="Elon Musk", source="episode_title")]
+        result = classify_candidates(
+            candidates,
+            episode_description="Body text with no guest cue",
+            feed_title="",
+            feed_description="",
+            episode_title="Ep 42: Elon Musk on AI",
+        )
+        assert len(result.guests) == 1
+        assert result.guests[0].name == "Elon Musk"
+        assert result.guests[0].confidence == "HIGH"
+
+
 # --- assign_speaker_slots ---
 
 class TestAssignSpeakerSlots:
@@ -303,8 +585,10 @@ class TestInferSpeakersTask:
         episode = MagicMock()
         episode.id = "ep-1"
         episode.has_diarization = True
-        episode.feed_id = "feed-1"
+        episode.feed_id = None  # skip feed lookup
         episode.description = "some text"
+        episode.title = None
+        episode.episode_author = None
         db.query.return_value.filter.return_value.first.return_value = episode
 
         with (

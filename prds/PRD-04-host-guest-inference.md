@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-04 — Host & Guest Inference  
-**Version:** 1.3
+**Version:** 1.4
 **Status:** Active
 **Depends on:** PRD-01 v1.1, PRD-02 v1.1, PRD-03 v1.1
 
 **Changelog:**
+- v1.4 — Added RSS person tag parsing (B1 + B3) and episode-title heuristic polish (E1 + E2). Feed rows now persist `itunes_author` and `itunes_owner_name`; episodes persist `episode_author` (dc:creator / author at item level). These candidates bypass NER and seed the classifier with HIGH/MEDIUM host signals via `extract_metadata_candidates` + `merge_candidates`. `classify_candidates` applies the "name after colon" guest rule to `episode.title` in addition to the description's first line, and `extract_candidates` runs episode titles through `strip_episode_prefix` so leading "Ep 42:" / "#42 —" tokens don't poison transformer NER spans. Feed author/owner tags refresh on every poll via a new `fetch_feed_and_episodes` helper that also collapses feed + episode fetch into one HTTP call (issue #523).
 - v1.3 — `Dockerfile.worker` now downloads `en_core_web_trf` in addition to `en_core_web_lg`, and `SPACY_MODEL` default flipped to `en_core_web_trf` to match the spec in §4.1. `en_core_web_lg` remains installed as an automatic fallback and as the recommended override for memory-constrained hosts (issue #523).
 - v1.2 — Marked status Active (feature is shipped: `services/inference.py`, `tasks/infer.py`, `INFERRING` stage, spaCy `en_core_web_lg` bundled in `Dockerfile.worker`). Pipeline stage ordering in §4.6 updated to match actual code path (adds CHUNKING and EMBEDDING between DIARIZING and INFERRING).
 

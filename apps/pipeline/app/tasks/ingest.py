@@ -44,7 +44,21 @@ def ingest_feed(feed_id: str, selected_guids: Optional[list[str]] = None) -> dic
             )
             return {"new_episodes": 0, "reason": "selective_mode_no_new_episodes"}
 
-        episodes_meta = rss_service.fetch_episodes(feed.url)
+        # Single HTTP fetch gets both feed-level metadata (refreshed for
+        # PRD-04 B1 person tags) and episode entries.
+        preview = rss_service.fetch_feed_and_episodes(feed.url)
+        episodes_meta = preview.episodes
+
+        # Refresh RSS-derived person tags on each poll. When the publisher
+        # replaces the tag with a new value we overwrite; when the tag is
+        # absent from the new XML we keep the last-known-good value rather
+        # than clearing it (publishers sometimes strip these temporarily
+        # during site migrations). Title/description are intentionally not
+        # refreshed here to preserve existing set-once behavior.
+        if preview.feed.itunes_author is not None:
+            feed.itunes_author = preview.feed.itunes_author
+        if preview.feed.itunes_owner_name is not None:
+            feed.itunes_owner_name = preview.feed.itunes_owner_name
 
         # Issue #84: in selective mode, restrict to the caller-supplied GUIDs.
         # Validate each requested GUID is present in the live feed to prevent injection.
@@ -92,6 +106,7 @@ def ingest_feed(feed_id: str, selected_guids: Optional[list[str]] = None) -> dic
                 duration_secs=meta.duration_secs,
                 audio_url=meta.audio_url,
                 episode_url=meta.episode_url,
+                episode_author=meta.episode_author,
                 status="pending",
             )
             db.add(episode)
