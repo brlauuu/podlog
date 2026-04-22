@@ -1820,8 +1820,10 @@ export interface PerEpisode {
 
 export interface PerSpeaker {
   speaker_display_name: string;
+  normalized_name: string;
   feed_id: string;
   episode_ids: string[];
+  episode_count: number;
   wpm: number;
   total_words: number;
   total_seconds: number;
