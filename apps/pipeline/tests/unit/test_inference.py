@@ -873,6 +873,88 @@ class TestMergeCandidates:
     def test_empty_lists(self):
         assert merge_candidates([], []) == []
 
+    def test_promotes_medium_host_when_ner_dupe_in_feed_title(self):
+        """Issue #530: metadata MEDIUM host promoted to HIGH when a dropped
+        NER dup for the same name appears in feed_title (the canonical HIGH
+        host signal). Blocks the confidence-oscillation cycle where a
+        recurring_host MEDIUM row shadows a would-be HIGH feed_title match."""
+        metadata = [
+            CandidateName(
+                name="Jane Smith", source="recurring_host", role="host", confidence="MEDIUM"
+            )
+        ]
+        ner = [CandidateName(name="Jane Smith", source="feed_title")]
+        merged = merge_candidates(metadata, ner, feed_title="The Jane Smith Show")
+        assert len(merged) == 1
+        assert merged[0].source == "recurring_host"
+        assert merged[0].confidence == "HIGH"
+
+    def test_no_promotion_when_name_absent_from_feed_title(self):
+        """Roles agree but feed_title does not corroborate — confidence stays."""
+        metadata = [
+            CandidateName(
+                name="Jane Smith", source="recurring_host", role="host", confidence="MEDIUM"
+            )
+        ]
+        ner = [CandidateName(name="Jane Smith", source="episode_description")]
+        merged = merge_candidates(metadata, ner, feed_title="Unrelated Show Name")
+        assert merged[0].confidence == "MEDIUM"
+
+    def test_no_promotion_without_feed_title_arg(self):
+        """Default call (no feed_title) preserves prior dedup semantics."""
+        metadata = [
+            CandidateName(
+                name="Jane Smith", source="recurring_host", role="host", confidence="MEDIUM"
+            )
+        ]
+        ner = [CandidateName(name="Jane Smith", source="feed_title")]
+        merged = merge_candidates(metadata, ner)
+        assert merged[0].confidence == "MEDIUM"
+
+    def test_no_promotion_for_guest_role_metadata(self):
+        """feed_title match implies host; never promote a metadata guest
+        candidate even if its name appears there."""
+        metadata = [
+            CandidateName(
+                name="Jane Smith",
+                source="podcast_person_episode",
+                role="guest",
+                confidence="MEDIUM",
+            )
+        ]
+        ner = [CandidateName(name="Jane Smith", source="feed_title")]
+        merged = merge_candidates(metadata, ner, feed_title="The Jane Smith Show")
+        assert merged[0].role == "guest"
+        assert merged[0].confidence == "MEDIUM"
+
+    def test_promotion_matches_case_insensitively(self):
+        """Feed title comparison is case-insensitive (classify_candidates
+        lowercases f_title before the `in` check — keep parity here)."""
+        metadata = [
+            CandidateName(
+                name="JANE SMITH", source="recurring_host", role="host", confidence="MEDIUM"
+            )
+        ]
+        ner = [CandidateName(name="JANE SMITH", source="feed_title")]
+        merged = merge_candidates(metadata, ner, feed_title="the jane smith show")
+        assert merged[0].confidence == "HIGH"
+
+    def test_already_high_metadata_unchanged(self):
+        """Promotion is a no-op when the metadata entry is already HIGH —
+        covers feed_speaker_cache and podcast:person (both HIGH host)."""
+        metadata = [
+            CandidateName(
+                name="Jane Smith",
+                source="feed_speaker_cache",
+                role="host",
+                confidence="HIGH",
+            )
+        ]
+        ner = [CandidateName(name="Jane Smith", source="feed_title")]
+        merged = merge_candidates(metadata, ner, feed_title="The Jane Smith Show")
+        assert merged[0].confidence == "HIGH"
+        assert merged[0].source == "feed_speaker_cache"
+
 
 # --- strip_episode_prefix (PRD-04 E2) ---
 

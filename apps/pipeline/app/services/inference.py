@@ -505,18 +505,45 @@ def extract_metadata_candidates(
 def merge_candidates(
     metadata_candidates: list[CandidateName],
     ner_candidates: list[CandidateName],
+    feed_title: Optional[str] = None,
 ) -> list[CandidateName]:
     """Combine metadata and NER candidates, deduping by normalized name.
 
     A name present in both lists keeps the metadata entry (already carries
     stronger role/confidence). The metadata list is returned first so the
     classifier handles those before heuristics.
+
+    Confidence reconciliation (issue #530): when a dropped NER duplicate would
+    have classified at HIGH via feed_title match (the canonical HIGH host
+    signal in classify_candidates), promote the retained metadata entry to
+    HIGH so the dedup does not shadow the stronger corroborating signal.
+    Without this, a MEDIUM recurring_host candidate for the same name writes
+    a MEDIUM speaker_names row, which then fails the HIGH-only filter in
+    get_recurring_host_name and causes the rule to oscillate as the window
+    fills with self-generated MEDIUM rows. Only applied when roles align
+    (metadata host + feed_title match always implies host) — cross-role
+    NER-HIGH paths (name_after_colon_in_title → guest HIGH) do not reconcile.
     """
-    seen = {normalize_name(c.name) for c in metadata_candidates}
-    out = list(metadata_candidates)
+    f_title_lower = feed_title.lower() if feed_title else None
+    metadata_by_norm: dict[str, CandidateName] = {}
+    out: list[CandidateName] = []
+    for c in metadata_candidates:
+        norm = normalize_name(c.name)
+        metadata_by_norm[norm] = c
+        out.append(c)
+    seen = set(metadata_by_norm.keys())
     for c in ner_candidates:
         norm = normalize_name(c.name)
         if norm in seen:
+            meta = metadata_by_norm.get(norm)
+            if (
+                meta is not None
+                and meta.role == "host"
+                and meta.confidence != "HIGH"
+                and f_title_lower
+                and c.name.lower() in f_title_lower
+            ):
+                meta.confidence = "HIGH"
             continue
         seen.add(norm)
         out.append(c)
