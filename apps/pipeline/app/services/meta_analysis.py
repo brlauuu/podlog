@@ -278,6 +278,160 @@ def _per_speaker(db: Session) -> list[dict[str, Any]]:
     return out
 
 
+def _identify_feed_host(feed: Feed, feed_speaker_cache_top: dict[str, str]) -> str | None:
+    """Resolve host display name for a feed. Order per spec:
+       feed_speaker_cache top entry → podcast_persons role=host →
+       itunes_owner_name → itunes_author.
+    """
+    top = feed_speaker_cache_top.get(feed.id)
+    if top:
+        return top
+    for p in (feed.podcast_persons or []):
+        if isinstance(p, dict) and (p.get("role") or "").lower() == "host":
+            name = p.get("name")
+            if name:
+                return name
+    return feed.itunes_owner_name or feed.itunes_author
+
+
+def _host_speaker_label_for_episode(
+    episode_id: str,
+    host_name: str,
+    sn_by_ep: dict[str, list[SpeakerName]],
+) -> str | None:
+    """Return the speaker_label in the episode whose display_name matches
+    host_name with confirmed=True or confidence='HIGH'."""
+    host_norm = host_name.strip().lower()
+    for sn in sn_by_ep.get(episode_id, []):
+        if (sn.confirmed_by_user or sn.confidence == "HIGH") \
+                and sn.display_name.strip().lower() == host_norm:
+            return sn.speaker_label
+    return None
+
+
+def _coverage_and_host_share(
+    db: Session, per_ep: list[dict], per_feed_rows: list[dict]
+) -> dict[str, Any]:
+    """Compute the coverage block AND fills host_share in per_ep entries."""
+    feeds = {f.id: f for f in db.execute(select(Feed)).scalars().all()}
+
+    from app.models import FeedSpeakerCache
+    fsc_rows = db.execute(
+        select(FeedSpeakerCache.feed_id, FeedSpeakerCache.display_name,
+               FeedSpeakerCache.occurrence_count)
+        .order_by(FeedSpeakerCache.feed_id, FeedSpeakerCache.occurrence_count.desc())
+    ).all()
+    fsc_top: dict[str, str] = {}
+    for r in fsc_rows:
+        fsc_top.setdefault(r.feed_id, r.display_name)
+
+    sn_rows = db.execute(select(SpeakerName)).scalars().all()
+    sn_by_ep: dict[str, list[SpeakerName]] = {}
+    for sn in sn_rows:
+        sn_by_ep.setdefault(sn.episode_id, []).append(sn)
+
+    seg_rows = db.execute(select(
+        Segment.episode_id, Segment.speaker_label,
+        Segment.start_time, Segment.end_time,
+    )).all()
+    seg_by_ep: dict[str, list] = {}
+    for s in seg_rows:
+        seg_by_ep.setdefault(s.episode_id, []).append(s)
+
+    chunk_eps = {
+        c.episode_id for c in db.execute(select(Chunk.episode_id).distinct()).all()
+    }
+
+    host_share_included: list[dict] = []
+    host_share_excluded: list[dict] = []
+    tokens_chunks_included: list[str] = []
+    tokens_chunks_excluded: list[dict] = []
+    wpm_speaker_included = 0
+    wpm_speaker_excluded: list[dict] = []
+
+    feed_title = {f_id: f.title or "(untitled)" for f_id, f in feeds.items()}
+    feed_host = {f_id: _identify_feed_host(f, fsc_top) for f_id, f in feeds.items()}
+    for f in per_feed_rows:
+        f["inferred_host_name"] = feed_host.get(f["feed_id"])
+
+    ep_titles = {
+        r.id: r.title
+        for r in db.execute(select(Episode.id, Episode.title)).all()
+    }
+
+    for ep in per_ep:
+        ep_id = ep["episode_id"]
+        feed_id = ep["feed_id"]
+        title = ep_titles.get(ep_id) or "(untitled)"
+
+        # tokens_chunks coverage
+        if ep_id in chunk_eps:
+            tokens_chunks_included.append(ep_id)
+        else:
+            tokens_chunks_excluded.append({
+                "episode_id": ep_id, "feed_id": feed_id,
+                "feed_title": feed_title.get(feed_id, ""),
+                "title": title, "reason": "no chunks yet",
+            })
+
+        # host_share computation
+        host_name = feed_host.get(feed_id)
+        if not host_name:
+            host_share_excluded.append({
+                "episode_id": ep_id, "feed_id": feed_id,
+                "feed_title": feed_title.get(feed_id, ""),
+                "title": title, "reason": "feed has no identified host",
+            })
+        else:
+            host_label = _host_speaker_label_for_episode(ep_id, host_name, sn_by_ep)
+            if not host_label:
+                host_share_excluded.append({
+                    "episode_id": ep_id, "feed_id": feed_id,
+                    "feed_title": feed_title.get(feed_id, ""),
+                    "title": title, "reason": "no confirmed host in episode",
+                })
+            else:
+                segs = seg_by_ep.get(ep_id, [])
+                total_sec = sum(max(0.0, s.end_time - s.start_time) for s in segs)
+                host_sec = sum(
+                    max(0.0, s.end_time - s.start_time) for s in segs
+                    if s.speaker_label == host_label
+                )
+                ep["host_share"] = (
+                    round(host_sec / total_sec, 3) if total_sec > 0 else None
+                )
+                host_share_included.append({"episode_id": ep_id})
+
+        # wpm_speaker coverage — included if any confirmed/HIGH speaker in episode
+        has_confirmed = any(
+            sn.confirmed_by_user or sn.confidence == "HIGH"
+            for sn in sn_by_ep.get(ep_id, [])
+        )
+        if has_confirmed:
+            wpm_speaker_included += 1
+        else:
+            wpm_speaker_excluded.append({
+                "episode_id": ep_id, "feed_id": feed_id,
+                "feed_title": feed_title.get(feed_id, ""),
+                "title": title, "reason": "no confirmed/HIGH speakers",
+            })
+
+    return {
+        "host_share": {
+            "included_count": len(host_share_included),
+            "excluded": host_share_excluded,
+        },
+        "wpm_speaker": {
+            "included_count": wpm_speaker_included,
+            "excluded": wpm_speaker_excluded,
+        },
+        "tokens_chunks": {
+            "included_count": len(tokens_chunks_included),
+            "excluded": tokens_chunks_excluded,
+        },
+    }
+
+
 def _timeline_monthly(db: Session, per_ep: list[dict]) -> list[dict[str, Any]]:
     """Monthly aggregates per feed, derived from the per_episode list."""
     buckets: dict[tuple[str, str], dict[str, Any]] = {}
@@ -309,10 +463,11 @@ def compute_snapshot(db: Session) -> dict[str, Any]:
     per_ep = _per_episode(db)
     per_feed = _per_feed(db)
     _roll_up_feed_text_totals(per_feed, per_ep)
+    coverage = _coverage_and_host_share(db, per_ep, per_feed)
     return {
         "per_feed": per_feed,
         "per_episode": per_ep,
         "per_speaker": _per_speaker(db),
         "timeline_monthly": _timeline_monthly(db, per_ep),
-        "coverage": {},
+        "coverage": coverage,
     }
