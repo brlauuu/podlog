@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
+import { normalizeName } from "@/lib/normalizeName";
 
 /**
  * Speaker name management — PRD-02 §5.4
@@ -32,8 +33,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       // PRD-04 C1/C2: upsert per-feed speaker cache so future episodes of
       // the same feed can seed inference with this confirmed name.
-      // normalized_name mirrors app.services.inference_helpers.normalize_name
-      // (lower + collapsed whitespace).
+      // normalized_name is computed in TS via normalizeName() so it matches
+      // the Python inference_helpers.normalize_name (lower + collapsed
+      // whitespace + leading-honorifics stripped) — ensures "Dr. Jane Smith"
+      // and "Jane Smith" dedupe into a single cache row.
+      const normalizedName = normalizeName(trimmedName);
       await client.query(
         `INSERT INTO feed_speaker_cache (
            id, feed_id, speaker_label, display_name, normalized_name,
@@ -44,7 +48,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
            e.feed_id,
            $2,
            $3,
-           lower(regexp_replace(btrim($3), '\\s+', ' ', 'g')),
+           $4,
            1,
            e.id,
            NOW(),
@@ -57,7 +61,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
            occurrence_count = feed_speaker_cache.occurrence_count + 1,
            last_seen_episode_id = EXCLUDED.last_seen_episode_id,
            last_seen_at = NOW()`,
-        [id, speaker_label, trimmedName]
+        [id, speaker_label, trimmedName, normalizedName]
       );
 
       await client.query("COMMIT");

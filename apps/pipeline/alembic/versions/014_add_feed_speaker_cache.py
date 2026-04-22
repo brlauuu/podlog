@@ -65,8 +65,11 @@ def upgrade() -> None:
     # Backfill from existing user-confirmed speaker_names. Group by
     # (feed_id, speaker_label, normalized_name) so historical renames for
     # the same name at the same label aggregate into occurrence_count.
-    # normalize_name: lower + collapse whitespace (mirrors
-    # app.services.inference_helpers.normalize_name).
+    # normalize_name mirrors app.services.inference_helpers.normalize_name:
+    # lower + collapse whitespace + strip up to two leading honorifics
+    # (dr/mr/mrs/ms/mx/prof/sir/madam/rev/fr/sr/st, with optional trailing
+    # punctuation). Two nested regexp_replace passes handle "Dr. Prof. ..."
+    # style double-honorifics; a single pass covers the common case.
     op.execute(
         """
         INSERT INTO feed_speaker_cache (
@@ -79,11 +82,19 @@ def upgrade() -> None:
             sn.speaker_label,
             (array_agg(sn.display_name ORDER BY e.published_at DESC NULLS LAST, e.id DESC))[1]
                 AS display_name,
-            lower(regexp_replace(btrim(sn.display_name), '\\s+', ' ', 'g')) AS normalized_name,
+            regexp_replace(
+                regexp_replace(
+                    lower(regexp_replace(btrim(sn.display_name), '\\s+', ' ', 'g')),
+                    '^(dr|mr|mrs|ms|mx|prof|sir|madam|rev|fr|sr|st)[.,:]* ',
+                    ''
+                ),
+                '^(dr|mr|mrs|ms|mx|prof|sir|madam|rev|fr|sr|st)[.,:]* ',
+                ''
+            ) AS normalized_name,
             COUNT(*) AS occurrence_count,
             (array_agg(e.id ORDER BY e.published_at DESC NULLS LAST, e.id DESC))[1]
                 AS last_seen_episode_id,
-            NOW() AS last_seen_at,
+            COALESCE(MAX(e.published_at), NOW()) AS last_seen_at,
             NOW() AS created_at
         FROM speaker_names sn
         JOIN episodes e ON e.id = sn.episode_id
@@ -91,7 +102,15 @@ def upgrade() -> None:
           AND e.feed_id IS NOT NULL
           AND btrim(sn.display_name) <> ''
         GROUP BY e.feed_id, sn.speaker_label,
-                 lower(regexp_replace(btrim(sn.display_name), '\\s+', ' ', 'g'))
+                 regexp_replace(
+                     regexp_replace(
+                         lower(regexp_replace(btrim(sn.display_name), '\\s+', ' ', 'g')),
+                         '^(dr|mr|mrs|ms|mx|prof|sir|madam|rev|fr|sr|st)[.,:]* ',
+                         ''
+                     ),
+                     '^(dr|mr|mrs|ms|mx|prof|sir|madam|rev|fr|sr|st)[.,:]* ',
+                     ''
+                 )
         """
     )
 

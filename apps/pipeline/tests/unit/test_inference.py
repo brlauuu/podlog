@@ -829,6 +829,28 @@ class TestGetFeedSpeakerCachePriors:
         chain = db.query.return_value
         assert chain.filter.call_count >= 2
 
+    def test_recency_days_adds_third_filter(self):
+        """With recency_days>0, a last_seen_at cutoff filter is added."""
+        db = _make_cache_db([("Host", "SPEAKER_00", 3)])
+        out = get_feed_speaker_cache_priors(
+            db, feed_id="feed-1", min_count=2, recency_days=30
+        )
+        assert len(out) == 1
+        chain = db.query.return_value
+        # feed_id + occurrence_count + last_seen_at
+        assert chain.filter.call_count == 3
+
+    def test_recency_days_zero_disables_cutoff(self):
+        """recency_days=0 means no cutoff filter is applied."""
+        db = _make_cache_db([("Host", "SPEAKER_00", 3)])
+        out = get_feed_speaker_cache_priors(
+            db, feed_id="feed-1", min_count=2, recency_days=0
+        )
+        assert len(out) == 1
+        chain = db.query.return_value
+        # feed_id + occurrence_count only — no recency filter
+        assert chain.filter.call_count == 2
+
 
 # --- merge_candidates ---
 

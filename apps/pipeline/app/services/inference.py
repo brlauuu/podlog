@@ -333,6 +333,7 @@ def get_feed_speaker_cache_priors(
     db,
     feed_id: Optional[str],
     min_count: int = _FEED_SPEAKER_CACHE_MIN_COUNT,
+    recency_days: Optional[int] = None,
 ) -> list[dict]:
     """Return user-confirmed speaker names cached on this feed (PRD-04 C1/C2).
 
@@ -345,6 +346,11 @@ def get_feed_speaker_cache_priors(
     least `min_count` times are surfaced — one-off confirmations are too
     often guest episodes or typos to be a reliable prior.
 
+    If `recency_days` is a positive integer, entries whose `last_seen_at`
+    is older than that cutoff are ignored; a long-ago confirmation can't
+    outrank a recent one. Defaults to settings.feed_speaker_cache_recency_days
+    when None; pass 0 to disable the cutoff.
+
     The consumer (extract_metadata_candidates) emits these as HIGH candidates
     with role="host": recurrence across user confirmations means the same
     person keeps showing up, which is the defining property of a host, not
@@ -352,12 +358,18 @@ def get_feed_speaker_cache_priors(
     appears in a guest-proximity pattern), the later dedup will keep the
     cache entry because METADATA_SOURCES bypasses heuristic reclassification.
     """
+    from datetime import datetime, timedelta, timezone
+
+    from app.config import settings
     from app.models import FeedSpeakerCache
 
     if not feed_id:
         return []
 
-    rows = (
+    if recency_days is None:
+        recency_days = settings.feed_speaker_cache_recency_days
+
+    query = (
         db.query(
             FeedSpeakerCache.display_name,
             FeedSpeakerCache.speaker_label,
@@ -365,12 +377,14 @@ def get_feed_speaker_cache_priors(
         )
         .filter(FeedSpeakerCache.feed_id == feed_id)
         .filter(FeedSpeakerCache.occurrence_count >= min_count)
-        .order_by(
-            FeedSpeakerCache.occurrence_count.desc(),
-            FeedSpeakerCache.last_seen_at.desc(),
-        )
-        .all()
     )
+    if recency_days and recency_days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=recency_days)
+        query = query.filter(FeedSpeakerCache.last_seen_at >= cutoff)
+    rows = query.order_by(
+        FeedSpeakerCache.occurrence_count.desc(),
+        FeedSpeakerCache.last_seen_at.desc(),
+    ).all()
     return [
         {"name": r[0], "speaker_label": r[1], "occurrence_count": r[2]}
         for r in rows

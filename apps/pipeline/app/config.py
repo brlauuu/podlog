@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     # rule cannot self-reinforce.
     recurring_host_window: int = Field(default=10, ge=1)
     recurring_host_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    # Per-feed speaker cache recency cutoff (PRD-04 §4.2 C1/C2): cache
+    # entries whose last_seen_at is older than this many days are ignored
+    # when seeding candidates, so a long-ago confirmation cannot outrank a
+    # recent correction. 0 disables the cutoff.
+    feed_speaker_cache_recency_days: int = Field(default=365, ge=0)
 
     # Hardware profile override for cost estimates (Issue #322)
     hardware_profile: str | None = None
