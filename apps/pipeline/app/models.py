@@ -312,7 +312,7 @@ class MetaAnalysisSnapshot(Base):
 
     __tablename__ = "meta_analysis_snapshot"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1, server_default=text("1"))
     snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
