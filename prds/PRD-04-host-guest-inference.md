@@ -286,7 +286,7 @@ All tests in `tests/unit/test_inference.py`. No live models needed — mock spaC
 | Guest from episode title colon | "Ep 5: Elon Musk on Mars" | `guest = "Elon Musk", confidence = HIGH` |
 | Multi-guest | "featuring Alice Chen and Bob Kim" | `guests = ["Alice Chen", "Bob Kim"]` |
 | No names found | "Today we discuss the economy" | `host = None, guests = []` |
-| Recurring host detection | Name appears in 8 of 10 recent episodes | `host = that name, confidence = HIGH` |
+| Recurring host detection | Name appears in 8 of 10 recent episodes | `host = that name, confidence = MEDIUM` (emitted MEDIUM to prevent self-reinforcement — see §11 changelog) |
 | Slot assignment — first appearance | SPEAKER_01 appears first, SPEAKER_00 appears second | SPEAKER_01 remapped to SPEAKER_00 |
 | Soft failure | spaCy raises exception | `inference_error` set, episode continues to DONE |
 | Inference skipped | `has_diarization = false` | No `speaker_names` rows written, `inference_skipped = true` |

@@ -300,10 +300,12 @@ def get_recurring_host_name(
             continue
         rank = ep_index.get(ep_id, len(ep_index))
         if norm in counts:
-            display, prev, _ = counts[norm]
-            counts[norm] = (display, prev + 1, rank)
+            display, prev, newest_rank = counts[norm]
+            # Preserve the original (newest-first-seen) rank so the tiebreak
+            # compares the most recent occurrence, not the oldest.
+            counts[norm] = (display, prev + 1, newest_rank)
         else:
-            # First (newest) occurrence — capture its display form.
+            # First (newest) occurrence — capture its display form and rank.
             counts[norm] = (name.strip(), 1, rank)
 
     if not counts:
