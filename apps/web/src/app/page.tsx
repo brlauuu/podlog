@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Search, BrainCircuit } from "lucide-react";
+import { Search, BrainCircuit, Book } from "lucide-react";
 
 export default function HomePage() {
   return (
@@ -28,21 +28,28 @@ export default function HomePage() {
         </p>
       </div>
 
-      {/* Quick links */}
-      <div className="flex gap-4">
+      {/* Quick links — width pinned to logo so three buttons don't outgrow it */}
+      <div className="flex gap-4 w-[280px] sm:w-[420px]">
         <Link
           href="/search"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors"
+          className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors"
         >
           <Search size={16} />
           Search
         </Link>
         <Link
           href="/ask"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors"
+          className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors"
         >
           <BrainCircuit size={16} />
           Ask
+        </Link>
+        <Link
+          href="/podcasts"
+          className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors"
+        >
+          <Book size={16} />
+          Explore
         </Link>
       </div>
     </div>

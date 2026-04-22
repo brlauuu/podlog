@@ -53,6 +53,29 @@ describe("HomePage issue 274", () => {
     expect(screen.queryByText(/RAG-powered AI answers/i)).toBeNull();
   });
 
+  test("renders Explore button linking to /podcasts in matching style (issue #528)", () => {
+    render(<HomePage />);
+
+    const exploreLink = screen.getByRole("link", { name: "Explore" });
+    expect(exploreLink).toHaveAttribute("href", "/podcasts");
+    expect(exploreLink.className).toContain("border border-input bg-background text-foreground");
+  });
+
+  test("button group is width-pinned to logo so three buttons cannot outgrow it (issue #528)", () => {
+    const { container } = render(<HomePage />);
+    const searchLink = screen.getByRole("link", { name: "Search" });
+    const buttonRow = searchLink.parentElement as HTMLElement;
+
+    expect(buttonRow.className).toContain("w-[280px]");
+    expect(buttonRow.className).toContain("sm:w-[420px]");
+    expect(searchLink.className).toContain("flex-1");
+    expect(screen.getByRole("link", { name: "Ask" }).className).toContain("flex-1");
+    expect(screen.getByRole("link", { name: "Explore" }).className).toContain("flex-1");
+
+    // Button row should be a direct child of the HomePage root (the logo's container)
+    expect(container.contains(buttonRow)).toBe(true);
+  });
+
   test("uses main-area centering without hardcoded viewport subtraction", () => {
     const { container } = render(<HomePage />);
     const root = container.firstElementChild as HTMLElement;
