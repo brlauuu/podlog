@@ -1,4 +1,5 @@
 """Tests for apps/pipeline/app/services/meta_analysis.py (Issue #521)."""
+import uuid
 from datetime import datetime, timezone
 
 from app.services.meta_analysis import (
@@ -44,7 +45,7 @@ def _make_feed(db_session, title="Test Feed"):
 
 def _make_episode(db_session, feed, **kwargs):
     defaults = {
-        "guid": f"guid-{datetime.now().timestamp()}",
+        "guid": f"guid-{uuid.uuid4()}",
         "audio_url": "http://example.com/a.mp3",
         "status": "done",
         "duration_secs": 600,
@@ -90,3 +91,14 @@ def test_compute_snapshot_excludes_non_done_episodes(db_session):
     entry = next(f for f in snap["per_feed"] if f["title"] == "Podcast B")
     assert entry["episode_count"] == 1
     assert entry["avg_length_min"] == 10.0
+
+
+def test_compute_snapshot_per_feed_sums_cost_and_audio_minutes(db_session):
+    feed = _make_feed(db_session, "Podcast C")
+    _make_episode(db_session, feed, fireworks_stt_cost_usd=0.12, fireworks_audio_minutes=10.0)
+    _make_episode(db_session, feed, fireworks_stt_cost_usd=0.08, fireworks_audio_minutes=5.0)
+    snap = compute_snapshot(db_session)
+
+    entry = next(f for f in snap["per_feed"] if f["title"] == "Podcast C")
+    assert entry["total_cost_usd"] == 0.20
+    assert entry["total_audio_minutes"] == 15.0
