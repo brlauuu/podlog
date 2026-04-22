@@ -115,6 +115,26 @@ Services: web (:3000), pipeline API (:8000), ollama (:11434).
 - **PRD references:** When implementing a feature, cite the PRD section (e.g. "per PRD-02 §5.6") in code comments only where the requirement is non-obvious.
 - **When modifying the design:** Update the relevant PRD and RISKS-AND-GAPS.md. Bump the version number.
 
+## Operational Gotchas
+
+Lessons from active development. Short rules; rationale linked to the incident or PRD section that proved them.
+
+- **Test images bake test files at build time.** Both `apps/pipeline/Dockerfile.worker` (used by `test`) and `apps/web/Dockerfile.test` do `COPY . .`, so editing a test file and re-running `docker compose -f docker-compose.test.yml run --rm test/web_test` executes the OLD copy. Rebuild the test image (`docker compose -f docker-compose.test.yml build test web_test`) after any test edit. Symptom: test count stays the same after adding cases.
+
+- **Use `gen_random_uuid()` without `::text` cast in raw SQL.** All `id` / `feed_id` / `last_seen_episode_id` columns are PostgreSQL `uuid` (declared via `sa.dialects.postgresql.UUID(as_uuid=False)`). Casting to text and inserting into a uuid column raises `DatatypeMismatch` and halts pipeline boot at `alembic upgrade head`. Match the pattern from `001_initial_schema.py`: `server_default = sa.text("gen_random_uuid()")`. This bit us in migration 014 — caught only on first prod restart, not in unit tests.
+
+- **Worker is non-interruptible; verify queue is drained before restart.** `concurrency=1` and in-flight jobs can take minutes. Before `docker compose up -d worker`, run `docker compose exec -T db psql -U postgres podlog -c "SELECT task, status, COUNT(*) FROM job_queue WHERE status IN ('pending','running') GROUP BY task, status;"` and confirm 0 rows. For idle periods this is fast; otherwise wait or use `docker compose stop -t 60 worker` for graceful shutdown.
+
+- **Smoke-test migrations against a real DB before merging.** Unit tests mock the DB so SQL type errors (like the UUID cast above) pass tests and only surface when `alembic upgrade head` runs on a real PostgreSQL in `docker compose up`. Before merging a migration PR, at minimum do `docker compose build pipeline && docker compose up -d pipeline` and check the logs, or run the migration against `db_test` via the test stack.
+
+- **When a dependency's shape changes, rewrite its mocks — don't just update the tests.** The `episodes-speakers-route` test mocked `pool.query` directly. When the route switched to `pool.connect()` for a transaction, the mock shape no longer matched the code, and the tests' "pass" was meaningless. Follow the `speaker-merge-route.test.ts` pattern: mock `pool.connect()` returning a fake client with `query`/`release`, assert `BEGIN`/`COMMIT`/`ROLLBACK` ordering explicitly.
+
+- **Cross-runtime helpers (TS + Python) must stay in lockstep.** When a normalization / canonicalization rule is duplicated across `apps/pipeline/` and `apps/web/`, give each copy a test suite that enumerates the same cases, and cross-reference the files in comments. `apps/web/src/lib/normalizeName.ts` ↔ `apps/pipeline/app/services/inference_helpers.py::normalize_name` is the pattern. Silent divergence corrupts shared DB keys (e.g. `normalized_name` cache column).
+
+- **Self-reinforcement analysis is a design concern for any feature that queries its own prior output.** Two patterns we've used (PRD-04): (a) emit at MEDIUM confidence so the rule's output rows can't satisfy the HIGH filter on the next cycle (`recurring_host`); (b) sever the data source so inference never writes to the table the heuristic reads (`feed_speaker_cache` is populated only from user renames). The `METADATA_SOURCES` frozenset is the mechanism that lets pre-classified candidates bypass heuristic reclassification.
+
+- **Split large issues into sequential PRs, not one bundle.** Issue #523 was shipped as 5 PRs (#525, #526, #527, #529, #531 + hotfix #532). Each PR had its own review / merge / prod-smoke loop. The hotfix pattern (#532 as a 2-line follow-up to #531) is cheaper than reverting or force-pushing over a merged PR.
+
 ## Current State & What's Next
 
 **Done:**
