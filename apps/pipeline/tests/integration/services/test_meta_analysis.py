@@ -229,3 +229,35 @@ def test_compute_snapshot_per_speaker_aggregates_across_episodes(db_session):
 
     # Stable ordering: for this feed, entries sorted by normalized_name.
     assert [s["normalized_name"] for s in podcast_g_speakers] == ["alice smith", "bob jones"]
+
+
+def test_compute_snapshot_timeline_monthly_buckets_by_month(db_session):
+    feed = _make_feed(db_session, "Podcast G")
+    _make_episode(
+        db_session, feed,
+        published_at=datetime(2026, 1, 10, tzinfo=timezone.utc),
+        duration_secs=600,
+    )
+    _make_episode(
+        db_session, feed,
+        published_at=datetime(2026, 1, 25, tzinfo=timezone.utc),
+        duration_secs=1200,
+    )
+    _make_episode(
+        db_session, feed,
+        published_at=datetime(2026, 2, 5, tzinfo=timezone.utc),
+        duration_secs=600,
+    )
+
+    snap = compute_snapshot(db_session)
+    jan = next(
+        t for t in snap["timeline_monthly"]
+        if t["feed_id"] == feed.id and t["month"] == "2026-01"
+    )
+    feb = next(
+        t for t in snap["timeline_monthly"]
+        if t["feed_id"] == feed.id and t["month"] == "2026-02"
+    )
+    assert jan["episode_count"] == 2
+    assert jan["total_duration_min"] == 30    # (600 + 1200) / 60
+    assert feb["episode_count"] == 1

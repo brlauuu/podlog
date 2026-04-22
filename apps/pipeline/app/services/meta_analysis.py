@@ -278,6 +278,32 @@ def _per_speaker(db: Session) -> list[dict[str, Any]]:
     return out
 
 
+def _timeline_monthly(db: Session, per_ep: list[dict]) -> list[dict[str, Any]]:
+    """Monthly aggregates per feed, derived from the per_episode list."""
+    buckets: dict[tuple[str, str], dict[str, Any]] = {}
+    for ep in per_ep:
+        if not ep["published_at"]:
+            continue
+        # published_at is ISO 8601 already; first 7 chars = YYYY-MM
+        month = ep["published_at"][:7]
+        key = (ep["feed_id"], month)
+        b = buckets.setdefault(key, {
+            "month": month,
+            "feed_id": ep["feed_id"],
+            "episode_count": 0,
+            "total_words": 0,
+            "total_duration_min": 0.0,
+        })
+        b["episode_count"] += 1
+        b["total_words"] += ep["word_count"]
+        b["total_duration_min"] += (ep["duration_secs"] or 0) / 60.0
+
+    return [
+        {**b, "total_duration_min": round(b["total_duration_min"], 2)}
+        for b in sorted(buckets.values(), key=lambda x: (x["feed_id"], x["month"]))
+    ]
+
+
 def compute_snapshot(db: Session) -> dict[str, Any]:
     """Compute the full meta-analysis snapshot dict."""
     per_ep = _per_episode(db)
@@ -287,6 +313,6 @@ def compute_snapshot(db: Session) -> dict[str, Any]:
         "per_feed": per_feed,
         "per_episode": per_ep,
         "per_speaker": _per_speaker(db),
-        "timeline_monthly": [],
+        "timeline_monthly": _timeline_monthly(db, per_ep),
         "coverage": {},
     }
