@@ -1,5 +1,6 @@
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,6 +51,12 @@ class Settings(BaseSettings):
     # en_core_web_trf is the PRD-04 default (better NER accuracy, ~500 MB).
     # inference.py falls back to en_core_web_lg if trf is not installed.
     spacy_model: str = "en_core_web_trf"
+    # Recurring-host rule (PRD-04 §4.2 A1): if the same display name appears
+    # as SPEAKER_00 across ≥ threshold * window recent episodes, use it as
+    # the host candidate for the current episode. Emitted at MEDIUM so the
+    # rule cannot self-reinforce.
+    recurring_host_window: int = Field(default=10, ge=1)
+    recurring_host_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
 
     # Hardware profile override for cost estimates (Issue #322)
     hardware_profile: str | None = None

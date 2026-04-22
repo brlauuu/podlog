@@ -34,8 +34,15 @@ METADATA_SOURCES = frozenset(
         "episode_author",
         "podcast_person_feed",
         "podcast_person_episode",
+        "recurring_host",
     }
 )
+
+# PRD-04 §4.2 A1: minimum absolute count required for the recurring-host
+# rule to fire, independent of the threshold ratio. Without this, a feed
+# with only 2 done episodes would trigger the rule from a single repeated
+# name, which is too little evidence.
+_RECURRING_HOST_MIN_COUNT = 3
 
 # <podcast:person> role values that map to host/guest. Everything else is
 # dropped rather than guessed — the Podcasting 2.0 role vocabulary is large
@@ -208,14 +215,123 @@ def _podcast_person_to_candidate(
     return CandidateName(name=name, source=source, role=role, confidence="HIGH")
 
 
+def get_recurring_host_name(
+    db,
+    feed_id: str,
+    current_episode_id: Optional[str] = None,
+    window: int = 10,
+    threshold: float = 0.8,
+) -> Optional[str]:
+    """Return the display name that recurs as host across a feed's recent episodes.
+
+    PRD-04 §4.2 A1 — looks at the feed's last `window` episodes with status=done
+    (excluding current_episode_id if given), counts SPEAKER_00 display names
+    from speaker_names rows that are either user-confirmed or HIGH-confidence
+    inferred. If one name dominates (count ≥ `threshold * window` AND count
+    ≥ _RECURRING_HOST_MIN_COUNT) it is returned so the caller can seed it as
+    the host candidate for the current episode. The caller writes recurring
+    inferences at MEDIUM confidence so they cannot self-reinforce (see the
+    HIGH filter below).
+
+    LOW/MEDIUM inferred rows are excluded to prevent self-reinforcement:
+      - MEDIUM guards against recurring_host inferences seeding themselves —
+        every row this rule writes is MEDIUM, so only user-confirmed rows or
+        HIGH rows from another source (podcast:person, itunes:author,
+        feed_title match) feed the next cycle.
+      - LOW guards against single-NER-guess propagation.
+
+    Ordering: episodes are pulled newest-first by `published_at DESC` with
+    `id DESC` as a tiebreaker for feeds with NULL or duplicate timestamps,
+    so the window is deterministic. On tied counts the most-recent display
+    form wins (see the loop below).
+    """
+    from sqlalchemy import or_
+
+    from app.models import Episode, SpeakerName
+
+    if not feed_id:
+        return None
+
+    episode_query = (
+        db.query(Episode.id)
+        .filter(Episode.feed_id == feed_id)
+        .filter(Episode.status == "done")
+    )
+    if current_episode_id:
+        episode_query = episode_query.filter(Episode.id != current_episode_id)
+    episode_ids = [
+        row[0]
+        for row in episode_query.order_by(
+            Episode.published_at.desc().nullslast(), Episode.id.desc()
+        )
+        .limit(window)
+        .all()
+    ]
+    if not episode_ids:
+        return None
+
+    rows = (
+        db.query(SpeakerName.display_name, SpeakerName.episode_id)
+        .filter(SpeakerName.episode_id.in_(episode_ids))
+        .filter(SpeakerName.speaker_label == "SPEAKER_00")
+        .filter(
+            or_(
+                SpeakerName.confirmed_by_user.is_(True),
+                (SpeakerName.inferred.is_(True)) & (SpeakerName.confidence == "HIGH"),
+            )
+        )
+        .all()
+    )
+    if not rows:
+        return None
+
+    # in_() does not preserve list order, so sort rows by episode recency
+    # (episode_ids is already newest-first). Iterating newest-first means
+    # the first display form seen for each name is the most-recent casing.
+    ep_index = {eid: i for i, eid in enumerate(episode_ids)}
+    rows_sorted = sorted(rows, key=lambda r: ep_index.get(r[1], len(ep_index)))
+
+    counts: dict[str, tuple[str, int, int]] = {}  # norm → (display, count, newest_rank)
+    for name, ep_id in rows_sorted:
+        if not name or not name.strip():
+            continue
+        norm = normalize_name(name)
+        if not norm:
+            continue
+        rank = ep_index.get(ep_id, len(ep_index))
+        if norm in counts:
+            display, prev, newest_rank = counts[norm]
+            # Preserve the original (newest-first-seen) rank so the tiebreak
+            # compares the most recent occurrence, not the oldest.
+            counts[norm] = (display, prev + 1, newest_rank)
+        else:
+            # First (newest) occurrence — capture its display form and rank.
+            counts[norm] = (name.strip(), 1, rank)
+
+    if not counts:
+        return None
+
+    # Tiebreak on ties: lower `newest_rank` (= more recent) wins, so a mid-feed
+    # host swap resolves to the current host rather than the predecessor.
+    top_norm, (top_name, top_count, _) = max(
+        counts.items(), key=lambda kv: (kv[1][1], -kv[1][2])
+    )
+    required = max(_RECURRING_HOST_MIN_COUNT, int(threshold * window))
+    if top_count < required:
+        return None
+    return top_name
+
+
 def extract_metadata_candidates(
     itunes_author: Optional[str],
     itunes_owner_name: Optional[str],
     episode_author: Optional[str],
     feed_podcast_persons: Optional[list[dict]] = None,
     episode_podcast_persons: Optional[list[dict]] = None,
+    recurring_host_name: Optional[str] = None,
 ) -> list[CandidateName]:
-    """Build pre-classified candidates from RSS person tags (PRD-04 B1/B2/B3).
+    """Build pre-classified candidates from RSS person tags (PRD-04 B1/B2/B3)
+    and the recurring-host observation (PRD-04 A1).
 
     These candidates bypass NER and the heuristic rules in classify_candidates:
     their role and confidence are taken directly from the RSS tag they came
@@ -226,13 +342,24 @@ def extract_metadata_candidates(
       - <podcast:person> at item level       → role as declared, HIGH
       - <podcast:person> at channel level    → role as declared, HIGH
       - itunes:author                        → host, HIGH
+      - recurring_host_name                  → host, MEDIUM
       - itunes:owner                         → host, MEDIUM
       - dc:creator / <author> at item level  → host, MEDIUM
 
     <podcast:person> is placed ahead of itunes:author because the publisher
     explicitly tagged the person's role (host vs guest); the itunes tags only
     distinguish "on-air author" from "business contact" and always map to
-    host, so they cannot contribute guests.
+    host, so they cannot contribute guests. Recurring-host is placed after
+    publisher-declared tags (podcast:person, itunes:author) because those are
+    authoritative; recurring is observed ground truth that fills in when the
+    publisher left the slot empty.
+
+    Confidence note: recurring_host is emitted at MEDIUM — not HIGH — so its
+    output rows in speaker_names do NOT satisfy the HIGH filter inside
+    get_recurring_host_name. This blocks the self-reinforcement cascade that
+    would otherwise let the rule bootstrap itself: every cycle must still
+    consume a legitimate HIGH row (podcast:person, itunes:author, feed_title
+    match) or a user-confirmed row before it can fire.
     """
     out: list[CandidateName] = []
     seen: set[str] = set()
@@ -251,12 +378,32 @@ def extract_metadata_candidates(
     for entry in feed_podcast_persons or []:
         _add(_podcast_person_to_candidate(entry, "podcast_person_feed"))
 
-    itunes_ordered = [
-        (itunes_author, "itunes_author", "host", "HIGH"),
+    if itunes_author and itunes_author.strip() and _looks_like_person_name(itunes_author):
+        _add(
+            CandidateName(
+                name=itunes_author.strip(), source="itunes_author", role="host", confidence="HIGH"
+            )
+        )
+
+    if (
+        recurring_host_name
+        and recurring_host_name.strip()
+        and _looks_like_person_name(recurring_host_name)
+    ):
+        _add(
+            CandidateName(
+                name=recurring_host_name.strip(),
+                source="recurring_host",
+                role="host",
+                confidence="MEDIUM",
+            )
+        )
+
+    remaining = [
         (itunes_owner_name, "itunes_owner", "host", "MEDIUM"),
         (episode_author, "episode_author", "host", "MEDIUM"),
     ]
-    for name, source, role, confidence in itunes_ordered:
+    for name, source, role, confidence in remaining:
         if not name or not name.strip():
             continue
         if not _looks_like_person_name(name):
@@ -323,15 +470,21 @@ def classify_candidates(
                     host = c
                 else:
                     # Second metadata host candidate → secondary slot as
-                    # guest. For <podcast:person> the publisher explicitly
-                    # declared this person, so keep HIGH confidence (covers
-                    # cohost shows — L-02). For itunes:author/owner we demote
-                    # to LOW because the second slot is usually the owner
-                    # (a business contact, not an on-air voice). Don't mutate
+                    # guest. For <podcast:person> and recurring_host the
+                    # signal is strong enough to preserve the candidate's
+                    # own confidence (podcast:person is publisher-declared
+                    # HIGH, recurring_host is observed across many episodes
+                    # and self-emits at MEDIUM — both cover cohost shows,
+                    # L-02). For itunes:author/owner we demote to LOW
+                    # because the second slot is usually the owner (a
+                    # business contact, not an on-air voice). Don't mutate
                     # the caller's CandidateName in place — return a fresh
                     # object so repeated classification calls are idempotent.
                     demoted_conf = (
-                        "HIGH" if c.source.startswith("podcast_person") else "LOW"
+                        c.confidence
+                        if c.source.startswith("podcast_person")
+                        or c.source == "recurring_host"
+                        else "LOW"
                     )
                     guests.append(
                         CandidateName(
