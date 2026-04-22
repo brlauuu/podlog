@@ -27,6 +27,7 @@ try:
     _TOKENIZER_AVAILABLE = True
 except Exception:  # pragma: no cover -- defensive import guard
     _TOKENIZER_AVAILABLE = False
+    logger.warning("tiktoken unavailable; meta-analysis token counts will be zero")
 
     def _count_tokens(text: str) -> int:
         return 0
@@ -142,11 +143,8 @@ def _per_episode(db: Session) -> list[dict[str, Any]]:
     for er in ep_rows:
         segs = seg_by_ep.get(er.id, [])
         words = sum(len(s.text.split()) for s in segs)
-        seg_tokens = sum(_count_tokens(s.text) for s in segs) if _TOKENIZER_AVAILABLE else None
-        chunk_tokens = (
-            sum(_count_tokens(t) for t in chunk_text_by_ep.get(er.id, []))
-            if _TOKENIZER_AVAILABLE else None
-        )
+        seg_tokens = sum(_count_tokens(s.text) for s in segs)
+        chunk_tokens = sum(_count_tokens(t) for t in chunk_text_by_ep.get(er.id, []))
         speakers = {s.speaker_label for s in segs if s.speaker_label}
         turn_count = _count_turns(segs)
         total_seconds = max((er.duration_secs or 0), 1)
@@ -158,8 +156,8 @@ def _per_episode(db: Session) -> list[dict[str, Any]]:
             "published_at": er.published_at.isoformat() if er.published_at else None,
             "duration_secs": er.duration_secs or 0,
             "word_count": words,
-            "token_count_segments": seg_tokens or 0,
-            "token_count_chunks": chunk_tokens or 0,
+            "token_count_segments": seg_tokens,
+            "token_count_chunks": chunk_tokens,
             "speaker_count": len(speakers),
             "turn_count": turn_count,
             "wpm": wpm,

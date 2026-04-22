@@ -21,6 +21,9 @@ RUN pip install --no-cache-dir poetry \
     && python -m spacy download en_core_web_trf \
     && python -m spacy download en_core_web_lg
 
+# Pre-download tiktoken encoder so the worker idle hook (#521) has no network dep
+RUN python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+
 COPY . .
 
 ENV HF_HOME=/root/.cache/huggingface

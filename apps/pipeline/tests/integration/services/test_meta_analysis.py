@@ -117,6 +117,10 @@ def test_compute_snapshot_per_episode_counts_words_and_tokens(db_session):
     assert ep_entry["feed_id"] == feed.id
     assert ep_entry["duration_secs"] == 60
 
+    feed_entry = next(f for f in snap["per_feed"] if f["feed_id"] == feed.id)
+    assert feed_entry["total_words"] == 5
+    assert feed_entry["total_tokens_segments"] > 0
+
 
 def test_compute_snapshot_per_episode_handles_no_chunks(db_session):
     feed = _make_feed(db_session, "Podcast D")
