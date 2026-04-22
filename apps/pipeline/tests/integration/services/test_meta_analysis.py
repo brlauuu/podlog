@@ -8,7 +8,7 @@ from app.services.meta_analysis import (
     clear_stale,
     compute_snapshot,
 )
-from app.models import Episode, Feed, Segment, SystemState
+from app.models import Chunk, Episode, Feed, Segment, SystemState
 
 
 def test_is_stale_returns_false_when_flag_missing(db_session):
@@ -102,3 +102,46 @@ def test_compute_snapshot_per_feed_sums_cost_and_audio_minutes(db_session):
     entry = next(f for f in snap["per_feed"] if f["title"] == "Podcast C")
     assert entry["total_cost_usd"] == 0.20
     assert entry["total_audio_minutes"] == 15.0
+
+
+def test_compute_snapshot_per_episode_counts_words_and_tokens(db_session):
+    feed = _make_feed(db_session, "Podcast C")
+    ep = _make_episode(db_session, feed, duration_secs=60)
+    _add_segments(db_session, ep, ["Hello world", "Short segment here"])
+
+    snap = compute_snapshot(db_session)
+    ep_entry = next(e for e in snap["per_episode"] if e["episode_id"] == ep.id)
+
+    assert ep_entry["word_count"] == 5        # "Hello world" + "Short segment here"
+    assert ep_entry["token_count_segments"] > 0
+    assert ep_entry["feed_id"] == feed.id
+    assert ep_entry["duration_secs"] == 60
+
+
+def test_compute_snapshot_per_episode_handles_no_chunks(db_session):
+    feed = _make_feed(db_session, "Podcast D")
+    ep = _make_episode(db_session, feed, duration_secs=120)
+    _add_segments(db_session, ep, ["a b c"])
+
+    snap = compute_snapshot(db_session)
+    ep_entry = next(e for e in snap["per_episode"] if e["episode_id"] == ep.id)
+    assert ep_entry["token_count_chunks"] == 0
+
+
+def test_compute_snapshot_per_episode_counts_chunks_when_present(db_session):
+    feed = _make_feed(db_session, "Podcast E")
+    ep = _make_episode(db_session, feed, duration_secs=120)
+    _add_segments(db_session, ep, ["hello"])
+    db_session.add(Chunk(
+        episode_id=ep.id,
+        speaker_label="SPEAKER_00",
+        start_time=0.0,
+        end_time=10.0,
+        text="hello world this is a chunk",
+        segment_ids=[],
+    ))
+    db_session.commit()
+
+    snap = compute_snapshot(db_session)
+    ep_entry = next(e for e in snap["per_episode"] if e["episode_id"] == ep.id)
+    assert ep_entry["token_count_chunks"] > 0
