@@ -114,7 +114,9 @@ def infer_speakers(episode_id: str) -> str:
             finally:
                 unload_spacy_model()
 
-            candidates = merge_candidates(metadata_candidates, ner_candidates)
+            candidates = merge_candidates(
+                metadata_candidates, ner_candidates, feed_title=feed_title
+            )
 
             if not candidates:
                 # No names found -- still remap speaker slots by first appearance
