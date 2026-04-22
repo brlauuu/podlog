@@ -172,3 +172,60 @@ def test_compute_snapshot_per_speaker_aggregates_by_confirmed_name(db_session):
     alice = next(s for s in snap["per_speaker"] if s["speaker_display_name"] == "Alice")
     assert alice["total_words"] == 5
     assert alice["turn_count"] == 1
+
+
+def test_compute_snapshot_per_speaker_aggregates_across_episodes(db_session):
+    feed = _make_feed(db_session, "Podcast G")
+    ep1 = _make_episode(db_session, feed, duration_secs=120)
+    ep2 = _make_episode(db_session, feed, duration_secs=120)
+    # Alice speaks in both episodes, under the same display name but with
+    # labels that happen to differ per episode (pyannote label identity
+    # does not persist across episodes).
+    _add_segments(db_session, ep1, ["one two three", "four five"], speaker="SPEAKER_00")
+    _add_segments(db_session, ep2, ["six seven", "eight nine ten"], speaker="SPEAKER_01")
+    # Distinct speaker in ep2, placed at a later start_time than Alice's
+    # segments so ordering is unambiguous under ORDER BY start_time.
+    db_session.add(Segment(
+        episode_id=ep2.id,
+        speaker_label="SPEAKER_02",
+        start_time=100.0,
+        end_time=110.0,
+        text="bob line",
+    ))
+    db_session.add_all([
+        SpeakerName(episode_id=ep1.id, speaker_label="SPEAKER_00",
+                    display_name="Alice Smith", confidence="HIGH", inferred=True),
+        SpeakerName(episode_id=ep2.id, speaker_label="SPEAKER_01",
+                    display_name="Alice Smith", confidence="HIGH", inferred=True),
+        SpeakerName(episode_id=ep2.id, speaker_label="SPEAKER_02",
+                    display_name="Bob Jones", confirmed_by_user=True),
+    ])
+    db_session.commit()
+
+    snap = compute_snapshot(db_session)
+    podcast_g_speakers = [s for s in snap["per_speaker"] if s["feed_id"] == feed.id]
+
+    # Exactly one Alice row despite appearing in two episodes.
+    alice_rows = [s for s in podcast_g_speakers if s["speaker_display_name"] == "Alice Smith"]
+    assert len(alice_rows) == 1
+    alice = alice_rows[0]
+    assert alice["episode_count"] == 2
+    assert sorted(alice["episode_ids"]) == sorted([ep1.id, ep2.id])
+    # ep1: 3 + 2 = 5 words; ep2: 2 + 3 = 5 words; total 10.
+    assert alice["total_words"] == 10
+    # Two segments in each episode for Alice -> 4 x 10s = 40s.
+    assert alice["total_seconds"] == 40.0
+    # Turn count increments when normalized speaker changes vs the previous
+    # segment. Within ep1 Alice is the sole speaker (1 turn). Within ep2
+    # Alice speaks both her segments contiguously (1 turn), then Bob
+    # speaks (that increments Bob's counter, not Alice's). Alice total = 2.
+    assert alice["turn_count"] == 2
+
+    # Bob is distinct from Alice and sorted after her (alphabetically) in
+    # the stable output order.
+    bob_rows = [s for s in podcast_g_speakers if s["speaker_display_name"] == "Bob Jones"]
+    assert len(bob_rows) == 1
+    assert bob_rows[0]["episode_count"] == 1
+
+    # Stable ordering: for this feed, entries sorted by normalized_name.
+    assert [s["normalized_name"] for s in podcast_g_speakers] == ["alice smith", "bob jones"]

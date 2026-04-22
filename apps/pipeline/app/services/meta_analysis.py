@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.models import Chunk, Episode, Feed, Segment, SpeakerName, SystemState
+from app.services.inference_helpers import normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -216,11 +217,15 @@ def _per_speaker(db: Session) -> list[dict[str, Any]]:
     ).all()
     ep_feed: dict[str, str] = {r.id: r.feed_id for r in ep_rows}
 
+    # Deterministic order is required: turn_count is computed by walking the
+    # segment stream and incrementing when speaker changes vs the previous
+    # row. Without ORDER BY, row order is engine-dependent and turn_count
+    # becomes non-reproducible across runs.
     seg_rows = db.execute(
         select(
             Segment.episode_id, Segment.speaker_label, Segment.text,
             Segment.start_time, Segment.end_time,
-        )
+        ).order_by(Segment.episode_id, Segment.start_time)
     ).all()
 
     agg: dict[tuple[str, str], dict[str, Any]] = {}
@@ -233,9 +238,15 @@ def _per_speaker(db: Session) -> list[dict[str, Any]]:
         if not name:
             continue
         feed_id = ep_feed[s.episode_id]
-        key = (feed_id, name.strip())
+        # Use canonical normalization (matches feed_speaker_cache.normalized_name
+        # per PRD-04) so "Alice" / "alice" / "Dr. Alice" collapse to one key.
+        normalized = normalize_name(name)
+        if not normalized:
+            continue
+        key = (feed_id, normalized)
         entry = agg.setdefault(key, {
             "speaker_display_name": name.strip(),
+            "normalized_name": normalized,
             "feed_id": feed_id,
             "episode_ids": set(),
             "total_words": 0,
@@ -246,20 +257,24 @@ def _per_speaker(db: Session) -> list[dict[str, Any]]:
         entry["total_words"] += len(s.text.split())
         entry["total_seconds"] += max(0.0, s.end_time - s.start_time)
         prev = last_speaker_per_ep.get(s.episode_id)
-        if prev != name:
+        if prev != normalized:
             entry["turn_count"] += 1
-        last_speaker_per_ep[s.episode_id] = name
+        last_speaker_per_ep[s.episode_id] = normalized
 
     out = []
     for entry in agg.values():
         total_sec = entry["total_seconds"]
         wpm = round(entry["total_words"] / (total_sec / 60.0), 1) if total_sec > 0 else 0.0
+        episode_ids = sorted(entry["episode_ids"])
         out.append({
             **entry,
-            "episode_ids": sorted(entry["episode_ids"]),
+            "episode_ids": episode_ids,
+            "episode_count": len(episode_ids),
             "wpm": wpm,
             "total_seconds": round(total_sec, 1),
         })
+    # Stable output ordering for deterministic snapshot JSON.
+    out.sort(key=lambda e: (e["feed_id"], e["normalized_name"]))
     return out
 
 
