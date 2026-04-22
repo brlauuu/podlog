@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.models import Chunk, Episode, Feed, Segment, SystemState
+from app.models import Chunk, Episode, Feed, Segment, SpeakerName, SystemState
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +191,78 @@ def _roll_up_feed_text_totals(per_feed: list[dict], per_ep: list[dict]) -> None:
         f["total_tokens_chunks"] = t["chunks"]
 
 
+def _per_speaker(db: Session) -> list[dict[str, Any]]:
+    """Per-speaker aggregates across the corpus.
+
+    Only includes speaker_names rows with confirmed_by_user=True OR
+    confidence='HIGH' — per spec inclusion rule.
+    """
+    sn_rows = db.execute(
+        select(
+            SpeakerName.episode_id,
+            SpeakerName.speaker_label,
+            SpeakerName.display_name,
+        ).where(
+            (SpeakerName.confirmed_by_user == True)  # noqa: E712
+            | (SpeakerName.confidence == "HIGH")
+        )
+    ).all()
+    label_name_map: dict[tuple[str, str], str] = {
+        (r.episode_id, r.speaker_label): r.display_name for r in sn_rows
+    }
+
+    ep_rows = db.execute(
+        select(Episode.id, Episode.feed_id).where(Episode.status == "done")
+    ).all()
+    ep_feed: dict[str, str] = {r.id: r.feed_id for r in ep_rows}
+
+    seg_rows = db.execute(
+        select(
+            Segment.episode_id, Segment.speaker_label, Segment.text,
+            Segment.start_time, Segment.end_time,
+        )
+    ).all()
+
+    agg: dict[tuple[str, str], dict[str, Any]] = {}
+    last_speaker_per_ep: dict[str, str | None] = {}
+
+    for s in seg_rows:
+        if s.episode_id not in ep_feed:
+            continue
+        name = label_name_map.get((s.episode_id, s.speaker_label))
+        if not name:
+            continue
+        feed_id = ep_feed[s.episode_id]
+        key = (feed_id, name.strip())
+        entry = agg.setdefault(key, {
+            "speaker_display_name": name.strip(),
+            "feed_id": feed_id,
+            "episode_ids": set(),
+            "total_words": 0,
+            "total_seconds": 0.0,
+            "turn_count": 0,
+        })
+        entry["episode_ids"].add(s.episode_id)
+        entry["total_words"] += len(s.text.split())
+        entry["total_seconds"] += max(0.0, s.end_time - s.start_time)
+        prev = last_speaker_per_ep.get(s.episode_id)
+        if prev != name:
+            entry["turn_count"] += 1
+        last_speaker_per_ep[s.episode_id] = name
+
+    out = []
+    for entry in agg.values():
+        total_sec = entry["total_seconds"]
+        wpm = round(entry["total_words"] / (total_sec / 60.0), 1) if total_sec > 0 else 0.0
+        out.append({
+            **entry,
+            "episode_ids": sorted(entry["episode_ids"]),
+            "wpm": wpm,
+            "total_seconds": round(total_sec, 1),
+        })
+    return out
+
+
 def compute_snapshot(db: Session) -> dict[str, Any]:
     """Compute the full meta-analysis snapshot dict."""
     per_ep = _per_episode(db)
@@ -199,7 +271,7 @@ def compute_snapshot(db: Session) -> dict[str, Any]:
     return {
         "per_feed": per_feed,
         "per_episode": per_ep,
-        "per_speaker": [],
+        "per_speaker": _per_speaker(db),
         "timeline_monthly": [],
         "coverage": {},
     }

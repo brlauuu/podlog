@@ -8,7 +8,7 @@ from app.services.meta_analysis import (
     clear_stale,
     compute_snapshot,
 )
-from app.models import Chunk, Episode, Feed, Segment, SystemState
+from app.models import Chunk, Episode, Feed, Segment, SpeakerName, SystemState
 
 
 def test_is_stale_returns_false_when_flag_missing(db_session):
@@ -149,3 +149,26 @@ def test_compute_snapshot_per_episode_counts_chunks_when_present(db_session):
     snap = compute_snapshot(db_session)
     ep_entry = next(e for e in snap["per_episode"] if e["episode_id"] == ep.id)
     assert ep_entry["token_count_chunks"] > 0
+
+
+def test_compute_snapshot_per_speaker_aggregates_by_confirmed_name(db_session):
+    feed = _make_feed(db_session, "Podcast F")
+    ep = _make_episode(db_session, feed, duration_secs=120)
+    _add_segments(db_session, ep, ["one two three", "four five"], speaker="SPEAKER_00")
+    _add_segments(db_session, ep, ["six seven"], speaker="SPEAKER_01")
+    db_session.add_all([
+        SpeakerName(episode_id=ep.id, speaker_label="SPEAKER_00",
+                    display_name="Alice", confirmed_by_user=True),
+        SpeakerName(episode_id=ep.id, speaker_label="SPEAKER_01",
+                    display_name="Unconfirmed Bob", confidence="LOW", inferred=True),
+    ])
+    db_session.commit()
+
+    snap = compute_snapshot(db_session)
+    names = {s["speaker_display_name"] for s in snap["per_speaker"]}
+    assert "Alice" in names
+    assert "Unconfirmed Bob" not in names   # LOW confidence, unconfirmed → excluded
+
+    alice = next(s for s in snap["per_speaker"] if s["speaker_display_name"] == "Alice")
+    assert alice["total_words"] == 5
+    assert alice["turn_count"] == 1
