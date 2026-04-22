@@ -26,8 +26,8 @@
 - `apps/pipeline/alembic/versions/015_add_meta_analysis_snapshot.py` — migration.
 - `apps/pipeline/app/services/meta_analysis.py` — `compute_snapshot`, stale-flag helpers, `upsert_snapshot`.
 - `apps/pipeline/app/api/meta_analysis.py` — FastAPI router.
-- `apps/pipeline/tests/unit/services/test_meta_analysis.py` — per_feed/per_episode/per_speaker/timeline tests.
-- `apps/pipeline/tests/unit/services/test_meta_analysis_coverage.py` — inclusion/exclusion edge cases.
+- `apps/pipeline/tests/integration/services/test_meta_analysis.py` — per_feed/per_episode/per_speaker/timeline tests.
+- `apps/pipeline/tests/integration/services/test_meta_analysis_coverage.py` — inclusion/exclusion edge cases.
 - `apps/pipeline/tests/unit/test_worker_idle_hook.py` — idle hook dispatches compute.
 - `apps/pipeline/tests/integration/api/test_meta_analysis_api.py` — API endpoints.
 
@@ -158,11 +158,11 @@ git commit -m "feat(pipeline): add meta_analysis_snapshot table and ORM (#521)"
 
 **Files:**
 - Create: `apps/pipeline/app/services/meta_analysis.py`
-- Create: `apps/pipeline/tests/unit/services/test_meta_analysis.py`
+- Create: `apps/pipeline/tests/integration/services/test_meta_analysis.py`
 
 - [ ] **Step 1: Write failing tests for the stale-flag helpers**
 
-Create `apps/pipeline/tests/unit/services/test_meta_analysis.py`:
+Create `apps/pipeline/tests/integration/services/test_meta_analysis.py`:
 
 ```python
 """Tests for apps/pipeline/app/services/meta_analysis.py (Issue #521)."""
@@ -201,7 +201,7 @@ def test_clear_stale_flips_value_to_false(db_session):
 
 - [ ] **Step 2: Run tests and verify they fail with ImportError**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis.py -v`
 
 Expected: ImportError (module doesn't exist yet).
 
@@ -252,14 +252,14 @@ def clear_stale(db: Session) -> None:
 
 - [ ] **Step 4: Run tests and verify they pass**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis.py -v`
 
 Expected: 4 passed.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/unit/services/test_meta_analysis.py
+git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/integration/services/test_meta_analysis.py
 git commit -m "feat(pipeline): add meta-analysis stale-flag helpers (#521)"
 ```
 
@@ -304,11 +304,11 @@ git commit -m "feat(pipeline): add tiktoken dependency for token counting (#521)
 
 **Files:**
 - Modify: `apps/pipeline/app/services/meta_analysis.py`
-- Modify: `apps/pipeline/tests/unit/services/test_meta_analysis.py`
+- Modify: `apps/pipeline/tests/integration/services/test_meta_analysis.py`
 
 - [ ] **Step 1: Write failing test for per_feed aggregates**
 
-Append to `apps/pipeline/tests/unit/services/test_meta_analysis.py`:
+Append to `apps/pipeline/tests/integration/services/test_meta_analysis.py`:
 
 ```python
 from datetime import datetime, timezone
@@ -375,7 +375,7 @@ def test_compute_snapshot_excludes_non_done_episodes(db_session):
 
 - [ ] **Step 2: Run tests and verify they fail**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis.py::test_compute_snapshot_per_feed_aggregates -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis.py::test_compute_snapshot_per_feed_aggregates -v`
 
 Expected: ImportError on `compute_snapshot` or AttributeError.
 
@@ -445,14 +445,14 @@ def compute_snapshot(db: Session) -> dict[str, Any]:
 
 - [ ] **Step 4: Run tests and verify per_feed tests pass**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis.py -v`
 
 Expected: all pass (stale-flag tests + 2 new per_feed tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/unit/services/test_meta_analysis.py
+git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/integration/services/test_meta_analysis.py
 git commit -m "feat(pipeline): compute per-feed aggregates for meta-analysis (#521)"
 ```
 
@@ -462,7 +462,7 @@ git commit -m "feat(pipeline): compute per-feed aggregates for meta-analysis (#5
 
 **Files:**
 - Modify: `apps/pipeline/app/services/meta_analysis.py`
-- Modify: `apps/pipeline/tests/unit/services/test_meta_analysis.py`
+- Modify: `apps/pipeline/tests/integration/services/test_meta_analysis.py`
 
 - [ ] **Step 1: Write failing tests**
 
@@ -517,7 +517,7 @@ def test_compute_snapshot_per_episode_counts_chunks_when_present(db_session):
 
 - [ ] **Step 2: Run tests — verify they fail**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis.py -v`
 
 Expected: new per-episode tests fail (per_episode is empty).
 
@@ -662,14 +662,14 @@ def _roll_up_feed_text_totals(per_feed: list[dict], per_ep: list[dict]) -> None:
 
 - [ ] **Step 4: Run tests — verify pass**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis.py -v`
 
 Expected: all pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/unit/services/test_meta_analysis.py
+git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/integration/services/test_meta_analysis.py
 git commit -m "feat(pipeline): compute per-episode with token counting (#521)"
 ```
 
@@ -679,7 +679,7 @@ git commit -m "feat(pipeline): compute per-episode with token counting (#521)"
 
 **Files:**
 - Modify: `apps/pipeline/app/services/meta_analysis.py`
-- Modify: `apps/pipeline/tests/unit/services/test_meta_analysis.py`
+- Modify: `apps/pipeline/tests/integration/services/test_meta_analysis.py`
 
 - [ ] **Step 1: Write failing test**
 
@@ -714,7 +714,7 @@ def test_compute_snapshot_per_speaker_aggregates_by_confirmed_name(db_session):
 
 - [ ] **Step 2: Run — verify failure**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis.py::test_compute_snapshot_per_speaker_aggregates_by_confirmed_name -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis.py::test_compute_snapshot_per_speaker_aggregates_by_confirmed_name -v`
 
 Expected: assertion fails (empty `per_speaker`).
 
@@ -805,14 +805,14 @@ Update `compute_snapshot` — replace `"per_speaker": []` with `"per_speaker": _
 
 - [ ] **Step 4: Run tests — verify pass**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis.py -v`
 
 Expected: all pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/unit/services/test_meta_analysis.py
+git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/integration/services/test_meta_analysis.py
 git commit -m "feat(pipeline): compute per-speaker meta-analysis aggregates (#521)"
 ```
 
@@ -822,7 +822,7 @@ git commit -m "feat(pipeline): compute per-speaker meta-analysis aggregates (#52
 
 **Files:**
 - Modify: `apps/pipeline/app/services/meta_analysis.py`
-- Modify: `apps/pipeline/tests/unit/services/test_meta_analysis.py`
+- Modify: `apps/pipeline/tests/integration/services/test_meta_analysis.py`
 
 - [ ] **Step 1: Write failing test**
 
@@ -863,7 +863,7 @@ def test_compute_snapshot_timeline_monthly_buckets_by_month(db_session):
 
 - [ ] **Step 2: Run — verify failure**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis.py::test_compute_snapshot_timeline_monthly_buckets_by_month -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis.py::test_compute_snapshot_timeline_monthly_buckets_by_month -v`
 
 Expected: KeyError or empty result.
 
@@ -914,14 +914,14 @@ def compute_snapshot(db: Session) -> dict[str, Any]:
 
 - [ ] **Step 4: Run — verify pass**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis.py -v`
 
 Expected: all pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/unit/services/test_meta_analysis.py
+git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/integration/services/test_meta_analysis.py
 git commit -m "feat(pipeline): compute monthly timeline aggregates (#521)"
 ```
 
@@ -931,11 +931,11 @@ git commit -m "feat(pipeline): compute monthly timeline aggregates (#521)"
 
 **Files:**
 - Modify: `apps/pipeline/app/services/meta_analysis.py`
-- Create: `apps/pipeline/tests/unit/services/test_meta_analysis_coverage.py`
+- Create: `apps/pipeline/tests/integration/services/test_meta_analysis_coverage.py`
 
 - [ ] **Step 1: Write failing tests in the dedicated coverage file**
 
-Create `apps/pipeline/tests/unit/services/test_meta_analysis_coverage.py`:
+Create `apps/pipeline/tests/integration/services/test_meta_analysis_coverage.py`:
 
 ```python
 """Coverage and inclusion-rule tests for compute_snapshot (Issue #521)."""
@@ -1046,7 +1046,7 @@ def test_tokens_chunks_included_when_chunks_exist(db_session):
 
 - [ ] **Step 2: Run — verify failure**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/test_meta_analysis_coverage.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/services/test_meta_analysis_coverage.py -v`
 
 Expected: assertion failures / KeyError (coverage is `{}`).
 
@@ -1225,14 +1225,14 @@ def compute_snapshot(db: Session) -> dict[str, Any]:
 
 - [ ] **Step 4: Run tests — verify pass**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/services/ -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest tests/integration/services/ -v`
 
 Expected: all meta-analysis tests pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/unit/services/test_meta_analysis_coverage.py
+git add apps/pipeline/app/services/meta_analysis.py apps/pipeline/tests/integration/services/test_meta_analysis_coverage.py
 git commit -m "feat(pipeline): compute coverage block and host_share (#521)"
 ```
 
@@ -1296,7 +1296,7 @@ def test_missing_speakers_groups_by_feed(api_client, db_session):
 
 - [ ] **Step 2: Run — verify failure (404)**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/integration/api/test_meta_analysis_api.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/api/test_meta_analysis_api.py -v`
 
 Expected: 404s (endpoints don't exist).
 
@@ -1446,7 +1446,7 @@ app.include_router(meta_analysis.router, prefix="/api")
 
 - [ ] **Step 6: Run tests — verify pass**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/integration/api/test_meta_analysis_api.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/integration/api/test_meta_analysis_api.py -v`
 
 Expected: all 4 pass.
 
@@ -1502,7 +1502,7 @@ def test_run_idle_hook_swallows_exceptions(db_session):
 
 - [ ] **Step 2: Run — verify failure**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/test_worker_idle_hook.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/unit/test_worker_idle_hook.py -v`
 
 Expected: ImportError (run_idle_hook doesn't exist).
 
@@ -1550,7 +1550,7 @@ Wire into the existing poll loop — replace the `if job is None:` block inside 
 
 - [ ] **Step 4: Run tests — verify pass**
 
-Run: `docker compose -f docker-compose.test.yml run --rm pipeline_test pytest apps/pipeline/tests/unit/test_worker_idle_hook.py -v`
+Run: `docker compose -f docker-compose.test.yml run --rm test pytest apps/pipeline/tests/unit/test_worker_idle_hook.py -v`
 
 Expected: 3 passed.
 
