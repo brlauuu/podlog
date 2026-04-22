@@ -46,6 +46,7 @@ def infer_speakers(episode_id: str) -> str:
                 classify_candidates,
                 extract_candidates,
                 extract_metadata_candidates,
+                get_recurring_host_name,
                 load_spacy_model,
                 merge_candidates,
                 unload_spacy_model,
@@ -60,15 +61,32 @@ def infer_speakers(episode_id: str) -> str:
             itunes_owner_name = feed.itunes_owner_name if feed else None
             feed_podcast_persons = feed.podcast_persons if feed else None
 
-            # PRD-04 B1/B2/B3: pre-classified candidates from RSS person tags.
-            # These bypass NER entirely and seed the candidate list with
-            # HIGH/MEDIUM host signals before heuristic rules run.
+            # PRD-04 A1: observed recurring host across this feed's recent
+            # episodes. Covers feeds where the host's name never appears in
+            # per-episode text (L-01) but is consistently the first speaker.
+            recurring_host_name = (
+                get_recurring_host_name(
+                    db,
+                    feed_id=episode.feed_id,
+                    current_episode_id=episode_id,
+                    window=settings.recurring_host_window,
+                    threshold=settings.recurring_host_threshold,
+                )
+                if episode.feed_id
+                else None
+            )
+
+            # PRD-04 B1/B2/B3 + A1: pre-classified candidates from RSS person
+            # tags and the recurring-host observation. These bypass NER
+            # entirely and seed the candidate list with HIGH/MEDIUM host
+            # signals before heuristic rules run.
             metadata_candidates = extract_metadata_candidates(
                 itunes_author=itunes_author,
                 itunes_owner_name=itunes_owner_name,
                 episode_author=episode.episode_author,
                 feed_podcast_persons=feed_podcast_persons,
                 episode_podcast_persons=episode.podcast_persons,
+                recurring_host_name=recurring_host_name,
             )
 
             # Step 1: NER extraction (episode title included per PRD-04 E1/E2)

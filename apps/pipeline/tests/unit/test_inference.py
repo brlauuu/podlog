@@ -14,6 +14,7 @@ from app.services.inference import (
     classify_candidates,
     extract_candidates,
     extract_metadata_candidates,
+    get_recurring_host_name,
     merge_candidates,
     strip_html,
     write_speaker_names,
@@ -435,6 +436,168 @@ class TestExtractMetadataCandidates:
         )
         assert out == []
 
+    def test_recurring_host_seeded_as_host_high(self):
+        """PRD-04 A1: recurring host observation seeds a host candidate."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            recurring_host_name="Tim Ferriss",
+        )
+        assert len(out) == 1
+        assert out[0].name == "Tim Ferriss"
+        assert out[0].source == "recurring_host"
+        assert out[0].role == "host"
+        assert out[0].confidence == "HIGH"
+
+    def test_recurring_host_dedup_with_itunes_author(self):
+        """Same person in both itunes:author and recurring — itunes wins (declared beats observed)."""
+        out = extract_metadata_candidates(
+            itunes_author="Jane Smith",
+            itunes_owner_name=None,
+            episode_author=None,
+            recurring_host_name="jane smith",
+        )
+        assert len(out) == 1
+        assert out[0].source == "itunes_author"
+
+    def test_recurring_host_ordered_after_podcast_person(self):
+        """podcast_person is publisher-declared and outranks recurring observation."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_podcast_persons=[{"name": "Publisher Host", "role": "host"}],
+            recurring_host_name="Recurring Host",
+        )
+        assert [c.name for c in out] == ["Publisher Host", "Recurring Host"]
+
+    def test_recurring_host_ordered_before_itunes_owner(self):
+        """Recurring observation beats itunes:owner (which is usually a business contact)."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name="Owner McOwner",
+            episode_author=None,
+            recurring_host_name="Recurring Host",
+        )
+        assert [c.source for c in out] == ["recurring_host", "itunes_owner"]
+
+    def test_recurring_host_company_name_dropped(self):
+        """Defensive: if somehow a company name is returned by the recurring-host
+        query, it must not be seeded as a person candidate."""
+        out = extract_metadata_candidates(
+            None, None, None, recurring_host_name="ACME Podcasts LLC"
+        )
+        assert out == []
+
+    def test_recurring_host_empty_is_noop(self):
+        out = extract_metadata_candidates(None, None, None, recurring_host_name="")
+        assert out == []
+        out2 = extract_metadata_candidates(None, None, None, recurring_host_name="   ")
+        assert out2 == []
+
+
+# --- get_recurring_host_name ---
+
+def _make_recurring_db(episode_ids: list[str], speaker_rows: list[str]):
+    """Return a mock db where the first .query() yields episode IDs and the
+    second yields speaker_names display_name rows. SQLAlchemy's fluent chain
+    (.filter / .order_by / .limit) collapses onto the same mock in each call."""
+    db = MagicMock()
+
+    ep_chain = MagicMock()
+    ep_chain.filter.return_value = ep_chain
+    ep_chain.order_by.return_value = ep_chain
+    ep_chain.limit.return_value = ep_chain
+    ep_chain.all.return_value = [(eid,) for eid in episode_ids]
+
+    sn_chain = MagicMock()
+    sn_chain.filter.return_value = sn_chain
+    sn_chain.all.return_value = [(name,) for name in speaker_rows]
+
+    db.query.side_effect = [ep_chain, sn_chain]
+    return db
+
+
+class TestGetRecurringHostName:
+    def test_fires_when_threshold_met(self):
+        db = _make_recurring_db(
+            episode_ids=[f"ep{i}" for i in range(10)],
+            speaker_rows=["Tim Ferriss"] * 8,  # 8 of 10
+        )
+        assert get_recurring_host_name(db, "feed-1", "current-ep") == "Tim Ferriss"
+
+    def test_does_not_fire_below_threshold(self):
+        db = _make_recurring_db(
+            episode_ids=[f"ep{i}" for i in range(10)],
+            speaker_rows=["Tim Ferriss"] * 7,  # 7 of 10, below 0.8
+        )
+        assert get_recurring_host_name(db, "feed-1", "current-ep") is None
+
+    def test_enforces_minimum_count_floor(self):
+        """Tiny feed with 2 episodes both labeled same — still below min=3."""
+        db = _make_recurring_db(
+            episode_ids=["ep1", "ep2"],
+            speaker_rows=["Tim Ferriss", "Tim Ferriss"],  # 2 of 2 = 100%, but < min
+        )
+        # With window=10 and threshold=0.8 the requirement is max(3, 8) = 8.
+        # With only 2 matches, rule does not fire.
+        assert get_recurring_host_name(db, "feed-1", "current-ep") is None
+
+    def test_normalizes_case_and_whitespace(self):
+        db = _make_recurring_db(
+            episode_ids=[f"ep{i}" for i in range(10)],
+            speaker_rows=[
+                "Tim Ferriss",
+                "tim ferriss",
+                "  Tim Ferriss  ",
+                "TIM FERRISS",
+                "Tim   Ferriss",
+                "Tim Ferriss",
+                "Tim Ferriss",
+                "Tim Ferriss",
+            ],
+        )
+        out = get_recurring_host_name(db, "feed-1", "current-ep")
+        # Returns the first-seen display form (trimmed to match display contract).
+        assert out in {"Tim Ferriss"}
+
+    def test_no_feed_id_returns_none(self):
+        db = MagicMock()
+        assert get_recurring_host_name(db, "", "current-ep") is None
+        db.query.assert_not_called()
+
+    def test_no_recent_episodes_returns_none(self):
+        db = _make_recurring_db(episode_ids=[], speaker_rows=[])
+        assert get_recurring_host_name(db, "feed-1", "current-ep") is None
+
+    def test_no_speaker_rows_returns_none(self):
+        db = _make_recurring_db(
+            episode_ids=[f"ep{i}" for i in range(10)],
+            speaker_rows=[],
+        )
+        assert get_recurring_host_name(db, "feed-1", "current-ep") is None
+
+    def test_empty_display_names_ignored(self):
+        db = _make_recurring_db(
+            episode_ids=[f"ep{i}" for i in range(10)],
+            speaker_rows=["", "  ", None, "Tim Ferriss"] + ["Tim Ferriss"] * 7,
+        )
+        assert get_recurring_host_name(db, "feed-1", "current-ep") == "Tim Ferriss"
+
+    def test_custom_threshold_and_window(self):
+        db = _make_recurring_db(
+            episode_ids=[f"ep{i}" for i in range(5)],
+            speaker_rows=["Tim Ferriss"] * 4,
+        )
+        # window=5, threshold=0.8 → required=max(3, 4)=4. Met.
+        assert (
+            get_recurring_host_name(
+                db, "feed-1", "current-ep", window=5, threshold=0.8
+            )
+            == "Tim Ferriss"
+        )
+
 
 # --- merge_candidates ---
 
@@ -651,6 +814,54 @@ class TestClassifyWithMetadata:
         assert len(result.guests) == 1
         assert result.guests[0].name == "Elon Musk"
         assert result.guests[0].confidence == "HIGH"
+
+    def test_recurring_host_honored_without_heuristics(self):
+        """PRD-04 A1: recurring_host candidate → host HIGH regardless of text."""
+        candidates = [
+            CandidateName(
+                name="Recurring Host",
+                source="recurring_host",
+                role="host",
+                confidence="HIGH",
+            )
+        ]
+        result = classify_candidates(
+            candidates,
+            episode_description="No mention of the host anywhere",
+            feed_title="Unrelated Show",
+            feed_description="",
+        )
+        assert result.host is not None and result.host.name == "Recurring Host"
+        assert result.host.confidence == "HIGH"
+
+    def test_recurring_host_as_second_metadata_keeps_high(self):
+        """When recurring_host comes after another metadata host, the demoted
+        secondary still keeps HIGH — same treatment as podcast:person cohosts."""
+        candidates = [
+            CandidateName(
+                name="Primary", source="itunes_author", role="host", confidence="HIGH"
+            ),
+            CandidateName(
+                name="Recurring", source="recurring_host", role="host", confidence="HIGH"
+            ),
+        ]
+        result = classify_candidates(candidates, "", "", "")
+        assert result.host is not None and result.host.name == "Primary"
+        assert len(result.guests) == 1
+        assert result.guests[0].name == "Recurring"
+        assert result.guests[0].confidence == "HIGH"
+
+    def test_recurring_host_lone_candidate_not_demoted(self):
+        """Single recurring_host candidate — must not hit the single-name
+        demotion rule (metadata sources are ground truth)."""
+        candidates = [
+            CandidateName(
+                name="Recurring", source="recurring_host", role="host", confidence="HIGH"
+            )
+        ]
+        result = classify_candidates(candidates, "some text", "", "")
+        assert result.host is not None
+        assert result.guests == []
 
 
 # --- assign_speaker_slots ---
