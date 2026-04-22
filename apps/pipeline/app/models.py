@@ -305,3 +305,17 @@ class NotificationLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class MetaAnalysisSnapshot(Base):
+    """Single-row cache of the computed meta-analysis dashboard snapshot (Issue #521)."""
+
+    __tablename__ = "meta_analysis_snapshot"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    episode_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    feed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
