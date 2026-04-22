@@ -77,7 +77,7 @@ def upgrade() -> None:
             occurrence_count, last_seen_episode_id, last_seen_at, created_at
         )
         SELECT
-            gen_random_uuid()::text,
+            gen_random_uuid(),
             e.feed_id,
             sn.speaker_label,
             (array_agg(sn.display_name ORDER BY e.published_at DESC NULLS LAST, e.id DESC))[1]

@@ -44,7 +44,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
            occurrence_count, last_seen_episode_id, last_seen_at, created_at
          )
          SELECT
-           gen_random_uuid()::text,
+           gen_random_uuid(),
            e.feed_id,
            $2,
            $3,
