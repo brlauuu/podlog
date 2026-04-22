@@ -46,6 +46,7 @@ def infer_speakers(episode_id: str) -> str:
                 classify_candidates,
                 extract_candidates,
                 extract_metadata_candidates,
+                get_feed_speaker_cache_priors,
                 get_recurring_host_name,
                 load_spacy_model,
                 merge_candidates,
@@ -76,10 +77,20 @@ def infer_speakers(episode_id: str) -> str:
                 else None
             )
 
-            # PRD-04 B1/B2/B3 + A1: pre-classified candidates from RSS person
-            # tags and the recurring-host observation. These bypass NER
-            # entirely and seed the candidate list with HIGH/MEDIUM host
-            # signals before heuristic rules run.
+            # PRD-04 C1/C2: user-confirmed speaker names from prior episodes
+            # of this feed. Ground truth — seeded at HIGH, no self-reinforcement
+            # risk (cache is populated only from explicit user renames).
+            feed_speaker_cache_priors = (
+                get_feed_speaker_cache_priors(db, feed_id=episode.feed_id)
+                if episode.feed_id
+                else []
+            )
+
+            # PRD-04 B1/B2/B3 + A1 + C1/C2: pre-classified candidates from RSS
+            # person tags, the recurring-host observation, and the per-feed
+            # cache of user confirmations. These bypass NER entirely and seed
+            # the candidate list with HIGH/MEDIUM signals before heuristic
+            # rules run.
             metadata_candidates = extract_metadata_candidates(
                 itunes_author=itunes_author,
                 itunes_owner_name=itunes_owner_name,
@@ -87,6 +98,7 @@ def infer_speakers(episode_id: str) -> str:
                 feed_podcast_persons=feed_podcast_persons,
                 episode_podcast_persons=episode.podcast_persons,
                 recurring_host_name=recurring_host_name,
+                feed_speaker_cache_priors=feed_speaker_cache_priors,
             )
 
             # Step 1: NER extraction (episode title included per PRD-04 E1/E2)

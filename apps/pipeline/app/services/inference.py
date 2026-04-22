@@ -35,8 +35,15 @@ METADATA_SOURCES = frozenset(
         "podcast_person_feed",
         "podcast_person_episode",
         "recurring_host",
+        "feed_speaker_cache",
     }
 )
+
+# PRD-04 C1/C2: minimum number of user-confirmed renames of the same name
+# on the same feed before the cache entry is surfaced as an inference prior.
+# One rename could be a typo or a guest episode mislabel; requiring ≥2 means
+# the name has persisted across at least two distinct user confirmations.
+_FEED_SPEAKER_CACHE_MIN_COUNT = 2
 
 # PRD-04 §4.2 A1: minimum absolute count required for the recurring-host
 # rule to fire, independent of the threshold ratio. Without this, a feed
@@ -322,6 +329,68 @@ def get_recurring_host_name(
     return top_name
 
 
+def get_feed_speaker_cache_priors(
+    db,
+    feed_id: Optional[str],
+    min_count: int = _FEED_SPEAKER_CACHE_MIN_COUNT,
+    recency_days: Optional[int] = None,
+) -> list[dict]:
+    """Return user-confirmed speaker names cached on this feed (PRD-04 C1/C2).
+
+    The cache is populated only from `confirmed_by_user=true` events in the
+    web rename API. Inference output never writes here, so the cache cannot
+    self-reinforce.
+
+    Returns a list of {name, speaker_label, occurrence_count} dicts sorted
+    strongest-first (count DESC, last_seen DESC). Only names confirmed at
+    least `min_count` times are surfaced — one-off confirmations are too
+    often guest episodes or typos to be a reliable prior.
+
+    If `recency_days` is a positive integer, entries whose `last_seen_at`
+    is older than that cutoff are ignored; a long-ago confirmation can't
+    outrank a recent one. Defaults to settings.feed_speaker_cache_recency_days
+    when None; pass 0 to disable the cutoff.
+
+    The consumer (extract_metadata_candidates) emits these as HIGH candidates
+    with role="host": recurrence across user confirmations means the same
+    person keeps showing up, which is the defining property of a host, not
+    a guest. If the heuristic classifier later disagrees (e.g. the name
+    appears in a guest-proximity pattern), the later dedup will keep the
+    cache entry because METADATA_SOURCES bypasses heuristic reclassification.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.config import settings
+    from app.models import FeedSpeakerCache
+
+    if not feed_id:
+        return []
+
+    if recency_days is None:
+        recency_days = settings.feed_speaker_cache_recency_days
+
+    query = (
+        db.query(
+            FeedSpeakerCache.display_name,
+            FeedSpeakerCache.speaker_label,
+            FeedSpeakerCache.occurrence_count,
+        )
+        .filter(FeedSpeakerCache.feed_id == feed_id)
+        .filter(FeedSpeakerCache.occurrence_count >= min_count)
+    )
+    if recency_days and recency_days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=recency_days)
+        query = query.filter(FeedSpeakerCache.last_seen_at >= cutoff)
+    rows = query.order_by(
+        FeedSpeakerCache.occurrence_count.desc(),
+        FeedSpeakerCache.last_seen_at.desc(),
+    ).all()
+    return [
+        {"name": r[0], "speaker_label": r[1], "occurrence_count": r[2]}
+        for r in rows
+    ]
+
+
 def extract_metadata_candidates(
     itunes_author: Optional[str],
     itunes_owner_name: Optional[str],
@@ -329,9 +398,11 @@ def extract_metadata_candidates(
     feed_podcast_persons: Optional[list[dict]] = None,
     episode_podcast_persons: Optional[list[dict]] = None,
     recurring_host_name: Optional[str] = None,
+    feed_speaker_cache_priors: Optional[list[dict]] = None,
 ) -> list[CandidateName]:
-    """Build pre-classified candidates from RSS person tags (PRD-04 B1/B2/B3)
-    and the recurring-host observation (PRD-04 A1).
+    """Build pre-classified candidates from RSS person tags (PRD-04 B1/B2/B3),
+    the recurring-host observation (PRD-04 A1), and the per-feed speaker
+    cache of user confirmations (PRD-04 C1/C2).
 
     These candidates bypass NER and the heuristic rules in classify_candidates:
     their role and confidence are taken directly from the RSS tag they came
@@ -339,6 +410,7 @@ def extract_metadata_candidates(
     source winning — earlier entries in the iteration order win.
 
     Ordering (strongest first):
+      - feed_speaker_cache (user-confirmed)  → host, HIGH
       - <podcast:person> at item level       → role as declared, HIGH
       - <podcast:person> at channel level    → role as declared, HIGH
       - itunes:author                        → host, HIGH
@@ -346,20 +418,25 @@ def extract_metadata_candidates(
       - itunes:owner                         → host, MEDIUM
       - dc:creator / <author> at item level  → host, MEDIUM
 
-    <podcast:person> is placed ahead of itunes:author because the publisher
-    explicitly tagged the person's role (host vs guest); the itunes tags only
-    distinguish "on-air author" from "business contact" and always map to
-    host, so they cannot contribute guests. Recurring-host is placed after
-    publisher-declared tags (podcast:person, itunes:author) because those are
-    authoritative; recurring is observed ground truth that fills in when the
-    publisher left the slot empty.
+    feed_speaker_cache is placed at the top because its entries are direct
+    user corrections — ground truth that overrides publisher-declared tags
+    and inferred observations. <podcast:person> is placed ahead of
+    itunes:author because the publisher explicitly tagged the person's role
+    (host vs guest); the itunes tags only distinguish "on-air author" from
+    "business contact" and always map to host, so they cannot contribute
+    guests. Recurring-host is placed after publisher-declared tags because
+    those are authoritative; recurring is observed ground truth that fills
+    in when the publisher left the slot empty.
 
     Confidence note: recurring_host is emitted at MEDIUM — not HIGH — so its
     output rows in speaker_names do NOT satisfy the HIGH filter inside
     get_recurring_host_name. This blocks the self-reinforcement cascade that
     would otherwise let the rule bootstrap itself: every cycle must still
     consume a legitimate HIGH row (podcast:person, itunes:author, feed_title
-    match) or a user-confirmed row before it can fire.
+    match) or a user-confirmed row before it can fire. feed_speaker_cache
+    entries are safe at HIGH because the cache is only written on explicit
+    user renames (confirmed_by_user=true) — inference output never populates
+    it, so no self-reinforcement path exists.
     """
     out: list[CandidateName] = []
     seen: set[str] = set()
@@ -372,6 +449,19 @@ def extract_metadata_candidates(
             return
         seen.add(norm)
         out.append(candidate)
+
+    for entry in feed_speaker_cache_priors or []:
+        name = (entry.get("name") or "").strip() if isinstance(entry, dict) else ""
+        if not name or not _looks_like_person_name(name):
+            continue
+        _add(
+            CandidateName(
+                name=name,
+                source="feed_speaker_cache",
+                role="host",
+                confidence="HIGH",
+            )
+        )
 
     for entry in episode_podcast_persons or []:
         _add(_podcast_person_to_candidate(entry, "podcast_person_episode"))
@@ -470,20 +560,23 @@ def classify_candidates(
                     host = c
                 else:
                     # Second metadata host candidate → secondary slot as
-                    # guest. For <podcast:person> and recurring_host the
-                    # signal is strong enough to preserve the candidate's
-                    # own confidence (podcast:person is publisher-declared
-                    # HIGH, recurring_host is observed across many episodes
-                    # and self-emits at MEDIUM — both cover cohost shows,
-                    # L-02). For itunes:author/owner we demote to LOW
-                    # because the second slot is usually the owner (a
-                    # business contact, not an on-air voice). Don't mutate
-                    # the caller's CandidateName in place — return a fresh
-                    # object so repeated classification calls are idempotent.
+                    # guest. For <podcast:person>, recurring_host, and
+                    # feed_speaker_cache the signal is strong enough to
+                    # preserve the candidate's own confidence
+                    # (podcast:person is publisher-declared HIGH;
+                    # recurring_host is observed across many episodes at
+                    # MEDIUM; feed_speaker_cache is user-confirmed HIGH —
+                    # all cover cohost shows, L-02). For itunes:author/owner
+                    # we demote to LOW because the second slot is usually
+                    # the owner (a business contact, not an on-air voice).
+                    # Don't mutate the caller's CandidateName in place —
+                    # return a fresh object so repeated classification calls
+                    # are idempotent.
                     demoted_conf = (
                         c.confidence
                         if c.source.startswith("podcast_person")
                         or c.source == "recurring_host"
+                        or c.source == "feed_speaker_cache"
                         else "LOW"
                     )
                     guests.append(

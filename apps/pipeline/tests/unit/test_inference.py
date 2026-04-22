@@ -14,6 +14,7 @@ from app.services.inference import (
     classify_candidates,
     extract_candidates,
     extract_metadata_candidates,
+    get_feed_speaker_cache_priors,
     get_recurring_host_name,
     merge_candidates,
     strip_html,
@@ -498,6 +499,108 @@ class TestExtractMetadataCandidates:
         out2 = extract_metadata_candidates(None, None, None, recurring_host_name="   ")
         assert out2 == []
 
+    # --- feed_speaker_cache priors (PRD-04 C1/C2) ---
+
+    def test_feed_speaker_cache_seeded_as_host_high(self):
+        """User-confirmed cache entries are ground truth → HIGH host."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_speaker_cache_priors=[
+                {"name": "Jane Doe", "speaker_label": "SPEAKER_00", "occurrence_count": 5}
+            ],
+        )
+        assert len(out) == 1
+        assert out[0].name == "Jane Doe"
+        assert out[0].source == "feed_speaker_cache"
+        assert out[0].role == "host"
+        assert out[0].confidence == "HIGH"
+
+    def test_feed_speaker_cache_ranked_before_podcast_person(self):
+        """User confirmation trumps publisher-declared podcast:person."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_podcast_persons=[{"name": "Publisher Host", "role": "host"}],
+            feed_speaker_cache_priors=[
+                {"name": "User Confirmed", "speaker_label": "SPEAKER_00", "occurrence_count": 3}
+            ],
+        )
+        assert [c.source for c in out] == ["feed_speaker_cache", "podcast_person_feed"]
+
+    def test_feed_speaker_cache_dedup_with_podcast_person(self):
+        """Same person in both sources — cache wins (listed first)."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_podcast_persons=[{"name": "Jane Doe", "role": "host"}],
+            feed_speaker_cache_priors=[
+                {"name": "jane doe", "speaker_label": "SPEAKER_00", "occurrence_count": 4}
+            ],
+        )
+        assert len(out) == 1
+        assert out[0].source == "feed_speaker_cache"
+
+    def test_feed_speaker_cache_multiple_entries_all_emitted_in_order(self):
+        """Multiple cache entries come through in provided order (sorted by count DESC upstream)."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_speaker_cache_priors=[
+                {"name": "Primary Host", "speaker_label": "SPEAKER_00", "occurrence_count": 10},
+                {"name": "Second Host", "speaker_label": "SPEAKER_01", "occurrence_count": 8},
+            ],
+        )
+        assert [c.name for c in out] == ["Primary Host", "Second Host"]
+        assert all(c.source == "feed_speaker_cache" for c in out)
+        assert all(c.confidence == "HIGH" for c in out)
+
+    def test_feed_speaker_cache_company_name_dropped(self):
+        """Cache should never return ORG names, but defensive filter applies."""
+        out = extract_metadata_candidates(
+            None,
+            None,
+            None,
+            feed_speaker_cache_priors=[
+                {"name": "ACME Podcasts LLC", "speaker_label": "SPEAKER_00", "occurrence_count": 5}
+            ],
+        )
+        assert out == []
+
+    def test_feed_speaker_cache_empty_is_noop(self):
+        assert extract_metadata_candidates(None, None, None, feed_speaker_cache_priors=[]) == []
+        assert extract_metadata_candidates(None, None, None, feed_speaker_cache_priors=None) == []
+
+    def test_feed_speaker_cache_whitespace_names_dropped(self):
+        out = extract_metadata_candidates(
+            None,
+            None,
+            None,
+            feed_speaker_cache_priors=[
+                {"name": "   ", "speaker_label": "SPEAKER_00", "occurrence_count": 3},
+                {"name": "", "speaker_label": "SPEAKER_01", "occurrence_count": 3},
+            ],
+        )
+        assert out == []
+
+    def test_feed_speaker_cache_missing_name_key_skipped(self):
+        """Malformed entries without 'name' key don't crash."""
+        out = extract_metadata_candidates(
+            None,
+            None,
+            None,
+            feed_speaker_cache_priors=[
+                {"speaker_label": "SPEAKER_00", "occurrence_count": 5},
+                {"name": "Valid Host", "speaker_label": "SPEAKER_01", "occurrence_count": 3},
+            ],
+        )
+        assert len(out) == 1
+        assert out[0].name == "Valid Host"
+
 
 # --- get_recurring_host_name ---
 
@@ -671,6 +774,82 @@ class TestGetRecurringHostName:
         assert (
             get_recurring_host_name(db, "feed-1", "current-ep") == "Tim Ferriss"
         )
+
+
+# --- get_feed_speaker_cache_priors (PRD-04 C1/C2) ---
+
+
+def _make_cache_db(rows: list[tuple]):
+    """Mock db where .query(...).filter(...).filter(...).order_by(...).all()
+    returns the given rows. Each row is (display_name, speaker_label, count).
+    """
+    chain = MagicMock()
+    chain.filter.return_value = chain
+    chain.order_by.return_value = chain
+    chain.all.return_value = rows
+
+    db = MagicMock()
+    db.query.return_value = chain
+    return db
+
+
+class TestGetFeedSpeakerCachePriors:
+    def test_returns_empty_when_no_feed_id(self):
+        db = MagicMock()
+        assert get_feed_speaker_cache_priors(db, feed_id=None) == []
+        assert get_feed_speaker_cache_priors(db, feed_id="") == []
+        # No DB query issued when feed_id is falsy
+        db.query.assert_not_called()
+
+    def test_returns_empty_when_no_rows(self):
+        db = _make_cache_db([])
+        assert get_feed_speaker_cache_priors(db, feed_id="feed-1") == []
+
+    def test_returns_rows_as_dicts_in_given_order(self):
+        """DB-side ORDER BY produces strongest-first; function preserves that."""
+        db = _make_cache_db(
+            [
+                ("Primary Host", "SPEAKER_00", 10),
+                ("Cohost", "SPEAKER_01", 5),
+            ]
+        )
+        out = get_feed_speaker_cache_priors(db, feed_id="feed-1")
+        assert out == [
+            {"name": "Primary Host", "speaker_label": "SPEAKER_00", "occurrence_count": 10},
+            {"name": "Cohost", "speaker_label": "SPEAKER_01", "occurrence_count": 5},
+        ]
+
+    def test_min_count_filter_applied_via_query(self):
+        """The min_count filter is applied in SQL via .filter() — verify the
+        call chain composes it (presence of two filter calls beyond feed_id)."""
+        db = _make_cache_db([("Host", "SPEAKER_00", 3)])
+        out = get_feed_speaker_cache_priors(db, feed_id="feed-1", min_count=3)
+        assert len(out) == 1
+        # chain.filter should have been called for feed_id AND occurrence_count
+        chain = db.query.return_value
+        assert chain.filter.call_count >= 2
+
+    def test_recency_days_adds_third_filter(self):
+        """With recency_days>0, a last_seen_at cutoff filter is added."""
+        db = _make_cache_db([("Host", "SPEAKER_00", 3)])
+        out = get_feed_speaker_cache_priors(
+            db, feed_id="feed-1", min_count=2, recency_days=30
+        )
+        assert len(out) == 1
+        chain = db.query.return_value
+        # feed_id + occurrence_count + last_seen_at
+        assert chain.filter.call_count == 3
+
+    def test_recency_days_zero_disables_cutoff(self):
+        """recency_days=0 means no cutoff filter is applied."""
+        db = _make_cache_db([("Host", "SPEAKER_00", 3)])
+        out = get_feed_speaker_cache_priors(
+            db, feed_id="feed-1", min_count=2, recency_days=0
+        )
+        assert len(out) == 1
+        chain = db.query.return_value
+        # feed_id + occurrence_count only — no recency filter
+        assert chain.filter.call_count == 2
 
 
 # --- merge_candidates ---
@@ -937,6 +1116,48 @@ class TestClassifyWithMetadata:
         result = classify_candidates(candidates, "some text", "", "")
         assert result.host is not None
         assert result.guests == []
+
+    def test_feed_speaker_cache_honored_without_heuristics(self):
+        """PRD-04 C1/C2: cache candidate → host HIGH regardless of text."""
+        candidates = [
+            CandidateName(
+                name="Cached Host",
+                source="feed_speaker_cache",
+                role="host",
+                confidence="HIGH",
+            )
+        ]
+        result = classify_candidates(
+            candidates,
+            episode_description="Text never mentions the host",
+            feed_title="",
+            feed_description="",
+        )
+        assert result.host is not None and result.host.name == "Cached Host"
+        assert result.host.confidence == "HIGH"
+
+    def test_feed_speaker_cache_as_second_metadata_keeps_own_confidence(self):
+        """When cache follows another metadata host, the demoted cohost keeps
+        HIGH (cache is ground truth; paralleling podcast:person cohost)."""
+        candidates = [
+            CandidateName(
+                name="Publisher Host",
+                source="podcast_person_feed",
+                role="host",
+                confidence="HIGH",
+            ),
+            CandidateName(
+                name="Cached Cohost",
+                source="feed_speaker_cache",
+                role="host",
+                confidence="HIGH",
+            ),
+        ]
+        result = classify_candidates(candidates, "", "", "")
+        assert result.host is not None and result.host.name == "Publisher Host"
+        assert len(result.guests) == 1
+        assert result.guests[0].name == "Cached Cohost"
+        assert result.guests[0].confidence == "HIGH"
 
 
 # --- assign_speaker_slots ---

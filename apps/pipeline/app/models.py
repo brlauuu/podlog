@@ -210,6 +210,45 @@ class SpeakerName(Base):
     episode: Mapped["Episode"] = relationship("Episode", back_populates="speaker_names")
 
 
+class FeedSpeakerCache(Base):
+    """Per-feed cache of user-confirmed (speaker_label → display_name) mappings.
+
+    PRD-04 C1/C2: populated automatically when the user renames a speaker,
+    queried at inference time to seed HIGH-confidence host candidates for
+    new episodes of the same feed.
+
+    Populated ONLY from confirmed_by_user=true events — inference output
+    never writes here, so the cache cannot self-reinforce.
+    """
+
+    __tablename__ = "feed_speaker_cache"
+    __table_args__ = (
+        UniqueConstraint(
+            "feed_id", "speaker_label", "normalized_name",
+            name="uq_feed_speaker_cache_label_name",
+        ),
+        Index("idx_feed_speaker_cache_feed_id", "feed_id"),
+    )
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    feed_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("feeds.id", ondelete="CASCADE"), nullable=False
+    )
+    speaker_label: Mapped[str] = mapped_column(Text, nullable=False)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_name: Mapped[str] = mapped_column(Text, nullable=False)
+    occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_seen_episode_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("episodes.id", ondelete="SET NULL")
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
 class Job(Base):
     """DB-backed job queue — replaces Celery/Redis."""
 
