@@ -103,6 +103,7 @@ class TestInferSpeakers:
             patch("app.services.inference.classify_candidates", return_value=mock_result),
             patch("app.services.inference.assign_speaker_slots", return_value=label_map),
             patch("app.services.inference.write_speaker_names"),
+            patch("app.services.inference.get_feed_speaker_cache_priors", return_value=[]),
             patch("app.tasks.infer._apply_label_remap"),
         ):
             mock_settings.inference_enabled = True
@@ -135,6 +136,7 @@ class TestInferSpeakers:
             patch("app.services.inference.unload_spacy_model"),
             patch("app.services.inference.extract_candidates", return_value=[]),
             patch("app.services.inference.assign_speaker_slots", return_value=label_map),
+            patch("app.services.inference.get_feed_speaker_cache_priors", return_value=[]),
             patch("app.tasks.infer._apply_label_remap"),
         ):
             mock_settings.inference_enabled = True
@@ -174,6 +176,7 @@ class TestInferSpeakers:
                 return_value=[],
             ) as mock_meta,
             patch("app.services.inference.assign_speaker_slots", return_value={}),
+            patch("app.services.inference.get_feed_speaker_cache_priors", return_value=[]),
             patch("app.tasks.infer._apply_label_remap"),
         ):
             mock_settings.inference_enabled = True
@@ -215,6 +218,10 @@ class TestInferSpeakers:
                 return_value=[],
             ) as mock_meta,
             patch("app.services.inference.assign_speaker_slots", return_value={}),
+            patch(
+                "app.services.inference.get_feed_speaker_cache_priors",
+                return_value=[],
+            ) as mock_cache,
             patch("app.tasks.infer._apply_label_remap"),
         ):
             mock_settings.inference_enabled = True
@@ -226,7 +233,61 @@ class TestInferSpeakers:
             infer_speakers("ep1")
 
         mock_recurring.assert_not_called()
+        mock_cache.assert_not_called()
         assert mock_meta.call_args.kwargs["recurring_host_name"] is None
+        assert mock_meta.call_args.kwargs["feed_speaker_cache_priors"] == []
+
+    @patch("app.tasks.infer.job_queue")
+    @patch("app.tasks.infer.update_episode")
+    @patch("app.tasks.infer.SessionLocal")
+    def test_feed_speaker_cache_is_plumbed_through(
+        self, mock_session_cls, mock_update, mock_jq
+    ):
+        """PRD-04 C1/C2: task queries get_feed_speaker_cache_priors and forwards
+        the result into extract_metadata_candidates."""
+        ep = _make_episode()
+        feed = _make_feed()
+        segs = [_make_segment(1, "SPEAKER_00")]
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.side_effect = [ep, feed]
+        db.query.return_value.filter.return_value.order_by.return_value.all.return_value = segs
+        mock_session_cls.return_value = db
+
+        cache_priors = [
+            {"name": "Cached Host", "speaker_label": "SPEAKER_00", "occurrence_count": 5}
+        ]
+
+        with (
+            patch("app.tasks.infer.settings") as mock_settings,
+            patch("app.services.inference.load_spacy_model", return_value=MagicMock()),
+            patch("app.services.inference.unload_spacy_model"),
+            patch("app.services.inference.extract_candidates", return_value=[]),
+            patch(
+                "app.services.inference.get_recurring_host_name", return_value=None
+            ),
+            patch(
+                "app.services.inference.get_feed_speaker_cache_priors",
+                return_value=cache_priors,
+            ) as mock_cache,
+            patch(
+                "app.services.inference.extract_metadata_candidates",
+                return_value=[],
+            ) as mock_meta,
+            patch("app.services.inference.assign_speaker_slots", return_value={}),
+            patch("app.tasks.infer._apply_label_remap"),
+        ):
+            mock_settings.inference_enabled = True
+            mock_settings.recurring_host_window = 10
+            mock_settings.recurring_host_threshold = 0.8
+
+            from app.tasks.infer import infer_speakers
+
+            infer_speakers("ep1")
+
+        mock_cache.assert_called_once()
+        cache_call_kwargs = mock_cache.call_args.kwargs
+        assert cache_call_kwargs["feed_id"] == "feed1"
+        assert mock_meta.call_args.kwargs["feed_speaker_cache_priors"] == cache_priors
 
     @patch("app.tasks.infer.job_queue")
     @patch("app.tasks.infer.update_episode")
