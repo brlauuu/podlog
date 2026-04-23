@@ -89,6 +89,31 @@ describe("TranscriptExportButton", () => {
     });
   });
 
+  // Issue #537: non-ASCII characters like đ/Đ/ć must survive into the
+  // download filename instead of being stripped or lowercased.
+  it("preserves unicode characters in the export filename", async () => {
+    const user = userEvent.setup();
+    const downloadValues: string[] = [];
+    const anchorDownloadSpy = jest
+      .spyOn(HTMLAnchorElement.prototype, "download", "set")
+      .mockImplementation(function (this: HTMLAnchorElement, value: string) {
+        downloadValues.push(value);
+      });
+
+    render(
+      <TranscriptExportButton {...baseProps} episodeTitle="Đorđe Relić podcast" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /export/i }));
+    await user.click(screen.getByText("Markdown (.md)"));
+
+    await waitFor(() => {
+      expect(downloadValues).toContain("Đorđe-Relić-podcast_transcript.md");
+    });
+
+    anchorDownloadSpy.mockRestore();
+  });
+
   it("opens print window for pdf export path", async () => {
     const user = userEvent.setup();
     const print = jest.fn();

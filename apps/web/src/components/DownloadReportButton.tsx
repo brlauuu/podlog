@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { SearchResult, GroupedSearchResult } from "@/lib/search";
 import { formatTimestamp } from "@/lib/timestamp";
+import { sanitizeFilename } from "@/lib/filename";
 
 interface DownloadReportButtonProps {
   query: string;
@@ -21,10 +22,6 @@ interface DownloadReportButtonProps {
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "");
-}
-
-function sanitizeFilename(query: string): string {
-  return query.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50);
 }
 
 function downloadFile(content: string, filename: string, mimeType: string) {
@@ -152,7 +149,7 @@ export default function DownloadReportButton({
       return;
     }
 
-    const safeQuery = sanitizeFilename(query);
+    const safeQuery = sanitizeFilename(query, { maxLength: 50, fallback: "query" });
 
     // Always fetch complete flat results for file exports
     // so both MD and TXT include full segment content
