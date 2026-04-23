@@ -30,13 +30,20 @@ export default function MissingSpeakersModal({ open, onClose, data }: Props) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="missing-speakers-title"
         className="bg-background rounded-md max-w-2xl w-full p-6 mt-12 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Episodes excluded — missing speakers</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            ✕
+          <h2 id="missing-speakers-title" className="text-lg font-semibold">Episodes excluded — missing speakers</h2>
+          <button
+            onClick={onClose}
+            aria-label="Close dialog"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <span aria-hidden="true">✕</span>
           </button>
         </div>
 

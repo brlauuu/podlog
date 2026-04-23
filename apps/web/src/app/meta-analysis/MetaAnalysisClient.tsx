@@ -41,6 +41,7 @@ export default function MetaAnalysisClient() {
   const openMissing = async () => {
     try {
       const r = await fetch("/api/meta-analysis/coverage/missing-speakers", { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       setMissingData(d);
     } catch {
