@@ -74,7 +74,7 @@ podlog/
 | Pipeline API | FastAPI (Python 3.11) | Internal API consumed by web app |
 | Task queue | PostgreSQL-backed job queue | Sequential processing (concurrency=1) to avoid OOM |
 | Transcription | WhisperX (CTranslate2 backend), default `large-v3-turbo` | Explicit unload before diarization — mandatory |
-| Diarization | `pyannote/community-1` (override via `PYANNOTE_MODEL`) | Requires HF_TOKEN; graceful failure path |
+| Diarization | `pyannote/speaker-diarization-community-1` (override via `PYANNOTE_MODEL`) | Requires HF_TOKEN; graceful failure path |
 | LLM inference | Ollama (local) or Fireworks AI (remote) | RAG-based Ask AI feature; provider selected via `inference_provider` config; model selected in Ask UI per request |
 | Database | PostgreSQL 15 (pgvector/pgvector:pg15) | FTS via `to_tsvector` + GIN index, vector HNSW index |
 | ORM | SQLAlchemy 2.0 + Alembic | Migrations auto-run on pipeline startup |

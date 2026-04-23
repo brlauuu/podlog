@@ -22,7 +22,7 @@
 
 - **Audio ingestion** — pull episodes from RSS feeds (full, selective, or test mode) or upload audio files (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.opus`, `.aac`, `.wma`, `.webm`, `.mp4`) directly from the web UI.
 - **Speech-to-text** — WhisperX with `large-v3-turbo` by default, tunable down to `tiny` for low-RAM machines.
-- **Speaker diarization** — pyannote `community-1` assigns `SPEAKER_NN` labels; spaCy NER proposes real names from episode metadata, and you can rename or merge speakers in the UI.
+- **Speaker diarization** — pyannote `speaker-diarization-community-1` assigns `SPEAKER_NN` labels; spaCy NER proposes real names from episode metadata, and you can rename or merge speakers in the UI.
 - **Hybrid search** — full-text keyword search (`"exact phrase"`, `OR`, `-exclude`) combined with pgvector semantic similarity, merged via Reciprocal Rank Fusion.
 - **Persistent audio player** — click any timestamp to play; the player keeps going while you navigate other pages.
 - **Ask AI (RAG)** — ask natural-language questions and get streamed, citation-backed answers drawn from your transcript library (local Ollama by default, Fireworks optional).
@@ -67,7 +67,7 @@ This uses `docker-compose.remote.yml` on top of the default compose file.
 
 - [Docker](https://docs.docker.com/get-docker/) with [Compose V2](https://docs.docker.com/compose/install/)
 - A free [HuggingFace](https://huggingface.co) account with an access token
-- You **must accept the pyannote license** at [pyannote/community-1](https://huggingface.co/pyannote/community-1) before diarization will work
+- You **must accept the pyannote license** at [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) before diarization will work
 - `postgresql-client` (optional) — needed for host-level health monitoring (`sudo apt install postgresql-client`)
 
 ## Architecture
@@ -185,7 +185,7 @@ Platforms:
 
 [O'Saasy License](https://osaasy.dev). See [LICENSE](LICENSE).
 
-**pyannote models** are subject to their own license — you must accept this independently at [huggingface.co/pyannote/community-1](https://huggingface.co/pyannote/community-1). Users are responsible for copyright compliance with podcast audio content.
+**pyannote models** are subject to their own license — you must accept this independently at [huggingface.co/pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1). Users are responsible for copyright compliance with podcast audio content.
 
 ## Disclaimer
 
