@@ -11,6 +11,7 @@ import EpisodeLengthTrend from "./charts/EpisodeLengthTrend";
 import HostGuestShare from "./charts/HostGuestShare";
 import LengthPerFeed from "./charts/LengthPerFeed";
 import ReleaseTimeline from "./charts/ReleaseTimeline";
+import TurnDensity from "./charts/TurnDensity";
 
 async function fetchSnapshot(): Promise<SnapshotResponse> {
   const r = await fetch("/api/meta-analysis/snapshot", { cache: "no-store" });
@@ -154,6 +155,12 @@ export default function MetaAnalysisClient() {
                 </ChartCard>
               );
             })()}
+            <ChartCard title="Turn density" subtitle="Episode length × speaker turns/min">
+              <TurnDensity
+                episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
+                feeds={filteredFeeds}
+              />
+            </ChartCard>
           </div>
         </>
       )}
