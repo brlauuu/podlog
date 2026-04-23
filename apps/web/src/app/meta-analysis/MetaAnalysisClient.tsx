@@ -11,6 +11,7 @@ import CostPerFeed from "./charts/CostPerFeed";
 import EpisodeLengthTrend from "./charts/EpisodeLengthTrend";
 import HostGuestShare from "./charts/HostGuestShare";
 import LengthPerFeed from "./charts/LengthPerFeed";
+import ProcessingTimeDistribution from "./charts/ProcessingTimeDistribution";
 import ReleaseTimeline from "./charts/ReleaseTimeline";
 import TurnDensity from "./charts/TurnDensity";
 import WpmPerSpeaker from "./charts/WpmPerSpeaker";
@@ -177,6 +178,11 @@ export default function MetaAnalysisClient() {
             </ChartCard>
             <ChartCard title="Cumulative remote cost per podcast" subtitle="USD · Fireworks">
               <CostPerFeed feeds={filteredFeeds} />
+            </ChartCard>
+            <ChartCard title="Processing time distribution" subtitle="Total (transcribe + diarize) seconds · local vs remote">
+              <ProcessingTimeDistribution
+                episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
+              />
             </ChartCard>
           </div>
           <InfoBlock />
