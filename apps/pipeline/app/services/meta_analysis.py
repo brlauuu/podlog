@@ -10,7 +10,15 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.models import Chunk, Episode, Feed, Segment, SpeakerName, SystemState
+from app.models import (
+    Chunk,
+    Episode,
+    Feed,
+    MetaAnalysisSnapshot,
+    Segment,
+    SpeakerName,
+    SystemState,
+)
 from app.services.inference_helpers import normalize_name
 
 logger = logging.getLogger(__name__)
@@ -473,3 +481,43 @@ def compute_snapshot(db: Session) -> dict[str, Any]:
         "timeline_monthly": _timeline_monthly(db, per_ep),
         "coverage": coverage,
     }
+
+
+def upsert_snapshot(
+    db: Session,
+    snapshot: dict[str, Any],
+    episode_count: int,
+    feed_count: int,
+) -> MetaAnalysisSnapshot:
+    """UPSERT into the single-row snapshot table."""
+    from datetime import datetime, timezone
+
+    stmt = insert(MetaAnalysisSnapshot).values(
+        id=1,
+        snapshot=snapshot,
+        computed_at=datetime.now(timezone.utc),
+        episode_count=episode_count,
+        feed_count=feed_count,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["id"],
+        set_={
+            "snapshot": stmt.excluded.snapshot,
+            "computed_at": stmt.excluded.computed_at,
+            "episode_count": stmt.excluded.episode_count,
+            "feed_count": stmt.excluded.feed_count,
+        },
+    )
+    db.execute(stmt)
+    db.commit()
+    return db.query(MetaAnalysisSnapshot).filter(MetaAnalysisSnapshot.id == 1).one()
+
+
+def recompute_and_store(db: Session) -> MetaAnalysisSnapshot:
+    """Run compute_snapshot, upsert, and clear the stale flag."""
+    snap = compute_snapshot(db)
+    episode_count = len(snap["per_episode"])
+    feed_count = len(snap["per_feed"])
+    row = upsert_snapshot(db, snap, episode_count, feed_count)
+    clear_stale(db)
+    return row
