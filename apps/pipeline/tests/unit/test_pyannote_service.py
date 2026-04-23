@@ -57,7 +57,7 @@ class TestLoadPipeline:
         """Regression guard: the HF model id is read from settings.pyannote_model,
         not hardcoded — see issue #515."""
         mock_settings.hf_token = "test-token"
-        mock_settings.pyannote_model = "pyannote/community-1"
+        mock_settings.pyannote_model = "pyannote/speaker-diarization-community-1"
 
         torch_mod = sys.modules["torch"]
         torch_mod.cuda.is_available.return_value = False
@@ -70,8 +70,123 @@ class TestLoadPipeline:
 
         from_pretrained_mock.assert_called_once()
         args, kwargs = from_pretrained_mock.call_args
-        assert args[0] == "pyannote/community-1"
+        assert args[0] == "pyannote/speaker-diarization-community-1"
         assert kwargs.get("token") == "test-token"
+
+
+class _FakeHfHubAuthErrors:
+    """Stand-ins for huggingface_hub.errors so the helper can import them."""
+
+    class GatedRepoError(Exception):
+        pass
+
+    class RepositoryNotFoundError(Exception):
+        pass
+
+    class HfHubHTTPError(Exception):
+        def __init__(self, message="", response=None):
+            super().__init__(message)
+            self.response = response
+
+
+def _install_hfhub_errors_mock():
+    mod = MagicMock()
+    mod.GatedRepoError = _FakeHfHubAuthErrors.GatedRepoError
+    mod.RepositoryNotFoundError = _FakeHfHubAuthErrors.RepositoryNotFoundError
+    mod.HfHubHTTPError = _FakeHfHubAuthErrors.HfHubHTTPError
+    sys.modules["huggingface_hub"] = MagicMock()
+    sys.modules["huggingface_hub.errors"] = mod
+
+
+class TestLoadPipelineAuthErrors:
+    def setup_method(self):
+        pyannote_mod._pipeline = None
+        _install_hfhub_errors_mock()
+
+    @patch("app.config.settings")
+    def test_gated_repo_error_is_reraised_with_actionable_message(self, mock_settings):
+        mock_settings.hf_token = "test-token"
+        mock_settings.pyannote_model = "pyannote/speaker-diarization-community-1"
+
+        torch_mod = sys.modules["torch"]
+        torch_mod.cuda.is_available.return_value = False
+
+        from_pretrained_mock = MagicMock(
+            side_effect=_FakeHfHubAuthErrors.GatedRepoError("gated")
+        )
+        sys.modules["pyannote.audio"].Pipeline = MagicMock(
+            from_pretrained=from_pretrained_mock
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            pyannote_mod.load_pipeline()
+
+        msg = str(exc_info.value)
+        assert "pyannote_auth_failed" in msg
+        assert "pyannote/speaker-diarization-community-1" in msg
+        assert "HF_TOKEN" in msg
+        assert "repo id" in msg
+        assert "gate accepted" in msg
+        assert "https://huggingface.co/pyannote/speaker-diarization-community-1" in msg
+
+    @patch("app.config.settings")
+    def test_repository_not_found_is_reraised_with_actionable_message(self, mock_settings):
+        mock_settings.hf_token = "test-token"
+        mock_settings.pyannote_model = "pyannote/typo"
+
+        torch_mod = sys.modules["torch"]
+        torch_mod.cuda.is_available.return_value = False
+
+        from_pretrained_mock = MagicMock(
+            side_effect=_FakeHfHubAuthErrors.RepositoryNotFoundError("not found")
+        )
+        sys.modules["pyannote.audio"].Pipeline = MagicMock(
+            from_pretrained=from_pretrained_mock
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            pyannote_mod.load_pipeline()
+
+        assert "pyannote/typo" in str(exc_info.value)
+
+    @patch("app.config.settings")
+    def test_http_401_is_reraised_with_actionable_message(self, mock_settings):
+        mock_settings.hf_token = "test-token"
+        mock_settings.pyannote_model = "pyannote/speaker-diarization-community-1"
+
+        torch_mod = sys.modules["torch"]
+        torch_mod.cuda.is_available.return_value = False
+
+        fake_response = MagicMock()
+        fake_response.status_code = 401
+        err = _FakeHfHubAuthErrors.HfHubHTTPError("401 Client Error", response=fake_response)
+
+        from_pretrained_mock = MagicMock(side_effect=err)
+        sys.modules["pyannote.audio"].Pipeline = MagicMock(
+            from_pretrained=from_pretrained_mock
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            pyannote_mod.load_pipeline()
+
+        assert "pyannote_auth_failed" in str(exc_info.value)
+
+    @patch("app.config.settings")
+    def test_non_auth_exception_is_not_rewrapped(self, mock_settings):
+        """Unrelated errors (e.g. OSError from disk) must bubble up untouched."""
+        mock_settings.hf_token = "test-token"
+        mock_settings.pyannote_model = "pyannote/speaker-diarization-community-1"
+
+        torch_mod = sys.modules["torch"]
+        torch_mod.cuda.is_available.return_value = False
+
+        from_pretrained_mock = MagicMock(side_effect=OSError("disk full"))
+        sys.modules["pyannote.audio"].Pipeline = MagicMock(
+            from_pretrained=from_pretrained_mock
+        )
+
+        with pytest.raises(OSError, match="disk full"):
+            pyannote_mod.load_pipeline()
 
 
 class TestUnloadPipeline:

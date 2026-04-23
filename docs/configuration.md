@@ -11,7 +11,7 @@ cp .env.example .env
 | Variable | Description |
 |---|---|
 | `POSTGRES_PASSWORD` | PostgreSQL password. Choose something strong — this is used for the internal database. |
-| `HF_TOKEN` | HuggingFace access token. Create one at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) (read access is sufficient). You must also accept the [pyannote model license](https://huggingface.co/pyannote/community-1). |
+| `HF_TOKEN` | HuggingFace access token. Create one at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) (read access is sufficient). You must also accept the [pyannote model license](https://huggingface.co/pyannote/speaker-diarization-community-1). |
 
 ## Pipeline Tuning
 
@@ -20,7 +20,7 @@ cp .env.example .env
 | `WHISPER_MODEL` | `large-v3-turbo` | Whisper model size. Options: `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`. Smaller models use less RAM but produce lower quality transcripts. |
 | `WHISPER_COMPUTE_TYPE` | `int8` | Quantization type. `int8` is recommended for CPU (faster, lower RAM). Use `float32` for maximum accuracy. |
 | `WHISPER_BATCH_SIZE` | `16` | WhisperX batched inference batch size. Reduce if you encounter OOM errors. |
-| `PYANNOTE_MODEL` | `pyannote/community-1` | HuggingFace ID of the pyannote diarization model. Override to pin to `pyannote/speaker-diarization-3.1` or a newer release. Users must accept the license for whichever model is selected. |
+| `PYANNOTE_MODEL` | `pyannote/speaker-diarization-community-1` | HuggingFace ID of the pyannote diarization model. Override to pin to `pyannote/speaker-diarization-3.1` or a newer release. Users must accept the license for whichever model is selected. |
 | `ARCHIVE_AUDIO` | `true` | When `true`, audio is re-encoded to compressed MP3 after transcription and the raw download is deleted. Set `false` to delete audio entirely after processing (saves disk). |
 | `AUDIO_ARCHIVE_BITRATE` | `64k` | MP3 bitrate for archived audio. `64k` is fine for speech; `128k` for higher quality. |
 | `FEED_POLL_INTERVAL_HOURS` | `24` | How often the worker checks RSS feeds for new episodes. |

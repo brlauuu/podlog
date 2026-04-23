@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     hf_token: str
 
     # pyannote diarization model (gated on HuggingFace — user must accept license)
-    pyannote_model: str = "pyannote/community-1"
+    pyannote_model: str = "pyannote/speaker-diarization-community-1"
 
     # Whisper (WhisperX / CTranslate2 backend)
     whisper_model: str = "large-v3-turbo"

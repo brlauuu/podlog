@@ -57,7 +57,7 @@ pending → download → transcribe → diarize → chunk → embed → infer �
 **Status:** `diarizing`
 
 **What it does:**
-- Runs pyannote community-1 on the audio (configurable via `PYANNOTE_MODEL`)
+- Runs pyannote `speaker-diarization-community-1` on the audio (configurable via `PYANNOTE_MODEL`)
 - If word-level alignment exists, assigns speakers per word and rebuilds segments at speaker boundaries
 - Falls back to segment-level majority overlap if no word data
 - Requires `HF_TOKEN` environment variable

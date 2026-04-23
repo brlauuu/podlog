@@ -25,15 +25,52 @@ def load_pipeline():
 
     logger.info('"action": "pyannote_load_start"')
 
-    _pipeline = Pipeline.from_pretrained(
-        settings.pyannote_model,
-        token=settings.hf_token,
-    )
+    try:
+        _pipeline = Pipeline.from_pretrained(
+            settings.pyannote_model,
+            token=settings.hf_token,
+        )
+    except Exception as exc:
+        if _is_hf_auth_error(exc):
+            model = settings.pyannote_model
+            msg = (
+                f"pyannote_auth_failed: cannot load {model}. Verify "
+                f"(1) HF_TOKEN is set with 'read' scope, "
+                f"(2) repo id is correct, "
+                f"(3) gate accepted at https://huggingface.co/{model}."
+            )
+            logger.error('"action": "pyannote_auth_failed", "model": "%s"', model)
+            raise RuntimeError(msg) from exc
+        raise
 
     if torch.cuda.is_available():
         _pipeline = _pipeline.to(torch.device("cuda"))
 
     logger.info('"action": "pyannote_load_complete"')
+
+
+def _is_hf_auth_error(exc: BaseException) -> bool:
+    """Detect HuggingFace auth / gated-repo / not-found errors from hfhub.
+
+    Covers both typed hfhub errors (RepositoryNotFoundError, GatedRepoError) and
+    plain HTTPError with a 401 status — the shape we see when the repo id is a
+    typo against a gated namespace (hfhub returns 401 rather than 404).
+    """
+    try:
+        from huggingface_hub.errors import (
+            GatedRepoError,
+            HfHubHTTPError,
+            RepositoryNotFoundError,
+        )
+    except ImportError:
+        return False
+
+    if isinstance(exc, (GatedRepoError, RepositoryNotFoundError)):
+        return True
+    if isinstance(exc, HfHubHTTPError):
+        response = getattr(exc, "response", None)
+        return getattr(response, "status_code", None) == 401
+    return False
 
 
 def unload_pipeline() -> None:
