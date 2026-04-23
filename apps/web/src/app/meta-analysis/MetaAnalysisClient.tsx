@@ -6,6 +6,8 @@ import type { SnapshotResponse, MissingSpeakersResponse } from "@/lib/metaAnalys
 import FiltersBar from "./FiltersBar";
 import CoverageStrip from "./CoverageStrip";
 import MissingSpeakersModal from "./MissingSpeakersModal";
+import ChartCard from "./ChartCard";
+import LengthPerFeed from "./charts/LengthPerFeed";
 
 async function fetchSnapshot(): Promise<SnapshotResponse> {
   const r = await fetch("/api/meta-analysis/snapshot", { cache: "no-store" });
@@ -35,6 +37,15 @@ export default function MetaAnalysisClient() {
   const snap = data?.snapshot ?? null;
 
   const [selectedFeedIds, setSelectedFeedIds] = useState<string[]>([]);
+
+  const filteredFeeds = snap
+    ? (Array.isArray(snap.per_feed)
+        ? (selectedFeedIds.length === 0
+            ? snap.per_feed
+            : snap.per_feed.filter((f) => selectedFeedIds.includes(f.feed_id)))
+        : [])
+    : [];
+
   const [missingOpen, setMissingOpen] = useState(false);
   const [missingData, setMissingData] = useState<MissingSpeakersResponse | null>(null);
 
@@ -106,11 +117,10 @@ export default function MetaAnalysisClient() {
             onClose={() => setMissingOpen(false)}
             data={missingData}
           />
-          {/* Chart grid is added by later tasks. */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="p-4 border rounded-md text-sm text-muted-foreground">
-              {Array.isArray(snap.per_feed) ? snap.per_feed.length : 0} podcasts · {data?.episode_count ?? 0} episodes processed
-            </div>
+            <ChartCard title="Episode length per podcast" subtitle="Avg (min) · σ error bars">
+              <LengthPerFeed feeds={filteredFeeds} />
+            </ChartCard>
           </div>
         </>
       )}
