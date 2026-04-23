@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { SnapshotResponse } from "@/lib/metaAnalysisTypes";
+import type { SnapshotResponse, MissingSpeakersResponse } from "@/lib/metaAnalysisTypes";
 import FiltersBar from "./FiltersBar";
+import CoverageStrip from "./CoverageStrip";
+import MissingSpeakersModal from "./MissingSpeakersModal";
 
 async function fetchSnapshot(): Promise<SnapshotResponse> {
   const r = await fetch("/api/meta-analysis/snapshot", { cache: "no-store" });
@@ -33,6 +35,19 @@ export default function MetaAnalysisClient() {
   const snap = data?.snapshot ?? null;
 
   const [selectedFeedIds, setSelectedFeedIds] = useState<string[]>([]);
+  const [missingOpen, setMissingOpen] = useState(false);
+  const [missingData, setMissingData] = useState<MissingSpeakersResponse | null>(null);
+
+  const openMissing = async () => {
+    try {
+      const r = await fetch("/api/meta-analysis/coverage/missing-speakers", { cache: "no-store" });
+      const d = await r.json();
+      setMissingData(d);
+    } catch {
+      setMissingData({ podcasts: [] });
+    }
+    setMissingOpen(true);
+  };
 
   if (isLoading) return <p className="text-muted-foreground">Loading meta-analysis…</p>;
   if (isError) return <p className="text-red-500">Could not load meta-analysis.</p>;
@@ -77,7 +92,20 @@ export default function MetaAnalysisClient() {
             selectedFeedIds={selectedFeedIds}
             onSelectedChange={setSelectedFeedIds}
           />
-          {/* Coverage strip + chart grid are added by later tasks. */}
+          <CoverageStrip
+            feedCount={data?.feed_count ?? 0}
+            episodeCount={data?.episode_count ?? 0}
+            queuedFailed={0}
+            missingSpeakers={snap.coverage?.host_share?.excluded?.length ?? 0}
+            onOpenMissingSpeakers={openMissing}
+            onOpenQueuedFailed={() => {}}
+          />
+          <MissingSpeakersModal
+            open={missingOpen}
+            onClose={() => setMissingOpen(false)}
+            data={missingData}
+          />
+          {/* Chart grid is added by later tasks. */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="p-4 border rounded-md text-sm text-muted-foreground">
               {Array.isArray(snap.per_feed) ? snap.per_feed.length : 0} podcasts · {data?.episode_count ?? 0} episodes processed
