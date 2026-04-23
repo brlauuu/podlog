@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SnapshotResponse } from "@/lib/metaAnalysisTypes";
+import FiltersBar from "./FiltersBar";
 
 async function fetchSnapshot(): Promise<SnapshotResponse> {
   const r = await fetch("/api/meta-analysis/snapshot", { cache: "no-store" });
@@ -29,6 +31,8 @@ export default function MetaAnalysisClient() {
   });
 
   const snap = data?.snapshot ?? null;
+
+  const [selectedFeedIds, setSelectedFeedIds] = useState<string[]>([]);
 
   if (isLoading) return <p className="text-muted-foreground">Loading meta-analysis…</p>;
   if (isError) return <p className="text-red-500">Could not load meta-analysis.</p>;
@@ -68,6 +72,11 @@ export default function MetaAnalysisClient() {
         </div>
       ) : (
         <>
+          <FiltersBar
+            feeds={Array.isArray(snap.per_feed) ? snap.per_feed.map((f) => ({ feed_id: f.feed_id, title: f.title })) : []}
+            selectedFeedIds={selectedFeedIds}
+            onSelectedChange={setSelectedFeedIds}
+          />
           {/* Coverage strip + chart grid are added by later tasks. */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="p-4 border rounded-md text-sm text-muted-foreground">
