@@ -21,7 +21,11 @@ describe("setMetaAnalysisStale", () => {
   });
 
   it("swallows DB errors so route handlers are not broken", async () => {
-    mockQuery.mockRejectedValue(new Error("db down"));
+    const err = new Error("db down");
+    mockQuery.mockRejectedValue(err);
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
     await expect(setMetaAnalysisStale()).resolves.toBeUndefined();
+    expect(spy).toHaveBeenCalledWith("setMetaAnalysisStale failed:", err);
+    spy.mockRestore();
   });
 });

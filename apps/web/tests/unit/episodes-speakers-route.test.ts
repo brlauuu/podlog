@@ -10,6 +10,11 @@ jest.mock("@/lib/db", () => ({
   default: { connect: mockConnect },
 }));
 
+const mockSetStale = jest.fn();
+jest.mock("@/lib/metaAnalysisStale", () => ({
+  setMetaAnalysisStale: (...args: unknown[]) => mockSetStale(...args),
+}));
+
 import { NextRequest } from "next/server";
 
 type RouteModule = typeof import("@/app/api/episodes/[id]/speakers/route");
@@ -24,6 +29,7 @@ beforeEach(() => {
   mockClientQuery.mockReset();
   mockClientRelease.mockReset();
   mockConnect.mockReset();
+  mockSetStale.mockReset();
   mockConnect.mockResolvedValue({
     query: mockClientQuery,
     release: mockClientRelease,
@@ -76,6 +82,7 @@ describe("PUT /api/episodes/[id]/speakers", () => {
     expect(cacheCall![1]).toEqual(["ep-1", "SPEAKER_00", "Alice", "alice"]);
 
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
+    expect(mockSetStale).toHaveBeenCalledTimes(1);
   });
 
   it("issues speaker_names INSERT before feed_speaker_cache INSERT", async () => {
@@ -135,6 +142,7 @@ describe("PUT /api/episodes/[id]/speakers", () => {
       error: "speaker_label and display_name are required",
     });
     expect(mockConnect).not.toHaveBeenCalled();
+    expect(mockSetStale).not.toHaveBeenCalled();
   });
 
   it("returns 400 when display_name is blank whitespace", async () => {
