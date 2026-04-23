@@ -176,7 +176,7 @@ export default function MetaAnalysisClient() {
             <ChartCard title="Tokens per episode" subtitle="Segments vs chunks · estimated (cl100k_base)">
               <TokensPerEpisode episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []} />
             </ChartCard>
-            <ChartCard title="Cumulative remote cost per podcast" subtitle="USD · Fireworks">
+            <ChartCard title="Total remote cost per podcast" subtitle="USD · Fireworks">
               <CostPerFeed feeds={filteredFeeds} />
             </ChartCard>
             <ChartCard title="Processing time distribution" subtitle="Total (transcribe + diarize) seconds · local vs remote">
