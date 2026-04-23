@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { normalizeName } from "@/lib/normalizeName";
+import { setMetaAnalysisStale } from "@/lib/metaAnalysisStale";
 
 /**
  * Speaker name management — PRD-02 §5.4
@@ -71,6 +72,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     } finally {
       client.release();
     }
+
+    // Issue #521: invalidate meta-analysis cache so the worker recomputes.
+    await setMetaAnalysisStale();
 
     return NextResponse.json({ ok: true });
   } catch (err) {
