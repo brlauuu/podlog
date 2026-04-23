@@ -12,6 +12,7 @@ import HostGuestShare from "./charts/HostGuestShare";
 import LengthPerFeed from "./charts/LengthPerFeed";
 import ReleaseTimeline from "./charts/ReleaseTimeline";
 import TurnDensity from "./charts/TurnDensity";
+import WpmPerSpeaker from "./charts/WpmPerSpeaker";
 
 async function fetchSnapshot(): Promise<SnapshotResponse> {
   const r = await fetch("/api/meta-analysis/snapshot", { cache: "no-store" });
@@ -158,6 +159,13 @@ export default function MetaAnalysisClient() {
             <ChartCard title="Turn density" subtitle="Episode length × speaker turns/min">
               <TurnDensity
                 episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
+                feeds={filteredFeeds}
+              />
+            </ChartCard>
+            <ChartCard title="Words per minute per speaker"
+              subtitle="Top 20 per podcast · confirmed speakers only">
+              <WpmPerSpeaker
+                speakers={Array.isArray(snap.per_speaker) ? snap.per_speaker : []}
                 feeds={filteredFeeds}
               />
             </ChartCard>
