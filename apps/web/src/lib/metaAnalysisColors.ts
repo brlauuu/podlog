@@ -16,11 +16,14 @@ export const FEED_COLOR_PALETTE = [
 ] as const;
 
 function hash(str: string): number {
-  let h = 0;
+  // FNV-1a 32-bit. Better distribution than the simple polynomial hash
+  // for narrow-alphabet inputs like UUIDs (hex chars + dashes).
+  let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
-    h = (h * 31 + str.charCodeAt(i)) | 0;
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
   }
-  return Math.abs(h);
+  return h >>> 0; // force unsigned
 }
 
 export function colorForFeed(feedId: string): string {
