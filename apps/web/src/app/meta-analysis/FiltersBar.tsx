@@ -1,9 +1,9 @@
 "use client";
 
-interface Feed { feed_id: string; title: string; }
+import type { FilterFeed } from "@/lib/metaAnalysisTypes";
 
 interface Props {
-  feeds: Feed[];
+  feeds: FilterFeed[];
   selectedFeedIds: string[];
   onSelectedChange: (ids: string[]) => void;
 }

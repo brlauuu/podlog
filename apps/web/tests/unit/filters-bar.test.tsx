@@ -24,4 +24,31 @@ describe("FiltersBar", () => {
     fireEvent.click(screen.getByLabelText("One"));
     expect(onChange).toHaveBeenCalledWith(["f1"]);
   });
+
+  it("calls onSelectedChange with empty array when toggling a selected id off", () => {
+    const onChange = jest.fn();
+    render(
+      <FiltersBar feeds={FEEDS} selectedFeedIds={["f1"]} onSelectedChange={onChange} />
+    );
+    fireEvent.click(screen.getByLabelText("One"));
+    expect(onChange).toHaveBeenCalledWith([]);
+  });
+
+  it("appends to existing selection on multi-toggle", () => {
+    const onChange = jest.fn();
+    render(
+      <FiltersBar feeds={FEEDS} selectedFeedIds={["f1"]} onSelectedChange={onChange} />
+    );
+    fireEvent.click(screen.getByLabelText("Two"));
+    expect(onChange).toHaveBeenCalledWith(["f1", "f2"]);
+  });
+
+  it("All podcasts button resets selection to []", () => {
+    const onChange = jest.fn();
+    render(
+      <FiltersBar feeds={FEEDS} selectedFeedIds={["f1", "f2"]} onSelectedChange={onChange} />
+    );
+    fireEvent.click(screen.getByText("All podcasts"));
+    expect(onChange).toHaveBeenCalledWith([]);
+  });
 });

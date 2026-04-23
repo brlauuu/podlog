@@ -91,3 +91,7 @@ export interface MissingSpeakersResponse {
     episodes: Array<{ id: string; title: string; reason: string }>;
   }>;
 }
+
+// Convenience subset for filter UIs (FiltersBar etc.) — only the
+// fields needed to identify and label a feed.
+export type FilterFeed = Pick<PerFeed, "feed_id" | "title">;
