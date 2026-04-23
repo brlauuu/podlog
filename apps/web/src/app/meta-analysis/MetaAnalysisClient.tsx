@@ -7,6 +7,7 @@ import FiltersBar from "./FiltersBar";
 import CoverageStrip from "./CoverageStrip";
 import MissingSpeakersModal from "./MissingSpeakersModal";
 import ChartCard from "./ChartCard";
+import CostPerFeed from "./charts/CostPerFeed";
 import EpisodeLengthTrend from "./charts/EpisodeLengthTrend";
 import HostGuestShare from "./charts/HostGuestShare";
 import LengthPerFeed from "./charts/LengthPerFeed";
@@ -173,6 +174,9 @@ export default function MetaAnalysisClient() {
             </ChartCard>
             <ChartCard title="Tokens per episode" subtitle="Segments vs chunks · estimated (cl100k_base)">
               <TokensPerEpisode episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []} />
+            </ChartCard>
+            <ChartCard title="Cumulative remote cost per podcast" subtitle="USD · Fireworks">
+              <CostPerFeed feeds={filteredFeeds} />
             </ChartCard>
           </div>
           <InfoBlock />
