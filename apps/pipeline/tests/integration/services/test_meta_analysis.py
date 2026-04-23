@@ -312,3 +312,47 @@ def test_recompute_and_store_preserves_stale_when_set_during_fresh_compute(
 
     recompute_and_store(db_session)
     assert is_stale(db_session) is True
+
+
+def test_compute_snapshot_excludes_manual_uploads(db_session):
+    """Episodes without a feed (manual uploads) must not break compute_snapshot
+    and must not appear in per_episode / per_speaker outputs — the dashboard
+    is feed-centric. Regression: NoneType < str sort failure during smoke
+    test of the initial /refresh call."""
+    feed = _make_feed(db_session, "Podcast A")
+    ep_with_feed = _make_episode(db_session, feed)
+    _add_segments(db_session, ep_with_feed, ["hello world"])
+    db_session.add(SpeakerName(
+        episode_id=ep_with_feed.id,
+        speaker_label="SPEAKER_00",
+        display_name="Alice",
+        confirmed_by_user=True,
+    ))
+
+    manual_ep = Episode(
+        feed_id=None,
+        guid=f"manual-{uuid.uuid4()}",
+        audio_url="http://example.com/manual.mp3",
+        status="done",
+        duration_secs=600,
+        published_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
+    )
+    db_session.add(manual_ep)
+    db_session.commit()
+    _add_segments(db_session, manual_ep, ["manual upload"])
+    db_session.add(SpeakerName(
+        episode_id=manual_ep.id,
+        speaker_label="SPEAKER_00",
+        display_name="Bob",
+        confirmed_by_user=True,
+    ))
+    db_session.commit()
+
+    snap = compute_snapshot(db_session)
+    ep_ids = {ep["episode_id"] for ep in snap["per_episode"]}
+    assert manual_ep.id not in ep_ids
+    assert ep_with_feed.id in ep_ids
+
+    speaker_names = {s["speaker_display_name"] for s in snap["per_speaker"]}
+    assert "Bob" not in speaker_names
+    assert "Alice" in speaker_names

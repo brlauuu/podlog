@@ -161,7 +161,7 @@ def _per_episode(db: Session) -> list[dict[str, Any]]:
             Episode.transcribe_duration_secs,
             Episode.diarize_duration_secs,
             Episode.inference_provider_used,
-        ).where(Episode.status == "done")
+        ).where(Episode.status == "done", Episode.feed_id.isnot(None))
     ).all()
 
     seg_rows = db.execute(
@@ -249,8 +249,13 @@ def _per_speaker(db: Session) -> list[dict[str, Any]]:
         (r.episode_id, r.speaker_label): r.display_name for r in sn_rows
     }
 
+    # Dashboard is feed-centric; manual uploads (feed_id IS NULL) are out of
+    # scope. Filtering here keeps None out of per-speaker feed_id aggregate
+    # keys, which would otherwise break the deterministic sort below.
     ep_rows = db.execute(
-        select(Episode.id, Episode.feed_id).where(Episode.status == "done")
+        select(Episode.id, Episode.feed_id).where(
+            Episode.status == "done", Episode.feed_id.isnot(None)
+        )
     ).all()
     ep_feed: dict[str, str] = {r.id: r.feed_id for r in ep_rows}
 
