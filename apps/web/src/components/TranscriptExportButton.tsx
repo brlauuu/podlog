@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Segment } from "@/lib/types";
 import { formatTimestamp } from "@/lib/timestamp";
+import { sanitizeFilename } from "@/lib/filename";
 
 interface Props {
   episodeTitle: string;
@@ -31,14 +32,6 @@ function formatDuration(secs: number): string {
   const m = Math.floor((secs % 3600) / 60);
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
-}
-
-function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[/\\:*?"<>|]/g, "")
-    .replace(/\s+/g, "-")
-    .toLowerCase()
-    .slice(0, 100);
 }
 
 function buildExportText(props: Props): string {

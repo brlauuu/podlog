@@ -12,6 +12,7 @@ import {
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { renderAnswerWithCitations, type Source, type OnCitationClick } from "@/lib/citations";
 import { formatTimestamp } from "@/lib/timestamp";
+import { sanitizeFilename } from "@/lib/filename";
 import {
   RAG_MODELS,
   DEFAULT_RAG_MODEL,
@@ -35,10 +36,6 @@ interface EpisodeChatProps {
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
-}
-
-function sanitizeFilename(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50) || "episode";
 }
 
 function downloadFile(content: string, filename: string, mimeType: string) {
@@ -290,7 +287,7 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
   const handleExport = useCallback(
     (format: "markdown" | "text") => {
       const meta: ConversationMeta = { feedTitle, episodeTitle, episodeDescription };
-      const safe = sanitizeFilename(episodeTitle);
+      const safe = sanitizeFilename(episodeTitle, { maxLength: 50, fallback: "episode" });
       if (format === "markdown") {
         const content = generateConversationMarkdown(meta, messages);
         downloadFile(content, `podlog-ask-${safe}.md`, "text/markdown;charset=utf-8");
