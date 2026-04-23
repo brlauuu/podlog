@@ -2,11 +2,13 @@
 import uuid
 from datetime import datetime, timezone
 
+from app.services import meta_analysis as ma
 from app.services.meta_analysis import (
     is_stale,
     set_stale,
     clear_stale,
     compute_snapshot,
+    recompute_and_store,
 )
 from app.models import Chunk, Episode, Feed, Segment, SpeakerName, SystemState
 
@@ -15,24 +17,29 @@ def test_is_stale_returns_false_when_flag_missing(db_session):
     assert is_stale(db_session) is False
 
 
-def test_set_stale_creates_row_with_value_true(db_session):
+def test_set_stale_writes_unique_token(db_session):
     set_stale(db_session)
     row = db_session.query(SystemState).filter(SystemState.key == "meta_analysis_stale").one()
-    assert row.value == "true"
+    uuid.UUID(row.value)  # raises if not a valid UUID
+    assert row.value != "false"
     assert is_stale(db_session) is True
 
 
-def test_set_stale_is_idempotent(db_session):
+def test_set_stale_rotates_token_on_each_call(db_session):
     set_stale(db_session)
+    first = db_session.query(SystemState).filter(SystemState.key == "meta_analysis_stale").one().value
     set_stale(db_session)
     rows = db_session.query(SystemState).filter(SystemState.key == "meta_analysis_stale").all()
     assert len(rows) == 1
+    assert rows[0].value != first
     assert is_stale(db_session) is True
 
 
 def test_clear_stale_flips_value_to_false(db_session):
     set_stale(db_session)
     clear_stale(db_session)
+    row = db_session.query(SystemState).filter(SystemState.key == "meta_analysis_stale").one()
+    assert row.value == "false"
     assert is_stale(db_session) is False
 
 
@@ -261,3 +268,47 @@ def test_compute_snapshot_timeline_monthly_buckets_by_month(db_session):
     assert jan["episode_count"] == 2
     assert jan["total_duration_min"] == 30    # (600 + 1200) / 60
     assert feb["episode_count"] == 1
+
+
+def test_recompute_and_store_clears_stale_on_happy_path(db_session):
+    set_stale(db_session)
+    recompute_and_store(db_session)
+    assert is_stale(db_session) is False
+
+
+def test_recompute_and_store_preserves_stale_if_set_during_compute(db_session, monkeypatch):
+    """If set_stale is called while compute_snapshot runs, the token rotates
+    and recompute_and_store must NOT clear the flag — otherwise the signal is
+    silently dropped. Regression test for issue #521 review finding."""
+    set_stale(db_session)
+
+    real_compute = ma.compute_snapshot
+
+    def compute_with_concurrent_set(db):
+        set_stale(db)  # simulate a speaker rename landing mid-compute
+        return real_compute(db)
+
+    monkeypatch.setattr(ma, "compute_snapshot", compute_with_concurrent_set)
+
+    recompute_and_store(db_session)
+    assert is_stale(db_session) is True
+
+
+def test_recompute_and_store_preserves_stale_when_set_during_fresh_compute(
+    db_session, monkeypatch
+):
+    """Manual /refresh path: nothing stale initially, but a writer calls
+    set_stale mid-compute. Captured token was None, so _clear_stale_if_token
+    skips unconditionally — the freshly-set flag must survive."""
+    assert is_stale(db_session) is False
+
+    real_compute = ma.compute_snapshot
+
+    def compute_with_concurrent_set(db):
+        set_stale(db)
+        return real_compute(db)
+
+    monkeypatch.setattr(ma, "compute_snapshot", compute_with_concurrent_set)
+
+    recompute_and_store(db_session)
+    assert is_stale(db_session) is True

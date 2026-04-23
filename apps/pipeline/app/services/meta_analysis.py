@@ -4,6 +4,7 @@ Computes the JSONB snapshot consumed by the /meta-analysis web page.
 Also owns the stale-flag helpers that gate recomputation.
 """
 import logging
+import uuid
 from typing import Any
 
 from sqlalchemy import func, select
@@ -44,13 +45,16 @@ except Exception:  # pragma: no cover -- defensive import guard
 
 def is_stale(db: Session) -> bool:
     row = db.query(SystemState).filter(SystemState.key == STALE_KEY).one_or_none()
-    return row is not None and row.value == "true"
+    return row is not None and row.value != "false"
 
 
 def set_stale(db: Session) -> None:
-    stmt = insert(SystemState).values(key=STALE_KEY, value="true")
+    # Each call writes a fresh UUID token so recompute_and_store can detect
+    # concurrent set_stale during compute and skip its conditional clear.
+    token = str(uuid.uuid4())
+    stmt = insert(SystemState).values(key=STALE_KEY, value=token)
     stmt = stmt.on_conflict_do_update(
-        index_elements=["key"], set_={"value": "true"}
+        index_elements=["key"], set_={"value": token}
     )
     db.execute(stmt)
     db.commit()
@@ -63,6 +67,31 @@ def clear_stale(db: Session) -> None:
     )
     db.execute(stmt)
     db.commit()
+
+
+def _capture_stale_token(db: Session) -> str | None:
+    """Read the current stale token, or None if not stale."""
+    row = db.query(SystemState).filter(SystemState.key == STALE_KEY).one_or_none()
+    if row is None or row.value == "false":
+        return None
+    return row.value
+
+
+def _clear_stale_if_token(db: Session, token: str | None) -> bool:
+    """Clear the stale flag only if its value still equals `token`.
+
+    Returns True if cleared, False if a concurrent set_stale rotated the
+    token during compute (flag stays stale so the next idle tick recomputes).
+    """
+    if token is None:
+        return False
+    affected = (
+        db.query(SystemState)
+        .filter(SystemState.key == STALE_KEY, SystemState.value == token)
+        .update({"value": "false"}, synchronize_session=False)
+    )
+    db.commit()
+    return affected > 0
 
 
 def _per_feed(db: Session) -> list[dict[str, Any]]:
@@ -514,10 +543,18 @@ def upsert_snapshot(
 
 
 def recompute_and_store(db: Session) -> MetaAnalysisSnapshot:
-    """Run compute_snapshot, upsert, and clear the stale flag."""
+    """Run compute_snapshot, upsert, and conditionally clear the stale flag.
+
+    Captures the stale token *before* compute, then only clears if the token
+    is unchanged afterward. If a speaker rename (or any writer) called
+    set_stale during compute, the token rotated — we leave the flag stale so
+    the next idle tick recomputes against the newer data. Prevents the silent
+    signal drop that the unconditional clear caused.
+    """
+    token = _capture_stale_token(db)
     snap = compute_snapshot(db)
     episode_count = len(snap["per_episode"])
     feed_count = len(snap["per_feed"])
     row = upsert_snapshot(db, snap, episode_count, feed_count)
-    clear_stale(db)
+    _clear_stale_if_token(db, token)
     return row
