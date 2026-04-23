@@ -301,10 +301,12 @@ def _host_speaker_label_for_episode(
 ) -> str | None:
     """Return the speaker_label in the episode whose display_name matches
     host_name with confirmed=True or confidence='HIGH'."""
-    host_norm = host_name.strip().lower()
+    host_norm = normalize_name(host_name)
+    if not host_norm:
+        return None
     for sn in sn_by_ep.get(episode_id, []):
         if (sn.confirmed_by_user or sn.confidence == "HIGH") \
-                and sn.display_name.strip().lower() == host_norm:
+                and normalize_name(sn.display_name) == host_norm:
             return sn.speaker_label
     return None
 

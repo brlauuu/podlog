@@ -106,3 +106,35 @@ def test_tokens_chunks_included_when_chunks_exist(db_session):
 
     snap = compute_snapshot(db_session)
     assert snap["coverage"]["tokens_chunks"]["included_count"] == 1
+
+
+def test_wpm_speaker_included_when_episode_has_confirmed_speaker(db_session):
+    feed = _make_feed(db_session, "Pod V")
+    ep = _make_ep(db_session, feed)
+    db_session.add_all([
+        Segment(episode_id=ep.id, speaker_label="S0", start_time=0, end_time=10, text="hi"),
+        SpeakerName(episode_id=ep.id, speaker_label="S0",
+                    display_name="Alice", confirmed_by_user=True),
+    ])
+    db_session.commit()
+
+    snap = compute_snapshot(db_session)
+    assert snap["coverage"]["wpm_speaker"]["included_count"] == 1
+
+
+def test_wpm_speaker_excluded_when_only_low_confidence_speakers(db_session):
+    feed = _make_feed(db_session, "Pod W")
+    ep = _make_ep(db_session, feed)
+    db_session.add_all([
+        Segment(episode_id=ep.id, speaker_label="S0", start_time=0, end_time=10, text="hi"),
+        SpeakerName(episode_id=ep.id, speaker_label="S0",
+                    display_name="Bob", confidence="LOW", inferred=True),
+    ])
+    db_session.commit()
+
+    snap = compute_snapshot(db_session)
+    excl = snap["coverage"]["wpm_speaker"]["excluded"]
+    assert any(
+        e["episode_id"] == ep.id and e["reason"] == "no confirmed/HIGH speakers"
+        for e in excl
+    )
