@@ -13,6 +13,8 @@ import LengthPerFeed from "./charts/LengthPerFeed";
 import ReleaseTimeline from "./charts/ReleaseTimeline";
 import TurnDensity from "./charts/TurnDensity";
 import WpmPerSpeaker from "./charts/WpmPerSpeaker";
+import TokensPerEpisode from "./charts/TokensPerEpisode";
+import InfoBlock from "./InfoBlock";
 
 async function fetchSnapshot(): Promise<SnapshotResponse> {
   const r = await fetch("/api/meta-analysis/snapshot", { cache: "no-store" });
@@ -169,7 +171,11 @@ export default function MetaAnalysisClient() {
                 feeds={filteredFeeds}
               />
             </ChartCard>
+            <ChartCard title="Tokens per episode" subtitle="Segments vs chunks · estimated (cl100k_base)">
+              <TokensPerEpisode episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []} />
+            </ChartCard>
           </div>
+          <InfoBlock />
         </>
       )}
     </div>
