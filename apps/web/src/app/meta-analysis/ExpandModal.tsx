@@ -39,6 +39,7 @@ export default function ExpandModal({ open, onClose, title, children }: Props) {
         <div className="flex items-center justify-between mb-4">
           <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close dialog"
             className="text-muted-foreground hover:text-foreground"
