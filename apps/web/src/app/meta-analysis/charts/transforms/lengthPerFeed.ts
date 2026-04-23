@@ -2,10 +2,10 @@ import { colorForFeed } from "@/lib/metaAnalysisColors";
 import type { PerFeed } from "@/lib/metaAnalysisTypes";
 
 export interface LengthBar {
-  feed_id: string;
+  feed_id: string; // retained for Cell key and per-feed lookups
   title: string;
   avg: number;
-  std: number;
+  std: number; // ±1σ; Recharts clips to axis bounds if avg − std < 0
   color: string;
 }
 

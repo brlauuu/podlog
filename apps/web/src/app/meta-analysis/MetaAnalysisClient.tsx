@@ -37,6 +37,8 @@ export default function MetaAnalysisClient() {
   const snap = data?.snapshot ?? null;
 
   const [selectedFeedIds, setSelectedFeedIds] = useState<string[]>([]);
+  const [missingOpen, setMissingOpen] = useState(false);
+  const [missingData, setMissingData] = useState<MissingSpeakersResponse | null>(null);
 
   const filteredFeeds = snap
     ? (Array.isArray(snap.per_feed)
@@ -45,9 +47,6 @@ export default function MetaAnalysisClient() {
             : snap.per_feed.filter((f) => selectedFeedIds.includes(f.feed_id)))
         : [])
     : [];
-
-  const [missingOpen, setMissingOpen] = useState(false);
-  const [missingData, setMissingData] = useState<MissingSpeakersResponse | null>(null);
 
   const openMissing = async () => {
     try {

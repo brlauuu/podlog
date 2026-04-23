@@ -23,6 +23,7 @@ describe("buildLengthPerFeed", () => {
   it("sorts descending by avg length", () => {
     const rows = buildLengthPerFeed(FEEDS);
     expect(rows[0].title).toBe("B");   // 60 > 40
+    expect(rows[1].title).toBe("A");
   });
 
   it("returns empty array when no feeds", () => {
