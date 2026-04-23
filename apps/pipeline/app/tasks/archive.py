@@ -13,6 +13,7 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment, SpeakerName
+from app.services.meta_analysis import set_stale
 from app.services.notification_runtime import emit_episode_done_event
 from app.tasks.helpers import mark_failed, update_episode
 
@@ -92,6 +93,14 @@ def archive_episode(episode_id: str) -> str:
 
         # Delegate payload construction and event emission to notification runtime.
         emit_episode_done_event(db, episode)
+
+        try:
+            set_stale(db)
+        except Exception:
+            logger.exception(
+                '"action": "meta_analysis_stale_set_failed", "episode_id": "%s"',
+                episode_id,
+            )
 
         # Safe to delete raw audio now that status is confirmed.
         # Skip when the "raw" path is actually the archive path itself
