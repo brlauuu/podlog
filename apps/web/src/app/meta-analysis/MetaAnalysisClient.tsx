@@ -20,6 +20,8 @@ export default function MetaAnalysisClient() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["meta-analysis-snapshot"],
     queryFn: fetchSnapshot,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
   const refresh = useMutation({
     mutationFn: refreshSnapshot,
@@ -40,15 +42,23 @@ export default function MetaAnalysisClient() {
             {data?.computed_at
               ? `Updated ${new Date(data.computed_at).toLocaleString()}`
               : "Never computed"}
-            {data?.is_stale ? " · refresh pending" : ""}
           </p>
+          {data?.is_stale ? (
+            <span
+              className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+              title="A queue task changed data since this snapshot was computed. Click Refresh to recompute."
+            >
+              Refresh pending
+            </span>
+          ) : null}
         </div>
         <button
           className="px-3 py-1.5 rounded-md border text-sm"
           onClick={() => refresh.mutate()}
           disabled={refresh.isPending}
+          aria-label="Refresh meta-analysis"
         >
-          {refresh.isPending ? "Refreshing…" : "↻ Refresh"}
+          <span aria-hidden="true">↻</span> {refresh.isPending ? "Refreshing…" : "Refresh"}
         </button>
       </header>
 
@@ -61,7 +71,7 @@ export default function MetaAnalysisClient() {
           {/* Coverage strip + chart grid are added by later tasks. */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="p-4 border rounded-md text-sm text-muted-foreground">
-              {snap.per_feed.length} podcasts · {data?.episode_count} episodes processed
+              {Array.isArray(snap.per_feed) ? snap.per_feed.length : 0} podcasts · {data?.episode_count ?? 0} episodes processed
             </div>
           </div>
         </>
