@@ -8,6 +8,7 @@ import CoverageStrip from "./CoverageStrip";
 import MissingSpeakersModal from "./MissingSpeakersModal";
 import ChartCard from "./ChartCard";
 import LengthPerFeed from "./charts/LengthPerFeed";
+import ReleaseTimeline from "./charts/ReleaseTimeline";
 
 async function fetchSnapshot(): Promise<SnapshotResponse> {
   const r = await fetch("/api/meta-analysis/snapshot", { cache: "no-store" });
@@ -119,6 +120,12 @@ export default function MetaAnalysisClient() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <ChartCard title="Episode length per podcast" subtitle="Avg (min) · σ error bars">
               <LengthPerFeed feeds={filteredFeeds} />
+            </ChartCard>
+            <ChartCard title="Episodes published per month" subtitle="Stacked by podcast">
+              <ReleaseTimeline
+                timeline={Array.isArray(snap.timeline_monthly) ? snap.timeline_monthly : []}
+                feeds={filteredFeeds}
+              />
             </ChartCard>
           </div>
         </>
