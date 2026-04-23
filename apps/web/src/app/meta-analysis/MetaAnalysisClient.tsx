@@ -8,6 +8,7 @@ import CoverageStrip from "./CoverageStrip";
 import MissingSpeakersModal from "./MissingSpeakersModal";
 import ChartCard from "./ChartCard";
 import EpisodeLengthTrend from "./charts/EpisodeLengthTrend";
+import HostGuestShare from "./charts/HostGuestShare";
 import LengthPerFeed from "./charts/LengthPerFeed";
 import ReleaseTimeline from "./charts/ReleaseTimeline";
 
@@ -134,6 +135,25 @@ export default function MetaAnalysisClient() {
                 feeds={filteredFeeds}
               />
             </ChartCard>
+            {(() => {
+              const hostShareCoverage = snap.coverage?.host_share;
+              return (
+                <ChartCard
+                  title="Host vs guest share"
+                  subtitle="% speech · confirmed hosts only"
+                  coverage={hostShareCoverage ? {
+                    included: hostShareCoverage.included_count,
+                    total: hostShareCoverage.included_count + (Array.isArray(hostShareCoverage.excluded) ? hostShareCoverage.excluded.length : 0),
+                    onClickExcluded: openMissing,
+                  } : undefined}
+                >
+                  <HostGuestShare
+                    episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
+                    feeds={filteredFeeds}
+                  />
+                </ChartCard>
+              );
+            })()}
           </div>
         </>
       )}
