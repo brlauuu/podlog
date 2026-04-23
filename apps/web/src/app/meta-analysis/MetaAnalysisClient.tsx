@@ -7,6 +7,7 @@ import FiltersBar from "./FiltersBar";
 import CoverageStrip from "./CoverageStrip";
 import MissingSpeakersModal from "./MissingSpeakersModal";
 import ChartCard from "./ChartCard";
+import EpisodeLengthTrend from "./charts/EpisodeLengthTrend";
 import LengthPerFeed from "./charts/LengthPerFeed";
 import ReleaseTimeline from "./charts/ReleaseTimeline";
 
@@ -124,6 +125,12 @@ export default function MetaAnalysisClient() {
             <ChartCard title="Episodes published per month" subtitle="Stacked by podcast">
               <ReleaseTimeline
                 timeline={Array.isArray(snap.timeline_monthly) ? snap.timeline_monthly : []}
+                feeds={filteredFeeds}
+              />
+            </ChartCard>
+            <ChartCard title="Episode length trend" subtitle="Per podcast over time">
+              <EpisodeLengthTrend
+                episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
                 feeds={filteredFeeds}
               />
             </ChartCard>
