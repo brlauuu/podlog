@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 const SAFE_SLUG_REGEX = /^[a-zA-Z0-9_-]+$/;
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   context: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await context.params;

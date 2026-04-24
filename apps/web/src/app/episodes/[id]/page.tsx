@@ -4,7 +4,6 @@ import Link from "next/link";
 import { AlertTriangle, ChevronLeft, ChevronRight, Info, XCircle } from "lucide-react";
 import pool from "@/lib/db";
 import type { Segment } from "@/lib/types";
-import { formatTimestamp } from "@/lib/timestamp";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import EpisodeDescription from "@/components/EpisodeDescription";
