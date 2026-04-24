@@ -20,7 +20,7 @@ export default function HostGuestShare({ episodes, feeds }: Props) {
         <BarChart data={data} layout="vertical" stackOffset="expand">
           <XAxis type="number" tickFormatter={(v) => `${Math.round(v * 100)}%`} />
           <YAxis type="category" dataKey="title" width={100} />
-          <Tooltip formatter={(v: number) => `${v}%`} />
+          <Tooltip formatter={(v) => `${Number(v)}%`} />
           <Bar dataKey="host_pct" stackId="1">
             {data.map((d) => <Cell key={d.feed_id} fill={colorForFeed(d.feed_id)} />)}
           </Bar>

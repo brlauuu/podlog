@@ -19,7 +19,7 @@ export default function CostPerFeed({ feeds }: Props) {
         <BarChart data={data} layout="vertical" margin={{ left: 40 }}>
           <XAxis type="number" tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
           <YAxis type="category" dataKey="title" width={100} />
-          <Tooltip formatter={(v: number) => `$${v.toFixed(2)}`} />
+          <Tooltip formatter={(v) => `$${Number(v).toFixed(2)}`} />
           <Bar dataKey="cost">
             {data.map((d) => <Cell key={d.feed_id} fill={d.color} />)}
           </Bar>

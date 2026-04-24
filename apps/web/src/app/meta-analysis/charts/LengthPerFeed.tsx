@@ -19,7 +19,7 @@ export default function LengthPerFeed({ feeds }: Props) {
         <BarChart data={data} layout="vertical" margin={{ left: 40 }}>
           <XAxis type="number" />
           <YAxis type="category" dataKey="title" width={100} />
-          <Tooltip formatter={(v: number) => `${v.toFixed(1)} min`} />
+          <Tooltip formatter={(v) => `${Number(v).toFixed(1)} min`} />
           <Bar dataKey="avg">
             {data.map((d) => <Cell key={d.feed_id} fill={d.color} />)}
             <ErrorBar dataKey="std" width={4} strokeWidth={1} stroke="#94a3b8" />
