@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { validateMergeRequest } from "@/lib/validateMergeRequest";
+import { setMetaAnalysisStale } from "@/lib/metaAnalysisStale";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let body: unknown;
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id: episodeId } = await params;
   const allLabels = [target_label, ...source_labels];
 
+  let mergedSegments = 0;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -57,8 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
 
     await client.query("COMMIT");
-
-    return NextResponse.json({ ok: true, merged_segments: update.rowCount ?? 0 });
+    mergedSegments = update.rowCount ?? 0;
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Speaker merge error:", err);
@@ -66,4 +67,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } finally {
     client.release();
   }
+
+  // Issue #521: invalidate meta-analysis cache so the worker recomputes.
+  await setMetaAnalysisStale();
+
+  return NextResponse.json({ ok: true, merged_segments: mergedSegments });
 }

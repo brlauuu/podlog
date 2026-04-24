@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 from app.database import SessionLocal
 from app import job_queue
+from app.services.meta_analysis import is_stale, recompute_and_store
 from app.task_registry import (
     TASK_HANDLERS,
     PERIODIC_TASKS,
@@ -47,6 +48,25 @@ def _run_periodic_tasks(last_run: dict[str, datetime], now: datetime) -> None:
                 last_run[task.name] = now
 
 
+def run_idle_hook(db) -> None:
+    """Run during idle poll cycles — recomputes the meta-analysis snapshot
+    if the stale flag is set. Swallows exceptions so the worker poll loop
+    is never interrupted.
+    """
+    try:
+        if not is_stale(db):
+            return
+        started = time.time()
+        recompute_and_store(db)
+        duration_ms = int((time.time() - started) * 1000)
+        logger.info(
+            '"action": "meta_analysis_recomputed", "duration_ms": %d',
+            duration_ms,
+        )
+    except Exception:
+        logger.exception('"action": "meta_analysis_idle_hook_failed"')
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -74,6 +94,7 @@ def main() -> None:
         try:
             job = job_queue.poll(db)
             if job is None:
+                run_idle_hook(db)
                 db.close()
                 time.sleep(POLL_INTERVAL)
                 continue

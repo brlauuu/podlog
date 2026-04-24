@@ -197,9 +197,12 @@ A global audio player bar is rendered in the root layout, fixed to the bottom of
 Top navigation bar (fixed):
 - **Podlog** logo/wordmark (links to `/`)
 - **Search** (homepage)
-- **Podcasts**
+- **Ask** (RAG)
+- **Sources** (`/podcasts`)
 - **Queue** (with a badge showing active + pending count)
+- **Meta-analysis** (`/meta-analysis`)
 - **Settings** (placeholder in V1, expanded in V2)
+- **Docs**, **About**
 - **Dark mode toggle** (sun/moon icon, right-aligned)
 
 ### 5.10 Ask AI (RAG)
@@ -238,6 +241,22 @@ Configured context (`num_ctx`) is kept well below each model's maximum to keep p
 **Citations:** The LLM is instructed to cite sources as `[Episode Title, MM:SS]`. The frontend parses these patterns and renders them as clickable links to the corresponding episode page at the cited timestamp.
 
 **Error handling:** If Ollama fails (model OOM, connection error, timeout), the SSE stream sends a descriptive error event. The UI shows the specific error message rather than a generic connection failure.
+
+### 5.11 Meta-Analysis Dashboard
+
+The `/meta-analysis` page offers cross-feed analytics: length, cadence, speaker share, words-per-minute, token footprint, remote-inference cost, and processing-time distribution. Users browse nine Recharts panels with a per-feed filter bar, an expand-to-modal affordance on each card, and a stale indicator.
+
+**Snapshot cache.** The nine panels are backed by a single JSONB `MetaAnalysisSnapshot` row (`id = 1`) holding `per_feed`, `per_episode`, `per_speaker`, `timeline_monthly`, and `coverage` aggregates. Computing it requires scanning every `Segment` and `Chunk`, so the dashboard never recomputes on page load — it reads the cached snapshot and reports its `computed_at` timestamp to the user.
+
+**Stale flag and recomputation.** A `system_state.meta_analysis_stale` row gates recomputation. Writers that change snapshot inputs (speaker renames, merges, and pipeline stages: ingest, transcribe, diarize, chunk, infer, archive, cleanup) call `set_stale`, which writes a fresh UUID token. The pipeline worker's idle hook (fires when the job queue drains) checks `is_stale` and, if set, invokes `recompute_and_store`. The user can also force a refresh via the `Refresh` button, which hits `/api/meta-analysis/refresh` and re-runs the recompute path under a PostgreSQL advisory lock (`pg_advisory_xact_lock('meta_analysis_refresh')`) to serialize concurrent refreshes.
+
+**Race-safe clear.** `recompute_and_store` captures the stale token before `compute_snapshot` and only clears the flag if the token is unchanged when compute finishes. If a concurrent writer called `set_stale` during compute, the token rotated, the conditional clear skips, and the flag stays stale so the next idle tick recomputes against the newer data. Prevents silent signal drop when a speaker rename lands mid-computation. Both the Python helpers (`apps/pipeline/app/services/meta_analysis.py`) and the TS counterpart (`apps/web/src/lib/metaAnalysisStale.ts`) write UUID tokens — they must stay in lockstep.
+
+**Charts.** All nine charts follow the same pattern: a pure `transform*` module produces display rows from the snapshot fragment, the chart component wraps Recharts in a `ResponsiveContainer`, and a Jest unit test covers the transform. Colors are assigned per feed via a 32-bit FNV-1a hash over the feed ID so the same podcast keeps the same color across panels and sessions. Each card renders inside a `ChartCard` with an expand-to-modal button for deep inspection.
+
+**Missing-speaker drill-down.** The `Host vs guest share` card excludes feeds that lack any confirmed host and surfaces a count of excluded podcasts. Clicking the count opens a modal listing the affected feeds (episode count, diarized count, first/last diarized date), with a link to the podcast page so the user can rename speakers. Fixing a host triggers `setMetaAnalysisStale` via the speaker-merge route, and the dashboard shows `Refresh pending` until the next recompute.
+
+**Tokenization.** `cl100k_base` (via `tiktoken`) is used for the `Tokens per episode` panel. If `tiktoken` is unavailable at import time, the service logs a warning and token counts fall back to zero so the dashboard still renders. Not user-configurable.
 
 ---
 

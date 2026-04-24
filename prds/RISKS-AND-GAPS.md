@@ -198,6 +198,34 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
+### RISK-09: Meta-Analysis Recompute Cost Scales with Corpus
+
+**Severity:** Low  
+**Component:** PRD-02 §5.11 — `apps/pipeline/app/services/meta_analysis.py`  
+**Description:** `compute_snapshot` scans every row in `segments` and `chunks` (per-episode word/token counts, per-speaker WPM aggregates). On the current corpus (~100 episodes) it completes in well under a second and runs opportunistically on worker idle. As the archive grows into the thousands of episodes, the recompute will start to dominate idle windows and could thrash CPU/disk if the stale flag is hit repeatedly (every speaker rename and every pipeline stage transition sets it).  
+**Mitigation:**
+1. The idle hook already guards with `is_stale` so the scan only runs when data changed.
+2. `recompute_and_store` uses a race-safe conditional clear, so we never recompute needlessly after a concurrent writer.
+3. Manual `/api/meta-analysis/refresh` is serialized with `pg_advisory_xact_lock` to prevent double-work.
+4. If compute time becomes painful, the next step is incremental aggregation (touch only the feed/episode that changed) rather than full-corpus scans. Not needed today.
+
+**Status:** Active risk accepted in v0.2.0; monitor as corpus grows.
+
+---
+
+### RISK-10: `tiktoken` Adds ~8 MB to the Pipeline Image
+
+**Severity:** Low  
+**Component:** PRD-02 §5.11, PRD-03 — Pipeline Docker image  
+**Description:** The `Tokens per episode` chart uses OpenAI's `tiktoken` library to count `cl100k_base` tokens per segment and chunk. `tiktoken` ships a precompiled Rust extension (~8 MB on disk) and pulls `regex` as a transitive dep. The pipeline image grew accordingly. No runtime cost beyond the import.  
+**Mitigation:**
+1. Import is defensive: if `tiktoken` fails to import (wheel unavailable for the platform), the dashboard falls back to zero token counts and the service logs a warning — the pipeline keeps running.
+2. No action planned. Image size is still well within acceptable bounds for the self-hosted target.
+
+**Status:** Active (accepted trade-off) in v0.2.0.
+
+---
+
 ### ~~RISK-07: Celery Beat Single Point of Failure~~ → Resolved in v1.3
 
 *Moved to Part 4: Resolved Items.*
@@ -263,3 +291,4 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 | RISK-07 | Celery Beat single point of failure | No longer applicable — Celery/Redis replaced by PostgreSQL-backed job queue with polling loop in `worker.py` | v1.3 |
 | RISK-04 | Diarization alignment quality (segment-level mis-attribution) | WhisperX with wav2vec2 word-level alignment shipped (see PRD-01 §5.4); `apps/pipeline/app/services/whisper.py` + `alignment.py` implement word-level speaker assignment | v1.5 |
 | GAP-04 | Word-level alignment not implemented | WhisperX CTranslate2 + wav2vec2 word-level timestamps align transcript words against pyannote segments, replacing majority-overlap at the segment level | v1.5 |
+| GAP-N/A | Meta-analysis stale-flag race drops recompute signal | `set_stale` writes a UUID token; `recompute_and_store` captures the token before `compute_snapshot` and only clears it if the token is unchanged — concurrent `set_stale` during compute keeps the flag stale. TS `setMetaAnalysisStale` mirrors the token write. | v0.2.0 |

@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: "/ask", label: "Ask" },
   { href: "/podcasts", label: "Sources" },
   { href: "/queue", label: "Queue" },
+  { href: "/meta-analysis", label: "Meta-analysis" },
   { href: "/settings", label: "Settings" },
   { href: "/docs", label: "Docs" },
   { href: "/about", label: "About" },

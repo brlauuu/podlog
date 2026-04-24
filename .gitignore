@@ -16,6 +16,7 @@ build/
 .coverage
 htmlcov/
 coverage/
+!apps/web/src/app/api/meta-analysis/coverage/
 .ruff_cache/
 
 # Node / Next.js

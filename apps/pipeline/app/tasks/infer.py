@@ -13,6 +13,7 @@ import logging
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Feed, Segment
+from app.services.meta_analysis import set_stale
 from app.tasks.helpers import update_episode
 from app import job_queue
 
@@ -177,6 +178,14 @@ def infer_speakers(episode_id: str) -> str:
                 '"action": "inference_failed_graceful", "episode_id": "%s", "error": "%s"',
                 episode_id,
                 str(exc),
+            )
+
+        try:
+            set_stale(db)
+        except Exception:
+            logger.exception(
+                '"action": "meta_analysis_stale_set_failed", "episode_id": "%s"',
+                episode_id,
             )
 
         job_queue.enqueue(db, episode_id, "archive")
