@@ -50,18 +50,18 @@ podlog/
 │   │   │   ├── job_queue.py        # PostgreSQL-backed job queue (enqueue, claim, complete)
 │   │   │   ├── task_registry.py    # Maps pipeline stages to task functions + next-stage routing
 │   │   │   ├── worker.py           # Background job worker + feed polling loop
-│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware)
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
-│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, inference_helpers, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels)
-│   │   ├── alembic/                # Database migrations (12 versions)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, rag, inference, inference_helpers, meta_analysis, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels)
+│   │   ├── alembic/                # Database migrations (17 versions)
 │   │   └── tests/                  # unit, integration, e2e
 │   └── web/                        # Next.js 16 (App Router)
 │       ├── Dockerfile              # Production image (standalone output)
 │       ├── Dockerfile.test         # Test image used by docker-compose.test.yml
-│       ├── src/app/                # Pages: /, /about, /podcasts, /podcasts/[id], /episodes/[id], /queue, /feeds, /ask, /search, /search/print, /settings, /docs (and /notifications redirects to /settings)
-│       ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll), queue, audio, ask/coverage, episodes ([id], ingest, upload, retry, speakers, speakers/merge), docs, hardware, notifications (settings, test), pipeline (ask, embed, health, queue/retry)
-│       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, DocsClient, etc.
-│       └── src/lib/                # db.ts, search.ts, search/ (feedFilter, filters, grouping, queryParser, speakerTurns, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, page-state.ts, queueStatus.ts
+│       ├── src/app/                # Pages: /, /about, /podcasts, /podcasts/[id], /episodes/[id], /queue, /feeds, /ask, /search, /search/print, /settings, /docs, /meta-analysis (and /notifications redirects to /settings); DocsClient lives in app/docs/
+│       ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll), queue, audio, ask/coverage, episodes ([id], ingest, upload, retry, speakers, speakers/merge), docs, hardware, notifications (settings, test), meta-analysis (coverage, refresh, snapshot), pipeline (ask, embed, health, queue/retry)
+│       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, etc.
+│       └── src/lib/                # db.ts, search.ts, search/ (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, filename.ts, metaAnalysisColors.ts, metaAnalysisStale.ts, metaAnalysisTypes.ts, normalizeName.ts, page-state.ts, queueStatus.ts, rag-models.ts
 ├── docs/                           # User-facing documentation and guides
 ├── scripts/                        # Operational scripts (nightly audit, health check)
 └── prds/                           # Specifications and risk register
@@ -139,8 +139,8 @@ Lessons from active development. Short rules; rationale linked to the incident o
 
 **Done:**
 - Full pipeline: ingest, download, transcribe, diarize, chunk, embed, infer, archive
-- All FastAPI endpoints (feeds, episodes, queue, health, ask, notifications, backfill)
-- All Next.js pages, API routes, and components (search, ask, queue, feeds, episodes, notifications)
+- All FastAPI endpoints (feeds, episodes, queue, health, ask, notifications, backfill, meta-analysis)
+- All Next.js pages, API routes, and components (search, ask, queue, feeds, episodes, notifications, meta-analysis)
 - Automated test suites for pipeline and web are maintained in-repo
 - Alembic migration history is maintained under `apps/pipeline/alembic/versions/`
 - shadcn/ui component set is installed and used in the web app
@@ -148,7 +148,9 @@ Lessons from active development. Short rules; rationale linked to the incident o
 - RAG-based Ask AI feature via Ollama (local) or Fireworks AI (remote)
 - Speaker merge/rename UI
 - Notification settings
+- pyannote.ai Precision-2 cloud diarization as an alternative to local pyannote (Issue #516)
+- Meta-Analysis dashboard aggregating cross-feed metrics (Issue #521)
+- CI enforces coverage thresholds: pipeline `--cov-fail-under=82` in `ci-full-unit.yml`, web `coverageThreshold` in `jest.config.js`
 
 **Not yet done:**
 - Full end-to-end pipeline smoke test in CI
-- Test coverage thresholds not yet enforced in CI
