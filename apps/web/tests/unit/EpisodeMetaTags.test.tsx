@@ -20,6 +20,7 @@ const baseProps = {
   inferenceProviderUsed: null,
   fireworksSttCostUsd: null,
   fireworksAudioMinutes: null,
+  pyannoteCloudCostUsd: null,
   episodeId: "ep-123",
 };
 

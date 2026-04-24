@@ -24,9 +24,15 @@ export interface Settings {
   embedding_model: string;
   fireworks_embedding_base_url: string;
   fireworks_embedding_model: string;
+  diarization_provider: "local" | "precision2";
+  pyannote_api_key: string | null;
+  pyannote_cloud_base_url: string;
+  pyannote_cloud_model: string;
+  pyannote_cloud_cost_per_second_usd: number;
   telegram_configured: boolean;
   email_configured: boolean;
   fireworks_configured: boolean;
+  pyannote_cloud_configured: boolean;
 }
 
 export function Toast({

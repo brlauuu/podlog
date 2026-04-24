@@ -55,6 +55,7 @@ const currentEpisode = {
   fireworks_audio_minutes: null,
   fireworks_stt_cost_per_minute_usd: null,
   fireworks_stt_cost_usd: null,
+  pyannote_cloud_cost_usd: null,
   audio_url: null,
   audio_local_path: null,
   guid: null,
