@@ -108,4 +108,4 @@ The host-level health check (`make health-install`) runs the same probes every 1
 
 ---
 
-**Back:** [RAG Search](12-rag-search.md) | **Home:** [Guide](README.md)
+**Back:** [pyannote Cloud Diarization](13-pyannote-cloud.md) | **Home:** [Guide](README.md)

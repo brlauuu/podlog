@@ -46,4 +46,4 @@ The Ask AI feature requires:
 
 ---
 
-**Next:** [Troubleshooting](13-troubleshooting.md) | **Back:** [Hardware & Performance](11-hardware.md) | **Home:** [Guide](README.md)
+**Next:** [pyannote Cloud Diarization](13-pyannote-cloud.md) | **Back:** [Hardware & Performance](11-hardware.md) | **Home:** [Guide](README.md)

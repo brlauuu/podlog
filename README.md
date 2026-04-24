@@ -22,7 +22,7 @@
 
 - **Audio ingestion** — pull episodes from RSS feeds (full, selective, or test mode) or upload audio files (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.opus`, `.aac`, `.wma`, `.webm`, `.mp4`) directly from the web UI.
 - **Speech-to-text** — WhisperX with `large-v3-turbo` by default, tunable down to `tiny` for low-RAM machines.
-- **Speaker diarization** — pyannote `speaker-diarization-community-1` assigns `SPEAKER_NN` labels; spaCy NER proposes real names from episode metadata, and you can rename or merge speakers in the UI.
+- **Speaker diarization** — pyannote `speaker-diarization-community-1` assigns `SPEAKER_NN` labels locally (free), with an optional paid cloud upgrade to pyannote.ai's higher-accuracy `precision-2` model; spaCy NER proposes real names from episode metadata, and you can rename or merge speakers in the UI.
 - **Hybrid search** — full-text keyword search (`"exact phrase"`, `OR`, `-exclude`) combined with pgvector semantic similarity, merged via Reciprocal Rank Fusion.
 - **Persistent audio player** — click any timestamp to play; the player keeps going while you navigate other pages.
 - **Ask AI (RAG)** — ask natural-language questions and get streamed, citation-backed answers drawn from your transcript library (local Ollama by default, Fireworks optional).
