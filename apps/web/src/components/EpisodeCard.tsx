@@ -294,7 +294,7 @@ export default function EpisodeCard({
 
         {/* Reprocess button - last item in tag row */}
         <span className="relative z-10 pointer-events-auto">
-          <ReprocessButton episodeId={ep.id} status={ep.status} />
+          <ReprocessButton episodeId={ep.id} />
         </span>
       </div>
 

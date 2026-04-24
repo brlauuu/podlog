@@ -259,7 +259,7 @@ export default function QueueStatus() {
     return <div className="text-muted-foreground text-sm">Loading queue...</div>;
   }
 
-  const { counts, allJobs, filtered, filteredDone, effectiveShowDone, isEmpty } = computeQueueViewModel({
+  const { counts, filtered, filteredDone, effectiveShowDone, isEmpty } = computeQueueViewModel({
     queue,
     search: debouncedSearch,
     stageFilter,

@@ -5,10 +5,6 @@ import PrintButton from "./PrintButton";
 
 export const dynamic = "force-dynamic";
 
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, "");
-}
-
 export default async function PrintPage({
   searchParams,
 }: {

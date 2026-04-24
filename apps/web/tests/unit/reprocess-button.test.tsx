@@ -21,7 +21,7 @@ describe("ReprocessButton", () => {
   });
 
   it("uses compact tag-like sizing classes", () => {
-    render(<ReprocessButton episodeId="ep-1" status="done" />);
+    render(<ReprocessButton episodeId="ep-1" />);
 
     const button = screen.getByRole("button", { name: /reprocess/i });
     expect(button).toHaveClass(

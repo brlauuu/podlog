@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
-import { renderAnswerWithCitations, type Source, type OnCitationClick } from "@/lib/citations";
+import { renderAnswerWithCitations, type Source } from "@/lib/citations";
 import { formatTimestamp } from "@/lib/timestamp";
 import { sanitizeFilename } from "@/lib/filename";
 import {
@@ -389,7 +389,7 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
         )}
 
         {messages.map((msg, i) => (
-          <MessageBubble key={i} message={msg} episodeId={episodeId} isStreaming={isStreaming && i === messages.length - 1} />
+          <MessageBubble key={i} message={msg} isStreaming={isStreaming && i === messages.length - 1} />
         ))}
 
         {status === "error" && errorMsg && (
@@ -430,7 +430,7 @@ function handleCitationClick(_episodeId: string, seconds: number) {
   scrollToTime(seconds);
 }
 
-function MessageBubble({ message, episodeId, isStreaming }: { message: Message; episodeId: string; isStreaming: boolean }) {
+function MessageBubble({ message, isStreaming }: { message: Message; isStreaming: boolean }) {
   const rendered = useMemo(
     () =>
       message.role === "assistant" && message.content

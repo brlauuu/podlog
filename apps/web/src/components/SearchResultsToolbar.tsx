@@ -55,7 +55,6 @@ export default function SearchResultsToolbar({
         </label>
         <DownloadReportButton
           query={submittedQuery}
-          viewMode={viewMode}
           flatResults={viewMode === "flat" ? flatData?.results : undefined}
           groupedResults={viewMode === "grouped" ? groupedData : undefined}
         />

@@ -15,7 +15,6 @@ import { sanitizeFilename } from "@/lib/filename";
 
 interface DownloadReportButtonProps {
   query: string;
-  viewMode: "flat" | "grouped";
   flatResults?: SearchResult[];
   groupedResults?: GroupedSearchResult;
 }
@@ -131,7 +130,6 @@ function openPrintView(query: string) {
 
 export default function DownloadReportButton({
   query,
-  viewMode,
   flatResults,
   groupedResults,
 }: DownloadReportButtonProps) {

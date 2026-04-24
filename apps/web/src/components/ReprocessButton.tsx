@@ -6,14 +6,11 @@ import { RefreshCw } from "lucide-react";
 
 interface ReprocessButtonProps {
   episodeId: string;
-  status: string;
 }
 
-export default function ReprocessButton({ episodeId, status }: ReprocessButtonProps) {
+export default function ReprocessButton({ episodeId }: ReprocessButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-
-  // Always render - parent controls visibility via CSS if needed
 
   async function handleReprocess() {
     if (!window.confirm("Re-queue this episode for full reprocessing?")) return;

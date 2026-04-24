@@ -197,7 +197,7 @@ export default function EpisodeMetaTags({
 
       {/* Row 3: actions */}
       <div>
-        <ReprocessButton episodeId={episodeId} status={status} />
+        <ReprocessButton episodeId={episodeId} />
       </div>
     </div>
   );
