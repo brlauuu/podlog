@@ -17,16 +17,16 @@ podlog/
 │   │   │   ├── models.py           # SQLAlchemy ORM (feeds, episodes, segments)
 │   │   │   ├── database.py         # Engine + session factory
 │   │   │   ├── job_queue.py        # DB-backed job queue (FOR UPDATE SKIP LOCKED)
-│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware)
-│   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks)
-│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, notifications, digest, events, fireworks_audio, …)
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis)
+│   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, rag, inference, inference_helpers, meta_analysis, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels)
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # Unit, integration, e2e tests
-│   └── web/                        # Next.js 16.2.2 (App Router)
-│       ├── src/app/                # Pages: /, /search, /ask, /podcasts, /episodes/[id], /queue, /feeds, /settings, /docs, /about (/notifications redirects to /settings)
-│       │   └── api/                # Route handlers: search, search/grouped, search/mentions, feeds, queue, audio, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, hardware, pipeline proxy
+│   └── web/                        # Next.js 16.2.4 (App Router)
+│       ├── src/app/                # Pages: /, /search, /ask, /podcasts, /episodes/[id], /queue, /feeds, /settings, /docs, /meta-analysis, /about (/notifications redirects to /settings)
+│       │   └── api/                # Route handlers: search, search/grouped, search/mentions, feeds, queue, audio, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, hardware, meta-analysis (coverage, refresh, snapshot), pipeline proxy
 │       ├── src/components/         # React components (Navbar, AudioPlayer, SearchResult, QueueStatus, …)
-│       └── src/lib/                # Utilities (db, search, searchHybrid, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest, citations, …)
+│       └── src/lib/                # Utilities (db, search, searchHybrid, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest, citations, normalizeName, filename, metaAnalysisTypes, rag-models, …)
 ├── docs/                           # User-facing documentation
 └── prds/                           # Internal design specs and risk register
 ```
