@@ -17,7 +17,10 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
-from app.services.notification_settings import get_runtime_inference_settings
+from app.services.notification_settings import (
+    get_runtime_diarization_settings,
+    get_runtime_inference_settings,
+)
 from app.tasks.helpers import update_episode
 from app import job_queue
 
@@ -39,6 +42,8 @@ def diarize_episode(episode_id: str) -> str:
 
         runtime = get_runtime_inference_settings(db)
         provider = runtime.get("inference_provider") or "local"
+        diarization_runtime = get_runtime_diarization_settings(db)
+        diarization_provider = diarization_runtime.get("diarization_provider") or "local"
 
         if provider == "fireworks":
             # Fireworks mode uses remote diarization metadata and never loads pyannote locally.
@@ -135,6 +140,63 @@ def diarize_episode(episode_id: str) -> str:
                     diarize_duration_secs=diarize_secs,
                     diarize_step_durations=step_durations,
                 )
+            except Exception as exc:
+                update_episode(
+                    db, episode_id,
+                    has_diarization=False,
+                    diarization_error=str(exc),
+                    diarize_step_durations=step_durations or None,
+                )
+                logger.warning(
+                    '"action": "diarize_failed_graceful", "episode_id": "%s", "error": "%s"',
+                    episode_id,
+                    str(exc),
+                )
+        elif diarization_provider == "precision2":
+            # pyannote.ai cloud diarization — no local model load/unload needed.
+            audio_path = episode.audio_local_path
+            step_durations: dict[str, float] = {}
+            try:
+                from app.services.pyannote_cloud import diarize_via_cloud
+
+                t0 = time.monotonic()
+                t_provider = time.monotonic()
+                diarization_segments, billed_secs, cost_usd = diarize_via_cloud(
+                    audio_path,
+                    api_key=diarization_runtime.get("pyannote_api_key") or "",
+                    base_url=diarization_runtime.get("pyannote_cloud_base_url")
+                    or "https://api.pyannote.ai/v1",
+                    model=diarization_runtime.get("pyannote_cloud_model") or "precision-2",
+                    cost_per_second_usd=float(
+                        diarization_runtime.get("pyannote_cloud_cost_per_second_usd") or 0.0
+                    ),
+                )
+                step_durations["provider_diarization_secs"] = _elapsed_seconds(t_provider)
+
+                if alignment_path.exists():
+                    step_durations.update(
+                        _diarize_wordlevel(db, episode_id, alignment_path, diarization_segments)
+                    )
+                else:
+                    step_durations.update(_diarize_segment_level(db, episode_id, diarization_segments))
+
+                diarize_secs = round(time.monotonic() - t0, 1)
+                update_episode(
+                    db, episode_id,
+                    has_diarization=True,
+                    diarization_error=None,
+                    diarize_duration_secs=diarize_secs,
+                    diarize_step_durations=step_durations,
+                    pyannote_cloud_cost_usd=cost_usd,
+                )
+                logger.info(
+                    '"action": "diarize_precision2_complete", "episode_id": "%s", '
+                    '"billed_secs": %.1f, "cost_usd": %.4f',
+                    episode_id,
+                    billed_secs,
+                    cost_usd,
+                )
+
             except Exception as exc:
                 update_episode(
                     db, episode_id,

@@ -16,6 +16,15 @@ class Settings(BaseSettings):
     # pyannote diarization model (gated on HuggingFace — user must accept license)
     pyannote_model: str = "pyannote/speaker-diarization-community-1"
 
+    # pyannote.ai precision-2 cloud provider (Issue #516)
+    diarization_provider: Literal["local", "precision2"] = "local"
+    pyannote_api_key: str | None = None
+    pyannote_cloud_base_url: str = "https://api.pyannote.ai/v1"
+    pyannote_cloud_model: str = "precision-2"
+    # pyannote.ai bills in seconds with a 20s per-request minimum. Check the
+    # dashboard for your tier's rate; default 0 means "no cost estimate".
+    pyannote_cloud_cost_per_second_usd: float = 0.0
+
     # Whisper (WhisperX / CTranslate2 backend)
     whisper_model: str = "large-v3-turbo"
     whisper_compute_type: str = "int8"

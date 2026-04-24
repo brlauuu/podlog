@@ -7,10 +7,11 @@ import pytest
 from app.models import SystemState
 from app.services.notification_settings import (
     get_notification_settings,
-    get_runtime_inference_settings,
+    get_runtime_diarization_settings,
     get_runtime_embedding_settings,
-    save_notification_settings,
+    get_runtime_inference_settings,
     mask_sensitive,
+    save_notification_settings,
     SETTINGS_KEY,
 )
 
@@ -163,10 +164,20 @@ class TestSaveNotificationSettings:
         with pytest.raises(ValueError, match="embedding_provider"):
             save_notification_settings(db, {"embedding_provider": "cloud"})
 
+    def test_rejects_invalid_diarization_provider(self):
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="diarization_provider"):
+            save_notification_settings(db, {"diarization_provider": "cloud"})
+
     def test_rejects_negative_fireworks_cost_rate(self):
         db = _mock_db(stored_json=None)
         with pytest.raises(ValueError, match="fireworks_stt_cost_per_minute_usd"):
             save_notification_settings(db, {"fireworks_stt_cost_per_minute_usd": -0.1})
+
+    def test_rejects_negative_pyannote_cloud_cost_rate(self):
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="pyannote_cloud_cost_per_second_usd"):
+            save_notification_settings(db, {"pyannote_cloud_cost_per_second_usd": -0.01})
 
     def test_empty_string_normalized_to_none(self):
         stored = json.dumps({"notification_email_to": "user@example.com"})
@@ -309,6 +320,14 @@ class TestMaskSensitive:
         assert result["fireworks_api_key"] != "fw_test_1234567890"
         assert "***" in result["fireworks_api_key"]
 
+    def test_masks_pyannote_api_key(self):
+        s = {"pyannote_api_key": "pn_test_1234567890"}
+        result = mask_sensitive(s)
+        assert result["pyannote_api_key"] != "pn_test_1234567890"
+        assert "***" in result["pyannote_api_key"]
+        assert result["pyannote_api_key"].startswith("pn_")
+        assert result["pyannote_api_key"].endswith("890")
+
 
 class TestRuntimeInferenceSettings:
     def test_uses_db_override_when_present(self):
@@ -369,3 +388,35 @@ class TestRuntimeEmbeddingSettings:
             mock_settings.fireworks_embedding_model = "BAAI/bge-small-en-v1.5"
             result = get_runtime_embedding_settings(None)
         assert result["embedding_provider"] == "local"
+
+
+class TestRuntimeDiarizationSettings:
+    def test_uses_db_override_when_present(self):
+        stored = json.dumps({
+            "diarization_provider": "precision2",
+            "pyannote_api_key": "pn_abc",
+            "pyannote_cloud_model": "precision-2",
+            "pyannote_cloud_cost_per_second_usd": 0.001,
+        })
+        db = _mock_db(stored_json=stored)
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.diarization_provider = "local"
+            mock_settings.pyannote_api_key = None
+            mock_settings.pyannote_cloud_base_url = "https://api.pyannote.ai/v1"
+            mock_settings.pyannote_cloud_model = "precision-2"
+            mock_settings.pyannote_cloud_cost_per_second_usd = 0.0
+            result = get_runtime_diarization_settings(db)
+        assert result["diarization_provider"] == "precision2"
+        assert result["pyannote_api_key"] == "pn_abc"
+        assert result["pyannote_cloud_cost_per_second_usd"] == 0.001
+
+    def test_uses_env_defaults_without_db(self):
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.diarization_provider = "local"
+            mock_settings.pyannote_api_key = None
+            mock_settings.pyannote_cloud_base_url = "https://api.pyannote.ai/v1"
+            mock_settings.pyannote_cloud_model = "precision-2"
+            mock_settings.pyannote_cloud_cost_per_second_usd = 0.0
+            result = get_runtime_diarization_settings(None)
+        assert result["diarization_provider"] == "local"
+        assert result["pyannote_api_key"] is None
