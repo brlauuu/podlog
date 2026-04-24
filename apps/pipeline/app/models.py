@@ -121,6 +121,9 @@ class Episode(Base):
     fireworks_stt_cost_per_minute_usd: Mapped[float | None] = mapped_column(Float)
     fireworks_stt_cost_usd: Mapped[float | None] = mapped_column(Float)
 
+    # pyannote cloud (precision-2) observability (Issue #516)
+    pyannote_cloud_cost_usd: Mapped[float | None] = mapped_column(Float)
+
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc),
