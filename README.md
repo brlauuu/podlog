@@ -10,8 +10,8 @@
 ![PostgreSQL](https://img.shields.io/badge/postgresql-15-4169e1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-compose-2496ed?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-O'Saasy-green)
-![Next.js](https://img.shields.io/badge/next.js-16.2.2-black?logo=next.js&logoColor=white)
-![React](https://img.shields.io/badge/react-19.2.4-149eca?logo=react&logoColor=white)
+![Next.js](https://img.shields.io/badge/next.js-16.2.4-black?logo=next.js&logoColor=white)
+![React](https://img.shields.io/badge/react-19.2.5-149eca?logo=react&logoColor=white)
 [![CI Fast](https://github.com/brlauuu/podlog/actions/workflows/ci.yml/badge.svg)](https://github.com/brlauuu/podlog/actions/workflows/ci.yml)
 [![CI Full Unit](https://github.com/brlauuu/podlog/actions/workflows/ci-full-unit.yml/badge.svg)](https://github.com/brlauuu/podlog/actions/workflows/ci-full-unit.yml)
 [![CI Slow (integration/e2e)](https://github.com/brlauuu/podlog/actions/workflows/ci-slow.yml/badge.svg)](https://github.com/brlauuu/podlog/actions/workflows/ci-slow.yml)
@@ -28,6 +28,7 @@
 - **Ask AI (RAG)** — ask natural-language questions and get streamed, citation-backed answers drawn from your transcript library (local Ollama by default, Fireworks optional).
 - **Export** — download search results or full transcripts as Markdown, plain text, or print-friendly PDF.
 - **Queue dashboard** — per-stage status, error classification, auto-retry for transient failures, manual retry for the rest.
+- **Meta-Analysis dashboard** — cross-feed metrics (episode counts, durations, WPM, turn density, host/guest share, processing time, token and cost totals) with drill-down charts at `/meta-analysis`.
 - **Notifications** — Telegram and email alerts when episodes finish or fail, with optional daily/weekly digest.
 - **Local-first** — no accounts, no cloud, no telemetry; optional Fireworks AI profile for users who prefer remote inference.
 
@@ -48,7 +49,7 @@ make build
 make up
 ```
 
-Open **http://localhost:3000**. From the navbar you can reach Search (`/search`), Ask (`/ask`), Sources (`/podcasts`, where you add feeds or upload audio), Queue (`/queue`), Settings (`/settings`), Docs (`/docs`) and About (`/about`).
+Open **http://localhost:3000**. From the navbar you can reach Search (`/search`), Ask (`/ask`), Sources (`/podcasts`, where you add feeds or upload audio), Queue (`/queue`), Meta-Analysis (`/meta-analysis`), Settings (`/settings`), Docs (`/docs`) and About (`/about`).
 
 > **First run:** The worker downloads Whisper and pyannote model weights (~3 GB). Jobs are queued during this phase and start processing once models are cached.
 
@@ -74,7 +75,7 @@ This uses `docker-compose.remote.yml` on top of the default compose file.
 
 ```
                         ┌──────────────────────────────────────────────┐
-  Browser :3000  ──────>│  web (Next.js 16.2.2)                        │
+  Browser :3000  ──────>│  web (Next.js 16.2.4)                        │
                         │    Home, search, episodes, queue, audio player│
                         │    Reads PostgreSQL directly for FTS/vector  │
                         │    Proxies to pipeline API for management    │
@@ -157,10 +158,10 @@ make help            # List all available commands
 |---|---|---|
 | [WhisperX](https://github.com/m-bain/whisperX) | Whisper large-v3-turbo + CTranslate2 | Speech-to-text transcription |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | CTranslate2 backend | Fast CPU inference for Whisper |
-| [pyannote](https://github.com/pyannote/pyannote-audio) | Speaker diarization 3.1 | Speaker labeling and separation |
+| [pyannote](https://github.com/pyannote/pyannote-audio) | `speaker-diarization-community-1` (local) or `precision-2` (pyannote.ai cloud) | Speaker labeling and separation |
 | [sentence-transformers](https://www.sbert.net/) | all-MiniLM-L6-v2 | Semantic search embeddings (384-dim) |
 | [pgvector](https://github.com/pgvector/pgvector) | PostgreSQL vector extension | Approximate nearest neighbor search |
-| [Next.js](https://nextjs.org/) 16.2.2 | App Router, React Server Components | Web UI |
+| [Next.js](https://nextjs.org/) 16.2.4 | App Router, React Server Components | Web UI |
 | [Tailwind CSS](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) | Utility-first CSS + components | Styling |
 | [FastAPI](https://fastapi.tiangolo.com/) | Python async web framework | Pipeline API |
 | [PostgreSQL](https://www.postgresql.org/) 15 | Relational database | Storage, FTS, job queue, vector search |
