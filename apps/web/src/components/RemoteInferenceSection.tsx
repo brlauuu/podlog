@@ -7,6 +7,8 @@ import {
   FireworksApiKeyField,
   type HardwareInfo,
   PipelineStepCards,
+  PyannoteApiKeyField,
+  PyannoteCloudIntro,
   RemoteProviderIntro,
 } from "./RemoteInferenceSectionParts";
 import { Settings } from "./NotificationSettingsSections";
@@ -23,6 +25,7 @@ export default function RemoteInferenceSection({
 }) {
   const [hwInfo, setHwInfo] = useState<HardwareInfo | null>(null);
   const [showKeyError, setShowKeyError] = useState(false);
+  const [keyErrorLabel, setKeyErrorLabel] = useState("Fireworks API key");
 
   useEffect(() => {
     fetch("/api/hardware")
@@ -38,16 +41,25 @@ export default function RemoteInferenceSection({
         value={settings.fireworks_api_key}
         onChange={(value) => onChange("fireworks_api_key", value)}
       />
+      <PyannoteCloudIntro />
+      <PyannoteApiKeyField
+        value={settings.pyannote_api_key}
+        onChange={(value) => onChange("pyannote_api_key", value)}
+      />
       <PipelineStepCards
         settings={settings}
         hwInfo={hwInfo}
         onChange={onChange}
-        onRequireApiKey={() => setShowKeyError(true)}
+        onRequireApiKey={(label) => {
+          setKeyErrorLabel(label);
+          setShowKeyError(true);
+        }}
       />
       <EstimatesExplainer settings={settings} />
       <ApiKeyRequiredDialog
         open={showKeyError}
         onOpenChange={setShowKeyError}
+        apiKeyLabel={keyErrorLabel}
       />
     </div>
   );

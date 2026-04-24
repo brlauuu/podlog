@@ -34,9 +34,15 @@ const defaultSettings = {
   embedding_model: "all-MiniLM-L6-v2",
   fireworks_embedding_base_url: "https://api.fireworks.ai/inference/v1",
   fireworks_embedding_model: "BAAI/bge-small-en-v1.5",
+  diarization_provider: "local",
+  pyannote_api_key: null,
+  pyannote_cloud_base_url: "https://api.pyannote.ai/v1",
+  pyannote_cloud_model: "precision-2",
+  pyannote_cloud_cost_per_second_usd: 0,
   telegram_configured: false,
   email_configured: false,
   fireworks_configured: false,
+  pyannote_cloud_configured: false,
 };
 
 beforeEach(() => {
@@ -162,6 +168,25 @@ describe("NotificationSettings", () => {
     // The API key field should be available after the tab content is rendered
     const apiKeyLabel = await screen.findByText(/fireworks api key/i);
     expect(apiKeyLabel).toBeInTheDocument();
+  });
+
+  it("shows pyannote cloud API key field and explainer in Remote Inference tab", async () => {
+    const user = userEvent.setup();
+    render(<NotificationSettings />);
+    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    await user.click(inferenceTab);
+    // Two key fields now: Fireworks and pyannote cloud. Both should render.
+    await screen.findByText(/fireworks api key/i);
+    expect(
+      screen.getByText(/pyannote cloud api key/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/What is pyannote cloud/i)
+    ).toBeInTheDocument();
+    // The key input should be a password field (masked by default).
+    const keyInput = document.getElementById("pyannote-api-key") as HTMLInputElement;
+    expect(keyInput).not.toBeNull();
+    expect(keyInput.type).toBe("password");
   });
 
   it("Notifications Save button is disabled when no changes", async () => {

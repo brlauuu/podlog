@@ -30,6 +30,7 @@ export interface EnrichedEpisode {
   inference_provider_used: string | null;
   fireworks_audio_minutes: number | null;
   fireworks_stt_cost_usd: number | null;
+  pyannote_cloud_cost_usd: number | null;
   speaker_count: number;
   speaker_name_tags: SpeakerNameTag[];
 }
@@ -98,6 +99,36 @@ function ErrorPill({ errorClass }: { errorClass: string }) {
     : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300";
   const label = errorClass.replace(/_/g, " ").toLowerCase();
   return <Tag className={`capitalize ${color}`}>{label}</Tag>;
+}
+
+function PyannoteCloudCostTag({ costUsd }: { costUsd: number }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const label = costUsd > 0 ? `$${costUsd.toFixed(2)}` : "—";
+
+  return (
+    <div
+      className="relative inline-flex items-center pointer-events-auto"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      <Tag className="bg-muted text-muted-foreground cursor-default">
+        pyannote cloud: {label}
+      </Tag>
+      {showTooltip && (
+        <div className="absolute z-50 bottom-full mb-1 left-1/2 -translate-x-1/2 w-56 p-2 rounded-md bg-popover text-popover-foreground text-xs shadow-md border">
+          <div className="font-medium mb-1">pyannote cloud (Precision-2)</div>
+          <div>
+            {costUsd > 0
+              ? `Estimated cost: $${costUsd.toFixed(4)}`
+              : "Cost rate not set — configure in Settings."}
+          </div>
+          <div className="mt-1 text-muted-foreground">
+            Billed in seconds with a 20-second per-request minimum.
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function FireworksCostTag({ costUsd, audioMinutes }: { costUsd: number; audioMinutes: number | null }) {
@@ -251,6 +282,10 @@ export default function EpisodeCard({
             costUsd={ep.fireworks_stt_cost_usd}
             audioMinutes={ep.fireworks_audio_minutes}
           />
+        )}
+
+        {ep.pyannote_cloud_cost_usd != null && (
+          <PyannoteCloudCostTag costUsd={ep.pyannote_cloud_cost_usd} />
         )}
 
         {/* Reprocess button - last item in tag row */}

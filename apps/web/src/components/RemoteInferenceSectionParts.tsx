@@ -58,6 +58,13 @@ export interface PipelineStep {
   remoteModels: { value: string; label: string }[];
   modelField: keyof Settings | null;
   remoteModelField: keyof Settings | null;
+  // When non-default (Fireworks), specify which provider-enum value means
+  // "remote" and which settings field holds the key. Optional so existing
+  // Fireworks-backed steps keep their current behavior.
+  remoteProviderValue?: string;
+  localProviderValue?: string;
+  apiKeyField?: keyof Settings;
+  apiKeyLabel?: string; // shown in the "API key required" dialog
 }
 
 export const PIPELINE_STEPS: PipelineStep[] = [
@@ -80,18 +87,26 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     title: "Diarization",
     description:
       "Identifies and labels different speakers in the audio. Runs after transcription to assign speaker labels to each segment.",
-    remoteAvailable: false,
-    disabledReason: "Speaker diarization is currently supported locally only.",
-    providerField: null,
+    remoteAvailable: true,
+    providerField: "diarization_provider",
     localModels: [
       {
-        value: "community-1",
-        label: "pyannote community-1",
+        value: "speaker-diarization-community-1",
+        label: "pyannote speaker-diarization-community-1 (free, local)",
       },
     ],
-    remoteModels: [],
+    remoteModels: [
+      {
+        value: "precision-2",
+        label: "pyannote precision-2 (paid, hosted)",
+      },
+    ],
     modelField: null,
-    remoteModelField: null,
+    remoteModelField: "pyannote_cloud_model",
+    remoteProviderValue: "precision2",
+    localProviderValue: "local",
+    apiKeyField: "pyannote_api_key",
+    apiKeyLabel: "pyannote cloud API key",
   },
   {
     key: "speaker-inference",
@@ -214,7 +229,8 @@ function StepHelpContent({
 
 function isRemoteStep(settings: Settings, step: PipelineStep): boolean {
   if (!step.providerField) return false;
-  return settings[step.providerField] === "fireworks";
+  const remoteValue = step.remoteProviderValue ?? "fireworks";
+  return settings[step.providerField] === remoteValue;
 }
 
 function getCurrentModel(settings: Settings, step: PipelineStep): string {
@@ -330,15 +346,19 @@ export function PipelineStepCards({
   settings: Settings;
   hwInfo: HardwareInfo | null;
   onChange: (field: keyof Settings, value: string | number | boolean | null) => void;
-  onRequireApiKey: () => void;
+  onRequireApiKey: (apiKeyLabel: string) => void;
 }) {
   function handleToggle(step: PipelineStep, checked: boolean) {
     if (!step.providerField) return;
-    if (checked && !settings.fireworks_api_key) {
-      onRequireApiKey();
+    const apiKeyField = step.apiKeyField ?? "fireworks_api_key";
+    const remoteValue = step.remoteProviderValue ?? "fireworks";
+    const localValue = step.localProviderValue ?? "local";
+    const apiKeyLabel = step.apiKeyLabel ?? "Fireworks API key";
+    if (checked && !settings[apiKeyField]) {
+      onRequireApiKey(apiKeyLabel);
       return;
     }
-    onChange(step.providerField, checked ? "fireworks" : "local");
+    onChange(step.providerField, checked ? remoteValue : localValue);
   }
 
   function handleModelChange(step: PipelineStep, value: string) {
@@ -452,9 +472,11 @@ export function EstimatesExplainer({ settings }: { settings: Settings }) {
 export function ApiKeyRequiredDialog({
   open,
   onOpenChange,
+  apiKeyLabel = "Fireworks API key",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  apiKeyLabel?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -462,9 +484,9 @@ export function ApiKeyRequiredDialog({
         <DialogHeader>
           <DialogTitle>API key required</DialogTitle>
           <DialogDescription>
-            You must provide a valid Fireworks API key before enabling remote
-            inference on any pipeline step. Enter your API key in the field
-            above and try again.
+            You must provide a valid {apiKeyLabel} before enabling remote
+            inference on this pipeline step. Enter the key in the field above
+            and try again.
           </DialogDescription>
         </DialogHeader>
         <DialogClose asChild>
@@ -474,5 +496,99 @@ export function ApiKeyRequiredDialog({
         </DialogClose>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function PyannoteCloudIntro() {
+  return (
+    <Collapsible>
+      <div className="rounded-lg border border-border bg-muted/50 p-4">
+        <CollapsibleTrigger className="flex w-full items-center justify-between text-left">
+          <h3 className="text-sm font-medium text-muted-foreground">
+            What is pyannote cloud (Precision-2)?
+          </h3>
+          <span className="text-xs text-muted-foreground">Show</span>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+            <p>
+              Precision-2 is pyannote.ai&apos;s paid hosted diarization model.
+              It runs on their infrastructure (no local CPU/RAM cost) and is
+              reported to be ~28% more accurate than the free local{" "}
+              <code>community-1</code> model on typical podcast audio.
+            </p>
+            <p>Enable it when:</p>
+            <ul className="list-disc ml-5 space-y-1">
+              <li>Your local machine struggles with diarization memory.</li>
+              <li>You want higher speaker-labeling accuracy.</li>
+              <li>You&apos;re fine paying per-second for audio processed.</li>
+            </ul>
+            <p>
+              To enable: create an account and API key at{" "}
+              <a
+                href="https://dashboard.pyannote.ai"
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                dashboard.pyannote.ai
+              </a>
+              , paste the key below, and flip the Diarization step to
+              &quot;Remote&quot; under Pipeline Steps. Billing is per second of
+              audio processed, with a 20-second per-request minimum. Check your
+              dashboard for the exact rate on your tier.
+            </p>
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+}
+
+export function PyannoteApiKeyField({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (value: string) => void;
+}) {
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  return (
+    <div className="mb-4">
+      <label className="block text-sm font-medium mb-1">
+        pyannote cloud API key
+      </label>
+      <p className="text-xs text-muted-foreground mb-1.5">
+        Required only for the Precision-2 diarization option. Stored securely
+        and masked on read. Generate at{" "}
+        <a
+          href="https://dashboard.pyannote.ai"
+          target="_blank"
+          rel="noreferrer"
+          className="underline"
+        >
+          dashboard.pyannote.ai
+        </a>
+        .
+      </p>
+      <div className="relative">
+        <input
+          id="pyannote-api-key"
+          type={showApiKey ? "text" : "password"}
+          className={inputClass}
+          placeholder="Your pyannote.ai API key"
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <button
+          type="button"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground px-2 py-1"
+          onClick={() => setShowApiKey(!showApiKey)}
+        >
+          {showApiKey ? "Hide" : "Show"}
+        </button>
+      </div>
+    </div>
   );
 }

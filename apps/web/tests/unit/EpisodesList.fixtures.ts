@@ -26,6 +26,7 @@ export function makeEpisode(overrides: Partial<EnrichedEpisode> = {}): EnrichedE
     inference_provider_used: "fireworks",
     fireworks_audio_minutes: 60,
     fireworks_stt_cost_usd: 0.0123,
+    pyannote_cloud_cost_usd: null,
     speaker_count: 2,
     speaker_name_tags: [],
     ...overrides,
@@ -51,6 +52,7 @@ export const mockEpisodes: EnrichedEpisode[] = [
     inference_provider_used: "local",
     fireworks_audio_minutes: null,
     fireworks_stt_cost_usd: null,
+    pyannote_cloud_cost_usd: null,
     speaker_count: 3,
   }),
 ];
