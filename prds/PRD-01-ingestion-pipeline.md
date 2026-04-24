@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.5
+**Version:** 1.6
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.6 — §5.5 extended with the pyannote cloud (`precision-2`) provider option (issue #516). Provider routing precedence documented: Fireworks STT diarization metadata wins over `DIARIZATION_PROVIDER`. Cost estimate persistence (`episodes.pyannote_cloud_cost_usd`) and the 20-second per-request minimum billing floor are called out.
 - v1.5 — §5.2 retry copy corrected to match code: backoff formula is `RETRY_BACKOFF_BASE * 2^(attempt-1)` (30s → 60s → 120s), and HTTP 4xx is clarified as classified `HTTP_ACCESS` with retry (not "non-transient and retried").
 - v1.4 — Added optional remote inference provider mode (Fireworks) for transcription and diarization while keeping local-first defaults. Runtime provider settings can be sourced from DB-backed Settings UI (env fallback remains). Added Fireworks configuration vars.
 - v1.3 — Updated tech stack to reflect actual implementation: Celery+Redis replaced by PostgreSQL-backed job queue; Whisper via transformers replaced by WhisperX (CTranslate2); Celery Beat replaced by polling loop in worker.py; Flower removed. Added Ollama for RAG inference. Updated architecture diagram. Removed stale env vars (REDIS_URL, CELERY_CONCURRENCY). Moved semantic search and faster Whisper from Future to Done. Updated default model to large-v3-turbo.
@@ -105,6 +106,7 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 - Local mode library: `pyannote/speaker-diarization-community-1` from HuggingFace (configurable via `PYANNOTE_MODEL`).
 - Requires a HuggingFace access token set via environment variable `HF_TOKEN` for local mode. The user must accept the pyannote model license on HuggingFace.com independently.
 - Fireworks mode uses diarization metadata returned by Fireworks transcription responses when enabled.
+- pyannote cloud mode (`DIARIZATION_PROVIDER=precision2`) routes diarization to pyannote.ai's hosted `precision-2` model via their REST API (issue #516). Audio is uploaded to pyannote.ai temporary storage, a diarization job is submitted, and the worker polls until completion. Precedence: Fireworks transcription (which carries its own diarization metadata) beats `DIARIZATION_PROVIDER`; otherwise `DIARIZATION_PROVIDER` selects `local` vs `precision2`. Cost is estimated per-episode as `billed_secs * PYANNOTE_CLOUD_COST_PER_SECOND_USD` with a 20-second per-request minimum and persisted in `episodes.pyannote_cloud_cost_usd`.
 - Diarization produces speaker-labeled time segments: `{ speaker: "SPEAKER_00", start: 12.4, end: 18.1 }`.
 - **Alignment strategy:** Transcript segments and diarization segments are aligned by majority overlap. For each transcript segment, the speaker whose time range overlaps the most with that segment's duration is assigned as the speaker label. In the event of an exact tie, the speaker label from the earlier-starting segment is used.
 - Speaker labels are stored as `SPEAKER_00`, `SPEAKER_01`, etc. Renaming to human names is handled in the web UI (PRD-02).

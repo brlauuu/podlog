@@ -16,7 +16,8 @@ Podlog is a self-hosted podcast transcription and search app. It downloads episo
 10. [Configuration](10-configuration.md) — Model selection and resource tuning
 11. [Hardware & Performance](11-hardware.md) — Processing times, storage estimates
 12. [Ask AI (RAG Search)](12-rag-search.md) — AI-powered Q&A over transcripts
-13. [Troubleshooting](13-troubleshooting.md) — Common issues and fixes
+13. [pyannote Cloud Diarization](13-pyannote-cloud.md) — Optional Precision-2 paid cloud provider
+14. [Troubleshooting](14-troubleshooting.md) — Common issues and fixes
 
 ## Quick Start
 

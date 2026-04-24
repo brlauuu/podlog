@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** RISKS-AND-GAPS
-**Version:** 1.5
+**Version:** 1.6
 **Status:** Living document — update as risks are resolved or new ones are identified  
 **How to use:** When a risk is mitigated or a gap is closed, move it to the Resolved section at the bottom with a note on how it was addressed. Add new entries as they are discovered during development.
 
 **Changelog:**
+- v1.6 — Added RISK-11 (audio egress to third party when `DIARIZATION_PROVIDER=precision2`). Documented as the accepted cost of offering pyannote.ai cloud diarization; local remains the free, no-egress default. VERSION bumped to 0.3.0.
 - v1.5 — RISK-04 and GAP-04 (word-level alignment) moved to Resolved. WhisperX CTranslate2 + wav2vec2 word-level alignment is the default transcription stack per PRD-01 §5.4.
 
 ---
@@ -223,6 +224,21 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 2. No action planned. Image size is still well within acceptable bounds for the self-hosted target.
 
 **Status:** Active (accepted trade-off) in v0.2.0.
+
+---
+
+### RISK-11: Audio Egress to Third Party via pyannote Cloud
+
+**Severity:** Medium
+**Component:** PRD-01 — Diarization provider (`precision2` / pyannote.ai cloud) — Issue #516
+**Description:** When `DIARIZATION_PROVIDER=precision2`, Podlog uploads the episode's audio to pyannote.ai (`https://api.pyannote.ai/v1/media/input` → presigned PUT) so the cloud can diarize it. This is a genuine data-egress event: audio leaves the user's machine and lives on pyannote.ai's infrastructure until their 24-hour retention window expires. For users with regulated, confidential, or sensitive content this is meaningfully different from the default local-only behavior.
+**Mitigation:**
+1. `DIARIZATION_PROVIDER` defaults to `local` — users must explicitly opt into cloud; nothing ships that way.
+2. The Settings UI's "What is pyannote cloud (Precision-2)?" collapsible and the `docs/guide/13-pyannote-cloud.md` guide both call out the egress in the "Data retention and privacy" section.
+3. `pyannote_api_key` is treated as a secret: masked on read (`mask_sensitive`), never logged, and stored in the DB settings row (not committed to env files by default).
+4. Errors from the cloud provider are classified (`TRANSIENT_NETWORK` / `HTTP_ACCESS`) and fall into the same graceful-failure contract as local diarization failures (PRD-01 §5.5) — a cloud outage does not block the rest of the pipeline.
+
+**Status:** Active risk accepted in v0.3.0 as the cost of offering the feature; local remains the free and no-egress default.
 
 ---
 

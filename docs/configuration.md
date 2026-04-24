@@ -68,6 +68,20 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `FIREWORKS_EMBEDDING_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks embeddings API. |
 | `FIREWORKS_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Fireworks embedding model used when `EMBEDDING_PROVIDER=fireworks`. |
 
+## pyannote Cloud Provider (Issue #516)
+
+Paid hosted diarization from pyannote.ai. Optional; the default is the free local `community-1` model. See the full [pyannote Cloud guide](guide/13-pyannote-cloud.md) for setup and billing details.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DIARIZATION_PROVIDER` | `local` | `local` uses the free local pyannote model; `precision2` routes diarization to pyannote.ai's cloud API. |
+| `PYANNOTE_API_KEY` | (unset) | Required when `DIARIZATION_PROVIDER=precision2`. Generate at [dashboard.pyannote.ai](https://dashboard.pyannote.ai). |
+| `PYANNOTE_CLOUD_BASE_URL` | `https://api.pyannote.ai/v1` | Base URL for the pyannote.ai REST API. |
+| `PYANNOTE_CLOUD_MODEL` | `precision-2` | Cloud model name sent on each request. `precision-2` or `community-1`. |
+| `PYANNOTE_CLOUD_COST_PER_SECOND_USD` | `0.0` | Your per-second rate (check your pyannote.ai dashboard). Leave at `0.0` to skip cost estimates — diarization still runs, but `pyannote_cloud_cost_usd` will be `0` and the episode cost chip shows `$—`. Billed seconds have a 20-second per-request minimum. |
+
+`INFERENCE_PROVIDER=fireworks` takes precedence — Fireworks transcription returns diarization metadata inline, so `DIARIZATION_PROVIDER` is ignored when Fireworks is enabled.
+
 ### Ask / RAG Model Selection
 
 Ask AI uses the model selected in the `/ask` page UI and sends it with each request. There is no `OLLAMA_MODEL` environment variable in Podlog.
