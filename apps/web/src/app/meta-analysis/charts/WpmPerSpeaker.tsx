@@ -19,7 +19,7 @@ export default function WpmPerSpeaker({ speakers, feeds }: Props) {
         <BarChart data={data} layout="vertical" margin={{ left: 80 }}>
           <XAxis type="number" />
           <YAxis type="category" dataKey="speaker_display_name" width={140} />
-          <Tooltip formatter={(v: number) => `${v.toFixed(0)} wpm`} />
+          <Tooltip formatter={(v) => `${Number(v).toFixed(0)} wpm`} />
           <Bar dataKey="wpm">
             {data.map((d) => <Cell key={`${d.feed_id}-${d.speaker_display_name}`} fill={d.color} />)}
           </Bar>
