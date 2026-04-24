@@ -1,7 +1,8 @@
-"""Tests for the queue API retry logic."""
+"""Tests for the queue API: retry logic + dashboard read (#555)."""
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from app.api.queue import NON_RETRYABLE, retry_job
+from app.api.queue import NON_RETRYABLE, TASK_TO_STATUS, get_queue, retry_job
 from app.models import Episode, Job
 
 
@@ -116,3 +117,146 @@ class TestRetryJob:
         ep = _make_episode("transcribing")
         result = self._call_retry(ep, has_active_job=True)
         assert result.status_code == 409
+
+
+def _classify(sql_text: str) -> str:
+    """Route a queue SQL string to its dashboard bucket.
+
+    Order matters: check for the most specific markers first because the
+    stuck / count queries both mention 'done' and 'failed' as literals.
+    """
+    if "COUNT(*) AS count" in sql_text:
+        return "done_count"
+    if "jq.status = 'picked'" in sql_text:
+        return "active"
+    if "jq.status = 'pending'" in sql_text:
+        return "pending"
+    if "jq.status IN ('pending', 'picked')" in sql_text:
+        return "stuck"
+    if "LIMIT 50" in sql_text:
+        return "done"
+    if "WHERE e.status = 'failed'" in sql_text:
+        return "failed"
+    return "unknown"
+
+
+def _mock_execute(rows_by_bucket: dict[str, list[dict]], done_count: int = 0):
+    """Build a side_effect that routes db.execute(text(sql)) by bucket name."""
+    def side_effect(stmt):
+        bucket = _classify(str(stmt))
+        result = MagicMock()
+        if bucket == "done_count":
+            result.scalar_one.return_value = done_count
+            return result
+        rows = rows_by_bucket.get(bucket, [])
+        result.all.return_value = [
+            SimpleNamespace(_mapping=dict(row)) for row in rows  # type: ignore[arg-type]
+        ]
+        return result
+    return side_effect
+
+
+class TestGetQueue:
+    def test_empty_queue_returns_zero_counts(self):
+        db = MagicMock()
+        db.execute.side_effect = _mock_execute({}, done_count=0)
+
+        payload = get_queue(db=db)
+
+        assert payload["active_count"] == 0
+        assert payload["pending_count"] == 0
+        assert payload["failed_count"] == 0
+        assert payload["done_count"] == 0
+        assert payload["stuck_count"] == 0
+        assert payload["active_jobs"] == []
+        assert payload["pending_jobs"] == []
+        assert payload["failed_jobs"] == []
+        assert payload["done_jobs"] == []
+        assert payload["stuck_jobs"] == []
+
+    def test_active_rows_get_task_mapped_to_display_status(self):
+        db = MagicMock()
+        db.execute.side_effect = _mock_execute(
+            {
+                "active": [
+                    {"episode_id": "ep-1", "active_task": "transcribe", "title": "T1"},
+                    {"episode_id": "ep-2", "active_task": "diarize", "title": "T2"},
+                ]
+            }
+        )
+
+        payload = get_queue(db=db)
+
+        assert payload["active_count"] == 2
+        assert [j["status"] for j in payload["active_jobs"]] == ["transcribing", "diarizing"]
+
+    def test_active_task_falls_back_to_raw_name_when_unmapped(self):
+        db = MagicMock()
+        db.execute.side_effect = _mock_execute(
+            {
+                "active": [
+                    {"episode_id": "ep-x", "active_task": "custom_task", "title": "X"},
+                ]
+            }
+        )
+
+        payload = get_queue(db=db)
+
+        assert payload["active_jobs"][0]["status"] == "custom_task"
+
+    def test_pending_and_stuck_rows_are_tagged_with_literal_statuses(self):
+        db = MagicMock()
+        db.execute.side_effect = _mock_execute(
+            {
+                "pending": [
+                    {"episode_id": "ep-p", "pending_task": "transcribe", "title": "P"}
+                ],
+                "stuck": [
+                    {"episode_id": "ep-s", "status": "downloading:100", "title": "S"}
+                ],
+            }
+        )
+
+        payload = get_queue(db=db)
+
+        assert payload["pending_count"] == 1
+        assert payload["pending_jobs"][0]["status"] == "pending"
+        assert payload["stuck_count"] == 1
+        assert payload["stuck_jobs"][0]["status"] == "stuck"
+
+    def test_failed_and_done_rows_pass_through_with_done_count(self):
+        db = MagicMock()
+        db.execute.side_effect = _mock_execute(
+            {
+                "failed": [
+                    {"episode_id": "ep-f", "title": "F", "status": "failed",
+                     "error_message": "HTTP 404"},
+                ],
+                "done": [
+                    {"episode_id": "ep-d", "title": "D", "status": "done"},
+                ],
+            },
+            done_count=1234,
+        )
+
+        payload = get_queue(db=db)
+
+        assert payload["failed_count"] == 1
+        assert payload["failed_jobs"][0]["error_message"] == "HTTP 404"
+        assert payload["done_count"] == 1234
+        assert isinstance(payload["done_count"], int)
+        assert payload["done_jobs"][0]["episode_id"] == "ep-d"
+
+
+class TestTaskToStatusMap:
+    def test_covers_every_pipeline_task(self):
+        # If a new task stage is added to job_queue, this guard reminds us to
+        # teach the dashboard how to display it.
+        assert TASK_TO_STATUS == {
+            "download": "downloading",
+            "transcribe": "transcribing",
+            "diarize": "diarizing",
+            "embed": "embedding",
+            "infer": "inferring",
+            "archive": "archiving",
+        }

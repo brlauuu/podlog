@@ -1,14 +1,16 @@
 /**
- * Tests for GET /api/queue — the queue dashboard's data source.
+ * Tests for GET /api/queue — thin proxy to the pipeline FastAPI.
  *
- * The route runs 6 parallel SQL queries. We mock pool.query with a
- * dispatcher that matches on query text so each call returns the
- * right shape.
+ * Ownership of the queue-dashboard read moved to the pipeline side
+ * (#555); the web route now just forwards, normalizes empty bodies,
+ * and degrades transient failures to a 502.
  *
  * @jest-environment node
  */
-const mockQuery = jest.fn();
-jest.mock("@/lib/db", () => ({ __esModule: true, default: { query: mockQuery } }));
+const mockFetch = jest.fn();
+global.fetch = mockFetch as unknown as typeof fetch;
+
+jest.mock("@/lib/pipeline", () => ({ PIPELINE_API: "http://pipeline:8000" }));
 
 type RouteModule = typeof import("@/app/api/queue/route");
 let GET: RouteModule["GET"];
@@ -19,156 +21,86 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  mockFetch.mockReset();
 });
 
-type QueueRow = Record<string, unknown>;
-
-function dispatch(rows: {
-  active?: QueueRow[];
-  pending?: QueueRow[];
-  failed?: QueueRow[];
-  done?: QueueRow[];
-  doneCount?: string;
-  stuck?: QueueRow[];
-}) {
-  mockQuery.mockImplementation((sql: string) => {
-    if (/jq\.status\s*=\s*'picked'/.test(sql)) {
-      return Promise.resolve({ rows: rows.active ?? [] });
-    }
-    if (/jq\.status\s*=\s*'pending'/.test(sql)) {
-      return Promise.resolve({ rows: rows.pending ?? [] });
-    }
-    if (/e\.status\s*=\s*'failed'/.test(sql)) {
-      return Promise.resolve({ rows: rows.failed ?? [] });
-    }
-    if (/COUNT\(\*\) AS count/.test(sql)) {
-      return Promise.resolve({ rows: [{ count: rows.doneCount ?? "0" }] });
-    }
-    if (/e\.status\s*=\s*'done'/.test(sql)) {
-      return Promise.resolve({ rows: rows.done ?? [] });
-    }
-    if (/NOT EXISTS/.test(sql)) {
-      return Promise.resolve({ rows: rows.stuck ?? [] });
-    }
-    return Promise.resolve({ rows: [] });
-  });
-}
-
 describe("GET /api/queue", () => {
-  it("returns empty buckets and zero counts when DB is empty", async () => {
-    dispatch({});
+  it("forwards the pipeline response verbatim on success", async () => {
+    const payload = {
+      active_count: 1,
+      pending_count: 2,
+      failed_count: 0,
+      done_count: 99,
+      stuck_count: 0,
+      active_jobs: [{ episode_id: "ep-1", status: "transcribing" }],
+      pending_jobs: [
+        { episode_id: "ep-2", status: "pending" },
+        { episode_id: "ep-3", status: "pending" },
+      ],
+      failed_jobs: [],
+      done_jobs: [],
+      stuck_jobs: [],
+    };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify(payload)),
+    });
 
     const resp = await GET();
 
     expect(resp.status).toBe(200);
-    const data = await resp.json();
-    expect(data).toEqual({
-      active_count: 0,
-      pending_count: 0,
-      failed_count: 0,
-      done_count: 0,
-      stuck_count: 0,
-      active_jobs: [],
-      pending_jobs: [],
-      failed_jobs: [],
-      done_jobs: [],
-      stuck_jobs: [],
-    });
-    expect(mockQuery).toHaveBeenCalledTimes(6);
+    expect(await resp.json()).toEqual(payload);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://pipeline:8000/api/queue",
+      expect.objectContaining({ cache: "no-store" })
+    );
   });
 
-  it("maps active job task to display status via TASK_TO_STATUS", async () => {
-    dispatch({
-      active: [
-        { episode_id: "ep-1", title: "T1", active_task: "transcribe" },
-        { episode_id: "ep-2", title: "T2", active_task: "diarize" },
-        { episode_id: "ep-3", title: "T3", active_task: "download" },
-        { episode_id: "ep-4", title: "T4", active_task: "embed" },
-        { episode_id: "ep-5", title: "T5", active_task: "infer" },
-        { episode_id: "ep-6", title: "T6", active_task: "archive" },
-      ],
+  it("returns null body when upstream returns empty text", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(""),
     });
 
     const resp = await GET();
-    const data = await resp.json();
-
-    expect(data.active_count).toBe(6);
-    const statuses = data.active_jobs.map((j: { status: string }) => j.status);
-    expect(statuses).toEqual([
-      "transcribing",
-      "diarizing",
-      "downloading",
-      "embedding",
-      "inferring",
-      "archiving",
-    ]);
+    expect(await resp.json()).toBeNull();
   });
 
-  it("falls back to raw task name when task has no display mapping", async () => {
-    dispatch({
-      active: [{ episode_id: "ep-x", title: "X", active_task: "custom_task" }],
+  it("surfaces upstream non-2xx status through to the client", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: () => Promise.resolve(JSON.stringify({ detail: "db down" })),
     });
 
     const resp = await GET();
-    const data = await resp.json();
-
-    expect(data.active_jobs[0].status).toBe("custom_task");
+    expect(resp.status).toBe(503);
+    expect(await resp.json()).toEqual({ detail: "db down" });
   });
 
-  it("tags pending jobs with status='pending' and stuck jobs with status='stuck'", async () => {
-    dispatch({
-      pending: [{ episode_id: "ep-p", title: "P", pending_task: "transcribe" }],
-      stuck: [{ episode_id: "ep-s", title: "S", status: "downloading:100" }],
+  it("returns 502 with hint when upstream body is non-JSON", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: () => Promise.resolve("<html>upstream exploded</html>"),
     });
 
     const resp = await GET();
-    const data = await resp.json();
-
-    expect(data.pending_count).toBe(1);
-    expect(data.pending_jobs[0]).toMatchObject({
-      episode_id: "ep-p",
-      status: "pending",
-      pending_task: "transcribe",
-    });
-    expect(data.stuck_count).toBe(1);
-    expect(data.stuck_jobs[0]).toMatchObject({
-      episode_id: "ep-s",
-      status: "stuck",
+    expect(resp.status).toBe(502);
+    expect(await resp.json()).toEqual({
+      error: "Upstream returned non-JSON (status 500)",
     });
   });
 
-  it("returns failed jobs rows unchanged and done count as number", async () => {
-    dispatch({
-      failed: [
-        {
-          episode_id: "ep-f",
-          title: "F",
-          status: "failed",
-          error_message: "HTTP 404",
-        },
-      ],
-      done: [{ episode_id: "ep-d", title: "D", status: "done" }],
-      doneCount: "1234",
-    });
-
-    const resp = await GET();
-    const data = await resp.json();
-
-    expect(data.failed_count).toBe(1);
-    expect(data.failed_jobs[0].error_message).toBe("HTTP 404");
-    expect(data.done_count).toBe(1234);
-    expect(typeof data.done_count).toBe("number");
-    expect(data.done_jobs[0].episode_id).toBe("ep-d");
-  });
-
-  it("returns 500 when any query throws", async () => {
-    mockQuery.mockRejectedValue(new Error("connection refused"));
+  it("returns 502 with fetch-error fallback when the pipeline is unreachable", async () => {
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    mockFetch.mockRejectedValue(new Error("ECONNREFUSED"));
 
     const resp = await GET();
 
-    expect(resp.status).toBe(500);
+    expect(resp.status).toBe(502);
     expect(await resp.json()).toEqual({ error: "Failed to fetch queue" });
     expect(consoleErrorSpy).toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
