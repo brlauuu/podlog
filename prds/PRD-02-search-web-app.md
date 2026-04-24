@@ -548,6 +548,7 @@ const { playEpisode } = useAudioPlayer();
 - Keyboard navigation of search results
 - Export transcript as `.txt` or `.srt` from episode page
 - "Copy timestamp link" button
+- Meta-Analysis dashboard (`/meta-analysis`) aggregating cross-feed metrics — coverage, episode length, WPM, turn density, host/guest share, tokens, processing time, and cost per feed (Issue #521; see §5.11)
 
 ### V2 (Phase 3)
 - **Authentication:** NextAuth.js + JWT, invite-only

@@ -377,6 +377,8 @@ GET    /api/health                   Health check — includes worker warm-up st
 - Chunking and embedding pipeline tasks
 - Notification system (email, Telegram)
 - Zombie job detection
+- pyannote.ai Precision-2 cloud diarization as an alternative to local pyannote, selected via `DIARIZATION_PROVIDER=precision2` (Issue #516; see RISKS-AND-GAPS RISK-11)
+- Fireworks AI remote-inference profile (`make up-remote`) for users who prefer remote Whisper/LLM over a local Ollama container
 
 ### Future
 - GPU support via Docker NVIDIA runtime flag
