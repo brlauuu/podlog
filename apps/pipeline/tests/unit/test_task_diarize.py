@@ -210,6 +210,105 @@ class TestDiarizeEpisode:
     @patch("app.tasks.diarize.job_queue")
     @patch("app.tasks.diarize.update_episode")
     @patch("app.tasks.diarize.SessionLocal")
+    def test_precision2_dispatches_to_cloud_service(
+        self, mock_session_cls, mock_update, mock_jq
+    ):
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        segs = [_make_segment()]
+        db.query.return_value.filter.return_value.order_by.return_value.all.return_value = segs
+        mock_session_cls.return_value = db
+
+        diar_segs = [{"speaker": "SPEAKER_00", "start": 0.0, "end": 30.0}]
+
+        with (
+            patch("app.tasks.diarize.settings") as mock_settings,
+            patch(
+                "app.tasks.diarize.get_runtime_inference_settings",
+                return_value={"inference_provider": "local"},
+            ),
+            patch(
+                "app.tasks.diarize.get_runtime_diarization_settings",
+                return_value={
+                    "diarization_provider": "precision2",
+                    "pyannote_api_key": "pn_test",
+                    "pyannote_cloud_base_url": "https://api.pyannote.ai/v1",
+                    "pyannote_cloud_model": "precision-2",
+                    "pyannote_cloud_cost_per_second_usd": 0.001,
+                },
+            ),
+            patch(
+                "app.services.pyannote_cloud.diarize_via_cloud",
+                return_value=(diar_segs, 30.0, 0.03),
+            ),
+            patch("app.services.alignment.assign_speakers", return_value={1: "SPEAKER_00"}),
+            patch("pathlib.Path.exists", return_value=False),
+        ):
+            mock_settings.transcript_dir = "/data/transcripts"
+            from app.tasks.diarize import diarize_episode
+
+            result = diarize_episode("ep1")
+
+        assert result == "ep1"
+        matching = [
+            call for call in mock_update.call_args_list
+            if call.args[:2] == (db, "ep1")
+            and call.kwargs.get("has_diarization") is True
+            and call.kwargs.get("pyannote_cloud_cost_usd") == pytest.approx(0.03)
+        ]
+        assert matching, "Expected an update with pyannote_cloud_cost_usd written"
+        mock_jq.enqueue.assert_called_once_with(db, "ep1", "chunk")
+
+    @patch("app.tasks.diarize.job_queue")
+    @patch("app.tasks.diarize.update_episode")
+    @patch("app.tasks.diarize.SessionLocal")
+    def test_precision2_failure_is_non_fatal(self, mock_session_cls, mock_update, mock_jq):
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        mock_session_cls.return_value = db
+
+        with (
+            patch("app.tasks.diarize.settings") as mock_settings,
+            patch(
+                "app.tasks.diarize.get_runtime_inference_settings",
+                return_value={"inference_provider": "local"},
+            ),
+            patch(
+                "app.tasks.diarize.get_runtime_diarization_settings",
+                return_value={
+                    "diarization_provider": "precision2",
+                    "pyannote_api_key": "pn_test",
+                    "pyannote_cloud_base_url": "https://api.pyannote.ai/v1",
+                    "pyannote_cloud_model": "precision-2",
+                    "pyannote_cloud_cost_per_second_usd": 0.001,
+                },
+            ),
+            patch(
+                "app.services.pyannote_cloud.diarize_via_cloud",
+                side_effect=RuntimeError("cloud crash"),
+            ),
+            patch("pathlib.Path.exists", return_value=False),
+        ):
+            mock_settings.transcript_dir = "/data/transcripts"
+            from app.tasks.diarize import diarize_episode
+
+            result = diarize_episode("ep1")
+
+        assert result == "ep1"
+        matching = [
+            call for call in mock_update.call_args_list
+            if call.args[:2] == (db, "ep1")
+            and call.kwargs.get("has_diarization") is False
+            and call.kwargs.get("diarization_error") == "cloud crash"
+        ]
+        assert matching, "Expected graceful-failure update with cloud_crash error"
+        mock_jq.enqueue.assert_called_once_with(db, "ep1", "chunk")
+
+    @patch("app.tasks.diarize.job_queue")
+    @patch("app.tasks.diarize.update_episode")
+    @patch("app.tasks.diarize.SessionLocal")
     def test_fireworks_diarize_disabled_is_noop(self, mock_session_cls, mock_update, mock_jq):
         ep = _make_episode()
         db = MagicMock()

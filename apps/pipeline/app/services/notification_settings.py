@@ -42,9 +42,19 @@ _FIELDS = [
     "embedding_model",
     "fireworks_embedding_base_url",
     "fireworks_embedding_model",
+    "diarization_provider",
+    "pyannote_api_key",
+    "pyannote_cloud_base_url",
+    "pyannote_cloud_model",
+    "pyannote_cloud_cost_per_second_usd",
 ]
 
-_SENSITIVE_FIELDS = {"telegram_bot_token", "smtp_password", "fireworks_api_key"}
+_SENSITIVE_FIELDS = {
+    "telegram_bot_token",
+    "smtp_password",
+    "fireworks_api_key",
+    "pyannote_api_key",
+}
 
 _NULLABLE_FIELDS = {
     "telegram_bot_token",
@@ -53,11 +63,13 @@ _NULLABLE_FIELDS = {
     "smtp_user",
     "smtp_password",
     "fireworks_api_key",
+    "pyannote_api_key",
 }
 
 _VALID_FREQUENCIES = {"immediate", "daily", "weekly"}
 _VALID_INFERENCE_PROVIDERS = {"local", "fireworks"}
 _VALID_EMBEDDING_PROVIDERS = {"local", "fireworks"}
+_VALID_DIARIZATION_PROVIDERS = {"local", "precision2"}
 _INFERENCE_FIELDS = {
     "inference_provider",
     "fireworks_api_key",
@@ -74,6 +86,13 @@ _EMBEDDING_FIELDS = {
     "fireworks_api_key",
     "fireworks_embedding_base_url",
     "fireworks_embedding_model",
+}
+_DIARIZATION_FIELDS = {
+    "diarization_provider",
+    "pyannote_api_key",
+    "pyannote_cloud_base_url",
+    "pyannote_cloud_model",
+    "pyannote_cloud_cost_per_second_usd",
 }
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
@@ -113,6 +132,7 @@ def get_notification_settings(db: Session) -> dict:
     )
     merged["email_configured"] = bool(merged.get("notification_email_to"))
     merged["fireworks_configured"] = bool(merged.get("fireworks_api_key"))
+    merged["pyannote_cloud_configured"] = bool(merged.get("pyannote_api_key"))
     return merged
 
 
@@ -154,6 +174,23 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
                 "fireworks_stt_cost_per_minute_usd must be a non-negative number"
             )
         updates["fireworks_stt_cost_per_minute_usd"] = float(rate)
+    if "diarization_provider" in updates:
+        if updates["diarization_provider"] not in _VALID_DIARIZATION_PROVIDERS:
+            raise ValueError(
+                f"diarization_provider must be one of {_VALID_DIARIZATION_PROVIDERS}, "
+                f"got '{updates['diarization_provider']}'"
+            )
+    if "pyannote_cloud_cost_per_second_usd" in updates:
+        rate = updates["pyannote_cloud_cost_per_second_usd"]
+        if (
+            not isinstance(rate, (int, float))
+            or not math.isfinite(float(rate))
+            or float(rate) < 0
+        ):
+            raise ValueError(
+                "pyannote_cloud_cost_per_second_usd must be a non-negative number"
+            )
+        updates["pyannote_cloud_cost_per_second_usd"] = float(rate)
 
     # Normalize empty/whitespace strings to None for nullable fields
     for key in list(updates.keys()):
@@ -204,6 +241,7 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
     )
     merged["email_configured"] = bool(merged.get("notification_email_to"))
     merged["fireworks_configured"] = bool(merged.get("fireworks_api_key"))
+    merged["pyannote_cloud_configured"] = bool(merged.get("pyannote_api_key"))
     return merged
 
 
@@ -235,3 +273,17 @@ def get_runtime_embedding_settings(db: Session | None = None) -> dict:
     else:
         base = get_notification_settings(db)
     return {key: base.get(key) for key in _EMBEDDING_FIELDS}
+
+
+def get_runtime_diarization_settings(db: Session | None = None) -> dict:
+    """Resolve diarization-provider settings for task execution.
+
+    Controls local vs. pyannote.ai cloud routing (Issue #516). Orthogonal to
+    ``inference_provider`` — Fireworks mode takes precedence and uses its own
+    word-level diarization metadata regardless of this setting.
+    """
+    if db is None:
+        base = _env_defaults()
+    else:
+        base = get_notification_settings(db)
+    return {key: base.get(key) for key in _DIARIZATION_FIELDS}
