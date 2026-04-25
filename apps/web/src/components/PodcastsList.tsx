@@ -9,7 +9,6 @@ import {
   List,
   ListChecks,
   Podcast,
-  Rows3,
   Rss,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,13 +26,13 @@ export interface PodcastsListFeed {
   last_polled_at: string | null;
 }
 
-type ViewMode = "list" | "grid" | "large";
+type ViewMode = "list" | "grid";
 
 const STORAGE_KEY = "podlog-podcasts-view";
 const DEFAULT_VIEW: ViewMode = "grid";
 
 function isViewMode(v: unknown): v is ViewMode {
-  return v === "list" || v === "grid" || v === "large";
+  return v === "list" || v === "grid";
 }
 
 interface Props {
@@ -85,8 +84,7 @@ export default function PodcastsList({ feeds, initialView }: Props) {
       </div>
 
       {view === "list" && <FeedListRows feeds={feeds} />}
-      {view === "grid" && <FeedGrid feeds={feeds} density="default" />}
-      {view === "large" && <FeedGrid feeds={feeds} density="large" />}
+      {view === "grid" && <FeedGrid feeds={feeds} />}
     </div>
   );
 }
@@ -101,7 +99,6 @@ function ViewToggle({
   const options: { mode: ViewMode; label: string; icon: React.ReactNode }[] = [
     { mode: "list", label: "List view", icon: <List size={14} /> },
     { mode: "grid", label: "Grid view", icon: <LayoutGrid size={14} /> },
-    { mode: "large", label: "Large tiles", icon: <Rows3 size={14} /> },
   ];
   return (
     <div
@@ -195,43 +192,21 @@ function ImageOrPlaceholder({
   );
 }
 
-function FeedGrid({
-  feeds,
-  density,
-}: {
-  feeds: PodcastsListFeed[];
-  density: "default" | "large";
-}) {
-  const gridClass =
-    density === "large"
-      ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5"
-      : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4";
-  const imgSize = density === "large" ? 480 : 300;
+function FeedGrid({ feeds }: { feeds: PodcastsListFeed[] }) {
   return (
-    <div className={gridClass}>
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
       {feeds.map((feed) => (
         <Link key={feed.id} href={`/podcasts/${feed.id}`}>
           <Card className="overflow-hidden hover:bg-accent/30 transition-colors h-full">
-            <ImageOrPlaceholder feed={feed} size={imgSize} />
-            <CardContent
-              className={density === "large" ? "p-4 space-y-1.5" : "p-3 space-y-1"}
-            >
+            <ImageOrPlaceholder feed={feed} size={300} />
+            <CardContent className="p-3 space-y-1">
               <div className="flex items-center gap-1.5">
-                <p
-                  className={`font-medium line-clamp-2 ${
-                    density === "large" ? "text-base" : "text-sm"
-                  }`}
-                >
+                <p className="font-medium line-clamp-2 text-sm">
                   {feed.title ?? "Untitled"}
                 </p>
                 <ModeBadges mode={feed.mode} />
               </div>
               <EpisodeCounter feed={feed} />
-              {density === "large" && feed.description && (
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {feed.description}
-                </p>
-              )}
             </CardContent>
           </Card>
         </Link>
