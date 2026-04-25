@@ -17,7 +17,7 @@ interface AudioPlayerContextValue {
   audioRef: React.RefObject<HTMLAudioElement | null>;
   playEpisode: (
     episodeId: string,
-    filename: string,
+    filename: string | null,
     startTimeSecs: number,
     title?: string,
     feedTitle?: string
@@ -42,20 +42,22 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
   function playEpisode(
     episodeId: string,
-    filename: string,
+    filename: string | null,
     startTimeSecs: number,
     title?: string,
     feedTitle?: string
   ) {
-    const src = `/api/audio/${episodeId}/${encodeURIComponent(filename)}`;
+    const src = filename
+      ? `/api/audio/${episodeId}/${encodeURIComponent(filename)}`
+      : null;
     setState({
       episodeId,
-      filename,
+      filename: filename || null,
       src,
       startTime: startTimeSecs,
       title: title ?? null,
       feedTitle: feedTitle ?? null,
-      isPlaying: true,
+      isPlaying: !!src,
     });
   }
 

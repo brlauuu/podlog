@@ -97,8 +97,7 @@ export default function TranscriptView({
   }, [scrollToTime]);
 
   function handleTimestampClick(startTime: number) {
-    if (!audioLocalPath) return;
-    const filename = audioLocalPath.split("/").pop() ?? "";
+    const filename = audioLocalPath ? (audioLocalPath.split("/").pop() ?? null) : null;
     playEpisode(episodeId, filename, startTime, episodeTitle ?? undefined, feedTitle ?? undefined);
   }
 
