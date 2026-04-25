@@ -122,9 +122,10 @@ export default function EpisodeDescription({
         e.preventDefault();
         const secs = Number(target.getAttribute("data-timestamp-secs"));
         if (!isNaN(secs)) {
-          // Play audio from this timestamp
-          if (episodeId && audioLocalPath) {
-            const filename = path.basename(audioLocalPath);
+          // Play audio from this timestamp (or open player with "unavailable"
+          // state when the episode has no audio_local_path).
+          if (episodeId) {
+            const filename = audioLocalPath ? path.basename(audioLocalPath) : null;
             playEpisode(
               episodeId,
               filename,
