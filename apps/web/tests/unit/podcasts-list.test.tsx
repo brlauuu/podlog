@@ -60,8 +60,8 @@ describe("<PodcastsList>", () => {
     render(<PodcastsList feeds={[makeFeed()]} />);
     fireEvent.click(screen.getByRole("button", { name: "List view" }));
     expect(window.localStorage.getItem(STORAGE_KEY)).toBe("list");
-    fireEvent.click(screen.getByRole("button", { name: "Large tiles" }));
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBe("large");
+    fireEvent.click(screen.getByRole("button", { name: "Grid view" }));
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBe("grid");
   });
 
   it("marks the active toggle with aria-pressed", () => {
@@ -83,7 +83,7 @@ describe("<PodcastsList>", () => {
 
   it("renders the feed title in every view", () => {
     const feed = makeFeed({ title: "Unique Title" });
-    for (const view of ["list", "grid", "large"] as const) {
+    for (const view of ["list", "grid"] as const) {
       const { unmount } = render(
         <PodcastsList feeds={[feed]} initialView={view} />,
       );
@@ -92,22 +92,28 @@ describe("<PodcastsList>", () => {
     }
   });
 
-  it("renders the description only in large view", () => {
+  it("does not render feed descriptions in any view", () => {
+    // Description belongs on /podcasts/[id] detail page; the list page
+    // shows only title + episode counter to keep tiles compact (#581).
     const feed = makeFeed({ description: "Look, a description!" });
-    const { unmount: u1 } = render(
-      <PodcastsList feeds={[feed]} initialView="grid" />,
-    );
-    expect(screen.queryByText("Look, a description!")).not.toBeInTheDocument();
-    u1();
+    for (const view of ["list", "grid"] as const) {
+      const { unmount } = render(
+        <PodcastsList feeds={[feed]} initialView={view} />,
+      );
+      expect(
+        screen.queryByText("Look, a description!"),
+      ).not.toBeInTheDocument();
+      unmount();
+    }
+  });
 
-    const { unmount: u2 } = render(
-      <PodcastsList feeds={[feed]} initialView="list" />,
-    );
-    expect(screen.queryByText("Look, a description!")).not.toBeInTheDocument();
-    u2();
-
-    render(<PodcastsList feeds={[feed]} initialView="large" />);
-    expect(screen.getByText("Look, a description!")).toBeInTheDocument();
+  it("treats stored 'large' as garbage and falls back to grid", () => {
+    // Migration safety: users who had the removed view cached should
+    // land on the default rather than render nothing (#581).
+    window.localStorage.setItem(STORAGE_KEY, "large");
+    render(<PodcastsList feeds={[makeFeed()]} />);
+    const root = screen.getByText("Example Podcast").closest("[data-view]");
+    expect(root?.getAttribute("data-view")).toBe("grid");
   });
 
   it("shows the processed/total counter when not all episodes are done", () => {
