@@ -5,6 +5,14 @@ import { useSearchParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import { Search, X } from "lucide-react";
+import { slugifyHeading, makeUniqueSlugger } from "@/lib/docs-slug";
+import {
+  searchIndex as searchDocs,
+  makeSnippet,
+  type DocSection,
+  type SearchHit,
+} from "@/lib/docs-search";
 
 interface DocEntry {
   name: string;        // filename without extension, e.g. "01-installation"
@@ -13,6 +21,7 @@ interface DocEntry {
 
 interface DocsClientProps {
   docs: DocEntry[];
+  searchIndex: DocSection[];
 }
 
 export interface TocItem {
@@ -69,24 +78,7 @@ export function resolveMarkdownHref(href: string | undefined, docs: DocEntry[]):
   return `${REPO_BLOB_BASE_URL}/${repoPath}${hashSuffix}`;
 }
 
-export function slugifyHeading(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
-}
-
-function makeUniqueSlugger() {
-  const slugCounts = new Map<string, number>();
-  return (text: string) => {
-    const base = slugifyHeading(text) || "section";
-    const count = slugCounts.get(base) ?? 0;
-    slugCounts.set(base, count + 1);
-    return count === 0 ? base : `${base}-${count}`;
-  };
-}
+export { slugifyHeading } from "@/lib/docs-slug";
 
 export function extractTocItems(markdown: string): TocItem[] {
   const getUniqueSlug = makeUniqueSlugger();
@@ -115,12 +107,38 @@ function textFromNode(node: ReactNode): string {
   return "";
 }
 
-export default function DocsClient({ docs }: DocsClientProps) {
+const MAX_SEARCH_RESULTS = 30;
+
+export default function DocsClient({ docs, searchIndex }: DocsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  const searchHits = useMemo<SearchHit[]>(() => {
+    if (!query.trim()) return [];
+    return searchDocs(query, searchIndex).slice(0, MAX_SEARCH_RESULTS);
+  }, [query, searchIndex]);
+  const isSearching = query.trim().length > 0;
+
+  function gotoSearchHit(hit: SearchHit) {
+    setQuery("");
+    const isSameDoc = hit.section.docSlug === currentPage;
+    const anchor = hit.section.sectionId ? `#${hit.section.sectionId}` : "";
+    router.push(`/docs?page=${encodeURIComponent(hit.section.docSlug)}${anchor}`);
+    // Same-doc navigation doesn't reload content, so the post-render scroll
+    // effect won't fire. Scroll directly here. Different-doc clicks fall
+    // through to the content-load scroll effect below.
+    if (isSameDoc && hit.section.sectionId) {
+      setTimeout(() => {
+        document
+          .getElementById(hit.section.sectionId)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
+  }
 
   const requestedPage = searchParams.get("page");
   const defaultPage = docs.find((doc) => doc.name === "README")?.name ?? docs[0]?.name ?? null;
@@ -167,6 +185,21 @@ export default function DocsClient({ docs }: DocsClientProps) {
     [content]
   );
 
+  // Scroll to URL hash after content finishes loading (covers different-doc
+  // search clicks, deep links, and back-button navigation). Tiny timeout
+  // gives react-markdown a chance to commit heading IDs to the DOM.
+  useEffect(() => {
+    if (loading || !content || typeof window === "undefined") return;
+    const hash = window.location.hash.replace(/^#/, "");
+    if (!hash) return;
+    const timer = setTimeout(() => {
+      document
+        .getElementById(hash)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [content, loading]);
+
   useEffect(() => {
     if (!tocItems.length) {
       setActiveHeadingId(null);
@@ -205,6 +238,36 @@ export default function DocsClient({ docs }: DocsClientProps) {
       {/* Sidebar / mobile navigator */}
       <aside className="w-full md:w-auto md:shrink-0">
         <h2 className="mb-2 px-1 text-sm font-semibold text-muted-foreground">Knowledge base</h2>
+
+        {/* Keyword search across all docs (issue #580). Filters by section. */}
+        {searchIndex.length > 0 && (
+          <div className="relative mb-3">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") setQuery(""); }}
+              placeholder="Search docs..."
+              aria-label="Search documentation"
+              className="w-full rounded-md border border-input bg-background pl-7 pr-7 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="md:hidden">
           <label htmlFor="docs-page-select" className="sr-only">Choose document</label>
           <select
@@ -225,21 +288,67 @@ export default function DocsClient({ docs }: DocsClientProps) {
             )}
           </select>
         </div>
-        <nav className="hidden space-y-1 md:block md:sticky md:top-20">
-          {docs.map((doc) => (
-            <button
-              key={doc.name}
-              onClick={() => router.push(`/docs?page=${encodeURIComponent(doc.name)}`)}
-              className={`w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
-                currentPage === doc.name
-                  ? "bg-accent text-accent-foreground font-medium"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
-              }`}
-            >
-              {doc.title}
-            </button>
-          ))}
-        </nav>
+        {isSearching ? (
+          <div className="hidden md:block md:sticky md:top-20 max-h-[calc(100vh-7rem)] overflow-y-auto">
+            {searchHits.length === 0 ? (
+              <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                No matches for &ldquo;{query.trim()}&rdquo;
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {searchHits.map((hit) => {
+                  const key = `${hit.section.docSlug}#${hit.section.sectionId || "_"}`;
+                  const snippetSource =
+                    hit.matchedIn === "title" ? hit.section.content : hit.section.content;
+                  const snippet = makeSnippet(snippetSource, query);
+                  return (
+                    <li key={key}>
+                      <button
+                        type="button"
+                        onClick={() => gotoSearchHit(hit)}
+                        className="w-full text-left rounded-md border border-border/60 bg-background hover:bg-accent transition-colors p-2 space-y-0.5"
+                      >
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {hit.section.docTitle}
+                        </div>
+                        <div className="text-sm font-medium">
+                          {hit.section.sectionTitle || "(introduction)"}
+                        </div>
+                        {(snippet.before || snippet.match || snippet.after) && (
+                          <div className="text-xs text-muted-foreground">
+                            {snippet.before}
+                            {snippet.match && (
+                              <mark className="bg-yellow-200/70 dark:bg-yellow-700/50 text-foreground rounded px-0.5">
+                                {snippet.match}
+                              </mark>
+                            )}
+                            {snippet.after}
+                          </div>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <nav className="hidden space-y-1 md:block md:sticky md:top-20">
+            {docs.map((doc) => (
+              <button
+                key={doc.name}
+                onClick={() => router.push(`/docs?page=${encodeURIComponent(doc.name)}`)}
+                className={`w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
+                  currentPage === doc.name
+                    ? "bg-accent text-accent-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}
+              >
+                {doc.title}
+              </button>
+            ))}
+          </nav>
+        )}
       </aside>
 
       {/* Content */}

@@ -51,7 +51,7 @@ describe("DocsClient", () => {
       text: () => Promise.resolve("# Test Doc\n\nHello world"),
     });
 
-    render(<DocsClient docs={mockDocs} />);
+    render(<DocsClient docs={mockDocs} searchIndex={[]} />);
 
     expect(screen.getByText("Knowledge base")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "README" })).toBeInTheDocument();
@@ -65,7 +65,7 @@ describe("DocsClient", () => {
       text: () => Promise.resolve("# Test Doc\n\nHello world"),
     });
 
-    render(<DocsClient docs={mockDocs} />);
+    render(<DocsClient docs={mockDocs} searchIndex={[]} />);
 
     await waitFor(() => {
       expect(screen.getByText(/Test Doc/)).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe("DocsClient", () => {
       () => new Promise(() => {}) // never resolves
     );
 
-    render(<DocsClient docs={mockDocs} />);
+    render(<DocsClient docs={mockDocs} searchIndex={[]} />);
 
     expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
@@ -88,7 +88,7 @@ describe("DocsClient", () => {
       ok: false,
     });
 
-    render(<DocsClient docs={mockDocs} />);
+    render(<DocsClient docs={mockDocs} searchIndex={[]} />);
 
     await waitFor(() => {
       expect(screen.getByText("Could not load the requested page.")).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe("DocsClient", () => {
   });
 
   it("shows empty state when docs list is empty", async () => {
-    render(<DocsClient docs={[]} />);
+    render(<DocsClient docs={[]} searchIndex={[]} />);
     expect(screen.getByText("No markdown docs were found.")).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
   });
@@ -110,7 +110,7 @@ describe("DocsClient", () => {
       text: () => Promise.resolve("# README"),
     });
 
-    render(<DocsClient docs={mockDocs} />);
+    render(<DocsClient docs={mockDocs} searchIndex={[]} />);
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/docs?page=README");
@@ -125,7 +125,7 @@ describe("DocsClient", () => {
       ),
     });
 
-    render(<DocsClient docs={mockDocs} />);
+    render(<DocsClient docs={mockDocs} searchIndex={[]} />);
 
     await waitFor(() => {
       expect(screen.getByText("On this page")).toBeInTheDocument();
