@@ -17,6 +17,7 @@ import TurnDensity from "./charts/TurnDensity";
 import WpmPerSpeaker from "./charts/WpmPerSpeaker";
 import TokensPerEpisode from "./charts/TokensPerEpisode";
 import InfoBlock from "./InfoBlock";
+import { formatDateTime } from "@/lib/dateFormat";
 
 async function fetchSnapshot(): Promise<SnapshotResponse> {
   const r = await fetch("/api/meta-analysis/snapshot", { cache: "no-store" });
@@ -79,7 +80,7 @@ export default function MetaAnalysisClient() {
           <h1 className="text-2xl font-semibold">Meta-analysis</h1>
           <p className="text-sm text-muted-foreground">
             {data?.computed_at
-              ? `Updated ${new Date(data.computed_at).toLocaleString()}`
+              ? `Updated ${formatDateTime(data.computed_at)}`
               : "Never computed"}
           </p>
           {data?.is_stale ? (

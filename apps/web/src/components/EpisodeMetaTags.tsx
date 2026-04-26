@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Loader2, XCircle } from "lucide-react";
 import { formatTimestamp } from "@/lib/timestamp";
+import { formatDate } from "@/lib/dateFormat";
 import ReprocessButton from "@/components/ReprocessButton";
 
 interface EpisodeMetaTagsProps {
@@ -148,7 +149,7 @@ export default function EpisodeMetaTags({
         {status !== "done" && <StatusTag status={status} />}
 
         {publishedAt && (
-          <Tag>{new Date(publishedAt).toLocaleDateString()}</Tag>
+          <Tag>{formatDate(publishedAt)}</Tag>
         )}
 
         {durationSecs != null && (

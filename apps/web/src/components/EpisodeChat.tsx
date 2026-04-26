@@ -12,6 +12,7 @@ import {
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { renderAnswerWithCitations, type Source } from "@/lib/citations";
 import { formatTimestamp } from "@/lib/timestamp";
+import { formatDateTime } from "@/lib/dateFormat";
 import { sanitizeFilename } from "@/lib/filename";
 import {
   RAG_MODELS,
@@ -79,7 +80,7 @@ function generateConversationMarkdown(meta: ConversationMeta, messages: Message[
     lines.push(stripHtml(meta.episodeDescription));
     lines.push("");
   }
-  lines.push(`*Exported: ${new Date().toLocaleString()}*`);
+  lines.push(`*Exported: ${formatDateTime(new Date())}*`);
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -119,7 +120,7 @@ function generateConversationText(meta: ConversationMeta, messages: Message[]): 
     lines.push(stripHtml(meta.episodeDescription));
     lines.push("");
   }
-  lines.push(`Exported: ${new Date().toLocaleString()}`);
+  lines.push(`Exported: ${formatDateTime(new Date())}`);
   lines.push("");
   lines.push("========================================");
   lines.push("");

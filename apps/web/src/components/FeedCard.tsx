@@ -4,6 +4,7 @@ import { Plus, RefreshCw, Trash2, FlaskConical, ListChecks } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatDateTime } from "@/lib/dateFormat";
 
 interface FeedCardFeed {
   id: string;
@@ -54,7 +55,7 @@ export default function FeedCard({
           <p className="text-xs text-muted-foreground">
             {feed.episode_count} episodes ·{" "}
             {feed.last_polled_at
-              ? `Last polled ${new Date(feed.last_polled_at).toLocaleString()}`
+              ? `Last polled ${formatDateTime(feed.last_polled_at)}`
               : "Never polled"}
           </p>
         </div>

@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import FeedsListSection from "@/components/FeedsListSection";
+import { formatDate } from "@/lib/dateFormat";
 
 interface Feed {
   id: string;
@@ -426,7 +427,7 @@ export default function FeedsPage() {
                           <p className="text-sm font-medium truncate">{ep.title ?? ep.guid}</p>
                           <p className="text-xs text-muted-foreground">
                             {ep.published_at
-                              ? new Date(ep.published_at).toLocaleDateString()
+                              ? formatDate(ep.published_at)
                               : null}
                             {ep.published_at && ep.duration_secs ? " · " : null}
                             {formatDuration(ep.duration_secs)}

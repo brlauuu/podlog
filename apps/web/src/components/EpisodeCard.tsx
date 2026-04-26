@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import ReprocessButton from "./ReprocessButton";
+import { formatDate } from "@/lib/dateFormat";
 
 export interface SpeakerNameTag {
   display_name: string;
@@ -247,11 +248,7 @@ export default function EpisodeCard({
 
         {ep.published_at && (
           <Tag className="bg-muted text-muted-foreground">
-            {new Date(ep.published_at).toLocaleDateString(undefined, {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-            })}
+            {formatDate(ep.published_at)}
           </Tag>
         )}
 

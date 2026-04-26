@@ -53,11 +53,12 @@ describe("<FeedCard>", () => {
     expect(screen.getByText(/5 episodes · Never polled/)).toBeInTheDocument();
   });
 
-  it("formats last_polled_at with toLocaleString when set", () => {
+  it("formats last_polled_at as DD/MM/YYYY HH:mm:ss when set", () => {
     const when = "2026-04-18T10:30:00Z";
     renderCard(makeFeed({ last_polled_at: when, episode_count: 1 }));
-    const expected = new Date(when).toLocaleString();
-    expect(screen.getByText(new RegExp(`Last polled ${expected.replace(/[\\/.*+?^${}()|[\]]/g, "\\$&")}`))).toBeInTheDocument();
+    expect(
+      screen.getByText(/Last polled \d{2}\/\d{2}\/2026 \d{2}:\d{2}:\d{2}/)
+    ).toBeInTheDocument();
   });
 
   it("renders Test badge only when mode=test", () => {
