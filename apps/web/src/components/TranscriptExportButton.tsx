@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Segment } from "@/lib/types";
 import { formatTimestamp } from "@/lib/timestamp";
+import { formatDate } from "@/lib/dateFormat";
 import { sanitizeFilename } from "@/lib/filename";
 
 interface Props {
@@ -53,7 +54,7 @@ function buildExportText(props: Props): string {
   lines.push("EPISODE METADATA");
   lines.push(sep);
   lines.push(`Title:        ${props.episodeTitle}`);
-  if (props.publishedAt) lines.push(`Published:    ${new Date(props.publishedAt).toLocaleDateString()}`);
+  if (props.publishedAt) lines.push(`Published:    ${formatDate(props.publishedAt)}`);
   if (props.durationSecs) lines.push(`Duration:     ${formatDuration(props.durationSecs)}`);
   if (props.description) lines.push(`Description:  ${props.description}`);
   if (props.audioUrl) lines.push(`Audio URL:    ${props.audioUrl}`);
@@ -87,7 +88,7 @@ function buildExportMarkdown(props: Props): string {
   lines.push("");
   if (props.feedTitle) lines.push(`**Podcast:** ${props.feedTitle}`);
   lines.push(`**Episode:** ${props.episodeTitle}`);
-  if (props.publishedAt) lines.push(`**Published:** ${new Date(props.publishedAt).toLocaleDateString()}`);
+  if (props.publishedAt) lines.push(`**Published:** ${formatDate(props.publishedAt)}`);
   if (props.durationSecs) lines.push(`**Duration:** ${formatDuration(props.durationSecs)}`);
   if (props.audioUrl) lines.push(`**Audio URL:** ${props.audioUrl}`);
   if (props.guid) lines.push(`**Episode GUID:** ${props.guid}`);
@@ -162,7 +163,7 @@ function openPrintView(props: Props) {
     <h1>${escapeHtml(title)}</h1>
     <div class="meta">
       ${props.feedTitle ? `<div><strong>Podcast:</strong> ${escapeHtml(props.feedTitle)}</div>` : ""}
-      ${props.publishedAt ? `<div><strong>Published:</strong> ${escapeHtml(new Date(props.publishedAt).toLocaleDateString())}</div>` : ""}
+      ${props.publishedAt ? `<div><strong>Published:</strong> ${escapeHtml(formatDate(props.publishedAt))}</div>` : ""}
       ${props.durationSecs ? `<div><strong>Duration:</strong> ${escapeHtml(formatDuration(props.durationSecs))}</div>` : ""}
     </div>
     <h2>Transcript</h2>

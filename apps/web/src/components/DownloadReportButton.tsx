@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { SearchResult, GroupedSearchResult } from "@/lib/search";
 import { formatTimestamp } from "@/lib/timestamp";
+import { formatDate } from "@/lib/dateFormat";
 import { sanitizeFilename } from "@/lib/filename";
 
 interface DownloadReportButtonProps {
@@ -58,7 +59,7 @@ function generateMarkdown(query: string, results: SearchResult[]): string {
   lines.push("");
   lines.push(`**Search term:** "${query}"`);
   lines.push(`**Total results:** ${results.length}`);
-  lines.push(`**Exported:** ${new Date().toLocaleDateString()}`);
+  lines.push(`**Exported:** ${formatDate(new Date())}`);
   lines.push("");
 
   const byEpisode = new Map<string, SearchResult[]>();
@@ -95,7 +96,7 @@ function generatePlainText(query: string, results: SearchResult[]): string {
   lines.push("");
   lines.push(`Search term: "${query}"`);
   lines.push(`Total results: ${results.length}`);
-  lines.push(`Exported: ${new Date().toLocaleDateString()}`);
+  lines.push(`Exported: ${formatDate(new Date())}`);
   lines.push("");
 
   const byEpisode = new Map<string, SearchResult[]>();
