@@ -50,7 +50,7 @@ describe("EpisodesList — search / filter", () => {
   it("filters episodes by title case-insensitively", () => {
     render(<EpisodesList episodes={twoEpisodes} feedId="feed-1" />);
 
-    const searchInput = screen.getByLabelText("Search episodes by title");
+    const searchInput = screen.getByLabelText("Search episodes by title or speaker");
     fireEvent.change(searchInput, { target: { value: "test" } });
 
     expect(screen.getByText("Test Episode One")).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("EpisodesList — search / filter", () => {
   it("filters episodes by partial title match", () => {
     render(<EpisodesList episodes={twoEpisodes} feedId="feed-1" />);
 
-    const searchInput = screen.getByLabelText("Search episodes by title");
+    const searchInput = screen.getByLabelText("Search episodes by title or speaker");
     fireEvent.change(searchInput, { target: { value: "ep" } });
 
     expect(screen.getByText("Test Episode One")).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("EpisodesList — search / filter", () => {
   it("shows empty state when no episodes match search", () => {
     render(<EpisodesList episodes={[twoEpisodes[0]]} feedId="feed-1" />);
 
-    const searchInput = screen.getByLabelText("Search episodes by title");
+    const searchInput = screen.getByLabelText("Search episodes by title or speaker");
     fireEvent.change(searchInput, { target: { value: "xyz" } });
 
     expect(screen.getByText("No episodes match your search")).toBeInTheDocument();
@@ -84,7 +84,7 @@ describe("EpisodesList — search / filter", () => {
   it("clear button resets search and shows all episodes", () => {
     render(<EpisodesList episodes={twoEpisodes} feedId="feed-1" />);
 
-    const searchInput = screen.getByLabelText("Search episodes by title");
+    const searchInput = screen.getByLabelText("Search episodes by title or speaker");
     fireEvent.change(searchInput, { target: { value: "test" } });
 
     expect(screen.getByText("Test Episode One")).toBeInTheDocument();
@@ -102,10 +102,41 @@ describe("EpisodesList — search / filter", () => {
 
     expect(screen.getByText(/2 episodes/)).toBeInTheDocument();
 
-    const searchInput = screen.getByLabelText("Search episodes by title");
+    const searchInput = screen.getByLabelText("Search episodes by title or speaker");
     fireEvent.change(searchInput, { target: { value: "test" } });
 
     expect(screen.getByText(/Showing 1 of 2 episodes/)).toBeInTheDocument();
+  });
+
+  it("filters episodes by speaker display name case-insensitively", () => {
+    const withSpeakers: EnrichedEpisode[] = [
+      makeEpisode({
+        id: "ep-1",
+        title: "Test Episode One",
+        speaker_name_tags: [
+          { display_name: "Alice Johnson", inferred: false, confirmed_by_user: true },
+        ],
+      }),
+      makeEpisode({
+        id: "ep-2",
+        title: "Another Episode",
+        published_at: "2026-04-02T10:00:00.000Z",
+        speaker_name_tags: [
+          { display_name: "Bob Smith", inferred: true, confirmed_by_user: false },
+        ],
+      }),
+    ];
+    render(<EpisodesList episodes={withSpeakers} feedId="feed-1" />);
+
+    const searchInput = screen.getByLabelText("Search episodes by title or speaker");
+    fireEvent.change(searchInput, { target: { value: "alice" } });
+
+    expect(screen.getByText("Test Episode One")).toBeInTheDocument();
+    expect(screen.queryByText("Another Episode")).not.toBeInTheDocument();
+
+    fireEvent.change(searchInput, { target: { value: "SMITH" } });
+    expect(screen.queryByText("Test Episode One")).not.toBeInTheDocument();
+    expect(screen.getByText("Another Episode")).toBeInTheDocument();
   });
 
   it("shows all episodes when search query is empty", () => {
@@ -114,7 +145,7 @@ describe("EpisodesList — search / filter", () => {
     expect(screen.getByText("Test Episode One")).toBeInTheDocument();
     expect(screen.getByText("Another Episode")).toBeInTheDocument();
 
-    const searchInput = screen.getByLabelText("Search episodes by title");
+    const searchInput = screen.getByLabelText("Search episodes by title or speaker");
     fireEvent.change(searchInput, { target: { value: "test" } });
     fireEvent.change(searchInput, { target: { value: "" } });
 
