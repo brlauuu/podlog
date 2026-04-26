@@ -116,7 +116,13 @@ export default function EpisodesList({ episodes }: Props) {
   const filteredAndSorted = useMemo(() => {
     const normalizedQuery = searchQuery.toLowerCase();
     const filtered = searchQuery
-      ? episodes.filter((ep) => ep.title?.toLowerCase().includes(normalizedQuery))
+      ? episodes.filter(
+          (ep) =>
+            ep.title?.toLowerCase().includes(normalizedQuery) ||
+            ep.speaker_name_tags?.some((sn) =>
+              sn.display_name.toLowerCase().includes(normalizedQuery)
+            )
+        )
       : episodes;
 
     const arr = [...filtered];
@@ -183,11 +189,11 @@ export default function EpisodesList({ episodes }: Props) {
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="text"
-          placeholder="Search episodes..."
+          placeholder="Search episodes by title or speaker..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10 pr-10"
-          aria-label="Search episodes by title"
+          aria-label="Search episodes by title or speaker"
         />
         {searchQuery && (
           <button
