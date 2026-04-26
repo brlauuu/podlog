@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, Toast } from "./NotificationSettingsSections";
+import { SettingsSchema } from "@/lib/settings-schema";
 import NotificationSection from "./NotificationSection";
 import RemoteInferenceSection from "./RemoteInferenceSection";
 
@@ -32,11 +33,26 @@ export default function NotificationSettings() {
   } | null>(null);
   const [dirtyNotifications, setDirtyNotifications] = useState<Partial<Settings>>({});
   const [dirtyInference, setDirtyInference] = useState<Partial<Settings>>({});
+  const [shapeError, setShapeError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/notifications/settings")
       .then((r) => r.json())
-      .then((data) => setSettings(data))
+      .then((data) => {
+        const parsed = SettingsSchema.safeParse(data);
+        if (parsed.success) {
+          setSettings(parsed.data);
+          return;
+        }
+        // Drift between backend allowlist and frontend schema. Surface it
+        // visibly instead of writing back a corrupted shape on the next PUT.
+        const summary = parsed.error.issues
+          .slice(0, 5)
+          .map((iss) => `${iss.path.join(".") || "(root)"}: ${iss.message}`)
+          .join("; ");
+        console.error("settings_shape_mismatch", parsed.error.issues);
+        setShapeError(summary);
+      })
       .catch(() => {});
   }, []);
 
@@ -45,6 +61,24 @@ export default function NotificationSettings() {
     const id = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(id);
   }, [toast]);
+
+  if (shapeError) {
+    return (
+      <div className="border border-destructive/40 bg-destructive/10 rounded-md p-4 text-sm space-y-2">
+        <div className="font-medium text-destructive">
+          Settings response shape didn&apos;t match the expected schema.
+        </div>
+        <div className="text-muted-foreground">
+          The backend may have added or changed a field. Refusing to render
+          editable fields to avoid corrupting the database on save. Please
+          report this with the details below.
+        </div>
+        <pre className="text-xs bg-muted/40 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+          {shapeError}
+        </pre>
+      </div>
+    );
+  }
 
   if (!settings) {
     return (
