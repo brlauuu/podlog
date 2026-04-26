@@ -2,6 +2,7 @@ import { readdir } from "fs/promises";
 import { join } from "path";
 import { Suspense } from "react";
 import DocsClient from "./DocsClient";
+import { buildDocsIndex } from "@/lib/docs-index";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +31,11 @@ export default async function DocsPage() {
     // Directory doesn't exist or is empty
   }
 
+  const searchIndex = await buildDocsIndex();
+
   return (
     <Suspense fallback={<div className="p-6 text-muted-foreground">Loading...</div>}>
-      <DocsClient docs={docs} />
+      <DocsClient docs={docs} searchIndex={searchIndex} />
     </Suspense>
   );
 }
