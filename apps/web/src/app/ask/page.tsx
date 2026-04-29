@@ -15,7 +15,10 @@ import PodcastFilter from "@/components/PodcastFilter";
 import {
   RAG_MODELS,
   DEFAULT_RAG_MODEL,
+  FIREWORKS_CHAT_MODELS,
+  DEFAULT_FIREWORKS_CHAT_MODEL,
   formatModelOption,
+  type RagModel,
 } from "@/lib/rag-models";
 
 interface Feed {
@@ -30,12 +33,26 @@ interface CoverageStats {
 }
 
 type StreamStatus = "idle" | "connecting" | "streaming" | "done" | "error";
+type RagProvider = "local" | "fireworks";
 
-function getStoredModel(): string {
-  if (typeof window === "undefined") return DEFAULT_RAG_MODEL;
+function modelsFor(provider: RagProvider): RagModel[] {
+  return provider === "fireworks" ? FIREWORKS_CHAT_MODELS : RAG_MODELS;
+}
+
+function defaultModelFor(provider: RagProvider): string {
+  return provider === "fireworks" ? DEFAULT_FIREWORKS_CHAT_MODEL : DEFAULT_RAG_MODEL;
+}
+
+function getStoredModel(provider: RagProvider): string {
+  // Issue #608: when the active provider's model list changes (toggled in
+  // Settings, or curated list updated), a stale localStorage entry would
+  // render an empty dropdown and 404 on submit. Migrate to the provider's
+  // default whenever the stored value isn't in the current list.
+  if (typeof window === "undefined") return defaultModelFor(provider);
   const stored = localStorage.getItem("podlog-ask-model");
-  if (stored && RAG_MODELS.some((m) => m.value === stored)) return stored;
-  return DEFAULT_RAG_MODEL;
+  const list = modelsFor(provider);
+  if (stored && list.some((m) => m.value === stored)) return stored;
+  return defaultModelFor(provider);
 }
 
 export default function AskPage() {
@@ -49,7 +66,10 @@ export default function AskPage() {
     return "idle";
   });
   const [errorMsg, setErrorMsg] = useState(initialSnapshot?.errorMsg || "");
-  const [model, setModel] = useState(initialSnapshot?.model || getStoredModel);
+  const [ragProvider, setRagProvider] = useState<RagProvider>("local");
+  const [model, setModel] = useState(
+    initialSnapshot?.model || getStoredModel("local"),
+  );
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [feedsLoading, setFeedsLoading] = useState(true);
   const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(
@@ -68,6 +88,33 @@ export default function AskPage() {
   useEffect(() => {
     localStorage.setItem("podlog-ask-model", model);
   }, [model]);
+
+  // Fetch the active rag_provider once on mount. If it doesn't match the
+  // current model's list, snap to that provider's default (#608).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/notifications/settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const provider: RagProvider =
+          data.rag_provider === "fireworks" ? "fireworks" : "local";
+        setRagProvider(provider);
+        const list = modelsFor(provider);
+        // If the persisted model isn't in the active provider's list,
+        // re-resolve to that provider's default.
+        if (!list.some((m) => m.value === model)) {
+          setModel(getStoredModel(provider));
+        }
+      })
+      .catch(() => {
+        // Soft fail: keep the local-default model behavior.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const snapshotStatus =
@@ -284,12 +331,20 @@ export default function AskPage() {
                 onChange={(e) => setModel(e.target.value)}
                 className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
               >
-                {RAG_MODELS.map((m) => (
+                {modelsFor(ragProvider).map((m) => (
                   <option key={m.value} value={m.value}>
                     {formatModelOption(m)}
                   </option>
                 ))}
               </select>
+              {ragProvider === "fireworks" && (
+                <span
+                  className="text-xs text-muted-foreground"
+                  title="RAG/Ask is configured to use Fireworks AI in Settings → Remote Inference → RAG / Ask."
+                >
+                  (remote)
+                </span>
+              )}
             </div>
 
             {/* Source filter */}

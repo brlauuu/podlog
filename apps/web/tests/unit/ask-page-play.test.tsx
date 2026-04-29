@@ -70,6 +70,11 @@ describe("Ask page source card actions", () => {
           json: async () => ({ processed: 1, total: 1, has_manual_uploads: false }),
         } as Response);
       }
+      if (url === "/api/notifications/settings") {
+        return Promise.resolve({
+          json: async () => ({ rag_provider: "local" }),
+        } as Response);
+      }
       return Promise.resolve({ json: async () => ({}) } as Response);
     }) as jest.Mock;
   });
@@ -90,7 +95,7 @@ describe("Ask page source card actions", () => {
       "Episode 42"
     );
     expect(openSpy).not.toHaveBeenCalled();
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
 
     openSpy.mockRestore();
   });

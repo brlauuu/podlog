@@ -61,7 +61,8 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `FIREWORKS_STT_MODEL` | `whisper-v3-large` | Fireworks speech-to-text model ID. |
 | `FIREWORKS_STT_DIARIZE` | `true` | Request speaker diarization metadata from Fireworks transcription API. |
 | `FIREWORKS_CHAT_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks OpenAI-compatible chat completions used by Ask generation. |
-| `FIREWORKS_CHAT_MODEL` | `accounts/fireworks/models/llama-v3p1-8b-instruct` | Fireworks chat model used when `INFERENCE_PROVIDER=fireworks` for Ask generation. |
+| `FIREWORKS_CHAT_MODEL` | `accounts/fireworks/models/llama-v3p1-8b-instruct` | Fireworks chat model used when `RAG_PROVIDER=fireworks` for Ask generation. The Settings UI exposes a curated dropdown of currently-deployed models; this env var supplies the default. |
+| `RAG_PROVIDER` | `local` | Issue #608: dedicated provider for the Ask / RAG step. Decoupled from `INFERENCE_PROVIDER` (transcription) so enabling Fireworks for transcription does not silently send retrieved transcript chunks to Fireworks for answer generation. Set to `fireworks` to opt in. |
 | `FIREWORKS_STT_COST_PER_MINUTE_USD` | `0.006` | Cost estimate assumption used for per-episode observability (`estimated_cost_usd = billed_minutes * rate`). |
 | `FIREWORKS_CHUNKED_TRANSCRIPTION_ENABLED` | `false` | Issue #610: split long audio into chunks for upload, then stitch the per-chunk transcripts back. Works around the undocumented Fireworks upload cap (#600). See the [Chunked Fireworks guide](guide/14-chunked-fireworks.md). |
 | `FIREWORKS_CHUNK_TARGET_SECS` | `900` | Target chunk duration when chunked transcription is enabled (15 min). Minimum 60. |
@@ -93,7 +94,7 @@ Ask AI uses the model selected in the `/ask` page UI and sends it with each requ
 - For local Ask mode, `OLLAMA_URL` controls the Ollama endpoint that serves the selected model.
 - The Ask page and per-episode chat popup default to `qwen2.5:3b` unless you choose another option. The full list is `qwen2.5:3b`, `phi3:mini`, and `gemma4:e4b` — all pulled by `make ollama-pull`.
 - Each model runs with a bounded `num_ctx` (8K–16K) to keep CPU prefill fast. The dropdown shows both the configured value and the model's maximum context.
-- When `INFERENCE_PROVIDER=fireworks`, `FIREWORKS_CHAT_MODEL` provides the default Ask model for remote generation.
+- When `RAG_PROVIDER=fireworks`, `FIREWORKS_CHAT_MODEL` provides the default Ask model for remote generation. The Ask page renders a curated dropdown of currently-deployed Fireworks chat models; the configured value is used as the default selection. (Note: this is independent of `INFERENCE_PROVIDER` — see Issue #608.)
 
 ### Deployment profiles
 
