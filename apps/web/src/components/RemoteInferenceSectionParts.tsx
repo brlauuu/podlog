@@ -317,8 +317,17 @@ export function RemoteProviderIntro() {
                 <li>You want to free up local resources for other tasks</li>
               </ul>
               <p>
-                Currently, Fireworks AI is the supported provider. You need a
-                Fireworks API key to enable remote processing.
+                Currently,{" "}
+                <a
+                  href="https://fireworks.ai"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  Fireworks AI
+                </a>{" "}
+                is the supported provider. You need a Fireworks API key to
+                enable remote processing.
               </p>
             </div>
           </CollapsibleContent>
@@ -342,6 +351,16 @@ export function FireworksApiKeyField({
       <label className="block text-sm font-medium mb-1">Fireworks API Key</label>
       <p className="text-xs text-muted-foreground mb-1.5">
         Required for remote inference. Stored securely and masked on read.
+        Generate at{" "}
+        <a
+          href="https://fireworks.ai/account/api-keys"
+          target="_blank"
+          rel="noreferrer"
+          className="underline"
+        >
+          fireworks.ai/account/api-keys
+        </a>
+        .
       </p>
       <div className="relative">
         <input
