@@ -23,6 +23,7 @@ fresh empty `[Unreleased]` is left at the top.
 ### Major changes
 - Per-active-provider queue ETA in notifications. The "Est. time left" line in episode notifications now uses the rate of episodes processed by whichever inference provider is currently configured, and tags the line with `(local)` or `(remote)` so the basis is visible. ([#595](https://github.com/brlauuu/podlog/pull/595))
 - Distinct error class for Fireworks upload rejections. When Fireworks aborts an upload at the TLS layer (typically size/duration cap), the failure is classified as `FIREWORKS_UPLOAD_REJECTED`, the retry loop is skipped, and notifications carry an "Action required: re-run on local inference" call-to-action. ([#602](https://github.com/brlauuu/podlog/pull/602))
+- Long-episode chunked transcription, opt-in from Settings → Remote Inference → Transcription. When transcription is set to Fireworks, a "Chunk long episodes" switch appears with optional advanced tunables (chunk size, overlap, per-chunk retries). Splits long audio into smaller pieces, transcribes each separately, and stitches them back; diarization runs once on the whole file via the configured provider. Works around Fireworks's upload size cap without falling back to local. ([#610](https://github.com/brlauuu/podlog/issues/610))
 
 ### Minor changes
 - Copy-to-clipboard button for the episode UUID on the episode page. Subtle icon next to the title. ([#601](https://github.com/brlauuu/podlog/pull/601))

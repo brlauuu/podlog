@@ -43,11 +43,16 @@ export const SettingsSchema = z.object({
   smtp_port: z.number(),
   fireworks_stt_cost_per_minute_usd: z.number(),
   pyannote_cloud_cost_per_second_usd: z.number(),
+  // Issue #610: chunked Fireworks transcription tunables.
+  fireworks_chunk_target_secs: z.number(),
+  fireworks_chunk_overlap_secs: z.number(),
+  fireworks_chunk_max_retries: z.number(),
 
   // Booleans.
   smtp_use_tls: z.boolean(),
   health_check_notifications_enabled: z.boolean(),
   fireworks_stt_diarize: z.boolean(),
+  fireworks_chunked_transcription_enabled: z.boolean(),
 
   // Enums (mirror backend _VALID_* sets).
   notification_frequency: z.enum(["immediate", "daily", "weekly"]),
