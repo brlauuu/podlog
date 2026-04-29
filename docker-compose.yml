@@ -99,6 +99,26 @@ services:
       pipeline:
         condition: service_healthy  # Waits for migrations -- prevents schema-not-found errors
 
+  # Issue #607: optional Jupyter-based DB exploration environment.
+  # Opt-in via Compose profile so a default `docker compose up` doesn't pull
+  # the image or run the service. Start with `make explore` (or
+  # `docker compose --profile explore up explore`).
+  explore:
+    build: ./apps/explore
+    profiles: [explore]
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
+    ports:
+      # Localhost-only binding — the Jupyter token is the only thing between
+      # the world and your DB, so don't expose this off the box. If a user
+      # needs remote access they should put it behind a reverse proxy.
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - ./notebooks:/workspace
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   audio_data:

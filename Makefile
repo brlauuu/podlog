@@ -1,4 +1,4 @@
-.PHONY: up up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated
+.PHONY: up up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs
 
 up:             ## Start full stack
 	docker compose up -d
@@ -61,6 +61,20 @@ ollama-pull:    ## Pull Ollama models used by the Ask feature
 	docker compose exec ollama ollama pull qwen2.5:3b
 	docker compose exec ollama ollama pull phi3:mini
 	docker compose exec ollama ollama pull gemma4:e4b
+
+explore:        ## Start the Jupyter DB-exploration service (#607). URL+token printed in logs.
+	docker compose --profile explore up -d explore
+	@echo ""
+	@echo "Jupyter is starting on http://localhost:8888"
+	@echo "Get the access token from the logs:"
+	@echo "  make explore-logs"
+	@echo "Look for the line that ends with /lab?token=<...>"
+
+explore-down:   ## Stop the explore service
+	docker compose --profile explore down explore
+
+explore-logs:   ## Follow the explore service logs (look for the token URL)
+	docker compose --profile explore logs -f explore
 
 health-check:   ## Run health check once (requires python3, pg_isready, docker)
 	python3 scripts/healthcheck.py
