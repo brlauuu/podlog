@@ -3,16 +3,35 @@ Fireworks audio transcription helpers.
 
 This service wraps Fireworks `/v1/audio/transcriptions` and normalizes the
 response shape used by Podlog tasks.
+
+For long episodes that exceed Fireworks's undocumented upload cap (#600),
+``transcribe`` can be called with ``chunked=True`` to split the file with
+:mod:`app.services.fireworks_audio_chunking` and stitch the per-chunk
+responses back together (#610). Default behavior is unchanged: one
+multipart upload, fail-fast on cap.
 """
 from __future__ import annotations
 
 import logging
+import tempfile
 from collections import Counter
 from pathlib import Path
 
 import httpx
 
+from app.services import fireworks_audio_chunking as chunking
+
 logger = logging.getLogger(__name__)
+
+
+# Maximum bisect depth for chunked uploads when a chunk hits
+# FIREWORKS_UPLOAD_REJECTED. Depth 2 means a chunk can split at most into
+# 4 sub-chunks (1 -> 2 -> 4) before we give up with FIREWORKS_CHUNK_FAILED.
+_BISECT_MAX_DEPTH = 2
+
+# Refuse to bisect a range below this duration: at some point the cap
+# isn't about size, and we should surface the failure to the user.
+_MIN_BISECT_DURATION_SECS = 30.0
 
 
 class FireworksTranscriptionError(RuntimeError):
@@ -76,23 +95,23 @@ def _format_upload_rejected_message(audio_path: str, original_error: str) -> str
     )
 
 
-def transcribe(
-    audio_path: str,
+def _post_transcription(
+    file_path: str | Path,
     *,
     api_key: str,
     audio_base_url: str,
     model_name: str,
     diarize: bool,
-) -> tuple[list[dict], str, dict]:
-    """
-    Transcribe audio with Fireworks.
+) -> dict:
+    """Single multipart upload to Fireworks ``/v1/audio/transcriptions``.
 
-    Returns `(segments, language, raw_response)` where segments follow Podlog's
-    existing format: `{"start": float, "end": float, "text": str}`.
+    Returns the raw response dict; raises :class:`FireworksTranscriptionError`
+    with retryability metadata on any HTTP/network failure. This is the
+    inner primitive used by both the single-shot and chunked code paths.
     """
-    path = Path(audio_path)
+    path = Path(file_path)
     if not path.exists():
-        raise RuntimeError(f"Audio file missing for Fireworks transcription: {audio_path}")
+        raise RuntimeError(f"Audio file missing for Fireworks transcription: {path}")
 
     data = {
         "model": model_name,
@@ -113,7 +132,7 @@ def transcribe(
                     _audio_url(audio_base_url), headers=headers, data=data, files=files
                 )
                 resp.raise_for_status()
-                result = resp.json()
+                return resp.json()
         except httpx.TimeoutException as exc:
             raise FireworksTranscriptionError(
                 f"Fireworks transcription timeout: {exc}",
@@ -124,7 +143,7 @@ def transcribe(
             error_text = str(exc)
             if _is_upload_rejected_signature(error_text):
                 raise FireworksTranscriptionError(
-                    _format_upload_rejected_message(audio_path, error_text),
+                    _format_upload_rejected_message(str(path), error_text),
                     error_class="FIREWORKS_UPLOAD_REJECTED",
                     retryable=False,
                 ) from exc
@@ -143,6 +162,198 @@ def transcribe(
                 status_code=status,
             ) from exc
 
+
+def _transcribe_range(
+    src_audio_path: Path,
+    range_start: float,
+    range_end: float,
+    *,
+    workdir: Path,
+    api_key: str,
+    audio_base_url: str,
+    model_name: str,
+    diarize: bool,
+    overlap_secs: int,
+    max_retries: int,
+    bisect_depth: int,
+    chunk_label: str,
+) -> dict:
+    """Transcribe a [start, end] range of the source audio.
+
+    Returns the raw response with timestamps in **range-local time**
+    (start of the range = 0). Recursively bisects the range when Fireworks
+    rejects the upload, until ``bisect_depth`` runs out.
+
+    Retryable errors are retried up to ``max_retries`` times with no
+    backoff (the request itself takes long enough; piling on backoff would
+    slow chunked transcription unnecessarily).
+    """
+    range_duration = range_end - range_start
+    chunk_filename = f"chunk_{chunk_label}.mp3"
+    chunk_path = workdir / chunk_filename
+    chunking.extract_chunk(
+        src_audio_path,
+        chunking.Chunk(index=0, start=range_start, end=range_end),
+        chunk_path,
+    )
+
+    last_error: FireworksTranscriptionError | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            return _post_transcription(
+                chunk_path,
+                api_key=api_key,
+                audio_base_url=audio_base_url,
+                model_name=model_name,
+                diarize=diarize,
+            )
+        except FireworksTranscriptionError as exc:
+            last_error = exc
+            if exc.error_class == "FIREWORKS_UPLOAD_REJECTED":
+                # Cap reached on this range; bisect or surface.
+                break
+            if not exc.retryable:
+                # Non-retryable terminal failure (e.g. HTTP_ACCESS-class).
+                break
+            logger.warning(
+                '"action": "fireworks_chunk_retry", "label": "%s", "attempt": %d, '
+                '"error_class": "%s", "error": "%s"',
+                chunk_label,
+                attempt + 1,
+                exc.error_class,
+                str(exc),
+            )
+
+    if last_error is None:
+        # Defensive: the retry loop body either returns successfully or sets
+        # last_error before breaking. Reaching here means a control-flow bug.
+        raise RuntimeError(
+            f"_transcribe_range exhausted retries without recording an error "
+            f"(label={chunk_label!r})"
+        )
+
+    if last_error.error_class == "FIREWORKS_UPLOAD_REJECTED" and bisect_depth > 0:
+        if range_duration < _MIN_BISECT_DURATION_SECS:
+            raise FireworksTranscriptionError(
+                f"Fireworks rejected upload of a {range_duration:.0f}s chunk "
+                f"[{_range_label(range_start, range_end)}]; below bisect floor "
+                f"({_MIN_BISECT_DURATION_SECS:.0f}s). Cap may not be size-related.",
+                error_class="FIREWORKS_CHUNK_FAILED",
+                retryable=False,
+            ) from last_error
+
+        logger.warning(
+            '"action": "fireworks_chunk_bisect", "label": "%s", "duration_secs": %.1f, '
+            '"depth_remaining": %d',
+            chunk_label,
+            range_duration,
+            bisect_depth,
+        )
+        sub_chunks = chunking.plan_chunks(
+            duration_secs=range_duration,
+            target_secs=max(int(range_duration / 2) + overlap_secs, overlap_secs + 1),
+            overlap_secs=overlap_secs,
+        )
+        sub_responses: list[dict] = []
+        for sub in sub_chunks:
+            sub_response = _transcribe_range(
+                src_audio_path,
+                range_start=range_start + sub.start,
+                range_end=range_start + sub.end,
+                workdir=workdir,
+                api_key=api_key,
+                audio_base_url=audio_base_url,
+                model_name=model_name,
+                diarize=diarize,
+                overlap_secs=overlap_secs,
+                max_retries=max_retries,
+                bisect_depth=bisect_depth - 1,
+                chunk_label=f"{chunk_label}.{sub.index}",
+            )
+            sub_responses.append(sub_response)
+        # Stitch sub-responses into a single range-local response: each
+        # sub_response has times relative to its own sub-range start
+        # (which is sub.start within the parent range), so stitch_responses
+        # with the original sub_chunks directly produces range-local times.
+        return chunking.stitch_responses(sub_responses, sub_chunks)
+
+    if last_error.error_class == "FIREWORKS_UPLOAD_REJECTED":
+        raise FireworksTranscriptionError(
+            f"Fireworks rejected upload of chunk [{_range_label(range_start, range_end)}] "
+            f"after exhausting bisect depth. Re-run this episode on local inference.",
+            error_class="FIREWORKS_CHUNK_FAILED",
+            retryable=False,
+        ) from last_error
+
+    # Retry budget exhausted on a retryable error, or non-retryable error.
+    raise FireworksTranscriptionError(
+        f"Chunk [{_range_label(range_start, range_end)}] failed after "
+        f"{max_retries + 1} attempts: {last_error}",
+        error_class="FIREWORKS_CHUNK_FAILED",
+        retryable=False,
+    ) from last_error
+
+
+def _range_label(start: float, end: float) -> str:
+    """Format a range as ``MM:SS-MM:SS`` for log/error messages."""
+
+    def fmt(secs: float) -> str:
+        m, s = divmod(int(secs), 60)
+        return f"{m}:{s:02d}"
+
+    return f"{fmt(start)}-{fmt(end)}"
+
+
+def transcribe(
+    audio_path: str,
+    *,
+    api_key: str,
+    audio_base_url: str,
+    model_name: str,
+    diarize: bool,
+    chunked: bool = False,
+    chunk_target_secs: int = 900,
+    chunk_overlap_secs: int = 3,
+    chunk_max_retries: int = 2,
+) -> tuple[list[dict], str, dict]:
+    """
+    Transcribe audio with Fireworks.
+
+    Returns ``(segments, language, raw_response)`` where segments follow
+    Podlog's existing format: ``{"start": float, "end": float, "text": str}``.
+
+    When ``chunked=False`` (default), behavior matches the historical
+    single-shot upload — one multipart POST, fail-fast on the upload cap
+    (#600). When ``chunked=True``, the file is split into pieces of
+    ``chunk_target_secs`` with ``chunk_overlap_secs`` overlap, each piece
+    is uploaded independently (with up to ``chunk_max_retries`` retries
+    and bisect-on-cap), and the per-chunk responses are stitched back
+    into a single response equivalent to one whole-file Fireworks call.
+    """
+    path = Path(audio_path)
+    if not path.exists():
+        raise RuntimeError(f"Audio file missing for Fireworks transcription: {audio_path}")
+
+    if chunked:
+        result = _transcribe_chunked(
+            path,
+            api_key=api_key,
+            audio_base_url=audio_base_url,
+            model_name=model_name,
+            diarize=diarize,
+            chunk_target_secs=chunk_target_secs,
+            chunk_overlap_secs=chunk_overlap_secs,
+            chunk_max_retries=chunk_max_retries,
+        )
+    else:
+        result = _post_transcription(
+            path,
+            api_key=api_key,
+            audio_base_url=audio_base_url,
+            model_name=model_name,
+            diarize=diarize,
+        )
+
     raw_segments = result.get("segments", []) or []
     segments: list[dict] = []
     for seg in raw_segments:
@@ -156,12 +367,69 @@ def transcribe(
 
     language = result.get("language", "unknown") or "unknown"
     logger.info(
-        '"action": "fireworks_transcribe_complete", "segments": %d, "language": "%s", "diarize": %s',
+        '"action": "fireworks_transcribe_complete", "segments": %d, "language": "%s", '
+        '"diarize": %s, "chunked": %s',
         len(segments),
         language,
         str(diarize).lower(),
+        str(chunked).lower(),
     )
     return segments, language, result
+
+
+def _transcribe_chunked(
+    audio_path: Path,
+    *,
+    api_key: str,
+    audio_base_url: str,
+    model_name: str,
+    diarize: bool,
+    chunk_target_secs: int,
+    chunk_overlap_secs: int,
+    chunk_max_retries: int,
+) -> dict:
+    """Chunked path: split, upload each chunk, stitch back. Issue #610.
+
+    Returns a single raw response in whole-file time, equivalent in shape
+    to one Fireworks call against the entire audio.
+    """
+    duration_secs = chunking.probe_duration_secs(audio_path)
+    chunks = chunking.plan_chunks(
+        duration_secs=duration_secs,
+        target_secs=chunk_target_secs,
+        overlap_secs=chunk_overlap_secs,
+    )
+    logger.info(
+        '"action": "fireworks_chunk_plan", "audio": "%s", "duration_secs": %.1f, '
+        '"chunks": %d, "target_secs": %d, "overlap_secs": %d',
+        audio_path.name,
+        duration_secs,
+        len(chunks),
+        chunk_target_secs,
+        chunk_overlap_secs,
+    )
+
+    chunk_responses: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="fireworks_chunks_") as workdir_str:
+        workdir = Path(workdir_str)
+        for chunk in chunks:
+            chunk_response = _transcribe_range(
+                audio_path,
+                range_start=chunk.start,
+                range_end=chunk.end,
+                workdir=workdir,
+                api_key=api_key,
+                audio_base_url=audio_base_url,
+                model_name=model_name,
+                diarize=diarize,
+                overlap_secs=chunk_overlap_secs,
+                max_retries=chunk_max_retries,
+                bisect_depth=_BISECT_MAX_DEPTH,
+                chunk_label=str(chunk.index),
+            )
+            chunk_responses.append(chunk_response)
+
+    return chunking.stitch_responses(chunk_responses, chunks)
 
 
 def diarization_segments_from_transcription(raw: dict) -> list[dict]:
