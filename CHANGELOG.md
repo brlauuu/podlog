@@ -32,6 +32,7 @@ fresh empty `[Unreleased]` is left at the top.
 - "Releases" sidebar on `/about` (right rail, `xl:` and up) listing every changelog version with sticky scroll-spy. Header shows version count and the latest tagged release. ([#606](https://github.com/brlauuu/podlog/pull/606))
 
 ### Fixes
+- Default `FIREWORKS_CHAT_MODEL` updated from `accounts/fireworks/models/llama-v3p1-8b-instruct` (deprecated by Fireworks, would 404 out of the box) to `accounts/fireworks/models/qwen2p5-7b-instruct`. Aligned with the curated Ask-page dropdown. Existing installs with the env var set explicitly keep their value. ([#608](https://github.com/brlauuu/podlog/issues/608))
 - Settings → Remote Inference: changes to chunked-transcription toggle, advanced tunables, and diarization provider/key fields now save correctly. They were previously routed to the Notifications tab's dirty bag, so the Inference Save button stayed disabled and changes were silently dropped. ([#610](https://github.com/brlauuu/podlog/issues/610))
 - Archive task now captures the tail of `ffmpeg`'s stderr when compression fails, instead of storing the placeholder `"ffmpeg error (see stderr output for detail)"`. ([#603](https://github.com/brlauuu/podlog/pull/603))
 - CI Slow's web e2e job now runs `alembic upgrade head` against `db_test` before serving, fixing the `relation "feeds" does not exist` failure introduced when the SSR e2e specs landed. (commit `21629cb`)
