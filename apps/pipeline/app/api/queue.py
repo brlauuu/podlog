@@ -230,3 +230,120 @@ def retry_job(episode_id: str, db: Session = Depends(get_db)) -> dict:
 
     logger.info('"action": "manual_retry", "episode_id": "%s"', episode.id)
     return {"queued": True, "episode_id": episode.id}
+
+
+# ---------------------------------------------------------------------------
+# Bulk retry: FIREWORKS_UPLOAD_REJECTED (#610)
+#
+# Episodes that hit Fireworks's upload cap (#600) are now retryable in bulk
+# once the user has enabled chunked transcription in Settings (#610). The
+# preview returns count + estimated cost so the UI can show a confirm dialog.
+# ---------------------------------------------------------------------------
+
+
+def _upload_rejected_query(db: Session) -> list[Episode]:
+    """All episodes currently failed because Fireworks rejected the upload.
+
+    Catches two cases:
+      1. ``FIREWORKS_UPLOAD_REJECTED`` (post-#600 classification).
+      2. ``TRANSIENT_NETWORK`` whose ``error_message`` contains the
+         ``BAD_RECORD_MAC`` signature — this is the same root cause but
+         pre-dates #600's retry classifier, and the retry loop exhausted
+         before fail-fast was wired up. These are still bulk-retry
+         eligible: chunking will keep each upload under the cap.
+    """
+    return (
+        db.query(Episode)
+        .filter(Episode.status == "failed")
+        .filter(
+            (Episode.error_class == "FIREWORKS_UPLOAD_REJECTED")
+            | (
+                (Episode.error_class == "TRANSIENT_NETWORK")
+                & Episode.error_message.contains("BAD_RECORD_MAC")
+            )
+        )
+        .all()
+    )
+
+
+def _chunked_transcription_enabled(db: Session) -> bool:
+    """True iff fireworks_chunked_transcription_enabled is set in runtime settings."""
+    from app.services.notification_settings import get_runtime_inference_settings
+
+    runtime = get_runtime_inference_settings(db)
+    return bool(runtime.get("fireworks_chunked_transcription_enabled"))
+
+
+@router.get("/queue/bulk-retry/upload-rejected")
+def preview_bulk_retry_upload_rejected(db: Session = Depends(get_db)) -> dict:
+    """Preview the bulk-retry batch and its estimated cost.
+
+    Returns:
+        eligible_count: number of failed episodes with FIREWORKS_UPLOAD_REJECTED
+        total_minutes: sum of episode durations (for cost estimate)
+        estimated_cost_usd: total_minutes × per-minute Fireworks STT rate
+        chunked_enabled: whether chunked transcription is on (gates the POST)
+    """
+    from app.config import settings
+    from app.services.notification_settings import get_runtime_inference_settings
+
+    eligible = _upload_rejected_query(db)
+    total_secs = sum(int(e.duration_secs or 0) for e in eligible)
+    total_minutes = round(total_secs / 60.0, 1)
+
+    runtime = get_runtime_inference_settings(db)
+    rate = runtime.get("fireworks_stt_cost_per_minute_usd")
+    if rate is None:
+        rate = settings.fireworks_stt_cost_per_minute_usd
+    estimated_cost_usd = round(total_minutes * float(rate or 0.0), 2)
+
+    return {
+        "eligible_count": len(eligible),
+        "total_minutes": total_minutes,
+        "estimated_cost_usd": estimated_cost_usd,
+        "chunked_enabled": _chunked_transcription_enabled(db),
+    }
+
+
+@router.post("/queue/bulk-retry/upload-rejected", status_code=202)
+def bulk_retry_upload_rejected(db: Session = Depends(get_db)) -> dict:
+    """Re-enqueue every failed FIREWORKS_UPLOAD_REJECTED episode.
+
+    Refuses with 422 if `fireworks_chunked_transcription_enabled` is off —
+    re-enqueueing without chunking would just hit the cap again. The user
+    must turn the toggle on in Settings first.
+    """
+    if not _chunked_transcription_enabled(db):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Chunked transcription is disabled. Enable it in Settings → "
+                "Remote Inference → Transcription before bulk-retrying these "
+                "episodes, otherwise they'll fail with the same upload-cap error."
+            ),
+        )
+
+    eligible = _upload_rejected_query(db)
+    queued: list[str] = []
+    for episode in eligible:
+        episode.status = "pending"
+        episode.error_message = None
+        episode.error_class = None
+        episode.retry_count = 0
+        episode.diarization_error = None
+        episode.has_diarization = False
+        episode.transcribe_duration_secs = None
+        episode.diarize_duration_secs = None
+        episode.diarize_step_durations = None
+        episode.inference_provider_used = None
+        queued.append(str(episode.id))
+    db.commit()
+
+    for episode_id in queued:
+        enqueue_episode_ingest(db, episode_id)
+
+    logger.info(
+        '"action": "bulk_retry_upload_rejected", "queued": %d',
+        len(queued),
+    )
+    return {"queued": len(queued), "episode_ids": queued}

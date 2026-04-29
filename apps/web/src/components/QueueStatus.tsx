@@ -234,6 +234,149 @@ function TableHeader() {
   );
 }
 
+// --- Bulk retry: FIREWORKS_UPLOAD_REJECTED (#610) ---
+
+interface BulkRetryPreview {
+  eligible_count: number;
+  total_minutes: number;
+  estimated_cost_usd: number;
+  chunked_enabled: boolean;
+}
+
+function BulkRetryUploadRejected() {
+  const [preview, setPreview] = useState<BulkRetryPreview | null>(null);
+  const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchPreview() {
+      try {
+        const res = await fetch(
+          "/api/pipeline/queue/bulk-retry/upload-rejected",
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as BulkRetryPreview;
+        if (!cancelled) setPreview(data);
+      } catch (_) {
+        // Soft fail: the bulk-retry control just won't show.
+      }
+    }
+    fetchPreview();
+    const id = setInterval(fetchPreview, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  if (!preview || preview.eligible_count === 0) return null;
+
+  async function handleConfirm() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        "/api/pipeline/queue/bulk-retry/upload-rejected",
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const detail =
+          (body && (body.detail as string | undefined)) ?? `HTTP ${res.status}`;
+        setError(detail);
+        return;
+      }
+      setOpen(false);
+      setPreview((p) =>
+        p ? { ...p, eligible_count: 0, total_minutes: 0, estimated_cost_usd: 0 } : p,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bulk-retry failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const { eligible_count, total_minutes, estimated_cost_usd, chunked_enabled } =
+    preview;
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">
+            {eligible_count} episode{eligible_count !== 1 ? "s" : ""} failed
+            because Fireworks rejected the upload
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Total {total_minutes.toFixed(0)} min · estimated $
+            {estimated_cost_usd.toFixed(2)} on Fireworks STT.
+            {!chunked_enabled && (
+              <>
+                {" "}
+                Enable <b>Chunk long episodes</b> in Settings → Remote
+                Inference → Transcription before retrying — otherwise these
+                will hit the same upload cap.
+              </>
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={!chunked_enabled || submitting}
+          onClick={() => setOpen(true)}
+          className="px-3 py-1 text-xs bg-action text-action-foreground rounded hover:bg-action/90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          title={
+            !chunked_enabled
+              ? "Enable chunked transcription in Settings first"
+              : undefined
+          }
+        >
+          Retry with chunking
+        </button>
+      </div>
+      {open && (
+        <div className="mt-3 rounded border border-border bg-background p-3 space-y-2">
+          <div className="text-sm font-medium">Confirm bulk retry</div>
+          <p className="text-xs text-muted-foreground">
+            This will re-enqueue {eligible_count} episode
+            {eligible_count !== 1 ? "s" : ""} (~{total_minutes.toFixed(0)} min,
+            ~${estimated_cost_usd.toFixed(2)}) for transcription using chunked
+            Fireworks. Diarization runs as a single whole-file pass via the
+            Diarization step's configured provider.
+          </p>
+          {error && (
+            <p className="text-xs text-destructive">{error}</p>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={submitting}
+              className="px-3 py-1 text-xs bg-action text-action-foreground rounded hover:bg-action/90 disabled:opacity-50"
+            >
+              {submitting ? "Queueing…" : "Confirm"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setError(null);
+              }}
+              disabled={submitting}
+              className="px-3 py-1 text-xs border border-border rounded hover:bg-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- Main Component ---
 
 export default function QueueStatus() {
@@ -286,6 +429,8 @@ export default function QueueStatus() {
   return (
     <div className="space-y-4">
       <StageBar counts={counts} activeFilter={stageFilter} onFilterChange={setStageFilter} />
+
+      <BulkRetryUploadRejected />
 
       {/* Search bar + summary */}
       <div className="flex items-center gap-3">
