@@ -17,8 +17,9 @@ Podlog is a self-hosted podcast transcription and search app. It downloads episo
 11. [Hardware & Performance](11-hardware.md) — Processing times, storage estimates
 12. [Ask AI (RAG Search)](12-rag-search.md) — AI-powered Q&A over transcripts
 13. [pyannote Cloud Diarization](13-pyannote-cloud.md) — Optional Precision-2 paid cloud provider
-14. [Meta-Analysis Dashboard](14-meta-analysis.md) — Cross-feed metrics and charts
-15. [Troubleshooting](15-troubleshooting.md) — Common issues and fixes
+14. [Chunked Fireworks Transcription](14-chunked-fireworks.md) — Long-episode workaround for the Fireworks upload cap
+15. [Meta-Analysis Dashboard](15-meta-analysis.md) — Cross-feed metrics and charts
+16. [Troubleshooting](16-troubleshooting.md) — Common issues and fixes
 
 ## Quick Start
 

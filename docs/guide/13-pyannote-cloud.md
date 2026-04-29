@@ -114,4 +114,4 @@ Pairing **local Fireworks-less transcription** with **pyannote cloud diarization
 
 ---
 
-**Next:** [Meta-Analysis Dashboard](14-meta-analysis.md) | **Back:** [Ask AI (RAG Search)](12-rag-search.md) | **Home:** [Guide](README.md)
+**Next:** [Chunked Fireworks Transcription](14-chunked-fireworks.md) | **Back:** [Ask AI (RAG Search)](12-rag-search.md) | **Home:** [Guide](README.md)

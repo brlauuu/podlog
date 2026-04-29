@@ -44,4 +44,4 @@ Staleness indicators show the snapshot age next to the refresh button.
 
 ---
 
-**Next:** [Troubleshooting](15-troubleshooting.md) | **Back:** [pyannote Cloud Diarization](13-pyannote-cloud.md) | **Home:** [Guide](README.md)
+**Next:** [Troubleshooting](16-troubleshooting.md) | **Back:** [Chunked Fireworks Transcription](14-chunked-fireworks.md) | **Home:** [Guide](README.md)
