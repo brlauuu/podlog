@@ -57,6 +57,7 @@ class PeriodicTask:
 PERIODIC_TASKS: list[PeriodicTask] = [
     PeriodicTask("poll_all_feeds", "app.tasks.ingest:poll_all_feeds", None),
     PeriodicTask("cleanup_zombie_jobs", "app.tasks.cleanup:cleanup_zombie_jobs", 30 * 60),
+    PeriodicTask("prune_superseded_failed_jobs", "app.tasks.cleanup:prune_superseded_failed_jobs", 24 * 60 * 60),
     PeriodicTask("send_digest", "app.services.digest:send_digest_if_due", 15 * 60),
 ]
 
