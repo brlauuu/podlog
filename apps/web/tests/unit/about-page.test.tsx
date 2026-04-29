@@ -61,7 +61,11 @@ beforeEach(() => {
 
 describe("<AboutPage>", () => {
   it("marks external links with target=_blank and rel=noopener", async () => {
-    mockReadFile.mockResolvedValue("See [example](https://example.com/x).");
+    // First call resolves about.md; second resolves CHANGELOG.md to empty so
+    // the test asserts on a single link from the about content.
+    mockReadFile
+      .mockResolvedValueOnce("See [example](https://example.com/x).")
+      .mockRejectedValueOnce(new Error("ENOENT"));
 
     const jsx = await AboutPage();
     render(jsx);
@@ -72,7 +76,9 @@ describe("<AboutPage>", () => {
   });
 
   it("does not set target/rel for relative links", async () => {
-    mockReadFile.mockResolvedValue("See [docs](/docs) for more.");
+    mockReadFile
+      .mockResolvedValueOnce("See [docs](/docs) for more.")
+      .mockRejectedValueOnce(new Error("ENOENT"));
 
     const jsx = await AboutPage();
     render(jsx);
@@ -83,7 +89,9 @@ describe("<AboutPage>", () => {
   });
 
   it("renders the fallback block when about.md is missing", async () => {
-    mockReadFile.mockRejectedValue(new Error("ENOENT"));
+    mockReadFile
+      .mockRejectedValueOnce(new Error("ENOENT"))
+      .mockRejectedValueOnce(new Error("ENOENT"));
 
     const jsx = await AboutPage();
     render(jsx);
@@ -92,5 +100,33 @@ describe("<AboutPage>", () => {
     expect(
       screen.getByText("Could not load the About page.")
     ).toBeInTheDocument();
+  });
+
+  it("renders the changelog section after the about content", async () => {
+    mockReadFile
+      .mockResolvedValueOnce("About body.")
+      .mockResolvedValueOnce("# Changelog\n\nSee [v1](https://example.com/v1).");
+
+    const jsx = await AboutPage();
+    render(jsx);
+
+    // Both about and changelog content are rendered as separate markdown blocks.
+    const blocks = screen.getAllByTestId("markdown");
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toHaveTextContent("About body.");
+    expect(blocks[1]).toHaveTextContent("v1");
+  });
+
+  it("hides the changelog section when CHANGELOG.md is missing", async () => {
+    mockReadFile
+      .mockResolvedValueOnce("About body.")
+      .mockRejectedValueOnce(new Error("ENOENT"));
+
+    const jsx = await AboutPage();
+    render(jsx);
+
+    const blocks = screen.getAllByTestId("markdown");
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toHaveTextContent("About body.");
   });
 });
