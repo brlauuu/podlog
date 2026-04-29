@@ -87,6 +87,12 @@ class Settings(BaseSettings):
     # Keep this explicit because provider pricing can change.
     fireworks_stt_cost_per_minute_usd: float = 0.006
 
+    # RAG/Ask provider routing (Issue #608). Decoupled from inference_provider
+    # so enabling Fireworks for transcription does not silently send retrieved
+    # transcript chunks to Fireworks for answer generation. Default `local`
+    # preserves existing behavior on upgrade.
+    rag_provider: Literal["local", "fireworks"] = "local"
+
     # Long-episode chunked transcription (Issue #610).
     # When enabled, episodes whose upload would otherwise hit Fireworks's
     # undocumented size/duration cap (#600) are split into smaller pieces,

@@ -169,6 +169,11 @@ class TestSaveNotificationSettings:
         with pytest.raises(ValueError, match="diarization_provider"):
             save_notification_settings(db, {"diarization_provider": "cloud"})
 
+    def test_rejects_invalid_rag_provider(self):
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="rag_provider"):
+            save_notification_settings(db, {"rag_provider": "openai"})
+
     def test_rejects_negative_fireworks_cost_rate(self):
         db = _mock_db(stored_json=None)
         with pytest.raises(ValueError, match="fireworks_stt_cost_per_minute_usd"):

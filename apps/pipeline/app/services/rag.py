@@ -327,6 +327,15 @@ async def stream_fireworks_response(
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 if resp.status_code != 200:
                     body = await resp.aread()
+                    if resp.status_code == 404:
+                        # Issue #608: name the offending model and direct the
+                        # user at Settings instead of leaking the raw provider
+                        # response, which is unhelpful in the Ask UI banner.
+                        raise RuntimeError(
+                            f"Fireworks model '{chat_model}' not found or not "
+                            f"deployed. Update the model in Settings → Remote "
+                            f"Inference → RAG / Ask."
+                        )
                     raise RuntimeError(
                         f"Fireworks returned {resp.status_code}: {body.decode(errors='ignore')[:500]}"
                     )
@@ -358,11 +367,20 @@ async def stream_fireworks_response(
 
 
 async def stream_response(messages: list[dict], model: str, runtime: dict | None = None):
-    """Provider-routed streaming for Ask generation."""
-    provider = _runtime_inference_value(runtime, "inference_provider", settings.inference_provider)
+    """Provider-routed streaming for Ask generation.
+
+    Issue #608: routing reads ``rag_provider`` (default ``local``), independent
+    of the transcription-side ``inference_provider``. When the caller passes a
+    model name that doesn't look like a Fireworks model path (i.e. anything
+    that isn't ``accounts/...``), the configured ``fireworks_chat_model`` is
+    used instead — this keeps PR 1 safe to ship before the Ask page UI is
+    provider-aware (PR 3); legacy Ollama-style names from the existing dropdown
+    don't get sent to Fireworks unchanged (which would 404).
+    """
+    provider = _runtime_inference_value(runtime, "rag_provider", settings.rag_provider)
     if provider == "fireworks":
         fireworks_model = model
-        if model == DEFAULT_MODEL:
+        if not (isinstance(model, str) and model.startswith("accounts/")):
             fireworks_model = _runtime_inference_value(
                 runtime, "fireworks_chat_model", settings.fireworks_chat_model
             )
@@ -376,7 +394,7 @@ async def stream_response(messages: list[dict], model: str, runtime: dict | None
 
 async def check_model_available(model: str, runtime: dict | None = None) -> bool:
     """Check if a model is available for the configured generation provider."""
-    provider = _runtime_inference_value(runtime, "inference_provider", settings.inference_provider)
+    provider = _runtime_inference_value(runtime, "rag_provider", settings.rag_provider)
     if provider == "fireworks":
         return bool(_runtime_inference_value(runtime, "fireworks_api_key", settings.fireworks_api_key))
 
