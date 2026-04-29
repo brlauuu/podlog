@@ -89,6 +89,16 @@ def test_format_digest_html_unknown_queue_estimate():
     assert "unknown" in html.lower()
 
 
+def test_format_digest_telegram_estimate_tagged_with_active_provider():
+    data = _make_digest_data()
+    data.queue_estimate_provider = "fireworks"
+    md = format_digest_telegram(data)
+    assert "(remote)" in md.split("Queue:")[1]
+
+    data.queue_estimate_provider = "local"
+    assert "(local)" in format_digest_telegram(data).split("Queue:")[1]
+
+
 def test_format_digest_html_contains_averages():
     data = _make_digest_data()
     data.avg_transcribe_secs = 125.0
