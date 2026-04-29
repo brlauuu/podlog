@@ -31,6 +31,7 @@ fresh empty `[Unreleased]` is left at the top.
 - Copy-to-clipboard button for the episode UUID on the episode page. Subtle icon next to the title. ([#601](https://github.com/brlauuu/podlog/pull/601))
 - "Releases" sidebar on `/about` (right rail, `xl:` and up) listing every changelog version with sticky scroll-spy. Header shows version count and the latest tagged release. ([#606](https://github.com/brlauuu/podlog/pull/606))
 - Episode page tag strip now shows the same metadata tags as the episode card on the podcast page: language (with flag), Local/Remote inference provider, and a "No labels" warning when diarization didn't produce speaker labels. Speaker name tags remain on the card only. ([#609](https://github.com/brlauuu/podlog/issues/609))
+- Settings → Remote Inference now links out to the Fireworks dashboard from both the API key field ("Generate at fireworks.ai/account/api-keys") and the "What are remote inference providers?" explainer, mirroring the existing pyannote.ai dashboard links. ([#618](https://github.com/brlauuu/podlog/issues/618))
 
 ### Fixes
 - Default `FIREWORKS_CHAT_MODEL` updated from `accounts/fireworks/models/llama-v3p1-8b-instruct` (deprecated by Fireworks, would 404 out of the box) to `accounts/fireworks/models/qwen2p5-7b-instruct`. Aligned with the curated Ask-page dropdown. Existing installs with the env var set explicitly keep their value. ([#608](https://github.com/brlauuu/podlog/issues/608))

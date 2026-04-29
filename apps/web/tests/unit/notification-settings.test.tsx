@@ -175,6 +175,36 @@ describe("NotificationSettings", () => {
     expect(apiKeyLabel).toBeInTheDocument();
   });
 
+  it("links to the Fireworks dashboard for API key generation (#618)", async () => {
+    const user = userEvent.setup();
+    render(<NotificationSettings />);
+    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    await user.click(inferenceTab);
+    await screen.findByText(/fireworks api key/i);
+
+    // The "Generate at fireworks.ai/account/api-keys" link in the helper text.
+    const apiKeysLink = screen.getByRole("link", {
+      name: /fireworks\.ai\/account\/api-keys/i,
+    });
+    expect(apiKeysLink).toHaveAttribute(
+      "href",
+      "https://fireworks.ai/account/api-keys",
+    );
+    expect(apiKeysLink).toHaveAttribute("target", "_blank");
+
+    // The "Fireworks AI" link lives inside the "What are remote inference
+    // providers?" collapsible — open it first.
+    await user.click(
+      screen.getByRole("button", {
+        name: /What are remote inference providers/i,
+      }),
+    );
+    const explainerLink = await screen.findByRole("link", {
+      name: /^Fireworks AI$/,
+    });
+    expect(explainerLink).toHaveAttribute("href", "https://fireworks.ai");
+  });
+
   it("shows pyannote cloud API key field and explainer in Remote Inference tab", async () => {
     const user = userEvent.setup();
     render(<NotificationSettings />);
