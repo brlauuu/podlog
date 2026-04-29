@@ -188,6 +188,67 @@ class TestTranscribeEpisode:
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "diarize")
 
     @patch("app.tasks.transcribe.job_queue")
+    @patch("app.tasks.transcribe.update_episode")
+    @patch("app.tasks.transcribe._convert_to_wav")
+    @patch("app.tasks.transcribe.SessionLocal")
+    def test_fireworks_chunked_forces_diarize_false(
+        self, mock_session_cls, mock_convert, mock_update, mock_jq
+    ):
+        """Issue #610: chunked transcription must drop Fireworks's per-chunk
+        diarization (cross-chunk speaker IDs cannot be reconciled). The
+        whole-file diarization pass runs separately in diarize_episode."""
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        db.query.return_value.filter.return_value.delete.return_value = 0
+        mock_session_cls.return_value = db
+
+        segments_data = [{"start": 0.0, "end": 5.0, "text": "hello"}]
+        fireworks_raw = {"segments": segments_data, "words": []}
+
+        with (
+            patch(
+                "app.services.fireworks_audio.transcribe",
+                return_value=(segments_data, "en", fireworks_raw),
+            ) as mock_fw_transcribe,
+            patch(
+                "app.tasks.transcribe.get_runtime_inference_settings",
+                return_value={
+                    "inference_provider": "fireworks",
+                    "fireworks_api_key": "fw_test",
+                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
+                    "fireworks_stt_model": "whisper-v3-large",
+                    # User has Fireworks diarization on, but chunked is also on:
+                    "fireworks_stt_diarize": True,
+                    "fireworks_chunked_transcription_enabled": True,
+                    "fireworks_chunk_target_secs": 900,
+                    "fireworks_chunk_overlap_secs": 3,
+                    "fireworks_chunk_max_retries": 2,
+                    "fireworks_stt_cost_per_minute_usd": 0.01,
+                },
+            ),
+            patch("app.tasks.transcribe.settings") as mock_settings,
+            patch("builtins.open", MagicMock()),
+            patch("app.tasks.transcribe_helpers.json"),
+        ):
+            mock_settings.transcript_dir = "/data/transcripts"
+
+            from app.tasks.transcribe import transcribe_episode
+
+            transcribe_episode("ep1")
+
+        mock_fw_transcribe.assert_called_once()
+        kwargs = mock_fw_transcribe.call_args.kwargs
+        # The override: chunked=True must force diarize=False even when the
+        # user has fireworks_stt_diarize=True in their settings.
+        assert kwargs["chunked"] is True
+        assert kwargs["diarize"] is False
+        # The chunking tunables are passed through.
+        assert kwargs["chunk_target_secs"] == 900
+        assert kwargs["chunk_overlap_secs"] == 3
+        assert kwargs["chunk_max_retries"] == 2
+
+    @patch("app.tasks.transcribe.job_queue")
     @patch("app.tasks.transcribe._mark_failed")
     @patch("app.tasks.transcribe.update_episode")
     @patch("app.tasks.transcribe._convert_to_wav")

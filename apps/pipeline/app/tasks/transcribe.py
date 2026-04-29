@@ -86,19 +86,27 @@ def transcribe_episode(episode_id: str) -> str:
                         "Fireworks inference provider selected but FIREWORKS_API_KEY is missing"
                     )
                 t0 = time.monotonic()
+                chunked_enabled = bool(
+                    runtime.get("fireworks_chunked_transcription_enabled")
+                )
+                # Issue #610: per-chunk speaker IDs are not consistent across
+                # chunks (chunk A's SPEAKER_00 != chunk B's SPEAKER_00), so
+                # asking Fireworks to diarize each chunk would give us labels
+                # we can't reconcile. Route diarization to a whole-file pass
+                # in diarize_episode instead, governed by diarization_provider.
+                fireworks_diarize = (
+                    False
+                    if chunked_enabled
+                    else bool(runtime.get("fireworks_stt_diarize", True))
+                )
                 segments_data, language, fireworks_result = fireworks_audio.transcribe(
                     str(audio_path),
                     api_key=api_key,
                     audio_base_url=runtime.get("fireworks_audio_base_url")
                     or settings.fireworks_audio_base_url,
                     model_name=runtime.get("fireworks_stt_model") or settings.fireworks_stt_model,
-                    diarize=bool(runtime.get("fireworks_stt_diarize", True)),
-                    chunked=bool(
-                        runtime.get(
-                            "fireworks_chunked_transcription_enabled",
-                            settings.fireworks_chunked_transcription_enabled,
-                        )
-                    ),
+                    diarize=fireworks_diarize,
+                    chunked=chunked_enabled,
                     chunk_target_secs=int(
                         runtime.get("fireworks_chunk_target_secs")
                         if runtime.get("fireworks_chunk_target_secs") is not None
