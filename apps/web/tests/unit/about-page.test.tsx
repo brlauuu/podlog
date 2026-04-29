@@ -130,9 +130,9 @@ describe("<AboutPage>", () => {
     expect(blocks[0]).toHaveTextContent("About body.");
   });
 
-  it("renders a Releases sidebar listing each changelog version", async () => {
+  it("renders the right-rail TOC with About + Changelog and nested versions (#620)", async () => {
     mockReadFile
-      .mockResolvedValueOnce("About body.")
+      .mockResolvedValueOnce("# About Podlog\n\nAbout body.")
       .mockResolvedValueOnce(
         "# Changelog\n\n## [Unreleased]\n\n- foo\n\n## [0.3.0] — 2026-04-24\n\n- bar\n"
       );
@@ -140,23 +140,31 @@ describe("<AboutPage>", () => {
     const jsx = await AboutPage();
     render(jsx);
 
-    expect(screen.getByText("Releases")).toBeInTheDocument();
-    expect(
-      screen.getByText("2 versions · latest [0.3.0]")
-    ).toBeInTheDocument();
-    // The version anchors carry slugified ids matching the heading slugger.
+    // Rail title (matches docs page pattern).
+    expect(screen.getByText("On this page")).toBeInTheDocument();
+
+    // Top-level entries.
+    const aboutLink = screen.getByRole("link", { name: "About" });
+    expect(aboutLink).toHaveAttribute("href", "#about-podlog");
+    const changelogLink = screen.getByRole("link", { name: "Changelog" });
+    expect(changelogLink).toHaveAttribute("href", "#changelog");
+
+    // Nested versions, date stripped, ids match the renderer slugger.
     const unreleased = screen.getByRole("link", { name: "[Unreleased]" });
     expect(unreleased).toHaveAttribute("href", "#unreleased");
+    const v030 = screen.getByRole("link", { name: "[0.3.0]" });
+    expect(v030).toHaveAttribute("href", "#030-2026-04-24");
   });
 
-  it("does not render the Releases sidebar when CHANGELOG.md is missing", async () => {
+  it("does not render the right-rail TOC when CHANGELOG.md is missing", async () => {
     mockReadFile
-      .mockResolvedValueOnce("About body.")
+      .mockResolvedValueOnce("# About Podlog\n\nAbout body.")
       .mockRejectedValueOnce(new Error("ENOENT"));
 
     const jsx = await AboutPage();
     render(jsx);
 
-    expect(screen.queryByText("Releases")).not.toBeInTheDocument();
+    // The "On this page" rail only renders when both H1s are present.
+    expect(screen.queryByText("On this page")).not.toBeInTheDocument();
   });
 });

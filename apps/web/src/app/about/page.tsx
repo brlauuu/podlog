@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 
-import ChangelogToc, { type ChangelogTocItem } from "@/components/ChangelogToc";
+import AboutToc, { type AboutTocItem } from "@/components/AboutToc";
 import { makeUniqueSlugger } from "@/lib/docs-slug";
 
 export const dynamic = "force-dynamic";
@@ -33,29 +33,47 @@ const markdownComponents = {
   },
 };
 
+interface HeadingId {
+  level: 1 | 2;
+  text: string;
+  id: string;
+}
+
 /**
- * Pull the changelog's version-section H2s — lines like
- * `## [0.3.0] — 2026-04-24` or `## [Unreleased]`. Skips other H2s
- * (e.g. the contribution-flow comment helper if one is ever added).
+ * Walk a markdown document and emit `{level, text, id}` for every H1 and H2
+ * encountered, preserving order. The slugger is shared across documents so
+ * collisions across the About + Changelog pages produce stable, unique ids.
  *
- * Pairs each entry with the slug the markdown renderer will produce so
- * the right-rail anchor links resolve to real DOM ids.
+ * Built once on the server so the rendered headings, the right-rail TOC,
+ * and the changelog version list all reference the exact same id strings.
  */
-function extractChangelogVersions(markdown: string): ChangelogTocItem[] {
-  // Slug every H2, but only emit version-shaped ones. Slugging every heading
-  // keeps this slugger's collision counts in lockstep with the renderer's
-  // slugger, so the produced ids match what ends up in the DOM even if a
-  // non-version H2 (e.g. "## Notes") is added between version sections.
-  const slugger = makeUniqueSlugger();
-  const out: ChangelogTocItem[] = [];
+function extractHeadings(
+  markdown: string,
+  slugger: (text: string) => string,
+): HeadingId[] {
+  const out: HeadingId[] = [];
   for (const line of markdown.split("\n")) {
-    const m = line.match(/^##\s+(.+)$/);
+    const m = line.match(/^(#{1,2})\s+(.+)$/);
     if (!m) continue;
-    const text = m[1].trim();
-    const id = slugger(text);
-    if (text.startsWith("[")) out.push({ id, text });
+    const level = m[1].length === 1 ? 1 : 2;
+    const text = m[2].trim();
+    out.push({ level, text, id: slugger(text) });
   }
   return out;
+}
+
+/** Build a Map keyed by the heading's first occurrence — used to look up
+ * ids from React component callbacks without re-slugging (which would
+ * collide and append `-1` suffixes). The first occurrence wins; if a
+ * heading text repeats inside one doc, the second instance gets no id —
+ * that's fine for our use here since the changelog version texts are unique
+ * by construction. */
+function firstOccurrenceMap(headings: HeadingId[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const h of headings) {
+    if (!m.has(h.text)) m.set(h.text, h.id);
+  }
+  return m;
 }
 
 export default async function AboutPage() {
@@ -64,32 +82,63 @@ export default async function AboutPage() {
     readDocOrNull("CHANGELOG.md"),
   ]);
 
-  const versions = changelogContent ? extractChangelogVersions(changelogContent) : [];
+  const slugger = makeUniqueSlugger();
+  const aboutHeadings = aboutContent ? extractHeadings(aboutContent, slugger) : [];
+  const changelogHeadings = changelogContent
+    ? extractHeadings(changelogContent, slugger)
+    : [];
 
-  // The renderer needs a stateful slugger so heading ids are stable and
-  // unique across the rendered changelog. Same scheme the docs page uses.
-  const renderHeadingId = makeUniqueSlugger();
-  const changelogComponents = {
+  const aboutH1 = aboutHeadings.find((h) => h.level === 1);
+  const changelogH1 = changelogHeadings.find((h) => h.level === 1);
+
+  const versions: AboutTocItem[] = changelogHeadings
+    .filter((h) => h.level === 2 && h.text.startsWith("["))
+    .map((h) => ({ id: h.id, text: h.text }));
+
+  const aboutIdByText = firstOccurrenceMap(aboutHeadings);
+  const changelogIdByText = firstOccurrenceMap(changelogHeadings);
+
+  const aboutMarkdownComponents = {
     ...markdownComponents,
+    h1: ({ children }: { children?: React.ReactNode }) => {
+      const text = textFromNode(children).trim();
+      const id = aboutIdByText.get(text);
+      return <h1 id={id}>{children}</h1>;
+    },
+  };
+
+  const changelogMarkdownComponents = {
+    ...markdownComponents,
+    h1: ({ children }: { children?: React.ReactNode }) => {
+      const text = textFromNode(children).trim();
+      const id = changelogIdByText.get(text);
+      return <h1 id={id}>{children}</h1>;
+    },
     h2: ({ children }: { children?: React.ReactNode }) => {
       const text = textFromNode(children).trim();
-      const id = renderHeadingId(text);
+      const id = changelogIdByText.get(text);
       return <h2 id={id}>{children}</h2>;
     },
   };
 
+  const showToc = Boolean(aboutH1 || changelogH1);
+
   return (
     <div className="mx-auto w-full max-w-7xl py-4">
       <div
-        className={`grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,42rem)_minmax(8rem,1fr)] ${versions.length === 0 ? "xl:grid-cols-1" : ""} xl:justify-center`}
+        className={
+          showToc
+            ? "grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,42rem)_minmax(8rem,1fr)] xl:justify-center"
+            : "grid grid-cols-1 gap-6"
+        }
       >
-        <div className="mx-auto w-full max-w-2xl space-y-10 xl:mx-0">
+        <div className="mx-auto w-full max-w-2xl space-y-10 xl:mx-0 [&_h1]:scroll-mt-20 [&_h2]:scroll-mt-20">
           {aboutContent ? (
             <article className="prose prose-sm dark:prose-invert max-w-none leading-7">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}
-                components={markdownComponents}
+                components={aboutMarkdownComponents}
               >
                 {aboutContent}
               </ReactMarkdown>
@@ -107,7 +156,7 @@ export default async function AboutPage() {
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}
-                  components={changelogComponents}
+                  components={changelogMarkdownComponents}
                 >
                   {changelogContent}
                 </ReactMarkdown>
@@ -116,7 +165,12 @@ export default async function AboutPage() {
           )}
         </div>
 
-        <ChangelogToc items={versions} />
+        {showToc && aboutH1 && changelogH1 && (
+          <AboutToc
+            about={{ id: aboutH1.id, label: "About" }}
+            changelog={{ id: changelogH1.id, label: "Changelog", versions }}
+          />
+        )}
       </div>
     </div>
   );
