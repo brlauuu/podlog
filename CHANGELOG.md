@@ -29,10 +29,22 @@ fresh empty `[Unreleased]` is left at the top.
 
 ### Fixes
 - Archive task now captures the tail of `ffmpeg`'s stderr when compression fails, instead of storing the placeholder `"ffmpeg error (see stderr output for detail)"`. ([#603](https://github.com/brlauuu/podlog/pull/603))
-- CI Slow's web e2e job now runs `alembic upgrade head` against `db_test` before serving, fixing the `relation "feeds" does not exist` failure introduced when the SSR e2e specs landed. ([#594](https://github.com/brlauuu/podlog/pull/594) follow-up)
+- CI Slow's web e2e job now runs `alembic upgrade head` against `db_test` before serving, fixing the `relation "feeds" does not exist` failure introduced when the SSR e2e specs landed. (commit `21629cb`)
 
 ### Internal
 - Periodic cleanup task that prunes superseded `failed` rows in `job_queue` (rows whose episode later succeeded). Runs every 24 h; clears noise from the queue dashboard's "failed" counter. ([#604](https://github.com/brlauuu/podlog/pull/604))
+- New "Changelog" CI check fails any PR that doesn't touch `CHANGELOG.md`; opt out per-PR with the `no-changelog` label. ([#605](https://github.com/brlauuu/podlog/pull/605))
+
+### Other minor changes
+- Zod runtime validation for the settings response. ([#588](https://github.com/brlauuu/podlog/pull/588))
+- Keyword search across docs. ([#589](https://github.com/brlauuu/podlog/pull/589))
+- Filter podcast episodes list by speaker name. ([#593](https://github.com/brlauuu/podlog/pull/593))
+- Format all dates as DD/MM/YYYY app-wide. ([#594](https://github.com/brlauuu/podlog/pull/594))
+
+### Other fixes
+- Remove "Large tiles" option from podcasts list. ([#585](https://github.com/brlauuu/podlog/pull/585))
+- Surface unavailable audio in the player + add a recovery script. ([#586](https://github.com/brlauuu/podlog/pull/586))
+- Exclude `tests/**` from base tsconfig so `tsc --noEmit` passes. ([#587](https://github.com/brlauuu/podlog/pull/587))
 
 ## [0.3.0] — 2026-04-24
 
@@ -43,6 +55,28 @@ fresh empty `[Unreleased]` is left at the top.
 - Inference service split into focused modules; queue read path moved to pipeline API. ([#577](https://github.com/brlauuu/podlog/pull/577), [#578](https://github.com/brlauuu/podlog/pull/578))
 - Recharts upgraded 2 → 3. ([#575](https://github.com/brlauuu/podlog/pull/575))
 - New e2e coverage for queue, meta-analysis, Ask AI, and SSR pages. ([#582](https://github.com/brlauuu/podlog/pull/582), [#583](https://github.com/brlauuu/podlog/pull/583))
+
+### Other fixes
+- Center text in Search and Ask search bars. ([#584](https://github.com/brlauuu/podlog/pull/584))
+
+### Docs
+- Refresh CLAUDE.md repo structure + current state. ([#557](https://github.com/brlauuu/podlog/pull/557))
+- Refresh README versions + Meta-Analysis feature. ([#558](https://github.com/brlauuu/podlog/pull/558))
+- Sync dev guide + user guide with current codebase. ([#559](https://github.com/brlauuu/podlog/pull/559))
+- Reflect shipped features in PRD roadmaps. ([#560](https://github.com/brlauuu/podlog/pull/560))
+
+### Tests
+- Cover low-coverage pipeline modules. ([#563](https://github.com/brlauuu/podlog/pull/563))
+- Cover meta-analysis + pipeline/ask API routes. ([#568](https://github.com/brlauuu/podlog/pull/568))
+- Cover lib helpers (db, filterOpts, mentions, grouped). ([#570](https://github.com/brlauuu/podlog/pull/570))
+- Cover simple UI components. ([#571](https://github.com/brlauuu/podlog/pull/571))
+- Cover meta-analysis chart transforms + render smoke. ([#572](https://github.com/brlauuu/podlog/pull/572))
+- Cover EpisodeChat UI states and submit error paths. ([#573](https://github.com/brlauuu/podlog/pull/573))
+
+### Other internal
+- Remove orphan nightly-audit script. ([#561](https://github.com/brlauuu/podlog/pull/561))
+- Remove unused web params, imports, and props. ([#562](https://github.com/brlauuu/podlog/pull/562))
+- Bump web patch/minor deps. ([#574](https://github.com/brlauuu/podlog/pull/574))
 
 ## [0.2.0] — 2026-04-24
 
@@ -71,6 +105,12 @@ fresh empty `[Unreleased]` is left at the top.
 - `feed_speaker_cache` UUID inserts no longer cast to text, fixing pipeline boot under PostgreSQL 15. ([#532](https://github.com/brlauuu/podlog/pull/532))
 - Confidence reconciliation in `merge_candidates` no longer demotes high-confidence inferences. ([#534](https://github.com/brlauuu/podlog/pull/534))
 - `PYANNOTE_MODEL` resolves the correct repo id, with an actionable error message when HF auth is missing. ([#539](https://github.com/brlauuu/podlog/pull/539))
+
+### Other minor changes
+- Add Explore button to landing page. ([#535](https://github.com/brlauuu/podlog/pull/535))
+
+### Other fixes
+- Preserve unicode characters in export filenames. ([#540](https://github.com/brlauuu/podlog/pull/540))
 
 ## [0.1.1] — 2026-04-07
 
@@ -111,6 +151,105 @@ fresh empty `[Unreleased]` is left at the top.
 - CI enforces test coverage thresholds (pipeline 82%, web via `coverageThreshold`). ([#483](https://github.com/brlauuu/podlog/pull/483))
 - "Operational Gotchas" section added to `CLAUDE.md` so issues like the UUID cast that bit us in #532 don't repeat. ([#533](https://github.com/brlauuu/podlog/pull/533))
 
+### Other minor changes
+- Upgrade landing page branding and CTA. ([#292](https://github.com/brlauuu/podlog/pull/292))
+- Persist Ask/Search state across navigation. ([#293](https://github.com/brlauuu/podlog/pull/293))
+- Stabilize Ask layout and add help popover. ([#295](https://github.com/brlauuu/podlog/pull/295))
+- Declare numpy as a direct Poetry dependency. ([#299](https://github.com/brlauuu/podlog/pull/299))
+- Integrate healthcheck tests into the supported unit-test layout. ([#300](https://github.com/brlauuu/podlog/pull/300))
+- Refresh CLAUDE.md to match current repo state. ([#301](https://github.com/brlauuu/podlog/pull/301))
+- Prune unused dependencies and exports. ([#305](https://github.com/brlauuu/podlog/pull/305))
+- Add copyright disclaimer to README and About page. ([#317](https://github.com/brlauuu/podlog/pull/317))
+- Center landing page hero block in viewport. ([#331](https://github.com/brlauuu/podlog/pull/331))
+- Monochrome action system + centralized action color. ([#333](https://github.com/brlauuu/podlog/pull/333))
+- Improve UI of episodes page. ([#363](https://github.com/brlauuu/podlog/pull/363))
+- UI fix for episode page navigation. ([#364](https://github.com/brlauuu/podlog/pull/364))
+- Update README credits with linked agents and platforms. ([#383](https://github.com/brlauuu/podlog/pull/383))
+- UI tag and inference label adjustments on podcast episodes. ([#388](https://github.com/brlauuu/podlog/pull/388))
+- Remove episode count from Ask page help hover. ([#400](https://github.com/brlauuu/podlog/pull/400))
+- Update About-page credits to match README format. ([#406](https://github.com/brlauuu/podlog/pull/406))
+- Revert About page to `max-w-2xl` width. ([#435](https://github.com/brlauuu/podlog/pull/435))
+- Remove width cap on docs page to maximise content column. ([#442](https://github.com/brlauuu/podlog/pull/442))
+- Match "Manage feeds" button styling to "Upload audio". ([#462](https://github.com/brlauuu/podlog/pull/462))
+- Compact Sources section buttons + podcast count. ([#464](https://github.com/brlauuu/podlog/pull/464))
+
+### Other fixes
+- Episode nav placement and help dropdown opacity. ([#247](https://github.com/brlauuu/podlog/pull/247))
+- Wizard dismiss on step-2 skip; tests aligned. ([#253](https://github.com/brlauuu/podlog/pull/253))
+- Skip archive compression when source is already in the archive directory. ([#266](https://github.com/brlauuu/podlog/pull/266))
+- Ask "source play" action now starts embedded audio. ([#294](https://github.com/brlauuu/podlog/pull/294))
+- Standardize Ask timestamp deep-links. ([#303](https://github.com/brlauuu/podlog/pull/303))
+- Repair pipeline container test harness. ([#308](https://github.com/brlauuu/podlog/pull/308))
+- Spinner layout shift on Search and Ask. ([#316](https://github.com/brlauuu/podlog/pull/316))
+- Wizard skip/completion navigation regressions. ([#336](https://github.com/brlauuu/podlog/pull/336))
+- Selective-episodes dialog overflow and speaker-click re-scroll. ([#348](https://github.com/brlauuu/podlog/pull/348))
+- Speaker tags on podcast episode list. ([#379](https://github.com/brlauuu/podlog/pull/379))
+- Docs tab markdown link resolution. ([#381](https://github.com/brlauuu/podlog/pull/381))
+- Inference tags now render with the requested colors. ([#397](https://github.com/brlauuu/podlog/pull/397))
+- Load the `/docs` listing at runtime. ([#404](https://github.com/brlauuu/podlog/pull/404))
+- Explicit speaker actions and direct inferred-name confirmation. ([#405](https://github.com/brlauuu/podlog/pull/405))
+- Stabilize Node runtime checks and outdated-package workflow. ([#413](https://github.com/brlauuu/podlog/pull/413))
+- About page spans content full width. ([#434](https://github.com/brlauuu/podlog/pull/434))
+- Align docs TOC with navbar edge and stretch content. ([#440](https://github.com/brlauuu/podlog/pull/440))
+- Float episode Ask button above audio player. ([#451](https://github.com/brlauuu/podlog/pull/451))
+- Stack floating buttons above audio player (follow-up to #448). ([#453](https://github.com/brlauuu/podlog/pull/453))
+- Serialize feed `id` as text in `GET /api/feeds`. ([#456](https://github.com/brlauuu/podlog/pull/456))
+- Raise Ask download dropdown above chat panel. ([#463](https://github.com/brlauuu/podlog/pull/463))
+
+### Docs
+- Fix RAG, lifecycle, and health-check config accuracy. ([#251](https://github.com/brlauuu/podlog/pull/251))
+- Refresh stale search paths and test count references. ([#252](https://github.com/brlauuu/podlog/pull/252))
+- Clarify audit workflows and findings lifecycle. ([#254](https://github.com/brlauuu/podlog/pull/254))
+- Refresh README/docs freshness on latest main. ([#269](https://github.com/brlauuu/podlog/pull/269))
+- Sync routes and Ask config. ([#306](https://github.com/brlauuu/podlog/pull/306))
+- Align CLAUDE.md claims with current codebase. ([#334](https://github.com/brlauuu/podlog/pull/334))
+- Align stage/status docs and make `test-unit` scope match reality. ([#335](https://github.com/brlauuu/podlog/pull/335))
+- Fix CLAUDE and audit-spec stale claims. ([#415](https://github.com/brlauuu/podlog/pull/415))
+- Deprecate obsolete worker-splitting spec. ([#416](https://github.com/brlauuu/podlog/pull/416))
+- Update CLAUDE.md and fix stale documentation. ([#482](https://github.com/brlauuu/podlog/pull/482))
+- Fix PRD/CLAUDE.md drift. ([#500](https://github.com/brlauuu/podlog/pull/500))
+
+### Tests
+- Improve coverage for audio player context. ([#249](https://github.com/brlauuu/podlog/pull/249))
+- Wizard regression coverage. ([#307](https://github.com/brlauuu/podlog/pull/307))
+- Targeted pipeline coverage for failure paths. ([#309](https://github.com/brlauuu/podlog/pull/309))
+- Restore runnable Playwright e2e setup. ([#310](https://github.com/brlauuu/podlog/pull/310))
+- Use full web coverage denominator. ([#311](https://github.com/brlauuu/podlog/pull/311))
+- Targeted coverage for queue/search/speaker and pipeline embed flows. ([#339](https://github.com/brlauuu/podlog/pull/339))
+- Fix CI failures from pyannote soundfile import and Ask floating button. ([#465](https://github.com/brlauuu/podlog/pull/465))
+- Fix integration tests for CI Slow. ([#466](https://github.com/brlauuu/podlog/pull/466))
+- Cover audio route with full handler tests. ([#505](https://github.com/brlauuu/podlog/pull/505))
+- Cover 5 zero-coverage proxy API routes. ([#506](https://github.com/brlauuu/podlog/pull/506))
+- Cover 6 more zero-coverage proxy routes. ([#507](https://github.com/brlauuu/podlog/pull/507))
+- Cover `api/queue` route. ([#508](https://github.com/brlauuu/podlog/pull/508))
+- Cover episode mutation routes incl. transactional merge. ([#509](https://github.com/brlauuu/podlog/pull/509))
+- Cover simple components, pages, and grouping helper. ([#510](https://github.com/brlauuu/podlog/pull/510))
+- Cover FeedCard and FeedsListSection. ([#511](https://github.com/brlauuu/podlog/pull/511))
+- Split long test files per scenario. ([#512](https://github.com/brlauuu/podlog/pull/512))
+
+### Other internal
+- Clean dead code and wire healthcheck tests. ([#250](https://github.com/brlauuu/podlog/pull/250))
+- Add minimal GitHub Actions workflow for test freshness. ([#270](https://github.com/brlauuu/podlog/pull/270))
+- Refactor notification runtime/event modules and split settings UI. ([#313](https://github.com/brlauuu/podlog/pull/313))
+- Refactor search and queue logic boundaries. ([#314](https://github.com/brlauuu/podlog/pull/314))
+- Align local Node requirements with Next.js 16. ([#337](https://github.com/brlauuu/podlog/pull/337))
+- Remove dead stubs and unused exports. ([#338](https://github.com/brlauuu/podlog/pull/338))
+- Remove orphan CSS declaration and redundant UI exports. ([#414](https://github.com/brlauuu/podlog/pull/414))
+- Extract FeedCard from feeds page. ([#418](https://github.com/brlauuu/podlog/pull/418))
+- Extract NotificationSection cards. ([#419](https://github.com/brlauuu/podlog/pull/419))
+- Extract RemoteInferenceSection parts. ([#420](https://github.com/brlauuu/podlog/pull/420))
+- Extract top controls from search page. ([#421](https://github.com/brlauuu/podlog/pull/421))
+- Extract inference text helpers. ([#429](https://github.com/brlauuu/podlog/pull/429))
+- Extract digest formatter helpers. ([#430](https://github.com/brlauuu/podlog/pull/430))
+- Split search page pagination and empty state. ([#432](https://github.com/brlauuu/podlog/pull/432))
+- Remove orphaned wizard/help-menu dead code and unused test fixtures. ([#480](https://github.com/brlauuu/podlog/pull/480))
+- Remove orphaned root `package-lock.json`. ([#481](https://github.com/brlauuu/podlog/pull/481))
+- Extract shared search filter builders from `search.ts`. ([#484](https://github.com/brlauuu/podlog/pull/484))
+- Extract task registry from `worker.py`. ([#485](https://github.com/brlauuu/podlog/pull/485))
+- Un-export page-state snapshot types. ([#501](https://github.com/brlauuu/podlog/pull/501))
+- Bump minor/patch npm deps. ([#502](https://github.com/brlauuu/podlog/pull/502))
+- Split `search.ts` into per-function modules. ([#504](https://github.com/brlauuu/podlog/pull/504))
+
 ## [0.1.0] — 2026-04-04
 
 ### Major changes
@@ -141,6 +280,41 @@ fresh empty `[Unreleased]` is left at the top.
 - Feedless episodes included in search results. ([#129](https://github.com/brlauuu/podlog/pull/129))
 - Wizard UX bugs — close button, Get Started navigation, test-mode color, skip-to-completion flow. ([#153](https://github.com/brlauuu/podlog/pull/153), [#196](https://github.com/brlauuu/podlog/pull/196), [#302](https://github.com/brlauuu/podlog/pull/302), [#304](https://github.com/brlauuu/podlog/pull/304))
 
+### Other minor changes
+- UI tweaks — prominent titles, navbar About, inline search tips. ([#221](https://github.com/brlauuu/podlog/pull/221))
+- Add avg episode length and processing factor to notifications. ([#230](https://github.com/brlauuu/podlog/pull/230))
+
+### Other fixes
+- Add missing `notification_log` migration. ([#126](https://github.com/brlauuu/podlog/pull/126))
+- Repair test harness env vars and broken service. ([#127](https://github.com/brlauuu/podlog/pull/127))
+- Type annotations, status comment, and embedding status tracking. ([#132](https://github.com/brlauuu/podlog/pull/132))
+- Correct failing web tests for path traversal and grouped search. ([#148](https://github.com/brlauuu/podlog/pull/148))
+- Add `torchaudio` as an explicit dependency. ([#155](https://github.com/brlauuu/podlog/pull/155))
+- Resolve remaining #104 review findings (notifications + test stack). ([#164](https://github.com/brlauuu/podlog/pull/164))
+- Fix episode page navigation ordering. ([#231](https://github.com/brlauuu/podlog/pull/231))
+- Fix PRD staleness in PRD-02 and PRD-04. ([#241](https://github.com/brlauuu/podlog/pull/241))
+- Fix PIPELINE_API vs PIPELINE_API_URL inconsistency. ([#242](https://github.com/brlauuu/podlog/pull/242))
+- Fix wizard accessibility and API compliance gaps. ([#243](https://github.com/brlauuu/podlog/pull/243))
+
+### Docs
+- Update stale CLAUDE.md to current reality. ([#130](https://github.com/brlauuu/podlog/pull/130))
+- Update CLAUDE.md to match current codebase. ([#149](https://github.com/brlauuu/podlog/pull/149))
+- Update all PRDs to match current codebase. ([#150](https://github.com/brlauuu/podlog/pull/150))
+- Fix test counts and add missing Ollama service. ([#154](https://github.com/brlauuu/podlog/pull/154))
+- Fix stale documentation across CLAUDE.md, README, PRDs, and guides. ([#195](https://github.com/brlauuu/podlog/pull/195))
+- Document Codex and Claude audit workflows. ([#232](https://github.com/brlauuu/podlog/pull/232))
+- CLAUDE.md accuracy sweep. ([#245](https://github.com/brlauuu/podlog/pull/245))
+
+### Tests
+- Add 62 pipeline unit tests for uncovered files. ([#159](https://github.com/brlauuu/podlog/pull/159))
+- Improve coverage for episodes API, RAG service, WizardAddFeed. ([#200](https://github.com/brlauuu/podlog/pull/200))
+
+### Other internal
+- Remove unused `soundfile` dependency. ([#156](https://github.com/brlauuu/podlog/pull/156))
+- npm cleanup — remove unused packages, bump `lucide-react` and `tailwind-merge`. ([#157](https://github.com/brlauuu/podlog/pull/157))
+- Remove unused `@types/dompurify`, add explicit `pydantic` dep. ([#199](https://github.com/brlauuu/podlog/pull/199))
+- Bump `@tanstack/react-query` floor to ^5.96.2. ([#227](https://github.com/brlauuu/podlog/pull/227))
+
 ## [0.0.0] — 2026-03-14 to 2026-04-03 (pre-versioning)
 
 The pre-versioning era — initial scaffold and the bulk of foundational features. Not a single release; every notable user-facing addition during this window is bucketed here under one heading.
@@ -161,7 +335,7 @@ The pre-versioning era — initial scaffold and the bulk of foundational feature
 - **Comprehensive user guide** added at `docs/guide`. ([#109](https://github.com/brlauuu/podlog/pull/109))
 
 ### Internal — major architectural simplification (Phase 0–4)
-The early stack was inherited from a more complex design. PRs [#62](https://github.com/brlauuu/podlog/pull/62)–[#65](https://github.com/brlauuu/podlog/pull/65) reduced operational overhead substantially:
+The early stack was inherited from a more complex design. PRs [#62](https://github.com/brlauuu/podlog/pull/62), [#63](https://github.com/brlauuu/podlog/pull/63), [#64](https://github.com/brlauuu/podlog/pull/64), [#65](https://github.com/brlauuu/podlog/pull/65) reduced operational overhead substantially:
 
 - **Phase 0–1**: bug fixes and code deduplication.
 - **Phase 2**: container consolidation (8 services → 5).
@@ -176,6 +350,30 @@ The early stack was inherited from a more complex design. PRs [#62](https://gith
 - Notification settings persist across page revisits. ([#100](https://github.com/brlauuu/podlog/pull/100))
 - Healthcheck Telegram 400 Bad Request. ([#122](https://github.com/brlauuu/podlog/pull/122))
 - Path-traversal protection on the audio route. ([#34](https://github.com/brlauuu/podlog/pull/34))
+
+### Other minor changes
+- Add processing duration tracking for transcribe and diarize tasks. ([#19](https://github.com/brlauuu/podlog/pull/19))
+- Add landing page branding, footer, and O'Saasy license. ([#21](https://github.com/brlauuu/podlog/pull/21))
+- Restyle footer and theme to match blog, add per-service health. ([#26](https://github.com/brlauuu/podlog/pull/26))
+- Link `brlauuu` references to GitHub Pages blog. ([#29](https://github.com/brlauuu/podlog/pull/29))
+- Preserve search query for back-navigation from episode page. ([#43](https://github.com/brlauuu/podlog/pull/43))
+- Install spaCy model in pipeline Docker image. ([#50](https://github.com/brlauuu/podlog/pull/50))
+- Link queue items to episode page. ([#75](https://github.com/brlauuu/podlog/pull/75))
+- Skip `COUNT(*)` query on search page 2+. ([#76](https://github.com/brlauuu/podlog/pull/76))
+- Episode selection when adding a feed; fix test-mode ordering. ([#86](https://github.com/brlauuu/podlog/pull/86))
+
+### Other fixes
+- Retry endpoint for stalled jobs. ([#52](https://github.com/brlauuu/podlog/pull/52))
+- Loading feedback on the "Poll Now" button. ([#73](https://github.com/brlauuu/podlog/pull/73))
+- Queue page reads `job_queue` for active/pending state. ([#99](https://github.com/brlauuu/podlog/pull/99))
+- Notification processing total. ([#107](https://github.com/brlauuu/podlog/pull/107))
+
+### Docs
+- Rewrite README and add project documentation. ([#79](https://github.com/brlauuu/podlog/pull/79))
+- Health-monitoring setup and `postgresql-client` prerequisite. ([#121](https://github.com/brlauuu/podlog/pull/121))
+
+### Other internal
+- Split Celery worker into heavy and light queues (later removed in Phase 3). ([#51](https://github.com/brlauuu/podlog/pull/51))
 
 [Unreleased]: https://github.com/brlauuu/podlog/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/brlauuu/podlog/compare/v0.2.0...v0.3.0
