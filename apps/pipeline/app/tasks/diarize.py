@@ -45,7 +45,15 @@ def diarize_episode(episode_id: str) -> str:
         diarization_runtime = get_runtime_diarization_settings(db)
         diarization_provider = diarization_runtime.get("diarization_provider") or "local"
 
-        if provider == "fireworks":
+        # Issue #610: chunked Fireworks transcription does not carry usable
+        # speaker IDs (per-chunk numbering can't be reconciled across the
+        # episode), so route diarization to the whole-file path governed by
+        # diarization_provider — exactly as if inference_provider were local.
+        chunked_fireworks = provider == "fireworks" and bool(
+            runtime.get("fireworks_chunked_transcription_enabled")
+        )
+
+        if provider == "fireworks" and not chunked_fireworks:
             # Fireworks mode uses remote diarization metadata and never loads pyannote locally.
             step_durations: dict[str, float] = {}
             try:
