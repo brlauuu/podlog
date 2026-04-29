@@ -1,0 +1,9 @@
+# Issue #607: explore service dependencies.
+# Pinned to known-working versions; bump in lockstep when upgrading.
+jupyterlab==4.3.5
+ipywidgets==8.1.5
+pandas==2.2.3
+numpy==2.2.2
+plotly==5.24.1
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10

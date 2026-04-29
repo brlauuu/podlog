@@ -1,0 +1,7 @@
+# Issue #607: only the curated examples are checked in. User scratch work
+# (and Jupyter checkpoints) stay local.
+*
+!.gitignore
+!examples/
+!examples/**
+.ipynb_checkpoints/
