@@ -241,8 +241,31 @@ def format_done_telegram(event: EpisodeDoneEvent) -> str:
     )
 
 
+def _fmt_action_required_html(event: EpisodeFailedEvent) -> str:
+    """Render a yellow call-to-action banner for failures the user must act on."""
+    if event.error_class != "FIREWORKS_UPLOAD_REJECTED":
+        return ""
+    return (
+        '  <div style="margin-top: 16px; padding: 12px; border-radius: 6px; '
+        'background: #fef3c7; color: #78350f; border: 1px solid #fbbf24;">'
+        '<strong>Action required:</strong> Fireworks rejected this upload. '
+        'Re-enqueue this episode against local inference to process it.'
+        "</div>"
+    )
+
+
+def _fmt_action_required_telegram(event: EpisodeFailedEvent) -> str:
+    if event.error_class != "FIREWORKS_UPLOAD_REJECTED":
+        return ""
+    return (
+        "\n\n*⚠️ Action required:* Fireworks rejected this upload. "
+        "Re-enqueue this episode against local inference to process it."
+    )
+
+
 def format_failed_html(event: EpisodeFailedEvent) -> str:
     avg_html = _fmt_avg_section_html(event)
+    action_html = _fmt_action_required_html(event)
     return f"""\
 <html>
 <body style="font-family: -apple-system, Arial, sans-serif; color: #222; max-width: 520px; margin: 0 auto; padding: 16px;">
@@ -269,6 +292,7 @@ def format_failed_html(event: EpisodeFailedEvent) -> str:
     <tr><td style="padding: 4px 12px; color: #666;">Retries</td>
         <td style="padding: 4px 12px;">{event.retry_count}/{event.retry_max}</td></tr>
   </table>
+{action_html}
 {avg_html}
   <h3 style="margin-top: 20px; margin-bottom: 8px;">Queue Status</h3>
   <table style="border-collapse: collapse; width: 100%;">
@@ -286,6 +310,7 @@ def format_failed_html(event: EpisodeFailedEvent) -> str:
 
 def format_failed_telegram(event: EpisodeFailedEvent) -> str:
     avg_section = _fmt_avg_section_telegram(event)
+    action_section = _fmt_action_required_telegram(event)
     return (
         f"*❌ Episode Failed*\n\n"
         f"*Podcast:* {event.podcast_title}\n"
@@ -295,7 +320,8 @@ def format_failed_telegram(event: EpisodeFailedEvent) -> str:
         f"*Error*\n"
         f"`Class:    {event.error_class}`\n"
         f"`Details:  {event.error_message}`\n"
-        f"`Retries:  {event.retry_count}/{event.retry_max}`\n"
+        f"`Retries:  {event.retry_count}/{event.retry_max}`"
+        f"{action_section}\n"
         f"{avg_section}\n"
         f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate_with_provider(event.queue_estimated_secs, getattr(event, 'queue_estimate_provider', None))}"
     )
