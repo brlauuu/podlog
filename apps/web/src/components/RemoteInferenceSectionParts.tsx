@@ -431,9 +431,129 @@ export function PipelineStepCards({
                 ))}
               </SelectContent>
             </Select>
+            {step.key === "transcription" && remote && (
+              <TranscriptionChunkedSection
+                settings={settings}
+                onChange={onChange}
+              />
+            )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function TranscriptionChunkedSection({
+  settings,
+  onChange,
+}: {
+  settings: Settings;
+  onChange: (field: keyof Settings, value: string | number | boolean | null) => void;
+}) {
+  const enabled = settings.fireworks_chunked_transcription_enabled;
+
+  return (
+    <div className="mt-4 rounded-md border border-border bg-muted/30 p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <label
+            htmlFor="chunked-transcription-toggle"
+            className="text-sm font-medium block"
+          >
+            Chunk long episodes
+          </label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Split long audio into smaller pieces, transcribe each separately,
+            then stitch them back together. Works around Fireworks&apos;s
+            upload size cap. Diarization runs as a single whole-file pass via
+            the Diarization step&apos;s configured provider.
+          </p>
+        </div>
+        <Switch
+          id="chunked-transcription-toggle"
+          checked={enabled}
+          onCheckedChange={(checked) =>
+            onChange("fireworks_chunked_transcription_enabled", checked)
+          }
+        />
+      </div>
+
+      {enabled && (
+        <Collapsible>
+          <CollapsibleTrigger className="flex w-full items-center justify-between text-left text-xs text-muted-foreground hover:text-foreground">
+            <span>Advanced tunables</span>
+            <span>Show</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <ChunkNumberField
+                id="chunk-target-secs"
+                label="Chunk size (sec)"
+                min={60}
+                value={settings.fireworks_chunk_target_secs}
+                onChange={(v) => onChange("fireworks_chunk_target_secs", v)}
+                hint="Default 900 (15 min). Smaller = more uploads, less risk of cap."
+              />
+              <ChunkNumberField
+                id="chunk-overlap-secs"
+                label="Overlap (sec)"
+                min={0}
+                value={settings.fireworks_chunk_overlap_secs}
+                onChange={(v) => onChange("fireworks_chunk_overlap_secs", v)}
+                hint="Default 3. Buffer for word boundaries straddling cuts."
+              />
+              <ChunkNumberField
+                id="chunk-max-retries"
+                label="Per-chunk retries"
+                min={0}
+                value={settings.fireworks_chunk_max_retries}
+                onChange={(v) => onChange("fireworks_chunk_max_retries", v)}
+                hint="Default 2. Retries on transient errors (not on size cap)."
+              />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+    </div>
+  );
+}
+
+function ChunkNumberField({
+  id,
+  label,
+  min,
+  value,
+  onChange,
+  hint,
+}: {
+  id: string;
+  label: string;
+  min: number;
+  value: number;
+  onChange: (next: number) => void;
+  hint: string;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-medium mb-1">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="number"
+        min={min}
+        step={1}
+        className={inputClass}
+        value={value}
+        onChange={(e) => {
+          const parsed = parseInt(e.target.value, 10);
+          if (Number.isFinite(parsed) && parsed >= min) {
+            onChange(parsed);
+          }
+        }}
+      />
+      <p className="text-[11px] text-muted-foreground mt-1">{hint}</p>
     </div>
   );
 }
