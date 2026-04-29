@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Settings } from "./NotificationSettingsSections";
+import { RAG_MODELS, FIREWORKS_CHAT_MODELS } from "@/lib/rag-models";
 
 export interface HardwareInfo {
   hardware: {
@@ -143,18 +144,26 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     remoteModelField: "fireworks_embedding_model",
   },
   {
+    // Issue #608: dedicated rag_provider toggle. Independent of
+    // inference_provider so enabling Fireworks for transcription does not
+    // implicitly send retrieved transcript chunks to Fireworks for answer
+    // generation.
     key: "rag",
     title: "RAG / Ask",
     description:
-      "Powers the Ask AI feature using retrieval-augmented generation with a local Ollama model.",
-    remoteAvailable: false,
-    disabledReason:
-      "RAG-powered Ask uses a local Ollama model. Remote LLM support is planned.",
-    providerField: null,
-    localModels: [{ value: "ollama", label: "Ollama (local LLM)" }],
-    remoteModels: [],
+      "Powers the Ask AI feature using retrieval-augmented generation. Local routes generation through Ollama; remote sends retrieved transcript chunks + your question to Fireworks for answer generation.",
+    remoteAvailable: true,
+    providerField: "rag_provider",
+    localModels: RAG_MODELS.map((m) => ({ value: m.value, label: m.label })),
+    remoteModels: FIREWORKS_CHAT_MODELS.map((m) => ({
+      value: m.value,
+      label: `${m.label} — ${m.description}`,
+    })),
+    // Local models on the Ask page are picked per-request (see /ask). The
+    // configured remote model lives in fireworks_chat_model, used as the
+    // default Fireworks pick when no per-request override is supplied.
     modelField: null,
-    remoteModelField: null,
+    remoteModelField: "fireworks_chat_model",
   },
 ];
 
@@ -264,6 +273,24 @@ export function RemoteProviderIntro() {
             <SelectItem value="fireworks">Fireworks AI</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Issue #608: explicit data-egress notice so users know what leaves
+          their machine when they flip a step to remote. */}
+      <div
+        role="note"
+        className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-foreground"
+      >
+        <p className="font-medium text-amber-700 dark:text-amber-400 mb-1">
+          Privacy: what leaves your machine
+        </p>
+        <p className="text-muted-foreground">
+          When a pipeline step is set to a remote provider, the data for that
+          step (audio for transcription &amp; diarization; queries and retrieved
+          transcript chunks for RAG / Ask; embedding inputs for embeddings) is
+          sent to that provider&apos;s servers for processing. Steps left on{" "}
+          <b>local</b> stay on this machine.
+        </p>
       </div>
 
       <Collapsible>

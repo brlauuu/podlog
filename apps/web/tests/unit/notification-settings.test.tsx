@@ -43,6 +43,7 @@ const defaultSettings = {
   fireworks_chunk_target_secs: 900,
   fireworks_chunk_overlap_secs: 3,
   fireworks_chunk_max_retries: 2,
+  rag_provider: "local",
   telegram_configured: false,
   email_configured: false,
   fireworks_configured: false,
@@ -209,6 +210,68 @@ describe("NotificationSettings", () => {
     await waitFor(() => {
       const saveBtn = screen.getByRole("button", { name: /save/i });
       expect(saveBtn).toBeDisabled();
+    });
+  });
+
+  it("Inference Save enables and PUTs rag_provider when RAG step toggled (#608)", async () => {
+    // Regression test: rag_provider must route to dirtyInference (not
+    // dirtyNotifications). Same class of bug as #610 PR 4 — without lockstep
+    // between INFERENCE_FIELDS and the actual UI surface, the Inference Save
+    // button stays disabled and the change is dropped.
+    const user = userEvent.setup();
+    mockFetch.mockImplementation((url: string) => {
+      if (url === "/api/hardware") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            hardware: null,
+            profile: null,
+            profile_label: null,
+            estimates: {},
+          }),
+        });
+      }
+      // Need a Fireworks API key set, otherwise the toggle opens the
+      // API-key-required dialog instead of switching.
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          ...defaultSettings,
+          fireworks_api_key: "fw_test",
+          fireworks_configured: true,
+        }),
+      });
+    });
+
+    render(<NotificationSettings />);
+    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    await user.click(inferenceTab);
+
+    // Find the RAG / Ask step's toggle. Each step renders a Switch; the RAG
+    // step is identifiable by the "RAG / Ask" heading. The Switch is the
+    // sibling Remote/Local control next to it.
+    const ragHeading = await screen.findByText("RAG / Ask");
+    const ragCard = ragHeading.closest("div.rounded-lg");
+    expect(ragCard).not.toBeNull();
+    const toggle = ragCard!.querySelector("[role='switch']") as HTMLElement;
+    expect(toggle).not.toBeNull();
+    fireEvent.click(toggle);
+
+    // The toggle requires a Fireworks API key; the fixture has one set.
+    // Save button must enable.
+    await waitFor(() => {
+      const saveBtn = screen.getByRole("button", { name: /save/i });
+      expect(saveBtn).not.toBeDisabled();
+    });
+    await user.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => {
+      const putCall = mockFetch.mock.calls.find(
+        (c: [string, RequestInit?]) => c[1]?.method === "PUT"
+      );
+      expect(putCall).toBeTruthy();
+      const body = JSON.parse(putCall![1]!.body as string);
+      expect(body.rag_provider).toBe("fireworks");
     });
   });
 

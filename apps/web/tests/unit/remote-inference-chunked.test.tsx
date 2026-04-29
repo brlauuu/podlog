@@ -40,6 +40,7 @@ const baseSettings: Settings = {
   fireworks_chunk_target_secs: 900,
   fireworks_chunk_overlap_secs: 3,
   fireworks_chunk_max_retries: 2,
+  rag_provider: "local",
   telegram_configured: false,
   email_configured: false,
   fireworks_configured: true,

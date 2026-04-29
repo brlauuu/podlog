@@ -59,6 +59,7 @@ export const SettingsSchema = z.object({
   inference_provider: z.enum(["local", "fireworks"]),
   embedding_provider: z.enum(["local", "fireworks"]),
   diarization_provider: z.enum(["local", "precision2"]),
+  rag_provider: z.enum(["local", "fireworks"]),
 
   // Server-computed read-only flags. Not in _FIELDS but always present in
   // the response payload — derived booleans the API includes alongside

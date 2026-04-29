@@ -32,6 +32,8 @@ const INFERENCE_FIELDS = new Set<keyof Settings>([
   "fireworks_chunk_target_secs",
   "fireworks_chunk_overlap_secs",
   "fireworks_chunk_max_retries",
+  // RAG / Ask provider (Issue #608)
+  "rag_provider",
   // Embedding provider
   "embedding_provider",
   "embedding_model",
