@@ -137,7 +137,17 @@ def transcribe_episode(episode_id: str) -> str:
                         error_msg=str(exc),
                     )
                 else:
-                    _mark_failed(db, episode_id, exc.error_class, str(exc))
+                    msg = str(exc)
+                    if exc.error_class == "FIREWORKS_UPLOAD_REJECTED" and episode.duration_secs:
+                        h, rem = divmod(int(episode.duration_secs), 3600)
+                        m, _ = divmod(rem, 60)
+                        dur = f"{h}h {m:02d}m" if h else f"{m}m"
+                        msg = msg.replace(
+                            "Re-run this episode on local inference.",
+                            f"Episode is {dur} long. Re-run this episode on local inference.",
+                            1,
+                        )
+                    _mark_failed(db, episode_id, exc.error_class, msg)
                 logger.warning(
                     '"action": "fireworks_transcribe_error", "episode_id": "%s", '
                     '"error_class": "%s", "retryable": %s, "error": "%s"',

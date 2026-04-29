@@ -229,6 +229,57 @@ def test_classify_http_error_marks_4xx_as_http_access_retryable():
     assert _classify_http_error(403) == ("HTTP_ACCESS", True)
 
 
+def test_transcribe_classifies_bad_record_mac_as_upload_rejected(tmp_path: Path):
+    """SSL `BAD_RECORD_MAC` mid-upload means an upstream proxy aborted us — issue #600."""
+    audio_path = tmp_path / "sample.mp3"
+    audio_path.write_bytes(b"x" * (5 * 1024 * 1024))  # 5 MB so the message has a real size
+
+    with patch("app.services.fireworks_audio.httpx.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client.post.side_effect = httpx.NetworkError(
+            "[SSL: SSLV3_ALERT_BAD_RECORD_MAC] ssl/tls alert bad record mac (_ssl.c:2590)"
+        )
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+
+        with pytest.raises(FireworksTranscriptionError) as excinfo:
+            transcribe(
+                str(audio_path),
+                api_key="fw_test",
+                audio_base_url="https://audio-turbo.api.fireworks.ai",
+                model_name="whisper-v3-large",
+                diarize=True,
+            )
+
+    exc = excinfo.value
+    assert exc.error_class == "FIREWORKS_UPLOAD_REJECTED"
+    assert exc.retryable is False
+    assert "Re-run this episode on local inference" in str(exc)
+    assert "5 MB" in str(exc)
+
+
+def test_transcribe_keeps_generic_network_error_as_transient(tmp_path: Path):
+    """Plain network errors without the SSL signature stay TRANSIENT_NETWORK."""
+    audio_path = tmp_path / "sample.wav"
+    audio_path.write_bytes(b"fake-audio")
+
+    with patch("app.services.fireworks_audio.httpx.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client.post.side_effect = httpx.NetworkError("connection reset by peer")
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+
+        with pytest.raises(FireworksTranscriptionError) as excinfo:
+            transcribe(
+                str(audio_path),
+                api_key="fw_test",
+                audio_base_url="https://audio-turbo.api.fireworks.ai",
+                model_name="whisper-v3-large",
+                diarize=True,
+            )
+
+    assert excinfo.value.error_class == "TRANSIENT_NETWORK"
+    assert excinfo.value.retryable is True
+
+
 def test_transcribe_wraps_429_as_retryable(tmp_path: Path):
     audio_path = tmp_path / "sample.wav"
     audio_path.write_bytes(b"fake-audio")

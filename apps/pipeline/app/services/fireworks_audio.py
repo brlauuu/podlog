@@ -49,6 +49,33 @@ def _classify_http_error(status_code: int) -> tuple[str, bool]:
     return "HTTP_ACCESS", True
 
 
+def _is_upload_rejected_signature(error_text: str) -> bool:
+    """Return True when a network error looks like an upstream proxy abort.
+
+    Fireworks (or its CDN) closes the TLS connection mid-upload when the
+    request exceeds an undocumented size/duration limit. The client sees a
+    TLS-layer alert — most commonly ``BAD_RECORD_MAC`` — instead of a clean
+    HTTP 413/400. Repeated retries with backoff hit the same wall, so it's
+    pointless to keep uploading; the user needs to know the file should be
+    transcribed locally instead. See issue #600.
+    """
+    needles = ("BAD_RECORD_MAC", "SSLV3_ALERT_BAD_RECORD_MAC")
+    return any(n in error_text for n in needles)
+
+
+def _format_upload_rejected_message(audio_path: str, original_error: str) -> str:
+    try:
+        size_bytes = Path(audio_path).stat().st_size
+        size_mb = size_bytes / (1024 * 1024)
+        size_str = f"{size_mb:.0f} MB"
+    except OSError:
+        size_str = "unknown size"
+    return (
+        f"Fireworks rejected the upload (likely size/duration cap on a {size_str} file). "
+        f"Re-run this episode on local inference. Underlying error: {original_error}"
+    )
+
+
 def transcribe(
     audio_path: str,
     *,
@@ -94,8 +121,15 @@ def transcribe(
                 retryable=True,
             ) from exc
         except httpx.NetworkError as exc:
+            error_text = str(exc)
+            if _is_upload_rejected_signature(error_text):
+                raise FireworksTranscriptionError(
+                    _format_upload_rejected_message(audio_path, error_text),
+                    error_class="FIREWORKS_UPLOAD_REJECTED",
+                    retryable=False,
+                ) from exc
             raise FireworksTranscriptionError(
-                f"Fireworks network error: {exc}",
+                f"Fireworks network error: {error_text}",
                 error_class="TRANSIENT_NETWORK",
                 retryable=True,
             ) from exc

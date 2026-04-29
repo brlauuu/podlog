@@ -303,6 +303,66 @@ class TestTranscribeEpisode:
     @patch("app.tasks.transcribe.update_episode")
     @patch("app.tasks.transcribe._convert_to_wav")
     @patch("app.tasks.transcribe.SessionLocal")
+    def test_fireworks_upload_rejected_fails_immediately_with_duration(
+        self, mock_session_cls, mock_convert, mock_update, mock_fail, mock_jq
+    ):
+        """Issue #600: FIREWORKS_UPLOAD_REJECTED skips the retry loop and surfaces duration."""
+        ep = _make_episode()
+        ep.retry_count = 0
+        ep.retry_max = 3
+        ep.duration_secs = 8388  # 2h 19m, the original incident
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        mock_session_cls.return_value = db
+
+        with (
+            patch(
+                "app.services.fireworks_audio.transcribe",
+                side_effect=FireworksTranscriptionError(
+                    "Fireworks rejected the upload (likely size/duration cap on a 192 MB file). "
+                    "Re-run this episode on local inference. Underlying error: BAD_RECORD_MAC",
+                    error_class="FIREWORKS_UPLOAD_REJECTED",
+                    retryable=False,
+                ),
+            ),
+            patch(
+                "app.tasks.transcribe.get_runtime_inference_settings",
+                return_value={
+                    "inference_provider": "fireworks",
+                    "fireworks_api_key": "fw_test",
+                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
+                    "fireworks_stt_model": "whisper-v3-large",
+                    "fireworks_stt_diarize": True,
+                    "fireworks_stt_cost_per_minute_usd": 0.006,
+                },
+            ),
+            patch("app.tasks.transcribe.settings") as mock_settings,
+        ):
+            mock_settings.retry_backoff_base = 30
+            mock_settings.retry_max = 3
+            mock_settings.fireworks_stt_model = "whisper-v3-large"
+            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
+
+            from app.tasks.transcribe import transcribe_episode
+
+            result = transcribe_episode("ep1")
+
+        assert result == "ep1"
+        mock_convert.assert_not_called()
+        # Crucial: no retry enqueued — this is the regression we're guarding against.
+        mock_jq.enqueue.assert_not_called()
+        mock_fail.assert_called_once()
+        assert mock_fail.call_args[0][2] == "FIREWORKS_UPLOAD_REJECTED"
+        # The message should carry the duration so the user knows what they're re-running.
+        assert "2h 19m" in mock_fail.call_args[0][3]
+        assert "Re-run this episode on local inference" in mock_fail.call_args[0][3]
+
+    @patch("app.tasks.transcribe.job_queue")
+    @patch("app.tasks.transcribe._mark_failed")
+    @patch("app.tasks.transcribe.update_episode")
+    @patch("app.tasks.transcribe._convert_to_wav")
+    @patch("app.tasks.transcribe.SessionLocal")
     def test_fireworks_import_failure_marks_system_error(
         self, mock_session_cls, mock_convert, mock_update, mock_fail, mock_jq
     ):

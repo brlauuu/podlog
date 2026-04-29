@@ -81,6 +81,35 @@ def test_format_done_telegram_estimate_tagged_with_active_provider():
     assert "(local)" in md_local.split("Queue:")[1]
 
 
+def test_format_failed_html_action_banner_for_upload_rejected():
+    """Issue #600: distinct banner when Fireworks rejects the upload."""
+    event = _make_failed_event()
+    event.error_class = "FIREWORKS_UPLOAD_REJECTED"
+    html = format_failed_html(event)
+    assert "Action required" in html
+    assert "local inference" in html
+
+
+def test_format_failed_html_no_action_banner_for_generic_failures():
+    event = _make_failed_event()  # error_class="OOM"
+    html = format_failed_html(event)
+    assert "Action required" not in html
+
+
+def test_format_failed_telegram_action_banner_for_upload_rejected():
+    event = _make_failed_event()
+    event.error_class = "FIREWORKS_UPLOAD_REJECTED"
+    md = format_failed_telegram(event)
+    assert "Action required" in md
+    assert "local inference" in md
+
+
+def test_format_failed_telegram_no_action_banner_for_generic_failures():
+    event = _make_failed_event()
+    md = format_failed_telegram(event)
+    assert "Action required" not in md
+
+
 def test_format_done_telegram_estimate_no_tag_when_provider_unknown():
     event = _make_done_event()
     event.queue_estimate_provider = None
