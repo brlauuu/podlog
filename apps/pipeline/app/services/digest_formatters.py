@@ -6,7 +6,7 @@ from html import escape
 from app.services.notifications import (
     _fmt_duration,
     _fmt_short_duration,
-    _fmt_estimate,
+    _fmt_estimate_with_provider,
     _fmt_factor,
     _provider_label,
 )
@@ -117,7 +117,9 @@ def format_digest_html(data) -> str:
             f'<td style="padding: 6px 12px; color: #666;">{escape(detail)}</td></tr>\n'
         )
 
-    est = _fmt_estimate(data.queue_estimated_secs)
+    est = _fmt_estimate_with_provider(
+        data.queue_estimated_secs, getattr(data, "queue_estimate_provider", None)
+    )
 
     provider_avgs_html = ""
     for pa in getattr(data, "provider_averages", []) or []:
@@ -217,6 +219,8 @@ def format_digest_telegram(data) -> str:
         if fallback:
             lines.append(fallback)
 
-    est = _fmt_estimate(data.queue_estimated_secs)
+    est = _fmt_estimate_with_provider(
+        data.queue_estimated_secs, getattr(data, "queue_estimate_provider", None)
+    )
     lines.append(f"\n*Queue:* {data.queue_remaining} remaining · Est. {est}")
     return "\n".join(lines)
