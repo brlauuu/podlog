@@ -63,6 +63,10 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `FIREWORKS_CHAT_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks OpenAI-compatible chat completions used by Ask generation. |
 | `FIREWORKS_CHAT_MODEL` | `accounts/fireworks/models/llama-v3p1-8b-instruct` | Fireworks chat model used when `INFERENCE_PROVIDER=fireworks` for Ask generation. |
 | `FIREWORKS_STT_COST_PER_MINUTE_USD` | `0.006` | Cost estimate assumption used for per-episode observability (`estimated_cost_usd = billed_minutes * rate`). |
+| `FIREWORKS_CHUNKED_TRANSCRIPTION_ENABLED` | `false` | Issue #610: split long audio into chunks for upload, then stitch the per-chunk transcripts back. Works around the undocumented Fireworks upload cap (#600). See the [Chunked Fireworks guide](guide/14-chunked-fireworks.md). |
+| `FIREWORKS_CHUNK_TARGET_SECS` | `900` | Target chunk duration when chunked transcription is enabled (15 min). Minimum 60. |
+| `FIREWORKS_CHUNK_OVERLAP_SECS` | `3` | Overlap between adjacent chunks. Resolves words that straddle a cut. |
+| `FIREWORKS_CHUNK_MAX_RETRIES` | `2` | Per-chunk retries on transient errors. Upload-cap rejections trigger bisection instead. |
 | `EMBEDDING_PROVIDER` | `local` | Runtime provider for query + segment/chunk embeddings (`local` or `fireworks`). |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local sentence-transformers model used when `EMBEDDING_PROVIDER=local`. |
 | `FIREWORKS_EMBEDDING_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks embeddings API. |
