@@ -11,6 +11,7 @@ import TranscriptSection from "@/components/TranscriptSection";
 import BackToSearchLink from "@/components/BackToSearchLink";
 import EpisodeChat from "@/components/EpisodeChat";
 import EpisodeMetaTags from "@/components/EpisodeMetaTags";
+import CopyIdButton from "@/components/CopyIdButton";
 
 export const dynamic = "force-dynamic";
 
@@ -148,7 +149,10 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
           </Link>
         )}
         <div className="mt-2 space-y-2">
-          <h1 className="text-xl font-semibold">{episode.title ?? "Untitled Episode"}</h1>
+          <div className="flex items-start gap-1.5">
+            <h1 className="text-xl font-semibold">{episode.title ?? "Untitled Episode"}</h1>
+            <CopyIdButton value={episode.id} label="Copy episode ID" />
+          </div>
           <EpisodeMetaTags
             status={episode.status}
             publishedAt={episode.published_at}
