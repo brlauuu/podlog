@@ -92,6 +92,7 @@ services:
       - audio_data:/data/audio:ro
       - ./docs/guide:/docs/guide:ro
       - ./docs/about.md:/docs/about.md:ro
+      - ./CHANGELOG.md:/docs/CHANGELOG.md:ro
     depends_on:
       db:
         condition: service_healthy

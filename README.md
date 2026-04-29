@@ -129,6 +129,7 @@ See [docs/configuration.md](docs/configuration.md) for the full list of all envi
 
 | Document | Description |
 |---|---|
+| [Changelog](CHANGELOG.md) | Notable changes per release. Also rendered at the bottom of the in-app About page. |
 | [User Guide](docs/guide/) | Step-by-step guide for new users: setup, features, configuration |
 | [Configuration](docs/configuration.md) | All environment variables with defaults and explanations |
 | [Hardware Guide](docs/hardware.md) | System requirements, processing benchmarks, tested machine specs |

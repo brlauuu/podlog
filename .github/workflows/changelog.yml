@@ -1,0 +1,67 @@
+name: Changelog
+
+# Per CLAUDE.md: PRs that ship user-visible behavior must add a one-line
+# entry to CHANGELOG.md under [Unreleased]. This workflow enforces that
+# discipline at the PR level.
+#
+# Escape hatch: add the `no-changelog` label to a PR that genuinely
+# doesn't need an entry — typo fixes, README-only edits, dependency-bot
+# auto-bumps, CI pipeline tweaks, etc. The label opts the PR out cleanly
+# without requiring a `--no-verify`-style override.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changelog-touched:
+    name: CHANGELOG.md updated
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip if PR has the no-changelog label
+        if: contains(github.event.pull_request.labels.*.name, 'no-changelog')
+        run: |
+          echo "PR has the 'no-changelog' label — skipping CHANGELOG.md check."
+          exit 0
+
+      - name: Checkout PR with full history
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Verify CHANGELOG.md was touched
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Find the merge-base so the diff reflects only this PR's changes.
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          if git diff --name-only "$base" "$HEAD_SHA" | grep -qx 'CHANGELOG.md'; then
+            echo "CHANGELOG.md was updated."
+            exit 0
+          fi
+          cat <<'EOF' >&2
+
+          ❌ This PR does not touch CHANGELOG.md.
+
+          Add a one-line entry under [Unreleased] in CHANGELOG.md describing
+          what changed, grouped under Major changes / Minor changes / Fixes
+          (or Internal where appropriate). The entry should read like a
+          release note, not a commit message.
+
+          If this PR genuinely does not need a changelog entry (typo fix,
+          dep bump, CI tweak, etc.), add the 'no-changelog' label to the PR
+          and re-run this check.
+
+          See CHANGELOG.md and CLAUDE.md > Conventions for the format.
+          EOF
+          exit 1
