@@ -38,6 +38,10 @@ _FIELDS = [
     "fireworks_chat_base_url",
     "fireworks_chat_model",
     "fireworks_stt_cost_per_minute_usd",
+    "fireworks_chunked_transcription_enabled",
+    "fireworks_chunk_target_secs",
+    "fireworks_chunk_overlap_secs",
+    "fireworks_chunk_max_retries",
     "embedding_provider",
     "embedding_model",
     "fireworks_embedding_base_url",
@@ -79,6 +83,10 @@ _INFERENCE_FIELDS = {
     "fireworks_chat_base_url",
     "fireworks_chat_model",
     "fireworks_stt_cost_per_minute_usd",
+    "fireworks_chunked_transcription_enabled",
+    "fireworks_chunk_target_secs",
+    "fireworks_chunk_overlap_secs",
+    "fireworks_chunk_max_retries",
 }
 _EMBEDDING_FIELDS = {
     "embedding_provider",
@@ -174,6 +182,23 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
                 "fireworks_stt_cost_per_minute_usd must be a non-negative number"
             )
         updates["fireworks_stt_cost_per_minute_usd"] = float(rate)
+    for int_field, min_value in (
+        ("fireworks_chunk_target_secs", 60),
+        ("fireworks_chunk_overlap_secs", 0),
+        ("fireworks_chunk_max_retries", 0),
+    ):
+        if int_field in updates:
+            value = updates[int_field]
+            if not isinstance(value, int) or isinstance(value, bool) or value < min_value:
+                raise ValueError(
+                    f"{int_field} must be an integer >= {min_value}, got {value!r}"
+                )
+    if "fireworks_chunked_transcription_enabled" in updates:
+        value = updates["fireworks_chunked_transcription_enabled"]
+        if not isinstance(value, bool):
+            raise ValueError(
+                f"fireworks_chunked_transcription_enabled must be a bool, got {value!r}"
+            )
     if "diarization_provider" in updates:
         if updates["diarization_provider"] not in _VALID_DIARIZATION_PROVIDERS:
             raise ValueError(

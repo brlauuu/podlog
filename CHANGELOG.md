@@ -35,6 +35,7 @@ fresh empty `[Unreleased]` is left at the top.
 ### Internal
 - Periodic cleanup task that prunes superseded `failed` rows in `job_queue` (rows whose episode later succeeded). Runs every 24 h; clears noise from the queue dashboard's "failed" counter. ([#604](https://github.com/brlauuu/podlog/pull/604))
 - New "Changelog" CI check fails any PR that doesn't touch `CHANGELOG.md`; opt out per-PR with the `no-changelog` label. ([#605](https://github.com/brlauuu/podlog/pull/605))
+- Groundwork for chunked Fireworks transcription of long episodes ([#610](https://github.com/brlauuu/podlog/issues/610)): new chunking module (`plan_chunks` / `extract_chunk` / `stitch_responses`) and four runtime settings (`fireworks_chunked_transcription_enabled`, `fireworks_chunk_target_secs`, `fireworks_chunk_overlap_secs`, `fireworks_chunk_max_retries`). Not wired into the transcribe path yet — feature stays off until a follow-up PR lands.
 
 ### Other minor changes
 - Zod runtime validation for the settings response. ([#588](https://github.com/brlauuu/podlog/pull/588))
