@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  XCircle,
+} from "lucide-react";
 import { formatTimestamp } from "@/lib/timestamp";
 import { formatDate } from "@/lib/dateFormat";
 import ReprocessButton from "@/components/ReprocessButton";
@@ -10,6 +16,8 @@ interface EpisodeMetaTagsProps {
   status: string;
   publishedAt: string | null;
   durationSecs: number | null;
+  language: string | null;
+  hasDiarization: boolean;
   transcribeDurationSecs: number | null;
   diarizeDurationSecs: number | null;
   diarizeStepDurations: Record<string, number> | null;
@@ -19,6 +27,20 @@ interface EpisodeMetaTagsProps {
   pyannoteCloudCostUsd: number | null;
   episodeId: string;
 }
+
+// Issue #609: keep visual parity with EpisodeCard's tag strip. Mirrors the
+// LANGUAGE_FLAGS map there; if a new language is added, update both. The two
+// surfaces deliberately duplicate small tag helpers rather than share a
+// component because the card uses a slightly different chip style.
+const LANGUAGE_FLAGS: Record<string, string> = {
+  en: "🇺🇸", de: "🇩🇪", fr: "🇫🇷", es: "🇪🇸", pt: "🇧🇷",
+  it: "🇮🇹", nl: "🇳🇱", ja: "🇯🇵", zh: "🇨🇳", ko: "🇰🇷",
+  ru: "🇷🇺", ar: "🇸🇦", pl: "🇵🇱", sv: "🇸🇪", da: "🇩🇰",
+  fi: "🇫🇮", no: "🇳🇴", nb: "🇳🇴", cs: "🇨🇿", uk: "🇺🇦",
+  tr: "🇹🇷", hu: "🇭🇺", ro: "🇷🇴", el: "🇬🇷", he: "🇮🇱",
+  hi: "🇮🇳", id: "🇮🇩", vi: "🇻🇳", th: "🇹🇭", sr: "🇷🇸",
+  hr: "🇭🇷", bg: "🇧🇬", sk: "🇸🇰", sl: "🇸🇮",
+};
 
 const STEP_ABBREVIATIONS: Record<string, string> = {
   io: "I/O", api: "API", stt: "STT", url: "URL",
@@ -38,6 +60,21 @@ function Tag({ children, className }: { children: React.ReactNode; className?: s
     <span className={`${CHIP_BASE_CLASS} ${className ?? "bg-muted text-muted-foreground"}`}>
       {children}
     </span>
+  );
+}
+
+function ProviderTag({ provider }: { provider: string | null }) {
+  const isRemote = provider === "fireworks";
+  return (
+    <Tag
+      className={
+        isRemote
+          ? "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200"
+          : "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200"
+      }
+    >
+      {isRemote ? "Remote inference" : "Local inference"}
+    </Tag>
   );
 }
 
@@ -128,6 +165,8 @@ export default function EpisodeMetaTags({
   status,
   publishedAt,
   durationSecs,
+  language,
+  hasDiarization,
   transcribeDurationSecs,
   diarizeDurationSecs,
   diarizeStepDurations,
@@ -142,11 +181,22 @@ export default function EpisodeMetaTags({
   const hasSteps =
     diarizeStepDurations != null && Object.keys(diarizeStepDurations).length > 0;
 
+  const lang = language?.toLowerCase() ?? "";
+  const flag = LANGUAGE_FLAGS[lang];
+
   return (
     <div className="space-y-2">
       {/* Row 1: informational tags */}
       <div className="flex flex-wrap items-center gap-1.5">
         {status !== "done" && <StatusTag status={status} />}
+
+        {/* Issue #609: parity with the episode card's tag strip. */}
+        {!hasDiarization && status === "done" && (
+          <Tag className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+            <AlertTriangle size={10} />
+            No labels
+          </Tag>
+        )}
 
         {publishedAt && (
           <Tag>{formatDate(publishedAt)}</Tag>
@@ -155,6 +205,14 @@ export default function EpisodeMetaTags({
         {durationSecs != null && (
           <Tag>{formatTimestamp(durationSecs)}</Tag>
         )}
+
+        {language && (
+          <Tag>
+            {flag ? `${flag} ` : ""}{language.toUpperCase()}
+          </Tag>
+        )}
+
+        <ProviderTag provider={inferenceProviderUsed} />
 
         {transcribeDurationSecs != null && (
           <Tag>Transcribed: {formatTimestamp(transcribeDurationSecs)}</Tag>

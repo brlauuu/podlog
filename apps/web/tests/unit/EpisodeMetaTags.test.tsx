@@ -14,6 +14,8 @@ const baseProps = {
   status: "done",
   publishedAt: "2024-03-15T10:00:00Z",
   durationSecs: 3723,
+  language: null,
+  hasDiarization: true,
   transcribeDurationSecs: 142,
   diarizeDurationSecs: 88,
   diarizeStepDurations: null,
@@ -144,5 +146,52 @@ describe("EpisodeMetaTags", () => {
   it("renders ReprocessButton", () => {
     render(<EpisodeMetaTags {...baseProps} />);
     expect(screen.getByRole("button", { name: /Reprocess/i })).toBeInTheDocument();
+  });
+
+  // Issue #609: parity with the episode card's tag strip.
+  it("renders language tag with flag when language is set", () => {
+    render(<EpisodeMetaTags {...baseProps} language="en" />);
+    expect(screen.getByText(/EN/)).toBeInTheDocument();
+    // Flag emoji 🇺🇸 — assert the tag contains it.
+    expect(screen.getByText(/🇺🇸/)).toBeInTheDocument();
+  });
+
+  it("renders language code without flag when unmapped", () => {
+    render(<EpisodeMetaTags {...baseProps} language="xx" />);
+    expect(screen.getByText("XX")).toBeInTheDocument();
+  });
+
+  it("omits language tag when language is null", () => {
+    render(<EpisodeMetaTags {...baseProps} language={null} />);
+    // No "EN" or any 2-letter all-caps tag from the language slot.
+    expect(screen.queryByText(/^EN$/)).toBeNull();
+  });
+
+  it("renders Local inference provider tag by default", () => {
+    render(<EpisodeMetaTags {...baseProps} inferenceProviderUsed={null} />);
+    expect(screen.getByText(/Local inference/)).toBeInTheDocument();
+  });
+
+  it("renders Remote inference tag when provider is fireworks", () => {
+    render(
+      <EpisodeMetaTags {...baseProps} inferenceProviderUsed="fireworks" />,
+    );
+    expect(screen.getByText(/Remote inference/)).toBeInTheDocument();
+  });
+
+  it("renders 'No labels' tag when done but no diarization", () => {
+    render(<EpisodeMetaTags {...baseProps} hasDiarization={false} />);
+    expect(screen.getByText(/No labels/)).toBeInTheDocument();
+  });
+
+  it("does not render 'No labels' tag when status is not done", () => {
+    render(
+      <EpisodeMetaTags
+        {...baseProps}
+        status="failed"
+        hasDiarization={false}
+      />,
+    );
+    expect(screen.queryByText(/No labels/)).toBeNull();
   });
 });
