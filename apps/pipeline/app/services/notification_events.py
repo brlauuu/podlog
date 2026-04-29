@@ -20,6 +20,7 @@ class EpisodeDoneEvent(Event):
     episode_processing_factor: float | None = None
     queue_remaining: int = 0
     queue_estimated_secs: float | None = None
+    queue_estimate_provider: str | None = None
     avg_transcribe_secs: float | None = None
     avg_diarize_secs: float | None = None
     avg_total_secs: float | None = None
@@ -41,6 +42,7 @@ class EpisodeFailedEvent(Event):
     inference_provider_used: str | None = None
     queue_remaining: int = 0
     queue_estimated_secs: float | None = None
+    queue_estimate_provider: str | None = None
     avg_transcribe_secs: float | None = None
     avg_diarize_secs: float | None = None
     avg_total_secs: float | None = None

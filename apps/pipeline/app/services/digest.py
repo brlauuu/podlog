@@ -100,6 +100,7 @@ class DigestData:
     avg_duration_secs: float | None = None
     processing_factor: float | None = None
     provider_averages: list[ProviderAverages] = field(default_factory=list)
+    queue_estimate_provider: str | None = None
 
 
 def _serialize_event(event: Event) -> str:
@@ -185,7 +186,8 @@ def send_digest_if_due(now: datetime | None = None) -> None:
             _update_last_sent(db, state_row, now)
             return
 
-        remaining, estimated, factor = estimate_queue_status(db)
+        active_provider = ns.get("inference_provider")
+        remaining, estimated, factor = estimate_queue_status(db, provider=active_provider)
         avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
         avg_dur = compute_avg_duration(db)
         items = []
@@ -245,6 +247,7 @@ def send_digest_if_due(now: datetime | None = None) -> None:
             avg_duration_secs=avg_dur,
             processing_factor=factor,
             provider_averages=provider_averages,
+            queue_estimate_provider=active_provider,
         )
 
         _send_digest(digest, ns)

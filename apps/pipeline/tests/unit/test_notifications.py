@@ -244,6 +244,63 @@ def test_episode_processing_factor_helper():
     assert _compute_episode_processing_factor(900.0, 0) is None
 
 
+def _make_chain(*, recent_episodes_per_call: list, queued_count: int, queued_audio_durations: list[int]):
+    """Build a self-chaining query mock.
+
+    `db.query(...).filter(...).filter(...)...` always returns the same chain object so
+    arbitrary `.filter()` chains resolve. Each call to `.limit().all()` consumes the
+    next list from `recent_episodes_per_call`. `.count()` and the bare `.all()` (no
+    `.limit()` in between) return queued data.
+    """
+    recent_iter = iter(recent_episodes_per_call)
+    queued_episodes = [MagicMock(duration_secs=d) for d in queued_audio_durations]
+
+    chain = MagicMock()
+    chain.filter.return_value = chain
+    chain.order_by.return_value = chain
+    chain.count.return_value = queued_count
+    chain.all.return_value = queued_episodes  # used by queued_episodes path
+
+    limit_chain = MagicMock()
+    limit_chain.all = MagicMock(side_effect=lambda: next(recent_iter, []))
+    chain.limit.return_value = limit_chain
+
+    db = MagicMock()
+    db.query.return_value = chain
+    return db
+
+
+def test_estimate_queue_status_filters_recent_by_provider():
+    """When provider is set, only matching episodes seed the rate."""
+    fast_remote = MagicMock(duration_secs=1800, transcribe_duration_secs=20.0, diarize_duration_secs=10.0)
+    db = _make_chain(
+        recent_episodes_per_call=[[fast_remote]],
+        queued_count=1,
+        queued_audio_durations=[1800],
+    )
+
+    remaining, estimated, factor = estimate_queue_status(db, provider="fireworks")
+    assert remaining == 1
+    # 30s processing / 1800s audio = 1/60 ⇒ 1800 * 1/60 = 30s ETA
+    assert estimated == 30.0
+    assert factor is not None and abs(factor - (1 / 60)) < 1e-9
+
+
+def test_estimate_queue_status_provider_falls_back_when_no_history():
+    """If the active provider has no recent episodes, fall back to all-providers."""
+    slow_local = MagicMock(duration_secs=1800, transcribe_duration_secs=600.0, diarize_duration_secs=300.0)
+    db = _make_chain(
+        recent_episodes_per_call=[[], [slow_local]],  # provider-narrowed empty, fallback hit
+        queued_count=1,
+        queued_audio_durations=[1800],
+    )
+
+    remaining, estimated, _ = estimate_queue_status(db, provider="fireworks")
+    assert remaining == 1
+    # 900 / 1800 = 0.5; queued audio = 1800 ⇒ ETA 900s.
+    assert estimated == 900.0
+
+
 def test_estimate_queue_status_no_history():
     """Without recent completed episodes, estimated_secs is None."""
     db = MagicMock()

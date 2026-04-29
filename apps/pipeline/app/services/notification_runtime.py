@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models import Episode
 from app.services.events import bus
 from app.services.notification_events import EpisodeDoneEvent, EpisodeFailedEvent
+from app.services.notification_settings import get_runtime_inference_settings
 
 
 def compute_avg_processing_stats(
@@ -84,12 +85,17 @@ def compute_avg_processing_factor(db: Session, provider: str | None = None) -> f
     return total_processing / total_audio
 
 
-def estimate_queue_status(db: Session) -> tuple[int, float | None, float | None]:
+def estimate_queue_status(
+    db: Session, provider: str | None = None
+) -> tuple[int, float | None, float | None]:
     """Return (remaining_count, estimated_seconds_to_complete, processing_factor).
 
-    processing_factor here reflects the duration-weighted rate of the 10 most
-    recent completed episodes regardless of provider — used for the queue ETA,
-    which processes whatever comes next.
+    The rate is the duration-weighted average of the 10 most recent completed
+    episodes. If ``provider`` is set, the sample is restricted to episodes
+    processed by that inference provider so the ETA reflects the active
+    setting (a queue that will run on Fireworks shouldn't be estimated from
+    slow local-CPU history, and vice versa). Falls back to all-providers
+    when there is no provider-matching history yet.
     """
     remaining = (
         db.query(Episode)
@@ -97,17 +103,19 @@ def estimate_queue_status(db: Session) -> tuple[int, float | None, float | None]
         .count()
     )
 
-    recent = (
-        db.query(Episode)
-        .filter(
+    def _recent_for(p: str | None):
+        q = db.query(Episode).filter(
             Episode.status == "done",
             Episode.processed_at.isnot(None),
             Episode.duration_secs.isnot(None),
         )
-        .order_by(Episode.processed_at.desc())
-        .limit(10)
-        .all()
-    )
+        if p is not None:
+            q = q.filter(Episode.inference_provider_used == p)
+        return q.order_by(Episode.processed_at.desc()).limit(10).all()
+
+    recent = _recent_for(provider) if provider else _recent_for(None)
+    if provider and not recent:
+        recent = _recent_for(None)
 
     if not recent:
         return remaining, None, None
@@ -162,7 +170,8 @@ def emit_episode_done_event(db: Session, episode: Episode) -> None:
     runs don't skew the average shown next to a slow local run (or vice versa).
     """
     provider = episode.inference_provider_used
-    remaining, estimated, _ = estimate_queue_status(db)
+    active_provider = get_runtime_inference_settings(db).get("inference_provider")
+    remaining, estimated, _ = estimate_queue_status(db, provider=active_provider)
     avg_t, avg_d, avg_total = compute_avg_processing_stats(db, provider=provider)
     avg_dur = compute_avg_duration(db, provider=provider)
     avg_factor = compute_avg_processing_factor(db, provider=provider)
@@ -183,6 +192,7 @@ def emit_episode_done_event(db: Session, episode: Episode) -> None:
             episode_processing_factor=episode_factor,
             queue_remaining=remaining,
             queue_estimated_secs=estimated,
+            queue_estimate_provider=active_provider,
             avg_transcribe_secs=avg_t,
             avg_diarize_secs=avg_d,
             avg_total_secs=avg_total,
@@ -201,7 +211,8 @@ def emit_episode_failed_event(
 ) -> None:
     """Emit EpisodeFailedEvent using runtime queue/average stats."""
     provider = episode.inference_provider_used
-    remaining, estimated, _ = estimate_queue_status(db)
+    active_provider = get_runtime_inference_settings(db).get("inference_provider")
+    remaining, estimated, _ = estimate_queue_status(db, provider=active_provider)
     avg_t, avg_d, avg_total = compute_avg_processing_stats(db, provider=provider)
     avg_dur = compute_avg_duration(db, provider=provider)
     avg_factor = compute_avg_processing_factor(db, provider=provider)
@@ -219,6 +230,7 @@ def emit_episode_failed_event(
             inference_provider_used=provider,
             queue_remaining=remaining,
             queue_estimated_secs=estimated,
+            queue_estimate_provider=active_provider,
             avg_transcribe_secs=avg_t,
             avg_diarize_secs=avg_d,
             avg_total_secs=avg_total,

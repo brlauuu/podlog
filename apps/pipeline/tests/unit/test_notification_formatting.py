@@ -69,6 +69,26 @@ def test_format_done_telegram_contains_key_info():
     assert "5" in md
 
 
+def test_format_done_telegram_estimate_tagged_with_active_provider():
+    """The Queue line carries the active provider so the user can read the ETA in context."""
+    event = _make_done_event()
+    event.queue_estimate_provider = "fireworks"
+    md = format_done_telegram(event)
+    assert "(remote)" in md.split("Queue:")[1]
+
+    event.queue_estimate_provider = "local"
+    md_local = format_done_telegram(event)
+    assert "(local)" in md_local.split("Queue:")[1]
+
+
+def test_format_done_telegram_estimate_no_tag_when_provider_unknown():
+    event = _make_done_event()
+    event.queue_estimate_provider = None
+    md = format_done_telegram(event)
+    queue_line = md.split("Queue:")[1]
+    assert "(local)" not in queue_line and "(remote)" not in queue_line
+
+
 def test_format_done_html_contains_diarization_step_breakdown():
     html = format_done_html(_make_done_event())
     assert "Diarization Step Breakdown" in html

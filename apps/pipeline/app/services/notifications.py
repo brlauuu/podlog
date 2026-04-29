@@ -66,6 +66,23 @@ def _provider_label(provider: str | None) -> str:
     return "all episodes"
 
 
+def _provider_tag(provider: str | None) -> str:
+    """Compact label for the active inference provider, e.g. 'local' or 'remote'."""
+    if provider == "local":
+        return "local"
+    if provider == "fireworks":
+        return "remote"
+    return provider or ""
+
+
+def _fmt_estimate_with_provider(secs: float | None, provider: str | None) -> str:
+    base = _fmt_estimate(secs)
+    tag = _provider_tag(provider)
+    if not tag or secs is None:
+        return base
+    return f"{base} ({tag})"
+
+
 def _fmt_diarize_steps_html(step_durations: dict[str, float] | None) -> str:
     if not step_durations:
         return ""
@@ -191,7 +208,7 @@ def format_done_html(event: EpisodeDoneEvent) -> str:
         <td style="padding: 4px 12px;">{event.queue_remaining} episodes</td></tr>
     <tr style="background: #f9f9f9;">
         <td style="padding: 4px 12px; color: #666;">Est. time left</td>
-        <td style="padding: 4px 12px;">{_fmt_estimate(event.queue_estimated_secs)}</td></tr>
+        <td style="padding: 4px 12px;">{_fmt_estimate_with_provider(event.queue_estimated_secs, getattr(event, "queue_estimate_provider", None))}</td></tr>
   </table>
   <hr style="margin-top: 24px; border: none; border-top: 1px solid #eee;">
   <p style="font-size: 12px; color: #999;">Sent by Podlog</p>
@@ -220,7 +237,7 @@ def format_done_telegram(event: EpisodeDoneEvent) -> str:
         f"{episode_factor_line}"
         f"{diarize_steps_section}"
         f"{avg_section}\n"
-        f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate(event.queue_estimated_secs)}"
+        f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate_with_provider(event.queue_estimated_secs, getattr(event, 'queue_estimate_provider', None))}"
     )
 
 
@@ -259,7 +276,7 @@ def format_failed_html(event: EpisodeFailedEvent) -> str:
         <td style="padding: 4px 12px;">{event.queue_remaining} episodes</td></tr>
     <tr style="background: #f9f9f9;">
         <td style="padding: 4px 12px; color: #666;">Est. time left</td>
-        <td style="padding: 4px 12px;">{_fmt_estimate(event.queue_estimated_secs)}</td></tr>
+        <td style="padding: 4px 12px;">{_fmt_estimate_with_provider(event.queue_estimated_secs, getattr(event, "queue_estimate_provider", None))}</td></tr>
   </table>
   <hr style="margin-top: 24px; border: none; border-top: 1px solid #eee;">
   <p style="font-size: 12px; color: #999;">Sent by Podlog</p>
@@ -280,7 +297,7 @@ def format_failed_telegram(event: EpisodeFailedEvent) -> str:
         f"`Details:  {event.error_message}`\n"
         f"`Retries:  {event.retry_count}/{event.retry_max}`\n"
         f"{avg_section}\n"
-        f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate(event.queue_estimated_secs)}"
+        f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate_with_provider(event.queue_estimated_secs, getattr(event, 'queue_estimate_provider', None))}"
     )
 
 
