@@ -429,7 +429,7 @@ class TestProviderRouting:
                 async for token in stream_response(
                     [{"role": "user", "content": "q"}],
                     model="qwen2.5:3b",
-                    runtime={"inference_provider": "fireworks", "fireworks_chat_model": "fw-model"},
+                    runtime={"rag_provider": "fireworks", "fireworks_chat_model": "fw-model"},
                 ):
                     out.append(token)
             return out
@@ -448,12 +448,123 @@ class TestProviderRouting:
                 async for token in stream_response(
                     [{"role": "user", "content": "q"}],
                     model="qwen2.5:3b",
-                    runtime={"inference_provider": "local"},
+                    runtime={"rag_provider": "local"},
                 ):
                     out.append(token)
             return out
 
         assert asyncio.run(collect()) == ["local"]
+
+    def test_stream_response_ignores_inference_provider_for_rag_routing(self):
+        """Issue #608: rag_provider is decoupled from inference_provider.
+        With inference_provider=fireworks (transcription remote) but
+        rag_provider unset/local, RAG must stay local. This is the bug fix
+        that motivated the whole issue.
+        """
+        from app.services.rag import stream_response
+
+        async def _fake_local(*args, **kwargs):
+            yield "local"
+
+        async def collect():
+            out = []
+            with (
+                patch(
+                    "app.services.rag.stream_ollama_response",
+                    return_value=_fake_local(),
+                ),
+                patch("app.services.rag.stream_fireworks_response") as mock_fw,
+            ):
+                async for token in stream_response(
+                    [{"role": "user", "content": "q"}],
+                    model="qwen2.5:3b",
+                    runtime={
+                        # Transcription is on Fireworks, but RAG is not — and
+                        # rag_provider not set means it falls back to settings
+                        # default (local).
+                        "inference_provider": "fireworks",
+                        "rag_provider": "local",
+                    },
+                ):
+                    out.append(token)
+                # Confirm Fireworks was never invoked.
+                mock_fw.assert_not_called()
+            return out
+
+        assert asyncio.run(collect()) == ["local"]
+
+    def test_stream_response_remaps_ollama_name_when_rag_provider_is_fireworks(self):
+        """If a caller passes an Ollama-style model (e.g. qwen2.5:3b) while
+        rag_provider=fireworks, the Fireworks call must use the configured
+        fireworks_chat_model instead of forwarding the Ollama name (which
+        would 404)."""
+        from app.services.rag import stream_response
+
+        async def _fake_fw(*args, **kwargs):
+            yield "fw"
+
+        captured: dict[str, object] = {}
+
+        def capture(messages, runtime=None, model=None):
+            captured["model"] = model
+            return _fake_fw()
+
+        async def collect():
+            out = []
+            with patch(
+                "app.services.rag.stream_fireworks_response",
+                side_effect=capture,
+            ):
+                async for token in stream_response(
+                    [{"role": "user", "content": "q"}],
+                    model="qwen2.5:3b",
+                    runtime={
+                        "rag_provider": "fireworks",
+                        "fireworks_chat_model": "accounts/fireworks/models/qwen2p5-72b-instruct",
+                    },
+                ):
+                    out.append(token)
+            return out
+
+        assert asyncio.run(collect()) == ["fw"]
+        assert captured["model"] == "accounts/fireworks/models/qwen2p5-72b-instruct"
+
+    def test_stream_response_passes_through_fireworks_path_unchanged(self):
+        """When the caller already sent a Fireworks model path, use it as-is."""
+        from app.services.rag import stream_response
+
+        async def _fake_fw(*args, **kwargs):
+            yield "fw"
+
+        captured: dict[str, object] = {}
+
+        def capture(messages, runtime=None, model=None):
+            captured["model"] = model
+            return _fake_fw()
+
+        async def collect():
+            out = []
+            with patch(
+                "app.services.rag.stream_fireworks_response",
+                side_effect=capture,
+            ):
+                async for token in stream_response(
+                    [{"role": "user", "content": "q"}],
+                    model="accounts/fireworks/models/llama-v3p3-70b-instruct",
+                    runtime={
+                        "rag_provider": "fireworks",
+                        "fireworks_chat_model": "accounts/fireworks/models/qwen2p5-72b-instruct",
+                    },
+                ):
+                    out.append(token)
+            return out
+
+        assert asyncio.run(collect()) == ["fw"]
+        # The caller's model wins over the configured default.
+        assert (
+            captured["model"]
+            == "accounts/fireworks/models/llama-v3p3-70b-instruct"
+        )
 
     def test_fireworks_requires_api_key(self):
         from app.services.rag import stream_fireworks_response
@@ -466,3 +577,56 @@ class TestProviderRouting:
 
         with pytest.raises(RuntimeError, match="FIREWORKS_API_KEY is missing"):
             asyncio.run(run())
+
+    def test_fireworks_404_raises_actionable_message(self):
+        """Issue #608: a 404 from Fireworks (deprecated/missing model) must
+        surface a message naming the offending model and pointing the user
+        at Settings, instead of leaking the raw provider response."""
+        from app.services.rag import stream_fireworks_response
+
+        class _Resp:
+            status_code = 404
+
+            async def aread(self):
+                return b'{"error":{"message":"Model not found"}}'
+
+            async def aiter_lines(self):
+                if False:
+                    yield ""
+
+        class _StreamCtx:
+            async def __aenter__(self):
+                return _Resp()
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class _Client:
+            def stream(self, *args, **kwargs):
+                return _StreamCtx()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        async def run():
+            with patch("app.services.rag.httpx.AsyncClient", return_value=_Client()):
+                async for _ in stream_fireworks_response(
+                    [{"role": "user", "content": "q"}],
+                    runtime={
+                        "fireworks_api_key": "fw_test",
+                        "fireworks_chat_base_url": "https://api.fireworks.ai/inference/v1",
+                        "fireworks_chat_model": "accounts/fireworks/models/missing-v1",
+                    },
+                ):
+                    pass
+
+        with pytest.raises(RuntimeError) as excinfo:
+            asyncio.run(run())
+        msg = str(excinfo.value)
+        # Names the offending model and points at Settings.
+        assert "accounts/fireworks/models/missing-v1" in msg
+        assert "Settings" in msg
+        assert "RAG" in msg or "Ask" in msg

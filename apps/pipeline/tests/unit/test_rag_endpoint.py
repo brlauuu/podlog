@@ -62,7 +62,8 @@ class TestAskEndpoint:
     def test_fireworks_provider_skips_local_model_check(self):
         mock_chunks = [make_chunk()]
         runtime = {
-            "inference_provider": "fireworks",
+            # Issue #608: RAG/Ask uses its own provider flag now.
+            "rag_provider": "fireworks",
             "fireworks_api_key": "fw_test",
             "fireworks_chat_base_url": "https://api.fireworks.ai/inference/v1",
             "fireworks_chat_model": "accounts/fireworks/models/llama-v3p1-8b-instruct",

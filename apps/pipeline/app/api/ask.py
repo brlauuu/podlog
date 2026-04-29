@@ -50,9 +50,17 @@ async def _stream_ask(question: str, model: str, feed_ids: list[str] | None, epi
     db = SessionLocal()
     try:
         runtime = get_runtime_inference_settings(db)
-        provider = runtime.get("inference_provider") or "local"
+        # Issue #608: RAG/Ask routing reads its own dedicated provider flag,
+        # decoupled from inference_provider (which controls transcription).
+        provider = runtime.get("rag_provider") or "local"
         resolved_model = model
-        if provider == "fireworks" and model == DEFAULT_MODEL:
+        if provider == "fireworks" and not (
+            isinstance(model, str) and model.startswith("accounts/")
+        ):
+            # Caller sent an Ollama-style name (legacy dropdown shipped only
+            # Ollama models pre-#608). Fall back to the configured Fireworks
+            # chat model. PR 3 makes the Ask page send valid Fireworks paths
+            # directly.
             resolved_model = runtime.get("fireworks_chat_model") or model
 
         if provider == "local" and not await check_model_available(resolved_model, runtime=runtime):

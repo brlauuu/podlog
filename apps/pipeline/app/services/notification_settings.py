@@ -42,6 +42,7 @@ _FIELDS = [
     "fireworks_chunk_target_secs",
     "fireworks_chunk_overlap_secs",
     "fireworks_chunk_max_retries",
+    "rag_provider",
     "embedding_provider",
     "embedding_model",
     "fireworks_embedding_base_url",
@@ -74,6 +75,7 @@ _VALID_FREQUENCIES = {"immediate", "daily", "weekly"}
 _VALID_INFERENCE_PROVIDERS = {"local", "fireworks"}
 _VALID_EMBEDDING_PROVIDERS = {"local", "fireworks"}
 _VALID_DIARIZATION_PROVIDERS = {"local", "precision2"}
+_VALID_RAG_PROVIDERS = {"local", "fireworks"}
 _INFERENCE_FIELDS = {
     "inference_provider",
     "fireworks_api_key",
@@ -87,6 +89,7 @@ _INFERENCE_FIELDS = {
     "fireworks_chunk_target_secs",
     "fireworks_chunk_overlap_secs",
     "fireworks_chunk_max_retries",
+    "rag_provider",
 }
 _EMBEDDING_FIELDS = {
     "embedding_provider",
@@ -170,6 +173,12 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
             raise ValueError(
                 f"embedding_provider must be one of {_VALID_EMBEDDING_PROVIDERS}, "
                 f"got '{updates['embedding_provider']}'"
+            )
+    if "rag_provider" in updates:
+        if updates["rag_provider"] not in _VALID_RAG_PROVIDERS:
+            raise ValueError(
+                f"rag_provider must be one of {_VALID_RAG_PROVIDERS}, "
+                f"got '{updates['rag_provider']}'"
             )
     if "fireworks_stt_cost_per_minute_usd" in updates:
         rate = updates["fireworks_stt_cost_per_minute_usd"]
