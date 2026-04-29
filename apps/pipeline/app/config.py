@@ -82,7 +82,13 @@ class Settings(BaseSettings):
     fireworks_stt_model: str = "whisper-v3-turbo"
     fireworks_stt_diarize: bool = True
     fireworks_chat_base_url: str = "https://api.fireworks.ai/inference/v1"
-    fireworks_chat_model: str = "accounts/fireworks/models/llama-v3p1-8b-instruct"
+    # Aligned with the curated dropdown in apps/web/src/lib/rag-models.ts
+    # (DEFAULT_FIREWORKS_CHAT_MODEL). The previous default
+    # `llama-v3p1-8b-instruct` was deprecated by Fireworks and 404'd
+    # out of the box (#608). Existing installs with FIREWORKS_CHAT_MODEL
+    # set explicitly in .env keep their value; only no-override installs
+    # are auto-upgraded.
+    fireworks_chat_model: str = "accounts/fireworks/models/qwen2p5-7b-instruct"
     # Cost estimate input for observability (Issue #261).
     # Keep this explicit because provider pricing can change.
     fireworks_stt_cost_per_minute_usd: float = 0.006
