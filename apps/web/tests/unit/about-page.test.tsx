@@ -129,4 +129,34 @@ describe("<AboutPage>", () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0]).toHaveTextContent("About body.");
   });
+
+  it("renders a Releases sidebar listing each changelog version", async () => {
+    mockReadFile
+      .mockResolvedValueOnce("About body.")
+      .mockResolvedValueOnce(
+        "# Changelog\n\n## [Unreleased]\n\n- foo\n\n## [0.3.0] — 2026-04-24\n\n- bar\n"
+      );
+
+    const jsx = await AboutPage();
+    render(jsx);
+
+    expect(screen.getByText("Releases")).toBeInTheDocument();
+    expect(
+      screen.getByText("2 versions · latest [0.3.0]")
+    ).toBeInTheDocument();
+    // The version anchors carry slugified ids matching the heading slugger.
+    const unreleased = screen.getByRole("link", { name: "[Unreleased]" });
+    expect(unreleased).toHaveAttribute("href", "#unreleased");
+  });
+
+  it("does not render the Releases sidebar when CHANGELOG.md is missing", async () => {
+    mockReadFile
+      .mockResolvedValueOnce("About body.")
+      .mockRejectedValueOnce(new Error("ENOENT"));
+
+    const jsx = await AboutPage();
+    render(jsx);
+
+    expect(screen.queryByText("Releases")).not.toBeInTheDocument();
+  });
 });

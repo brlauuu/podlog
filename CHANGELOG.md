@@ -26,6 +26,7 @@ fresh empty `[Unreleased]` is left at the top.
 
 ### Minor changes
 - Copy-to-clipboard button for the episode UUID on the episode page. Subtle icon next to the title. ([#601](https://github.com/brlauuu/podlog/pull/601))
+- "Releases" sidebar on `/about` (right rail, `xl:` and up) listing every changelog version with sticky scroll-spy. Header shows version count and the latest tagged release. ([#606](https://github.com/brlauuu/podlog/pull/606))
 
 ### Fixes
 - Archive task now captures the tail of `ffmpeg`'s stderr when compression fails, instead of storing the placeholder `"ffmpeg error (see stderr output for detail)"`. ([#603](https://github.com/brlauuu/podlog/pull/603))
