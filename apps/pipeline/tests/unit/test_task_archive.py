@@ -185,6 +185,69 @@ class TestArchiveEpisode:
         assert archive_file.exists(), "archive file must not be deleted on re-run"
         assert archive_file.read_bytes() == b"real-archive-bytes"
 
+    def test_compress_surfaces_ffmpeg_stderr_in_runtime_error(self, tmp_path):
+        """Issue #597: ffmpeg.Error must be re-raised with the stderr tail in the message."""
+        import ffmpeg
+
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        raw = tmp_path / "raw" / "ep1.mp3"
+        raw.parent.mkdir()
+        raw.write_bytes(b"not-actually-audio")
+
+        # The stderr that python-ffmpeg's Error.stderr would carry on a real failure.
+        fake_stderr = (
+            b"ffmpeg version 6.0 Copyright (c) 2000-2023\n"
+            b"[mp3 @ 0x55e0f7] Header missing\n"
+            b"[in#0 @ 0x55e000] Error opening input: Invalid data found when processing input\n"
+        )
+        boom = ffmpeg.Error("ffmpeg", b"", fake_stderr)
+
+        with patch("app.tasks.archive.settings") as mock_settings:
+            mock_settings.audio_archive_dir = str(archive_dir)
+            mock_settings.audio_archive_bitrate = "64k"
+
+            with patch.object(ffmpeg.nodes.OutputStream, "run", side_effect=boom):
+                from app.tasks.archive import _compress_audio
+
+                with pytest.raises(RuntimeError) as excinfo:
+                    _compress_audio(raw, "ep1")
+
+        msg = str(excinfo.value)
+        assert "ep1.mp3" in msg
+        assert "Invalid data found when processing input" in msg
+        # The original ffmpeg.Error is preserved as the cause for traceability.
+        assert isinstance(excinfo.value.__cause__, ffmpeg.Error)
+
+    def test_compress_truncates_long_ffmpeg_stderr(self, tmp_path):
+        """Stderr tail is bounded so a chatty ffmpeg run doesn't bloat the DB row."""
+        import ffmpeg
+
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        raw = tmp_path / "raw" / "ep2.mp3"
+        raw.parent.mkdir()
+        raw.write_bytes(b"x")
+
+        long_stderr = (b"chatty ffmpeg log line\n" * 5000) + b"FINAL_DIAGNOSTIC_LINE\n"
+        boom = ffmpeg.Error("ffmpeg", b"", long_stderr)
+
+        with patch("app.tasks.archive.settings") as mock_settings:
+            mock_settings.audio_archive_dir = str(archive_dir)
+            mock_settings.audio_archive_bitrate = "64k"
+
+            with patch.object(ffmpeg.nodes.OutputStream, "run", side_effect=boom):
+                from app.tasks.archive import _compress_audio
+
+                with pytest.raises(RuntimeError) as excinfo:
+                    _compress_audio(raw, "ep2")
+
+        msg = str(excinfo.value)
+        # The most recent line — what you'd actually want to see — is preserved.
+        assert "FINAL_DIAGNOSTIC_LINE" in msg
+        # And the message is bounded.
+        assert len(msg) < 2_000
+
     def test_compress_skips_when_already_in_archive_dir(self, tmp_path):
         """_compress_audio should skip ffmpeg when source is already the dest."""
         archive_dir = tmp_path / "archive"

@@ -119,6 +119,9 @@ def archive_episode(episode_id: str) -> str:
         db.close()
 
 
+_FFMPEG_STDERR_TAIL_BYTES = 1024
+
+
 def _compress_audio(raw_path: Path, episode_id: str) -> Path:
     import ffmpeg
 
@@ -135,11 +138,24 @@ def _compress_audio(raw_path: Path, episode_id: str) -> Path:
         )
         return dest
 
-    ffmpeg.input(str(raw_path)).output(
-        str(dest),
-        audio_bitrate=settings.audio_archive_bitrate,
-        acodec="libmp3lame",
-    ).overwrite_output().run(capture_stdout=True, capture_stderr=True)
+    try:
+        ffmpeg.input(str(raw_path)).output(
+            str(dest),
+            audio_bitrate=settings.audio_archive_bitrate,
+            acodec="libmp3lame",
+        ).overwrite_output().run(capture_stdout=True, capture_stderr=True)
+    except ffmpeg.Error as exc:
+        # Issue #597: ffmpeg.Error.__str__ deliberately tells you to look at the
+        # stderr attribute. Surface the tail of stderr in the error message so
+        # the failure row in job_queue is debuggable instead of the useless
+        # "see stderr output for detail".
+        stderr_tail = ""
+        if exc.stderr:
+            decoded = exc.stderr.decode(errors="replace").strip()
+            stderr_tail = decoded[-_FFMPEG_STDERR_TAIL_BYTES:]
+        raise RuntimeError(
+            f"ffmpeg failed compressing {raw_path.name}: {stderr_tail or 'no stderr captured'}"
+        ) from exc
 
     return dest
 
