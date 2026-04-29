@@ -93,6 +93,26 @@ def transcribe_episode(episode_id: str) -> str:
                     or settings.fireworks_audio_base_url,
                     model_name=runtime.get("fireworks_stt_model") or settings.fireworks_stt_model,
                     diarize=bool(runtime.get("fireworks_stt_diarize", True)),
+                    chunked=bool(
+                        runtime.get(
+                            "fireworks_chunked_transcription_enabled",
+                            settings.fireworks_chunked_transcription_enabled,
+                        )
+                    ),
+                    chunk_target_secs=int(
+                        runtime.get("fireworks_chunk_target_secs")
+                        or settings.fireworks_chunk_target_secs
+                    ),
+                    chunk_overlap_secs=int(
+                        runtime.get("fireworks_chunk_overlap_secs")
+                        if runtime.get("fireworks_chunk_overlap_secs") is not None
+                        else settings.fireworks_chunk_overlap_secs
+                    ),
+                    chunk_max_retries=int(
+                        runtime.get("fireworks_chunk_max_retries")
+                        if runtime.get("fireworks_chunk_max_retries") is not None
+                        else settings.fireworks_chunk_max_retries
+                    ),
                 )
                 transcribe_secs = round(time.monotonic() - t0, 1)
                 audio_secs = estimate_fireworks_usage(segments_data, episode.duration_secs)

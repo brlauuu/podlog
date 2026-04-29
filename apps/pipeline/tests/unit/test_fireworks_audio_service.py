@@ -307,3 +307,232 @@ def test_transcribe_wraps_429_as_retryable(tmp_path: Path):
     assert exc.error_class == "TRANSIENT_NETWORK"
     assert exc.retryable is True
     assert exc.status_code == 429
+
+
+# ---------------------------------------------------------------------------
+# Chunked transcription (Issue #610)
+# ---------------------------------------------------------------------------
+
+
+def _chunk_response(words: list[dict], segments: list[dict] | None = None, language: str = "en"):
+    """Build a fake Fireworks raw response in chunk-local time."""
+    return {
+        "language": language,
+        "segments": segments or [],
+        "words": words,
+    }
+
+
+def _patch_chunking_io(monkeypatch, duration_secs: float):
+    """Stub probe_duration_secs and extract_chunk so tests don't need ffmpeg."""
+    from app.services import fireworks_audio_chunking as chunking
+
+    monkeypatch.setattr(chunking, "probe_duration_secs", lambda _path: duration_secs)
+    monkeypatch.setattr(chunking, "extract_chunk", lambda _src, _chunk, dst: Path(dst))
+
+
+def test_transcribe_chunked_short_file_single_call(tmp_path: Path, monkeypatch):
+    """A file shorter than chunk_target_secs goes through one upload, stitched via chunk-of-1."""
+    audio_path = tmp_path / "short.mp3"
+    audio_path.write_bytes(b"fake")
+    _patch_chunking_io(monkeypatch, duration_secs=120.0)
+
+    fake_response = _chunk_response(
+        words=[{"word": "hello", "start": 1.0, "end": 1.5, "speaker_id": "0"}],
+        segments=[{"start": 0.0, "end": 2.0, "text": "hello"}],
+    )
+    with patch(
+        "app.services.fireworks_audio._post_transcription",
+        return_value=fake_response,
+    ) as mock_post:
+        segments, language, raw = transcribe(
+            str(audio_path),
+            api_key="fw_test",
+            audio_base_url="https://audio-turbo.api.fireworks.ai",
+            model_name="whisper-v3-turbo",
+            diarize=True,
+            chunked=True,
+            chunk_target_secs=900,
+            chunk_overlap_secs=3,
+            chunk_max_retries=2,
+        )
+
+    assert mock_post.call_count == 1
+    assert language == "en"
+    assert segments == [{"start": 0.0, "end": 2.0, "text": "hello"}]
+    assert raw["words"][0]["word"] == "hello"
+
+
+def test_transcribe_chunked_long_file_stitches_two_chunks(tmp_path: Path, monkeypatch):
+    """A 1500s file with 900s chunks produces two upload calls, stitched into whole-file time."""
+    audio_path = tmp_path / "long.mp3"
+    audio_path.write_bytes(b"fake")
+    _patch_chunking_io(monkeypatch, duration_secs=1500.0)
+
+    # Each chunk's response has its own LOCAL timeline (start = 0).
+    chunk0 = _chunk_response(
+        words=[{"word": "first", "start": 50.0, "end": 50.5, "speaker_id": "0"}],
+        segments=[{"start": 50.0, "end": 51.0, "text": "first"}],
+    )
+    chunk1 = _chunk_response(
+        words=[{"word": "second", "start": 100.0, "end": 100.5, "speaker_id": "0"}],
+        segments=[{"start": 100.0, "end": 101.0, "text": "second"}],
+    )
+
+    with patch(
+        "app.services.fireworks_audio._post_transcription",
+        side_effect=[chunk0, chunk1],
+    ) as mock_post:
+        segments, _language, raw = transcribe(
+            str(audio_path),
+            api_key="fw_test",
+            audio_base_url="https://audio-turbo.api.fireworks.ai",
+            model_name="whisper-v3-turbo",
+            diarize=True,
+            chunked=True,
+            chunk_target_secs=900,
+            chunk_overlap_secs=3,
+            chunk_max_retries=2,
+        )
+
+    assert mock_post.call_count == 2
+    # Chunk 1 starts at 897s in whole-file time (target 900 - overlap 3).
+    # Word "second" was at chunk-local 100s, so whole-file 997s.
+    second_word = next(w for w in raw["words"] if w["word"] == "second")
+    assert second_word["start"] == pytest.approx(997.0)
+    second_seg = next(s for s in segments if s["text"] == "second")
+    assert second_seg["start"] == pytest.approx(997.0)
+
+
+def test_transcribe_chunked_retries_on_transient_error(tmp_path: Path, monkeypatch):
+    """A retryable error on a chunk is retried up to max_retries before succeeding."""
+    audio_path = tmp_path / "long.mp3"
+    audio_path.write_bytes(b"fake")
+    _patch_chunking_io(monkeypatch, duration_secs=120.0)
+
+    transient = FireworksTranscriptionError(
+        "transient blip", error_class="TRANSIENT_NETWORK", retryable=True
+    )
+    success = _chunk_response(words=[{"word": "ok", "start": 0.0, "end": 0.5}])
+
+    with patch(
+        "app.services.fireworks_audio._post_transcription",
+        side_effect=[transient, transient, success],
+    ) as mock_post:
+        segments, _language, _raw = transcribe(
+            str(audio_path),
+            api_key="fw_test",
+            audio_base_url="https://audio-turbo.api.fireworks.ai",
+            model_name="whisper-v3-turbo",
+            diarize=True,
+            chunked=True,
+            chunk_target_secs=900,
+            chunk_overlap_secs=3,
+            chunk_max_retries=2,
+        )
+
+    assert mock_post.call_count == 3  # 1 try + 2 retries
+    assert segments == []  # no segments in the success response
+
+
+def test_transcribe_chunked_retry_exhaustion_raises_chunk_failed(tmp_path: Path, monkeypatch):
+    audio_path = tmp_path / "long.mp3"
+    audio_path.write_bytes(b"fake")
+    _patch_chunking_io(monkeypatch, duration_secs=120.0)
+
+    transient = FireworksTranscriptionError(
+        "transient blip", error_class="TRANSIENT_NETWORK", retryable=True
+    )
+
+    with patch(
+        "app.services.fireworks_audio._post_transcription",
+        side_effect=[transient] * 5,
+    ):
+        with pytest.raises(FireworksTranscriptionError) as excinfo:
+            transcribe(
+                str(audio_path),
+                api_key="fw_test",
+                audio_base_url="https://audio-turbo.api.fireworks.ai",
+                model_name="whisper-v3-turbo",
+                diarize=True,
+                chunked=True,
+                chunk_target_secs=900,
+                chunk_overlap_secs=3,
+                chunk_max_retries=2,
+            )
+    assert excinfo.value.error_class == "FIREWORKS_CHUNK_FAILED"
+    assert excinfo.value.retryable is False
+
+
+def test_transcribe_chunked_bisects_on_upload_rejected(tmp_path: Path, monkeypatch):
+    """When a chunk hits the cap, the range is bisected and sub-chunks succeed."""
+    audio_path = tmp_path / "long.mp3"
+    audio_path.write_bytes(b"fake")
+    _patch_chunking_io(monkeypatch, duration_secs=1500.0)
+
+    rejected = FireworksTranscriptionError(
+        "Fireworks rejected upload",
+        error_class="FIREWORKS_UPLOAD_REJECTED",
+        retryable=False,
+    )
+    chunk_resp = _chunk_response(words=[{"word": "ok", "start": 0.0, "end": 0.5}])
+
+    # Chunk 0 succeeds; chunk 1 hits the cap (no retry on cap) and bisects
+    # into 2 sub-chunks that each succeed.
+    side = [
+        chunk_resp,  # chunk 0
+        rejected,    # chunk 1: cap → break retry loop → bisect
+        chunk_resp,  # sub-chunk 1.0
+        chunk_resp,  # sub-chunk 1.1
+    ]
+
+    with patch(
+        "app.services.fireworks_audio._post_transcription",
+        side_effect=side,
+    ) as mock_post:
+        _segments, _language, _raw = transcribe(
+            str(audio_path),
+            api_key="fw_test",
+            audio_base_url="https://audio-turbo.api.fireworks.ai",
+            model_name="whisper-v3-turbo",
+            diarize=True,
+            chunked=True,
+            chunk_target_secs=900,
+            chunk_overlap_secs=3,
+            chunk_max_retries=2,
+        )
+
+    assert mock_post.call_count == 4
+
+
+def test_transcribe_chunked_bisect_exhaustion_raises_chunk_failed(tmp_path: Path, monkeypatch):
+    audio_path = tmp_path / "long.mp3"
+    audio_path.write_bytes(b"fake")
+    _patch_chunking_io(monkeypatch, duration_secs=1500.0)
+
+    rejected = FireworksTranscriptionError(
+        "Fireworks rejected upload",
+        error_class="FIREWORKS_UPLOAD_REJECTED",
+        retryable=False,
+    )
+
+    with patch(
+        "app.services.fireworks_audio._post_transcription",
+        side_effect=[rejected] * 100,  # everything fails with cap
+    ):
+        with pytest.raises(FireworksTranscriptionError) as excinfo:
+            transcribe(
+                str(audio_path),
+                api_key="fw_test",
+                audio_base_url="https://audio-turbo.api.fireworks.ai",
+                model_name="whisper-v3-turbo",
+                diarize=True,
+                chunked=True,
+                chunk_target_secs=900,
+                chunk_overlap_secs=3,
+                chunk_max_retries=2,
+            )
+    assert excinfo.value.error_class == "FIREWORKS_CHUNK_FAILED"
+    assert excinfo.value.retryable is False
+    # The error should name the failing range so the user knows what to look at.
+    assert "-" in str(excinfo.value) or "Re-run" in str(excinfo.value)
