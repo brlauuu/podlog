@@ -17,6 +17,7 @@ import TurnDensity from "./charts/TurnDensity";
 import WpmPerSpeaker from "./charts/WpmPerSpeaker";
 import TokensPerEpisode from "./charts/TokensPerEpisode";
 import InfoBlock from "./InfoBlock";
+import ExploreStatusPanel from "./ExploreStatusPanel";
 import { formatDateTime } from "@/lib/dateFormat";
 
 async function fetchSnapshot(): Promise<SnapshotResponse> {
@@ -187,6 +188,7 @@ export default function MetaAnalysisClient() {
             </ChartCard>
           </div>
           <InfoBlock />
+          <ExploreStatusPanel />
         </>
       )}
     </div>
