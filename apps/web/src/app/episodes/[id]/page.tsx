@@ -21,6 +21,7 @@ interface Episode {
   description: string | null;
   published_at: string | null;
   duration_secs: number | null;
+  language: string | null;
   status: string;
   error_class: string | null;
   error_message: string | null;
@@ -157,6 +158,8 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
             status={episode.status}
             publishedAt={episode.published_at}
             durationSecs={episode.duration_secs}
+            language={episode.language}
+            hasDiarization={episode.has_diarization}
             transcribeDurationSecs={episode.transcribe_duration_secs}
             diarizeDurationSecs={episode.diarize_duration_secs}
             diarizeStepDurations={episode.diarize_step_durations}
