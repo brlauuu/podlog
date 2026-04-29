@@ -224,13 +224,19 @@ def _transcribe_range(
                 str(exc),
             )
 
-    assert last_error is not None  # loop body either returns or sets last_error
+    if last_error is None:
+        # Defensive: the retry loop body either returns successfully or sets
+        # last_error before breaking. Reaching here means a control-flow bug.
+        raise RuntimeError(
+            f"_transcribe_range exhausted retries without recording an error "
+            f"(label={chunk_label!r})"
+        )
 
     if last_error.error_class == "FIREWORKS_UPLOAD_REJECTED" and bisect_depth > 0:
         if range_duration < _MIN_BISECT_DURATION_SECS:
             raise FireworksTranscriptionError(
                 f"Fireworks rejected upload of a {range_duration:.0f}s chunk "
-                f"[{range_label(range_start, range_end)}]; below bisect floor "
+                f"[{_range_label(range_start, range_end)}]; below bisect floor "
                 f"({_MIN_BISECT_DURATION_SECS:.0f}s). Cap may not be size-related.",
                 error_class="FIREWORKS_CHUNK_FAILED",
                 retryable=False,
@@ -273,7 +279,7 @@ def _transcribe_range(
 
     if last_error.error_class == "FIREWORKS_UPLOAD_REJECTED":
         raise FireworksTranscriptionError(
-            f"Fireworks rejected upload of chunk [{range_label(range_start, range_end)}] "
+            f"Fireworks rejected upload of chunk [{_range_label(range_start, range_end)}] "
             f"after exhausting bisect depth. Re-run this episode on local inference.",
             error_class="FIREWORKS_CHUNK_FAILED",
             retryable=False,
@@ -281,14 +287,14 @@ def _transcribe_range(
 
     # Retry budget exhausted on a retryable error, or non-retryable error.
     raise FireworksTranscriptionError(
-        f"Chunk [{range_label(range_start, range_end)}] failed after "
+        f"Chunk [{_range_label(range_start, range_end)}] failed after "
         f"{max_retries + 1} attempts: {last_error}",
         error_class="FIREWORKS_CHUNK_FAILED",
         retryable=False,
     ) from last_error
 
 
-def range_label(start: float, end: float) -> str:
+def _range_label(start: float, end: float) -> str:
     """Format a range as ``MM:SS-MM:SS`` for log/error messages."""
 
     def fmt(secs: float) -> str:

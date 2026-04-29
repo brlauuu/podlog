@@ -101,7 +101,8 @@ def transcribe_episode(episode_id: str) -> str:
                     ),
                     chunk_target_secs=int(
                         runtime.get("fireworks_chunk_target_secs")
-                        or settings.fireworks_chunk_target_secs
+                        if runtime.get("fireworks_chunk_target_secs") is not None
+                        else settings.fireworks_chunk_target_secs
                     ),
                     chunk_overlap_secs=int(
                         runtime.get("fireworks_chunk_overlap_secs")
