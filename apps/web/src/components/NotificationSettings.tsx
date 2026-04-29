@@ -7,7 +7,18 @@ import { SettingsSchema } from "@/lib/settings-schema";
 import NotificationSection from "./NotificationSection";
 import RemoteInferenceSection from "./RemoteInferenceSection";
 
+// Fields edited from the Remote Inference tab. handleChange routes any field
+// in this Set into dirtyInference (saved by that tab's Save button); other
+// fields go into dirtyNotifications. Any field rendered by RemoteInferenceSection
+// must be listed here, otherwise the Inference Save button stays disabled and
+// the user's change appears to be silently dropped.
+//
+// Keep in lockstep with apps/pipeline/app/services/notification_settings.py
+// (_INFERENCE_FIELDS, _EMBEDDING_FIELDS, _DIARIZATION_FIELDS) for fields that
+// have a backend twin. The regression test in tests/unit/notification-settings-routing.test.tsx
+// pins the relationship.
 const INFERENCE_FIELDS = new Set<keyof Settings>([
+  // Transcription provider
   "inference_provider",
   "fireworks_api_key",
   "fireworks_audio_base_url",
@@ -16,10 +27,22 @@ const INFERENCE_FIELDS = new Set<keyof Settings>([
   "fireworks_chat_base_url",
   "fireworks_chat_model",
   "fireworks_stt_cost_per_minute_usd",
+  // Chunked transcription (Issue #610)
+  "fireworks_chunked_transcription_enabled",
+  "fireworks_chunk_target_secs",
+  "fireworks_chunk_overlap_secs",
+  "fireworks_chunk_max_retries",
+  // Embedding provider
   "embedding_provider",
   "embedding_model",
   "fireworks_embedding_base_url",
   "fireworks_embedding_model",
+  // Diarization provider (Issue #516)
+  "diarization_provider",
+  "pyannote_api_key",
+  "pyannote_cloud_base_url",
+  "pyannote_cloud_model",
+  "pyannote_cloud_cost_per_second_usd",
 ]);
 
 export default function NotificationSettings() {
