@@ -99,16 +99,6 @@ class Settings(BaseSettings):
     # preserves existing behavior on upgrade.
     rag_provider: Literal["local", "fireworks"] = "local"
 
-    # Long-episode chunked transcription (Issue #610).
-    # When enabled, episodes whose upload would otherwise hit Fireworks's
-    # undocumented size/duration cap (#600) are split into smaller pieces,
-    # transcribed independently, and stitched back into a single transcript.
-    # Off by default so existing installs see no behavior change on upgrade.
-    fireworks_chunked_transcription_enabled: bool = False
-    fireworks_chunk_target_secs: int = Field(default=900, ge=60)  # 15 min
-    fireworks_chunk_overlap_secs: int = Field(default=3, ge=0)
-    fireworks_chunk_max_retries: int = Field(default=2, ge=0)
-
     # Embedding provider routing (Issue #258)
     embedding_provider: Literal["local", "fireworks"] = "local"
     embedding_model: str = "all-MiniLM-L6-v2"

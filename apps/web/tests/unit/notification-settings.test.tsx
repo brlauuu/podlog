@@ -39,10 +39,6 @@ const defaultSettings = {
   pyannote_cloud_base_url: "https://api.pyannote.ai/v1",
   pyannote_cloud_model: "precision-2",
   pyannote_cloud_cost_per_second_usd: 0,
-  fireworks_chunked_transcription_enabled: false,
-  fireworks_chunk_target_secs: 900,
-  fireworks_chunk_overlap_secs: 3,
-  fireworks_chunk_max_retries: 2,
   rag_provider: "local",
   telegram_configured: false,
   email_configured: false,
@@ -302,49 +298,6 @@ describe("NotificationSettings", () => {
       expect(putCall).toBeTruthy();
       const body = JSON.parse(putCall![1]!.body as string);
       expect(body.rag_provider).toBe("fireworks");
-    });
-  });
-
-  it("Inference Save enables and PUTs chunked toggle when flipped (#610 routing fix)", async () => {
-    // Regression test: until this fix, the chunked-transcription field
-    // landed in dirtyNotifications because it wasn't in INFERENCE_FIELDS,
-    // so the Inference Save button stayed disabled and the change was lost.
-    const user = userEvent.setup();
-    // Set transcription provider to Fireworks so the chunked toggle is rendered.
-    const settingsWithFireworks = { ...defaultSettings, inference_provider: "fireworks" };
-    mockFetch.mockImplementation((url: string) => {
-      if (url === "/api/hardware") {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ hardware: null, profile: null, profile_label: null, estimates: {} }),
-        });
-      }
-      return Promise.resolve({ ok: true, json: async () => ({ ...settingsWithFireworks }) });
-    });
-
-    render(<NotificationSettings />);
-    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
-    await user.click(inferenceTab);
-
-    const toggle = await screen.findByLabelText(/chunk long episodes/i);
-    fireEvent.click(toggle);
-
-    // Save button must enable.
-    await waitFor(() => {
-      const saveBtn = screen.getByRole("button", { name: /save/i });
-      expect(saveBtn).not.toBeDisabled();
-    });
-
-    await user.click(screen.getByRole("button", { name: /save/i }));
-
-    // PUT body must contain the chunked toggle.
-    await waitFor(() => {
-      const putCall = mockFetch.mock.calls.find(
-        (c: [string, RequestInit?]) => c[1]?.method === "PUT"
-      );
-      expect(putCall).toBeTruthy();
-      const body = JSON.parse(putCall![1]!.body as string);
-      expect(body.fireworks_chunked_transcription_enabled).toBe(true);
     });
   });
 });
