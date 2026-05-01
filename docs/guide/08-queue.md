@@ -40,8 +40,6 @@ When an episode fails, the error is classified to determine whether it can be re
 
 **Manual retry:** Click the **Retry** button on a failed episode to re-queue it. Non-retryable errors (DISK_FULL, OOM) show a message explaining what to fix first.
 
-**Bulk retry for upload-rejected episodes:** When Fireworks rejects long-episode uploads (`FIREWORKS_UPLOAD_REJECTED` or pre-#600 `TRANSIENT_NETWORK` with the SSL `BAD_RECORD_MAC` signature), a banner at the top of the queue dashboard offers a one-click retry for the whole batch using chunked transcription. The button is disabled until you enable **Chunk long episodes** in Settings → Remote Inference → Transcription. See [Chunked Fireworks Transcription](14-chunked-fireworks.md) for the full workflow.
-
 ## Stuck Episodes
 
 An episode may appear as **Stuck** if it's not in a done/failed state but has no active job in the queue. This can happen if:

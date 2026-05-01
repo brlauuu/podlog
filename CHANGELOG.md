@@ -41,9 +41,6 @@ fresh empty `[Unreleased]` is left at the top.
 - Archive task now captures the tail of `ffmpeg`'s stderr when compression fails, instead of storing the placeholder `"ffmpeg error (see stderr output for detail)"`. ([#603](https://github.com/brlauuu/podlog/pull/603))
 - CI Slow's web e2e job now runs `alembic upgrade head` against `db_test` before serving, fixing the `relation "feeds" does not exist` failure introduced when the SSR e2e specs landed. (commit `21629cb`)
 
-### Docs
-- New guide page **Chunked Fireworks Transcription** explaining when to enable the toggle, how the split-transcribe-stitch flow works, the diarization-on-whole-file design, the bulk-retry workflow, the bisect-on-cap behavior, and cost. New `FIREWORKS_CHUNKED_TRANSCRIPTION_ENABLED` and the three tunables documented in `docs/configuration.md`. Queue dashboard guide cross-links the bulk-retry workflow. ([#610](https://github.com/brlauuu/podlog/issues/610))
-
 ### Internal
 - Periodic cleanup task that prunes superseded `failed` rows in `job_queue` (rows whose episode later succeeded). Runs every 24 h; clears noise from the queue dashboard's "failed" counter. ([#604](https://github.com/brlauuu/podlog/pull/604))
 - Decoupled Ask/RAG generation from `inference_provider`: backend now reads a dedicated `rag_provider` runtime flag (default `local`). Previously, enabling Fireworks for transcription silently routed retrieved transcript chunks to Fireworks for answer generation too. Existing installs default to `local` so no behavior change on upgrade — Settings UI to change this ships in a follow-up PR. Also surfaces a clean, actionable message (instead of leaking the raw provider response) when Fireworks returns 404 for a deprecated chat model. ([#608](https://github.com/brlauuu/podlog/issues/608))
