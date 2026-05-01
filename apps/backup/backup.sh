@@ -52,6 +52,9 @@ dump_db() {
 
   # Promote to weekly on Sundays (cron-style: %u = 7).
   if [ "$(date -d "$date_str" +%u)" = "7" ]; then
+    # rm first so a same-day re-run keeps the hardlink rather than falling
+    # through to the non-link cp on EEXIST.
+    rm -f "$DB_WEEKLY/podlog-$date_str.dump"
     cp -al "$target" "$DB_WEEKLY/podlog-$date_str.dump" 2>/dev/null \
       || cp "$target" "$DB_WEEKLY/podlog-$date_str.dump"
     log "db weekly link → $DB_WEEKLY/podlog-$date_str.dump"
@@ -59,6 +62,7 @@ dump_db() {
 
   # Promote to monthly on the 1st.
   if [ "$(date -d "$date_str" +%d)" = "01" ]; then
+    rm -f "$DB_MONTHLY/podlog-$date_str.dump"
     cp -al "$target" "$DB_MONTHLY/podlog-$date_str.dump" 2>/dev/null \
       || cp "$target" "$DB_MONTHLY/podlog-$date_str.dump"
     log "db monthly link → $DB_MONTHLY/podlog-$date_str.dump"
@@ -74,21 +78,32 @@ snapshot_audio() {
     return 0
   fi
 
-  # Pick the most recent existing snapshot to hardlink unchanged files
-  # against. ISO dates sort lexically.
+  # Pick the most recent existing snapshot — excluding today's target —
+  # to hardlink unchanged files against. ISO dates sort lexically. The
+  # `! -path` filter avoids picking ourselves on a same-day retry, which
+  # would either no-op the link-dest or pin to stale state.
   local previous
   previous=$(find "$AUDIO_ROOT" -mindepth 1 -maxdepth 1 -type d -name '20??-??-??' \
+    ! -path "$target" \
     | sort | tail -n 1)
 
   log "audio snapshot → $target (link-dest: ${previous:-none})"
 
   local link_dest_arg=""
-  if [ -n "$previous" ] && [ "$previous" != "$target" ]; then
+  if [ -n "$previous" ]; then
     link_dest_arg="--link-dest=$previous"
   fi
 
-  rsync -a --delete $link_dest_arg "$AUDIO_SOURCE/" "$target.partial/"
-  mv "$target.partial" "$target"
+  # rsync directly into the target — no partial-dir dance. `mv` of a
+  # directory over an existing directory NESTS rather than replaces, so
+  # the partial-pattern that works for files (DB dumps) breaks for dirs.
+  # Idempotency guarantees: if the run crashes mid-rsync, the next run
+  # rsyncs into the same target with --delete, which reconciles to
+  # source state. The trade-off is that an ongoing rsync leaves the
+  # snapshot in an inconsistent state visible to readers — acceptable
+  # for a daily backup; restore from yesterday's snapshot if today's
+  # is mid-update.
+  rsync -a --delete $link_dest_arg "$AUDIO_SOURCE/" "$target/"
 }
 
 # Prune a directory of dump files (oldest first) keeping only N most

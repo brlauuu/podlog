@@ -77,9 +77,9 @@ explore-logs:   ## Follow the explore service logs (look for the token URL)
 	docker compose --profile explore logs -f explore
 
 backup-now:     ## Force a backup run right now (bypasses the daily flag).
-	@docker compose exec backup sh -c 'rm -f /backups/.last_run && /usr/local/bin/backup.sh & sleep 2; pkill -f "sleep " || true' 2>/dev/null || true
-	@docker compose exec backup ls -la /backups/db/daily | tail -5
-	@echo "Tip: tail logs with: docker compose logs -f backup"
+	docker compose exec backup rm -f /backups/.last_run
+	docker compose restart backup
+	@echo "Backup triggered. Tail with: docker compose logs -f backup"
 
 backup-list:    ## List available DB dumps and audio snapshots.
 	@echo "DB dumps (daily):"
@@ -95,9 +95,11 @@ restore-db:     ## DESTRUCTIVE: restore the DB from a dated dump. Usage: make re
 	@if [ -z "$(DATE)" ]; then echo "Usage: make restore-db DATE=YYYY-MM-DD"; exit 1; fi
 	@echo "About to DROP and recreate the 'podlog' database from backup dated $(DATE)."
 	@printf "Type 'yes' to continue: "; read confirm; [ "$$confirm" = "yes" ] || { echo "aborted"; exit 1; }
+	# Always restart pipeline/worker/web at the end, even if restore fails —
+	# otherwise a script error leaves the stack down. The trailing exit $$rc
+	# preserves the restore script's exit status so Make still reports failure.
 	docker compose stop pipeline worker web
-	docker compose exec backup /usr/local/bin/restore-db.sh $(DATE)
-	docker compose start pipeline worker web
+	@sh -c 'docker compose exec backup /usr/local/bin/restore-db.sh $(DATE); rc=$$?; docker compose start pipeline worker web; exit $$rc'
 
 restore-audio:  ## DESTRUCTIVE: restore audio archive from a dated snapshot. Usage: make restore-audio DATE=YYYY-MM-DD
 	@if [ -z "$(DATE)" ]; then echo "Usage: make restore-audio DATE=YYYY-MM-DD"; exit 1; fi
