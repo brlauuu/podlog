@@ -116,7 +116,7 @@ function PyannoteCloudCostTag({ costUsd }: { costUsd: number }) {
         pyannote cloud: {label}
       </Tag>
       {showTooltip && (
-        <div className="absolute z-50 bottom-full mb-1 left-1/2 -translate-x-1/2 w-64 p-2 rounded-md bg-popover text-popover-foreground text-xs shadow-md border">
+        <div className="absolute z-50 bottom-full mb-1 left-1/2 -translate-x-1/2 w-64 p-2 rounded-md bg-card text-card-foreground text-xs shadow-md border">
           <div className="font-medium mb-1">pyannote cloud (Precision-2)</div>
           {costUsd > 0 ? (
             <div>Estimated cost: ${costUsd.toFixed(4)}</div>
@@ -149,7 +149,7 @@ function FireworksCostTag({ costUsd, audioMinutes }: { costUsd: number; audioMin
         Fireworks STT: ${costUsd.toFixed(2)}
       </Tag>
       {showTooltip && (
-        <div className="absolute z-50 bottom-full mb-1 left-1/2 -translate-x-1/2 w-48 p-2 rounded-md bg-popover text-popover-foreground text-xs shadow-md border">
+        <div className="absolute z-50 bottom-full mb-1 left-1/2 -translate-x-1/2 w-48 p-2 rounded-md bg-card text-card-foreground text-xs shadow-md border">
           <div className="font-medium mb-1">Fireworks STT Details</div>
           {audioMinutes != null && <div>Audio: {audioMinutes.toFixed(1)} min</div>}
           <div>Cost: ${costUsd.toFixed(4)}</div>
