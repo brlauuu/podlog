@@ -99,6 +99,31 @@ services:
       pipeline:
         condition: service_healthy  # Waits for migrations -- prevents schema-not-found errors
 
+  # Issue #630: daily backup of the Podlog DB + audio archive.
+  # Always-on. Set BACKUP_RETENTION_DAILY/WEEKLY/MONTHLY=0 to disable
+  # individual buckets; set all three to 0 to opt out entirely.
+  # Backups land on the host at ./backups/ (gitignored).
+  backup:
+    build: ./apps/backup
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: podlog
+      BACKUP_RETENTION_DAILY: ${BACKUP_RETENTION_DAILY:-7}
+      BACKUP_RETENTION_WEEKLY: ${BACKUP_RETENTION_WEEKLY:-4}
+      BACKUP_RETENTION_MONTHLY: ${BACKUP_RETENTION_MONTHLY:-12}
+    volumes:
+      # Not :ro — restore-audio.sh needs to write back. The backup loop is
+      # read-only by design; the rsync command in backup.sh never targets
+      # /source/.
+      - audio_data:/source/audio
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   # Issue #607: optional Jupyter-based DB exploration environment.
   # Opt-in via Compose profile so a default `docker compose up` doesn't pull
   # the image or run the service. Start with `make explore` (or

@@ -17,8 +17,9 @@ Podlog is a self-hosted podcast transcription and search app. It downloads episo
 11. [Hardware & Performance](11-hardware.md) — Processing times, storage estimates
 12. [Ask AI (RAG Search)](12-rag-search.md) — AI-powered Q&A over transcripts
 13. [pyannote Cloud Diarization](13-pyannote-cloud.md) — Optional Precision-2 paid cloud provider
-15. [Meta-Analysis Dashboard](15-meta-analysis.md) — Cross-feed metrics and charts
-16. [Database Exploration with Jupyter](16-explore.md) — Optional advanced: pandas + Plotly notebooks against the Podlog DB
+14. [Meta-Analysis Dashboard](14-meta-analysis.md) — Cross-feed metrics and charts
+15. [Database Exploration with Jupyter](15-explore.md) — Optional advanced: pandas + Plotly notebooks against the Podlog DB
+16. [Backups](16-backups.md) — Daily DB + audio backups, retention, restore
 17. [Troubleshooting](17-troubleshooting.md) — Common issues and fixes
 
 ## Quick Start

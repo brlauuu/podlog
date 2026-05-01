@@ -35,6 +35,9 @@ apps/web/VERSION
 # Docker volumes (local bind mounts during dev)
 data/
 
+# Backups (#630): host-mounted destination for the backup service.
+backups/
+
 # Audit reports (generated locally by nightly codex runs)
 docs/audit/**
 !docs/audit/.gitkeep

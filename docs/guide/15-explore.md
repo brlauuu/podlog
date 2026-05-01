@@ -79,4 +79,4 @@ A small status panel on the **Meta-Analysis** page indicates whether the explore
 
 ---
 
-**Next:** [Troubleshooting](17-troubleshooting.md) | **Back:** [Meta-Analysis Dashboard](15-meta-analysis.md) | **Home:** [Guide](README.md)
+**Next:** [Backups](16-backups.md) | **Back:** [Meta-Analysis Dashboard](14-meta-analysis.md) | **Home:** [Guide](README.md)

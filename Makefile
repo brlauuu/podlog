@@ -1,4 +1,4 @@
-.PHONY: up up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs
+.PHONY: up up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs backup-now backup-list restore-db restore-audio
 
 up:             ## Start full stack
 	docker compose up -d
@@ -75,6 +75,35 @@ explore-down:   ## Stop the explore service
 
 explore-logs:   ## Follow the explore service logs (look for the token URL)
 	docker compose --profile explore logs -f explore
+
+backup-now:     ## Force a backup run right now (bypasses the daily flag).
+	@docker compose exec backup sh -c 'rm -f /backups/.last_run && /usr/local/bin/backup.sh & sleep 2; pkill -f "sleep " || true' 2>/dev/null || true
+	@docker compose exec backup ls -la /backups/db/daily | tail -5
+	@echo "Tip: tail logs with: docker compose logs -f backup"
+
+backup-list:    ## List available DB dumps and audio snapshots.
+	@echo "DB dumps (daily):"
+	@docker compose exec backup sh -c 'ls /backups/db/daily 2>/dev/null | sort | head -10' || true
+	@echo "DB dumps (weekly):"
+	@docker compose exec backup sh -c 'ls /backups/db/weekly 2>/dev/null | sort' || true
+	@echo "DB dumps (monthly):"
+	@docker compose exec backup sh -c 'ls /backups/db/monthly 2>/dev/null | sort' || true
+	@echo "Audio snapshots:"
+	@docker compose exec backup sh -c 'ls /backups/audio 2>/dev/null | sort | head -10' || true
+
+restore-db:     ## DESTRUCTIVE: restore the DB from a dated dump. Usage: make restore-db DATE=YYYY-MM-DD
+	@if [ -z "$(DATE)" ]; then echo "Usage: make restore-db DATE=YYYY-MM-DD"; exit 1; fi
+	@echo "About to DROP and recreate the 'podlog' database from backup dated $(DATE)."
+	@printf "Type 'yes' to continue: "; read confirm; [ "$$confirm" = "yes" ] || { echo "aborted"; exit 1; }
+	docker compose stop pipeline worker web
+	docker compose exec backup /usr/local/bin/restore-db.sh $(DATE)
+	docker compose start pipeline worker web
+
+restore-audio:  ## DESTRUCTIVE: restore audio archive from a dated snapshot. Usage: make restore-audio DATE=YYYY-MM-DD
+	@if [ -z "$(DATE)" ]; then echo "Usage: make restore-audio DATE=YYYY-MM-DD"; exit 1; fi
+	@echo "About to overwrite /data/audio/archive from snapshot dated $(DATE)."
+	@printf "Type 'yes' to continue: "; read confirm; [ "$$confirm" = "yes" ] || { echo "aborted"; exit 1; }
+	docker compose exec backup /usr/local/bin/restore-audio.sh $(DATE)
 
 health-check:   ## Run health check once (requires python3, pg_isready, docker)
 	python3 scripts/healthcheck.py
