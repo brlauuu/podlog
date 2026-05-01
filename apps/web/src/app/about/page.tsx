@@ -123,16 +123,29 @@ export default async function AboutPage() {
 
   const showToc = Boolean(aboutH1 || changelogH1);
 
+  // Issue #620 follow-up: keep the content column horizontally aligned with
+  // the Docs page so switching tabs doesn't shift the text. Docs uses a
+  // 3-column grid `[nav | content | toc]` at xl. About has no left nav, so
+  // we mirror that grid with an empty placeholder in slot 1 — the centered
+  // content column then lines up byte-for-byte with Docs.
+  //
+  // At md/lg About stays single-column (the right-rail TOC is `hidden
+  // xl:block`, so adding a second column there would render an empty
+  // placeholder column). The outer `mx-auto` on the content child keeps
+  // it centered at those breakpoints.
   return (
-    <div className="mx-auto w-full max-w-7xl py-4">
+    <div className="w-full py-6">
       <div
         className={
           showToc
-            ? "grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,42rem)_minmax(8rem,1fr)] xl:justify-center"
+            ? "grid grid-cols-1 gap-6 xl:grid-cols-[minmax(8rem,1fr)_minmax(0,42rem)_minmax(8rem,1fr)]"
             : "grid grid-cols-1 gap-6"
         }
       >
-        <div className="mx-auto w-full max-w-2xl space-y-10 xl:mx-0 [&_h1]:scroll-mt-20 [&_h2]:scroll-mt-20">
+        {showToc && (
+          <div className="hidden xl:block" aria-hidden />
+        )}
+        <div className="mx-auto w-full max-w-2xl space-y-10 [&_h1]:scroll-mt-20 [&_h2]:scroll-mt-20">
           {aboutContent ? (
             <article className="prose prose-sm dark:prose-invert max-w-none leading-7">
               <ReactMarkdown
