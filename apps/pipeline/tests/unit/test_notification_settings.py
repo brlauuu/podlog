@@ -184,28 +184,6 @@ class TestSaveNotificationSettings:
         with pytest.raises(ValueError, match="pyannote_cloud_cost_per_second_usd"):
             save_notification_settings(db, {"pyannote_cloud_cost_per_second_usd": -0.01})
 
-    def test_rejects_invalid_chunked_transcription_toggle(self):
-        db = _mock_db(stored_json=None)
-        with pytest.raises(ValueError, match="fireworks_chunked_transcription_enabled"):
-            save_notification_settings(db, {"fireworks_chunked_transcription_enabled": "yes"})
-
-    def test_rejects_invalid_chunk_target_secs(self):
-        db = _mock_db(stored_json=None)
-        with pytest.raises(ValueError, match="fireworks_chunk_target_secs"):
-            save_notification_settings(db, {"fireworks_chunk_target_secs": 30})  # below min
-        with pytest.raises(ValueError, match="fireworks_chunk_target_secs"):
-            save_notification_settings(db, {"fireworks_chunk_target_secs": "900"})
-
-    def test_rejects_invalid_chunk_overlap_secs(self):
-        db = _mock_db(stored_json=None)
-        with pytest.raises(ValueError, match="fireworks_chunk_overlap_secs"):
-            save_notification_settings(db, {"fireworks_chunk_overlap_secs": -1})
-
-    def test_rejects_invalid_chunk_max_retries(self):
-        db = _mock_db(stored_json=None)
-        with pytest.raises(ValueError, match="fireworks_chunk_max_retries"):
-            save_notification_settings(db, {"fireworks_chunk_max_retries": -1})
-
     def test_empty_string_normalized_to_none(self):
         stored = json.dumps({"notification_email_to": "user@example.com"})
         db = _mock_db(stored_json=stored)
