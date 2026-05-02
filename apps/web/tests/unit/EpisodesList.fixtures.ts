@@ -27,6 +27,7 @@ export function makeEpisode(overrides: Partial<EnrichedEpisode> = {}): EnrichedE
     fireworks_audio_minutes: 60,
     fireworks_stt_cost_usd: 0.0123,
     pyannote_cloud_cost_usd: null,
+    audio_file_size_bytes: null,
     speaker_count: 2,
     speaker_name_tags: [],
     ...overrides,

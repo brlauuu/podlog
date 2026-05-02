@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { formatTimestamp } from "@/lib/timestamp";
 import { formatDate } from "@/lib/dateFormat";
+import { formatFileSize } from "@/lib/formatFileSize";
 import ReprocessButton from "@/components/ReprocessButton";
 
 interface EpisodeMetaTagsProps {
@@ -25,6 +26,7 @@ interface EpisodeMetaTagsProps {
   fireworksSttCostUsd: number | null;
   fireworksAudioMinutes: number | null;
   pyannoteCloudCostUsd: number | null;
+  audioFileSizeBytes: number | null;
   episodeId: string;
 }
 
@@ -174,6 +176,7 @@ export default function EpisodeMetaTags({
   fireworksSttCostUsd,
   fireworksAudioMinutes,
   pyannoteCloudCostUsd,
+  audioFileSizeBytes,
   episodeId,
 }: EpisodeMetaTagsProps) {
   const [stepsExpanded, setStepsExpanded] = useState(false);
@@ -204,6 +207,10 @@ export default function EpisodeMetaTags({
 
         {durationSecs != null && (
           <Tag>{formatTimestamp(durationSecs)}</Tag>
+        )}
+
+        {audioFileSizeBytes != null && (
+          <Tag>{formatFileSize(audioFileSizeBytes)}</Tag>
         )}
 
         {language && (
