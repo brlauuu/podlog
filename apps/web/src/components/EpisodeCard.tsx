@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import ReprocessButton from "./ReprocessButton";
 import { formatDate } from "@/lib/dateFormat";
+import { formatFileSize } from "@/lib/formatFileSize";
 
 export interface SpeakerNameTag {
   display_name: string;
@@ -32,6 +33,7 @@ export interface EnrichedEpisode {
   fireworks_audio_minutes: number | null;
   fireworks_stt_cost_usd: number | null;
   pyannote_cloud_cost_usd: number | null;
+  audio_file_size_bytes: number | null;
   speaker_count: number;
   speaker_name_tags: SpeakerNameTag[];
 }
@@ -255,6 +257,12 @@ export default function EpisodeCard({
         {ep.duration_secs != null && (
           <Tag className="bg-muted text-muted-foreground">
             {formatDuration(ep.duration_secs)}
+          </Tag>
+        )}
+
+        {ep.audio_file_size_bytes != null && (
+          <Tag className="bg-muted text-muted-foreground">
+            {formatFileSize(ep.audio_file_size_bytes)}
           </Tag>
         )}
 

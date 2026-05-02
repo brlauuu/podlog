@@ -39,6 +39,7 @@ async function getEpisodes(feedId: string): Promise<EnrichedEpisode[]> {
        e.fireworks_audio_minutes,
        e.fireworks_stt_cost_usd,
        e.pyannote_cloud_cost_usd,
+       e.audio_file_size_bytes,
        COALESCE(agg.speaker_count, 0)::int AS speaker_count,
        COALESCE(sn_agg.speaker_name_tags, '[]'::json) AS speaker_name_tags
      FROM episodes e

@@ -86,6 +86,7 @@ class Episode(Base):
     # present on a specific episode.
     podcast_persons: Mapped[list | None] = mapped_column(JSONB)
     audio_local_path: Mapped[str | None] = mapped_column(Text)
+    audio_file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     transcript_path: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str | None] = mapped_column(Text)
 

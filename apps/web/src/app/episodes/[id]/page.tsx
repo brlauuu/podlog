@@ -37,6 +37,7 @@ interface Episode {
   fireworks_stt_cost_per_minute_usd: number | null;
   fireworks_stt_cost_usd: number | null;
   pyannote_cloud_cost_usd: number | null;
+  audio_file_size_bytes: number | null;
   audio_url: string | null;
   audio_local_path: string | null;
   guid: string | null;
@@ -167,6 +168,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
             fireworksSttCostUsd={episode.fireworks_stt_cost_usd}
             fireworksAudioMinutes={episode.fireworks_audio_minutes}
             pyannoteCloudCostUsd={episode.pyannote_cloud_cost_usd}
+            audioFileSizeBytes={episode.audio_file_size_bytes}
             episodeId={episode.id}
           />
         </div>

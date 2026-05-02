@@ -85,6 +85,8 @@ def transcribe_episode(episode_id: str) -> str:
                     raise RuntimeError(
                         "Fireworks inference provider selected but FIREWORKS_API_KEY is missing"
                     )
+                audio_file_size_bytes = audio_path.stat().st_size if audio_path.exists() else None
+                update_episode(db, episode_id, audio_file_size_bytes=audio_file_size_bytes)
                 t0 = time.monotonic()
                 segments_data, language, fireworks_result = fireworks_audio.transcribe(
                     str(audio_path),
@@ -199,6 +201,7 @@ def transcribe_episode(episode_id: str) -> str:
                 # MANDATORY: unload Whisper before pyannote can be loaded (PRD-01 S5.4)
                 _unload_whisper()
                 if wav_path.exists():
+                    update_episode(db, episode_id, audio_file_size_bytes=wav_path.stat().st_size)
                     wav_path.unlink()
 
         # Step 2b: save alignment/transcript data for diarization
