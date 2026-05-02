@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { BrainCircuit, Download, FileText, Send, Type, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
-import { renderAnswerWithCitations, type Source } from "@/lib/citations";
+import { MarkdownAnswer, type Source } from "@/lib/citations";
 import { formatTimestamp } from "@/lib/timestamp";
 import { formatDateTime } from "@/lib/dateFormat";
 import { sanitizeFilename } from "@/lib/filename";
@@ -432,14 +432,6 @@ function handleCitationClick(_episodeId: string, seconds: number) {
 }
 
 function MessageBubble({ message, isStreaming }: { message: Message; isStreaming: boolean }) {
-  const rendered = useMemo(
-    () =>
-      message.role === "assistant" && message.content
-        ? renderAnswerWithCitations(message.content, message.sources ?? [], handleCitationClick)
-        : null,
-    [message.content, message.sources, message.role]
-  );
-
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
@@ -454,7 +446,12 @@ function MessageBubble({ message, isStreaming }: { message: Message; isStreaming
     <div className="flex justify-start">
       <div className="bg-muted rounded-lg px-3 py-2 text-sm max-w-[85%] space-y-2">
         {message.content ? (
-          <div className="whitespace-pre-wrap">{rendered}</div>
+          <MarkdownAnswer
+            text={message.content}
+            sources={message.sources ?? []}
+            onCitationClick={handleCitationClick}
+            className="prose prose-sm dark:prose-invert max-w-none"
+          />
         ) : isStreaming ? (
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Loader2 size={12} className="animate-spin" />

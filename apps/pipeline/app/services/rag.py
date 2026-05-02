@@ -46,6 +46,7 @@ RULES:
 - Answer ONLY based on the provided transcript excerpts below.
 - If the excerpts don't contain enough information, say so clearly.
 - Cite your sources using the format [Episode Title, MM:SS] after each claim.
+- Format your response using Markdown: use **bold** for emphasis, bullet lists for multiple points, and headers for distinct sections when appropriate.
 - Be concise and direct."""
 
 

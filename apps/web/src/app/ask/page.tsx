@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Play, BrainCircuit, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { renderAnswerWithCitations, type Source } from "@/lib/citations";
+import { MarkdownAnswer, type Source } from "@/lib/citations";
 import { episodeTimestampHref } from "@/lib/episode-link";
 import { loadAskSnapshot, saveAskSnapshot } from "@/lib/page-state";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
@@ -153,11 +153,6 @@ export default function AskPage() {
       })
       .catch(() => {});
   }, []);
-
-  const renderedAnswer = useMemo(
-    () => (answer ? renderAnswerWithCitations(answer, sources) : null),
-    [answer, sources]
-  );
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -386,11 +381,12 @@ export default function AskPage() {
           <h2 className="text-sm font-medium text-muted-foreground">
             Analysis
           </h2>
-          <div
-            ref={answerRef}
-            className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap"
-          >
-            {renderedAnswer}
+          <div ref={answerRef}>
+            <MarkdownAnswer
+              text={answer}
+              sources={sources}
+              className="prose prose-sm dark:prose-invert max-w-none"
+            />
           </div>
         </div>
       )}
