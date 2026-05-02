@@ -357,7 +357,7 @@ export default function EpisodeCard({
             )}
           </div>
           {expandedError && ep.error_message && (
-            <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-32">
+            <pre className="text-xs bg-muted p-2 rounded whitespace-pre-wrap break-words overflow-y-auto max-h-32">
               {ep.error_message}
             </pre>
           )}
