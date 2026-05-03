@@ -101,7 +101,7 @@ export default function AboutToc({ about, changelog }: Props) {
 }
 
 /**
- * `[0.3.0] — 2026-04-24` → `[0.3.0]`. Per #620, the changelog rail shows
+ * `0.3.0 — 2026-04-24` → `0.3.0`. Per #620, the changelog rail shows
  * versions only as numbers; the date sits next to the rendered heading
  * itself anyway so it's redundant in the rail.
  */
