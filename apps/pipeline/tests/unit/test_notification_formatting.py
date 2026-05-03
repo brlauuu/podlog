@@ -82,11 +82,17 @@ def test_format_done_telegram_estimate_tagged_with_active_provider():
 
 
 def test_format_failed_html_action_banner_for_upload_rejected():
-    """Issue #600: distinct banner when Fireworks rejects the upload."""
+    """Issue #600/#641: distinct banner when Fireworks rejects the upload.
+
+    The banner is now only shown after retries are exhausted (issue #641
+    made FIREWORKS_UPLOAD_REJECTED retryable), so the copy reflects
+    "repeatedly rejected" rather than a one-shot failure.
+    """
     event = _make_failed_event()
     event.error_class = "FIREWORKS_UPLOAD_REJECTED"
     html = format_failed_html(event)
     assert "Action required" in html
+    assert "repeatedly rejected" in html
     assert "local inference" in html
 
 
@@ -101,6 +107,7 @@ def test_format_failed_telegram_action_banner_for_upload_rejected():
     event.error_class = "FIREWORKS_UPLOAD_REJECTED"
     md = format_failed_telegram(event)
     assert "Action required" in md
+    assert "repeatedly rejected" in md
     assert "local inference" in md
 
 

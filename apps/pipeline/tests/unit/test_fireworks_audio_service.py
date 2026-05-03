@@ -230,7 +230,12 @@ def test_classify_http_error_marks_4xx_as_http_access_retryable():
 
 
 def test_transcribe_classifies_bad_record_mac_as_upload_rejected(tmp_path: Path):
-    """SSL `BAD_RECORD_MAC` mid-upload means an upstream proxy aborted us — issue #600."""
+    """SSL ``BAD_RECORD_MAC`` mid-upload is a Fireworks TLS abort — issue #600.
+
+    Issue #641 reclassified this as retryable: bulk-reprocessing data showed
+    the failures are transient (~14% rate at any duration/size, ~99% recovery
+    on retry), so the standard retry budget should handle it.
+    """
     audio_path = tmp_path / "sample.mp3"
     audio_path.write_bytes(b"x" * (5 * 1024 * 1024))  # 5 MB so the message has a real size
 
@@ -252,8 +257,9 @@ def test_transcribe_classifies_bad_record_mac_as_upload_rejected(tmp_path: Path)
 
     exc = excinfo.value
     assert exc.error_class == "FIREWORKS_UPLOAD_REJECTED"
-    assert exc.retryable is False
-    assert "Re-run this episode on local inference" in str(exc)
+    assert exc.retryable is True
+    assert "TLS abort" in str(exc)
+    assert "Will retry" in str(exc)
     assert "5 MB" in str(exc)
 
 

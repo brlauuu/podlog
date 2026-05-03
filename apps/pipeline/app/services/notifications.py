@@ -248,8 +248,10 @@ def _fmt_action_required_html(event: EpisodeFailedEvent) -> str:
     return (
         '  <div style="margin-top: 16px; padding: 12px; border-radius: 6px; '
         'background: #fef3c7; color: #78350f; border: 1px solid #fbbf24;">'
-        '<strong>Action required:</strong> Fireworks rejected this upload. '
-        'Re-enqueue this episode against local inference to process it.'
+        '<strong>Action required:</strong> Fireworks repeatedly rejected this '
+        'upload (TLS abort) after exhausting all retries. Try re-enqueuing — '
+        'these failures are transient and usually clear on a fresh attempt — '
+        'or fall back to local inference if it persists.'
         "</div>"
     )
 
@@ -258,8 +260,10 @@ def _fmt_action_required_telegram(event: EpisodeFailedEvent) -> str:
     if event.error_class != "FIREWORKS_UPLOAD_REJECTED":
         return ""
     return (
-        "\n\n*⚠️ Action required:* Fireworks rejected this upload. "
-        "Re-enqueue this episode against local inference to process it."
+        "\n\n*⚠️ Action required:* Fireworks repeatedly rejected this upload "
+        "(TLS abort) after exhausting all retries. Try re-enqueuing — these "
+        "failures are transient and usually clear on a fresh attempt — or "
+        "fall back to local inference if it persists."
     )
 
 
