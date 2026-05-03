@@ -6,6 +6,7 @@ import { Settings, Toast } from "./NotificationSettingsSections";
 import { SettingsSchema } from "@/lib/settings-schema";
 import NotificationSection from "./NotificationSection";
 import RemoteInferenceSection from "./RemoteInferenceSection";
+import BackupsSection from "./BackupsSection";
 
 const INFERENCE_FIELDS = new Set<keyof Settings>([
   "inference_provider",
@@ -193,6 +194,7 @@ export default function NotificationSettings() {
         <TabsList className="mb-6">
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="inference">Remote Inference</TabsTrigger>
+          <TabsTrigger value="backups">Backups</TabsTrigger>
         </TabsList>
 
         <TabsContent value="notifications">
@@ -224,6 +226,10 @@ export default function NotificationSettings() {
               {savingInference ? "Saving..." : "Save"}
             </button>
           </div>
+        </TabsContent>
+
+        <TabsContent value="backups">
+          <BackupsSection />
         </TabsContent>
       </Tabs>
 
