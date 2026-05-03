@@ -435,3 +435,24 @@ class TestHandleTaskException:
         mock_fail.assert_not_called()
         mock_jq.enqueue.assert_not_called()
         mock_jq.fail.assert_called_once()
+
+    @patch("app.worker.job_queue")
+    @patch("app.worker.update_episode")
+    @patch("app.worker.mark_failed")
+    def test_episode_missing_only_records_job(self, mock_fail, mock_update, mock_jq):
+        """If the episode row was deleted between job pickup and exception,
+        we still record the job as failed but skip episode mutations."""
+        from app.worker import _handle_task_exception
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None  # episode gone
+        job = MagicMock()
+        job.episode_id = "ep-missing"
+        job.task = "embed"
+
+        _handle_task_exception(db, job, RuntimeError("orphaned"))
+
+        mock_update.assert_not_called()
+        mock_fail.assert_not_called()
+        mock_jq.enqueue.assert_not_called()
+        mock_jq.fail.assert_called_once_with(db, job, "orphaned")

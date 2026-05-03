@@ -243,7 +243,8 @@ class TestRecoverStrandedEpisodes:
 
         assert result["recovered"] == 0
         assert result["unmapped"] == 1
-        assert result["unmapped_pairs"] == [("ep-weird", "frobnicating")]
+        assert result["unmapped_ids"] == ["ep-weird"]
+        assert result["unmapped_statuses"] == ["frobnicating"]
         mock_enqueue.assert_not_called()
         # Status preserved: don't silently mutate something we don't understand.
         assert ep.status == "frobnicating"

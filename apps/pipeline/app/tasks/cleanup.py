@@ -154,10 +154,6 @@ _STATUS_TO_TASK = {
     "archiving": "archive",
 }
 
-_TERMINAL_OR_PIPELINE_STATUSES = frozenset(
-    {"done", "failed", "pending"} | set(_STATUS_TO_TASK.keys())
-)
-
 
 def _resolve_stranded_task(status: str) -> str | None:
     """Map an episode status to the task that should be re-enqueued.
@@ -204,31 +200,33 @@ def recover_stranded_episodes() -> dict:
         )
 
         recovered: list[str] = []
-        unmapped: list[tuple[str, str]] = []  # (episode_id, status) pairs we skipped
+        unmapped_ids: list[str] = []
+        unmapped_statuses: list[str] = []
 
         for episode in stranded:
             task = _resolve_stranded_task(episode.status)
             if task is None:
-                unmapped.append((str(episode.id), episode.status))
+                unmapped_ids.append(str(episode.id))
+                unmapped_statuses.append(episode.status)
                 continue
             episode.status = "pending"
-            db.flush()
             job_queue.enqueue(db, str(episode.id), task)
             recovered.append(str(episode.id))
 
-        if recovered or unmapped:
+        if recovered or unmapped_ids:
             db.commit()
             logger.warning(
                 'action=recover_stranded_episodes recovered=%d unmapped=%d '
-                'recovered_ids=%s unmapped=%s',
-                len(recovered), len(unmapped),
-                recovered[:10], unmapped[:10],
+                'recovered_ids=%s unmapped_ids=%s unmapped_statuses=%s',
+                len(recovered), len(unmapped_ids),
+                recovered[:10], unmapped_ids[:10], unmapped_statuses[:10],
             )
         return {
             "recovered": len(recovered),
             "recovered_ids": recovered,
-            "unmapped": len(unmapped),
-            "unmapped_pairs": unmapped,
+            "unmapped": len(unmapped_ids),
+            "unmapped_ids": unmapped_ids,
+            "unmapped_statuses": unmapped_statuses,
         }
     except Exception:
         db.rollback()

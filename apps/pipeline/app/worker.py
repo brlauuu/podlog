@@ -29,19 +29,28 @@ from app.tasks.helpers import mark_failed, update_episode
 
 logger = logging.getLogger(__name__)
 
+POLL_INTERVAL = 2  # seconds between queue polls when idle
+
+_shutdown = False
+
+
+def _handle_signal(signum, frame):
+    global _shutdown
+    logger.info('"action": "worker_shutdown_requested", "signal": %d', signum)
+    _shutdown = True
+
 
 # Issue #641: exception types raised by transient infrastructure failures
 # (network blips, DNS hiccups, momentary connection resets). When a task
-# task raises one of these, the episode is re-enqueued with exponential
+# raises one of these, the episode is re-enqueued with exponential
 # backoff up to ``retry_max`` attempts. Anything else is treated as
 # terminal SYSTEM_ERROR.
 _TRANSIENT_EXC_TYPES: tuple[type[BaseException], ...] = (
     httpx.NetworkError,
     httpx.TimeoutException,
     socket.gaierror,        # DNS resolution failure
-    socket.timeout,
     ConnectionError,        # socket-level connection failures
-    TimeoutError,
+    TimeoutError,           # also covers socket.timeout (alias since 3.10)
 )
 
 # Substrings that indicate a transient failure even when the exception
@@ -83,7 +92,7 @@ def _handle_task_exception(db, job, exc: Exception) -> None:
     episode = db.query(Episode).filter(Episode.id == job.episode_id).first()
 
     # Episode already terminal (e.g. download.py called mark_failed on
-    # DISK_FULL): respect the task's decision and just record the job.
+    # DISK_FULL) or row missing entirely: just record the job.
     if episode is None or episode.status == "failed":
         job_queue.fail(db, job, str(exc))
         return
@@ -125,16 +134,6 @@ def _handle_task_exception(db, job, exc: Exception) -> None:
     )
     mark_failed(db, str(episode.id), error_class=error_class, error_message=suffix)
     job_queue.fail(db, job, str(exc))
-
-POLL_INTERVAL = 2  # seconds between queue polls when idle
-
-_shutdown = False
-
-
-def _handle_signal(signum, frame):
-    global _shutdown
-    logger.info('"action": "worker_shutdown_requested", "signal": %d', signum)
-    _shutdown = True
 
 
 def _run_periodic_tasks(last_run: dict[str, datetime], now: datetime) -> None:
