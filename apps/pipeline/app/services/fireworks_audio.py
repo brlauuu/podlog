@@ -50,14 +50,16 @@ def _classify_http_error(status_code: int) -> tuple[str, bool]:
 
 
 def _is_upload_rejected_signature(error_text: str) -> bool:
-    """Return True when a network error looks like an upstream proxy abort.
+    """Return True when a network error looks like a Fireworks upload abort.
 
-    Fireworks (or its CDN) closes the TLS connection mid-upload when the
-    request exceeds an undocumented size/duration limit. The client sees a
-    TLS-layer alert — most commonly ``BAD_RECORD_MAC`` — instead of a clean
-    HTTP 413/400. Repeated retries with backoff hit the same wall, so it's
-    pointless to keep uploading; the user needs to know the file should be
-    transcribed locally instead. See issue #600.
+    Fireworks (or its CDN) sometimes closes the TLS connection mid-upload.
+    The client sees a TLS-layer alert — most commonly ``BAD_RECORD_MAC`` —
+    instead of a clean HTTP 4xx/5xx. Originally classified as non-retryable
+    on the assumption it indicated a hard size/duration cap (issue #600),
+    but bulk-reprocessing data (issue #641) showed it's transient: the same
+    episode IDs across the full duration/size range fail at a steady ~14%
+    rate, with retries succeeding ~99% of the time. We now classify this
+    as retryable so the standard ``retry_max`` budget recovers from it.
     """
     needles = ("BAD_RECORD_MAC", "SSLV3_ALERT_BAD_RECORD_MAC")
     return any(n in error_text for n in needles)
@@ -71,8 +73,8 @@ def _format_upload_rejected_message(audio_path: str, original_error: str) -> str
     except OSError:
         size_str = "unknown size"
     return (
-        f"Fireworks rejected the upload (likely size/duration cap on a {size_str} file). "
-        f"Re-run this episode on local inference. Underlying error: {original_error}"
+        f"Fireworks rejected the upload mid-stream (TLS abort) on a {size_str} file. "
+        f"Transient — the task layer will retry. Underlying error: {original_error}"
     )
 
 
@@ -126,7 +128,7 @@ def transcribe(
                 raise FireworksTranscriptionError(
                     _format_upload_rejected_message(audio_path, error_text),
                     error_class="FIREWORKS_UPLOAD_REJECTED",
-                    retryable=False,
+                    retryable=True,
                 ) from exc
             raise FireworksTranscriptionError(
                 f"Fireworks network error: {error_text}",

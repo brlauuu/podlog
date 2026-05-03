@@ -35,7 +35,7 @@ def mark_failed(db, episode_id: str, error_class: str, error_message: str) -> No
     # Emit failure notification on terminal failure:
     # - retries exhausted, OR
     # - non-retryable error class (DISK_FULL, OOM, SYSTEM_ERROR from zombies)
-    _NON_RETRYABLE = {"DISK_FULL", "OOM", "SYSTEM_ERROR", "FIREWORKS_UPLOAD_REJECTED"}
+    _NON_RETRYABLE = {"DISK_FULL", "OOM", "SYSTEM_ERROR"}
     episode = db.query(Episode).filter(Episode.id == episode_id).first()
     if episode and (error_class in _NON_RETRYABLE or episode.retry_count >= episode.retry_max):
         emit_episode_failed_event(
