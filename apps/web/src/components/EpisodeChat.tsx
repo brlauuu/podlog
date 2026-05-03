@@ -158,17 +158,28 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
   const [model, setModel] = useState<string>(DEFAULT_RAG_MODEL);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Skip the first persist write so the unselected DEFAULT_RAG_MODEL isn't
+  // written to localStorage on mount. Without this, opening EpisodeChat with
+  // empty localStorage would poison the Ask page's "no preference" detection
+  // (#637).
+  const persistedOnce = useRef(false);
 
   // Hydrate model from localStorage, falling back to the backend default (#637).
   useEffect(() => {
-    const stored = localStorage.getItem("podlog-ask-model");
-    if (stored && RAG_MODELS.some((m) => m.value === stored)) {
-      setModel(stored);
-      return;
+    let cancelled = false;
+    try {
+      const stored = localStorage.getItem("podlog-ask-model");
+      if (stored && RAG_MODELS.some((m) => m.value === stored)) {
+        setModel(stored);
+        return;
+      }
+    } catch {
+      // localStorage unavailable (e.g. Safari private mode) — fall through to fetch.
     }
     fetch("/api/notifications/settings")
       .then((r) => r.json())
       .then((data) => {
+        if (cancelled) return;
         if (
           data.rag_local_model &&
           RAG_MODELS.some((m: { value: string }) => m.value === data.rag_local_model)
@@ -177,10 +188,17 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
         }
       })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Persist model selection
   useEffect(() => {
+    if (!persistedOnce.current) {
+      persistedOnce.current = true;
+      return;
+    }
     try {
       localStorage.setItem("podlog-ask-model", model);
     } catch {}
