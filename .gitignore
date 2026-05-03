@@ -36,7 +36,9 @@ apps/web/VERSION
 data/
 
 # Backups (#630): host-mounted destination for the backup service.
-backups/
+# Anchored to the repo root so the pattern doesn't match a nested dir
+# like apps/web/src/app/api/backups/ (Next.js route added in #646).
+/backups/
 
 # Audit reports (generated locally by nightly codex runs)
 docs/audit/**

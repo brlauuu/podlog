@@ -25,6 +25,11 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
+      # Mirrored from the backup service (#630) so /api/backups (#646)
+      # can report retention to the Settings UI.
+      BACKUP_RETENTION_DAILY: ${BACKUP_RETENTION_DAILY:-7}
+      BACKUP_RETENTION_WEEKLY: ${BACKUP_RETENTION_WEEKLY:-4}
+      BACKUP_RETENTION_MONTHLY: ${BACKUP_RETENTION_MONTHLY:-12}
     ports:
       - "8000:8000"
     extra_hosts:
@@ -32,6 +37,10 @@ services:
     volumes:
       - audio_data:/data/audio
       - transcript_data:/data/transcripts
+      # Read-only mount so /api/backups (#646) can list available backups
+      # for the Settings page. The backup service writes to the same host
+      # dir; the pipeline only reads.
+      - ./backups:/backups:ro
     depends_on:
       db:
         condition: service_healthy

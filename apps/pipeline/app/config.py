@@ -103,6 +103,14 @@ class Settings(BaseSettings):
     # Must match one of the values in apps/web/src/lib/rag-models.ts::RAG_MODELS.
     rag_local_model: str = "qwen2.5:3b"
 
+    # Daily backup retention (#630). Mirrors what the apps/backup
+    # service reads via env. Surfaced through /api/backups (#646) so
+    # the Settings UI can show "X of N kept" without having to read
+    # the env vars itself.
+    backup_retention_daily: int = 7
+    backup_retention_weekly: int = 4
+    backup_retention_monthly: int = 12
+
     # Embedding provider routing (Issue #258)
     embedding_provider: Literal["local", "fireworks"] = "local"
     embedding_model: str = "all-MiniLM-L6-v2"

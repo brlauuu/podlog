@@ -75,11 +75,12 @@ beforeEach(() => {
 });
 
 describe("NotificationSettings", () => {
-  it("renders both tab triggers", async () => {
+  it("renders all three tab triggers", async () => {
     render(<NotificationSettings />);
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: "Notifications" })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: "Remote Inference" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Backups" })).toBeInTheDocument();
     });
   });
 

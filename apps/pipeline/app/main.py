@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import ask, backfill, feeds, episodes, queue, health, embed, explore, notifications, hardware, meta_analysis
+from app.api import ask, backfill, backups, feeds, episodes, queue, health, embed, explore, notifications, hardware, meta_analysis
 from app.services.events import bus
 from app.services.digest import register_notification_handlers
 
@@ -65,3 +65,4 @@ app.include_router(backfill.router, prefix="/api")
 app.include_router(hardware.router, prefix="/api")
 app.include_router(meta_analysis.router, prefix="/api")
 app.include_router(explore.router, prefix="/api")
+app.include_router(backups.router, prefix="/api")
