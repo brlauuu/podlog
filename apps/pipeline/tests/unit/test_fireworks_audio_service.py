@@ -258,9 +258,13 @@ def test_transcribe_classifies_bad_record_mac_as_upload_rejected(tmp_path: Path)
     exc = excinfo.value
     assert exc.error_class == "FIREWORKS_UPLOAD_REJECTED"
     assert exc.retryable is True
-    assert "TLS abort" in str(exc)
-    assert "Will retry" in str(exc)
-    assert "5 MB" in str(exc)
+    # Pin the user-visible message verbatim so accidental f-string regressions
+    # (e.g. an un-interpolated `{retry_max}` or `retry_max` literal) get caught.
+    assert str(exc) == (
+        "Fireworks rejected the upload mid-stream (TLS abort) on a 5 MB file. "
+        "Transient — the task layer will retry. Underlying error: "
+        "[SSL: SSLV3_ALERT_BAD_RECORD_MAC] ssl/tls alert bad record mac (_ssl.c:2590)"
+    )
 
 
 def test_transcribe_keeps_generic_network_error_as_transient(tmp_path: Path):

@@ -74,7 +74,7 @@ def _format_upload_rejected_message(audio_path: str, original_error: str) -> str
         size_str = "unknown size"
     return (
         f"Fireworks rejected the upload mid-stream (TLS abort) on a {size_str} file. "
-        f"Will retry up to retry_max attempts. Underlying error: {original_error}"
+        f"Transient — the task layer will retry. Underlying error: {original_error}"
     )
 
 
