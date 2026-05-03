@@ -92,8 +92,18 @@ export default function AskPage() {
     typeof window !== "undefined" &&
       !!localStorage.getItem("podlog-ask-model"),
   );
+  // Skip persisting on the initial render so an unselected DEFAULT_RAG_MODEL
+  // isn't written to localStorage before the settings fetch can apply the
+  // backend rag_local_model. Without this gate, navigating away during the
+  // fetch leaves a stale default in localStorage that blocks the override on
+  // subsequent mounts (#637).
+  const persistedOnce = useRef(false);
 
   useEffect(() => {
+    if (!persistedOnce.current) {
+      persistedOnce.current = true;
+      return;
+    }
     localStorage.setItem("podlog-ask-model", model);
   }, [model]);
 
