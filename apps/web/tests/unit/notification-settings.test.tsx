@@ -40,6 +40,7 @@ const defaultSettings = {
   pyannote_cloud_model: "precision-2",
   pyannote_cloud_cost_per_second_usd: 0,
   rag_provider: "local",
+  rag_local_model: "qwen2.5:3b",
   telegram_configured: false,
   email_configured: false,
   fireworks_configured: false,

@@ -85,12 +85,35 @@ export default function AskPage() {
   const abortRef = useRef<AbortController | null>(null);
   const { playEpisode } = useAudioPlayer();
 
+  // Capture the user's stored per-session preference at mount, before any
+  // effect runs. We re-validate it against the active provider's model list
+  // inside the settings fetch (rather than just checking presence), so a
+  // stale wrong-provider value doesn't mask the "no valid preference" case
+  // (#637).
+  const storedModelAtMount = useRef<string | null>(
+    typeof window !== "undefined"
+      ? localStorage.getItem("podlog-ask-model")
+      : null,
+  );
+  // Skip persisting on the initial render so an unselected DEFAULT_RAG_MODEL
+  // isn't written to localStorage before the settings fetch can apply the
+  // backend rag_local_model. Without this gate, navigating away during the
+  // fetch leaves a stale default in localStorage that blocks the override on
+  // subsequent mounts (#637).
+  const persistedOnce = useRef(false);
+
   useEffect(() => {
+    if (!persistedOnce.current) {
+      persistedOnce.current = true;
+      return;
+    }
     localStorage.setItem("podlog-ask-model", model);
   }, [model]);
 
   // Fetch the active rag_provider once on mount. If it doesn't match the
   // current model's list, snap to that provider's default (#608).
+  // Also use the backend rag_local_model as the default for local RAG when
+  // no per-session localStorage preference is set (#637).
   useEffect(() => {
     let cancelled = false;
     fetch("/api/notifications/settings")
@@ -101,10 +124,21 @@ export default function AskPage() {
           data.rag_provider === "fireworks" ? "fireworks" : "local";
         setRagProvider(provider);
         const list = modelsFor(provider);
-        // If the persisted model isn't in the active provider's list,
-        // re-resolve to that provider's default.
-        if (!list.some((m) => m.value === model)) {
-          setModel(getStoredModel(provider));
+        const storedAtMount = storedModelAtMount.current;
+        const userHadValidPreference = !!(
+          storedAtMount && list.some((m) => m.value === storedAtMount)
+        );
+        if (!userHadValidPreference) {
+          // No valid per-session preference for the active provider —
+          // prefer the backend default (local) or the active provider's
+          // default (fireworks).
+          const backendDefault =
+            provider === "local" &&
+            data.rag_local_model &&
+            list.some((m: RagModel) => m.value === data.rag_local_model)
+              ? data.rag_local_model
+              : getStoredModel(provider);
+          setModel(backendDefault);
         }
       })
       .catch(() => {

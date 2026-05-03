@@ -28,6 +28,14 @@ beforeEach(() => {
   localStorage.clear();
   // jsdom doesn't implement scrollIntoView; stub it.
   Element.prototype.scrollIntoView = jest.fn();
+  // Default: settings endpoint returns rag_local_model so the model-hydration
+  // useEffect doesn't blow up when localStorage is empty (#637).
+  mockFetch.mockImplementation((url: string) => {
+    if (url === "/api/notifications/settings") {
+      return Promise.resolve({ ok: true, json: async () => ({ rag_local_model: "qwen2.5:3b" }) });
+    }
+    return undefined;
+  });
 });
 
 const baseProps = {
@@ -114,7 +122,10 @@ describe("EpisodeChat — handleSubmit", () => {
     // Submit button is disabled with empty input.
     const submitBtn = screen.getByRole("button", { name: "" });
     expect(submitBtn).toBeDisabled();
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining("pipeline/ask"),
+      expect.anything(),
+    );
   });
 
   it("shows an error message when the pipeline response is not ok", async () => {

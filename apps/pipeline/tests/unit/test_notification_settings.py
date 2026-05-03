@@ -174,6 +174,25 @@ class TestSaveNotificationSettings:
         with pytest.raises(ValueError, match="rag_provider"):
             save_notification_settings(db, {"rag_provider": "openai"})
 
+    def test_rag_local_model_persisted_and_returned(self):
+        db = _mock_db(stored_json=None)
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.telegram_bot_token = None
+            mock_settings.telegram_chat_id = None
+            mock_settings.notification_email_to = None
+            mock_settings.notification_email_from = "podlog@localhost"
+            mock_settings.smtp_host = "host.docker.internal"
+            mock_settings.smtp_port = 25
+            mock_settings.smtp_user = None
+            mock_settings.smtp_password = None
+            mock_settings.smtp_use_tls = False
+            mock_settings.notification_frequency = "immediate"
+            mock_settings.rag_local_model = "qwen2.5:3b"
+
+            result = save_notification_settings(db, {"rag_local_model": "phi3:mini"})
+
+        assert result["rag_local_model"] == "phi3:mini"
+
     def test_rejects_negative_fireworks_cost_rate(self):
         db = _mock_db(stored_json=None)
         with pytest.raises(ValueError, match="fireworks_stt_cost_per_minute_usd"):

@@ -87,6 +87,91 @@ describe("Ask page provider-aware dropdown (#608 PR 3)", () => {
     expect(optionValues.every((v) => v.startsWith("accounts/"))).toBe(true);
   });
 
+  test("applies backend rag_local_model on a fresh browser when no localStorage preference is set (#637)", async () => {
+    // Fresh browser: no podlog-ask-model in localStorage. Backend has the
+    // admin-configured rag_local_model = phi3:mini. Verify the dropdown shows
+    // phi3:mini, not the hardcoded DEFAULT_RAG_MODEL (qwen2.5:3b).
+    global.fetch = jest.fn((url: string) => {
+      if (url === "/api/feeds") return Promise.resolve({ json: async () => [] } as Response);
+      if (url === "/api/ask/coverage") {
+        return Promise.resolve({
+          json: async () => ({ processed: 1, total: 1, has_manual_uploads: false }),
+        } as Response);
+      }
+      if (url === "/api/notifications/settings") {
+        return Promise.resolve({
+          json: async () => ({ rag_provider: "local", rag_local_model: "phi3:mini" }),
+        } as Response);
+      }
+      return Promise.resolve({ json: async () => ({}) } as Response);
+    }) as jest.Mock;
+
+    render(<AskPage />);
+
+    await waitFor(() => {
+      const select = screen.getByLabelText(/model:/i) as HTMLSelectElement;
+      expect(select.value).toBe("phi3:mini");
+    });
+  });
+
+  test("applies backend rag_local_model when localStorage has a stale wrong-provider value (#637)", async () => {
+    // User previously used Fireworks and has a Fireworks path stored. The
+    // admin has switched rag_provider back to local with rag_local_model =
+    // phi3:mini. The stale Fireworks path is invalid for the local provider,
+    // so the backend default should win.
+    localStorage.setItem(
+      "podlog-ask-model",
+      "accounts/fireworks/models/qwen2p5-7b-instruct",
+    );
+    global.fetch = jest.fn((url: string) => {
+      if (url === "/api/feeds") return Promise.resolve({ json: async () => [] } as Response);
+      if (url === "/api/ask/coverage") {
+        return Promise.resolve({
+          json: async () => ({ processed: 1, total: 1, has_manual_uploads: false }),
+        } as Response);
+      }
+      if (url === "/api/notifications/settings") {
+        return Promise.resolve({
+          json: async () => ({ rag_provider: "local", rag_local_model: "phi3:mini" }),
+        } as Response);
+      }
+      return Promise.resolve({ json: async () => ({}) } as Response);
+    }) as jest.Mock;
+
+    render(<AskPage />);
+
+    await waitFor(() => {
+      const select = screen.getByLabelText(/model:/i) as HTMLSelectElement;
+      expect(select.value).toBe("phi3:mini");
+    });
+  });
+
+  test("respects an existing valid localStorage preference over the backend rag_local_model (#637)", async () => {
+    // User has previously picked qwen2.5:3b on the Ask page. Backend says
+    // phi3:mini. Per-session preference must win.
+    localStorage.setItem("podlog-ask-model", "qwen2.5:3b");
+    global.fetch = jest.fn((url: string) => {
+      if (url === "/api/feeds") return Promise.resolve({ json: async () => [] } as Response);
+      if (url === "/api/ask/coverage") {
+        return Promise.resolve({
+          json: async () => ({ processed: 1, total: 1, has_manual_uploads: false }),
+        } as Response);
+      }
+      if (url === "/api/notifications/settings") {
+        return Promise.resolve({
+          json: async () => ({ rag_provider: "local", rag_local_model: "phi3:mini" }),
+        } as Response);
+      }
+      return Promise.resolve({ json: async () => ({}) } as Response);
+    }) as jest.Mock;
+
+    render(<AskPage />);
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith("/api/notifications/settings"));
+    const select = screen.getByLabelText(/model:/i) as HTMLSelectElement;
+    expect(select.value).toBe("qwen2.5:3b");
+  });
+
   test("migrates a stale localStorage Ollama name when provider is fireworks", async () => {
     // Simulate the bug case: user's localStorage has `phi3:mini` from a
     // previous local session, but rag_provider is now fireworks.

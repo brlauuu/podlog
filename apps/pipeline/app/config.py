@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     # transcript chunks to Fireworks for answer generation. Default `local`
     # preserves existing behavior on upgrade.
     rag_provider: Literal["local", "fireworks"] = "local"
+    # Default local Ollama model for the Ask / RAG feature (Issue #637).
+    # Must match one of the values in apps/web/src/lib/rag-models.ts::RAG_MODELS.
+    rag_local_model: str = "qwen2.5:3b"
 
     # Embedding provider routing (Issue #258)
     embedding_provider: Literal["local", "fireworks"] = "local"

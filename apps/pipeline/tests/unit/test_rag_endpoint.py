@@ -59,6 +59,31 @@ class TestAskEndpoint:
             error_data = next(e for e in events if e["event"] == "error")
             assert "nonexistent" in error_data["data"]["message"]
 
+    def test_uses_runtime_rag_local_model_when_request_omits_model(self):
+        # Issue #637: when the caller doesn't supply `model`, fall back to the
+        # admin-configured rag_local_model rather than the hardcoded default.
+        mock_chunks = [make_chunk()]
+        runtime = {"rag_provider": "local", "rag_local_model": "phi3:mini"}
+
+        captured = {}
+
+        async def fake_stream(*args, **kwargs):
+            captured["model"] = kwargs.get("model")
+            yield "ok"
+
+        with (
+            patch("app.api.ask.check_model_available", new_callable=AsyncMock, return_value=True),
+            patch("app.api.ask.get_runtime_inference_settings", return_value=runtime),
+            patch("app.api.ask.retrieve_chunks", return_value=mock_chunks),
+            patch("app.api.ask.build_prompt", return_value=[{"role": "user", "content": "test"}]),
+            patch("app.api.ask.chunks_to_sources", return_value=[{"chunk_id": 1}]),
+            patch("app.api.ask.stream_response", side_effect=fake_stream),
+        ):
+            resp = client.post("/api/ask", json={"question": "What was discussed?"})
+            assert resp.status_code == 200
+
+        assert captured["model"] == "phi3:mini"
+
     def test_fireworks_provider_skips_local_model_check(self):
         mock_chunks = [make_chunk()]
         runtime = {

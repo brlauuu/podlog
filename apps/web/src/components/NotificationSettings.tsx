@@ -18,6 +18,7 @@ const INFERENCE_FIELDS = new Set<keyof Settings>([
   "fireworks_stt_cost_per_minute_usd",
   // RAG / Ask provider (Issue #608)
   "rag_provider",
+  "rag_local_model",
   // Embedding provider
   "embedding_provider",
   "embedding_model",
