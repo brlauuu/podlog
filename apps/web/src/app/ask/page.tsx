@@ -91,6 +91,8 @@ export default function AskPage() {
 
   // Fetch the active rag_provider once on mount. If it doesn't match the
   // current model's list, snap to that provider's default (#608).
+  // Also use the backend rag_local_model as the default for local RAG when
+  // no per-session localStorage preference is set (#637).
   useEffect(() => {
     let cancelled = false;
     fetch("/api/notifications/settings")
@@ -101,10 +103,15 @@ export default function AskPage() {
           data.rag_provider === "fireworks" ? "fireworks" : "local";
         setRagProvider(provider);
         const list = modelsFor(provider);
-        // If the persisted model isn't in the active provider's list,
-        // re-resolve to that provider's default.
         if (!list.some((m) => m.value === model)) {
-          setModel(getStoredModel(provider));
+          // No valid per-session model — prefer the backend default for local.
+          const backendDefault =
+            provider === "local" &&
+            data.rag_local_model &&
+            list.some((m: RagModel) => m.value === data.rag_local_model)
+              ? data.rag_local_model
+              : getStoredModel(provider);
+          setModel(backendDefault);
         }
       })
       .catch(() => {

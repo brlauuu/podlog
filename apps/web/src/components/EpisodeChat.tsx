@@ -159,14 +159,24 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Hydrate model selection from localStorage on mount
+  // Hydrate model from localStorage, falling back to the backend default (#637).
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("podlog-ask-model");
-      if (stored && RAG_MODELS.some((m) => m.value === stored)) {
-        setModel(stored);
-      }
-    } catch {}
+    const stored = localStorage.getItem("podlog-ask-model");
+    if (stored && RAG_MODELS.some((m) => m.value === stored)) {
+      setModel(stored);
+      return;
+    }
+    fetch("/api/notifications/settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (
+          data.rag_local_model &&
+          RAG_MODELS.some((m: { value: string }) => m.value === data.rag_local_model)
+        ) {
+          setModel(data.rag_local_model);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Persist model selection

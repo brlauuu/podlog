@@ -9,6 +9,9 @@ jest.mock("@/components/AudioPlayerContext", () => ({
   useAudioPlayer: () => ({ state: { src: null } }),
 }));
 
+// Stub fetch so the model-hydration useEffect doesn't blow up (#637).
+global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: async () => ({}) })) as unknown as typeof fetch;
+
 import EpisodeChat from "@/components/EpisodeChat";
 
 describe("EpisodeChat trigger icon", () => {

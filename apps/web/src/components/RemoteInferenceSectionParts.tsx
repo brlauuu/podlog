@@ -159,10 +159,11 @@ export const PIPELINE_STEPS: PipelineStep[] = [
       value: m.value,
       label: `${m.label} — ${m.description}`,
     })),
-    // Local models on the Ask page are picked per-request (see /ask). The
-    // configured remote model lives in fireworks_chat_model, used as the
-    // default Fireworks pick when no per-request override is supplied.
-    modelField: null,
+    // rag_local_model is the persistent default for local Ollama inference
+    // (Issue #637). The Ask page prefers a per-session localStorage value but
+    // falls back to this when none is set. The configured remote model lives
+    // in fireworks_chat_model.
+    modelField: "rag_local_model",
     remoteModelField: "fireworks_chat_model",
   },
 ];
