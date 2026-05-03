@@ -40,29 +40,35 @@ export const DEFAULT_RAG_MODEL = "qwen2.5:3b";
 // Picked from currently-deployed Fireworks chat models with stable instruct
 // variants — one cheap/fast, one mid-tier balanced, one high-quality. Update
 // this list (and only this list) if a model is deprecated.
+//
+// Issue #636: the previous defaults (qwen2p5-7b-instruct,
+// llama-v3p1-70b-instruct, qwen2p5-72b-instruct) all returned 404 from
+// Fireworks's serverless endpoint. Replaced with the current
+// docs.fireworks.ai/guides/recommended-models picks that are confirmed
+// "Available Serverless" on fireworks.ai/models.
 export const FIREWORKS_CHAT_MODELS: RagModel[] = [
   {
-    value: "accounts/fireworks/models/qwen2p5-7b-instruct",
-    label: "Qwen2.5 7B Instruct",
+    value: "accounts/fireworks/models/qwen3-8b",
+    label: "Qwen3 8B",
     description: "Fast",
-    speedHint: "lowest cost",
-    maxContext: 32768,
+    speedHint: "$0.20/M tokens",
+    maxContext: 40960,
     usedContext: 16384,
   },
   {
-    value: "accounts/fireworks/models/llama-v3p1-70b-instruct",
-    label: "Llama 3.1 70B Instruct",
+    value: "accounts/fireworks/models/llama-v3p3-70b-instruct",
+    label: "Llama 3.3 70B Instruct",
     description: "Balanced",
     speedHint: "$0.9/M tokens",
     maxContext: 131072,
     usedContext: 16384,
   },
   {
-    value: "accounts/fireworks/models/qwen2p5-72b-instruct",
-    label: "Qwen2.5 72B Instruct",
+    value: "accounts/fireworks/models/deepseek-v3p1",
+    label: "DeepSeek V3.1",
     description: "Quality",
-    speedHint: "high quality",
-    maxContext: 131072,
+    speedHint: "$0.56/$1.68 per M tokens",
+    maxContext: 163840,
     usedContext: 16384,
   },
 ];
