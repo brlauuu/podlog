@@ -97,8 +97,8 @@ def _handle_task_exception(db, job, exc: Exception) -> None:
         job_queue.fail(db, job, str(exc))
         return
 
-    retry_count = int(getattr(episode, "retry_count", 0) or 0)
-    retry_max = int(getattr(episode, "retry_max", settings.retry_max) or settings.retry_max)
+    retry_count = episode.retry_count
+    retry_max = episode.retry_max
 
     if transient and retry_count < retry_max:
         new_count = retry_count + 1
@@ -120,7 +120,7 @@ def _handle_task_exception(db, job, exc: Exception) -> None:
         logger.warning(
             '"action": "task_transient_retry", "episode_id": "%s", "task": "%s", '
             '"attempt": %d, "retry_max": %d, "backoff_secs": %d, "error": "%s"',
-            episode.id, job.task, new_count, retry_max, backoff_secs, exc,
+            str(episode.id), job.task, new_count, retry_max, backoff_secs, exc,
         )
         return
 

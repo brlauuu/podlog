@@ -200,33 +200,30 @@ def recover_stranded_episodes() -> dict:
         )
 
         recovered: list[str] = []
-        unmapped_ids: list[str] = []
-        unmapped_statuses: list[str] = []
+        unmapped: list[dict[str, str]] = []
 
         for episode in stranded:
             task = _resolve_stranded_task(episode.status)
             if task is None:
-                unmapped_ids.append(str(episode.id))
-                unmapped_statuses.append(episode.status)
+                unmapped.append({"id": str(episode.id), "status": episode.status})
                 continue
             episode.status = "pending"
             job_queue.enqueue(db, str(episode.id), task)
             recovered.append(str(episode.id))
 
-        if recovered or unmapped_ids:
+        if recovered or unmapped:
             db.commit()
             logger.warning(
                 'action=recover_stranded_episodes recovered=%d unmapped=%d '
-                'recovered_ids=%s unmapped_ids=%s unmapped_statuses=%s',
-                len(recovered), len(unmapped_ids),
-                recovered[:10], unmapped_ids[:10], unmapped_statuses[:10],
+                'recovered_ids=%s unmapped=%s',
+                len(recovered), len(unmapped),
+                recovered[:10], unmapped[:10],
             )
         return {
             "recovered": len(recovered),
             "recovered_ids": recovered,
-            "unmapped": len(unmapped_ids),
-            "unmapped_ids": unmapped_ids,
-            "unmapped_statuses": unmapped_statuses,
+            "unmapped": len(unmapped),
+            "unmapped_episodes": unmapped,
         }
     except Exception:
         db.rollback()
