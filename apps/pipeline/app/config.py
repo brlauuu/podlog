@@ -83,12 +83,13 @@ class Settings(BaseSettings):
     fireworks_stt_diarize: bool = True
     fireworks_chat_base_url: str = "https://api.fireworks.ai/inference/v1"
     # Aligned with the curated dropdown in apps/web/src/lib/rag-models.ts
-    # (DEFAULT_FIREWORKS_CHAT_MODEL). The previous default
-    # `llama-v3p1-8b-instruct` was deprecated by Fireworks and 404'd
-    # out of the box (#608). Existing installs with FIREWORKS_CHAT_MODEL
+    # (DEFAULT_FIREWORKS_CHAT_MODEL). Fireworks deprecates serverless
+    # models on a regular cadence — `llama-v3p1-8b-instruct` (#608),
+    # `qwen2p5-7b-instruct` (#636), then `qwen3-8b` (May 2026 notice)
+    # have all been retired. Existing installs with FIREWORKS_CHAT_MODEL
     # set explicitly in .env keep their value; only no-override installs
     # are auto-upgraded.
-    fireworks_chat_model: str = "accounts/fireworks/models/qwen2p5-7b-instruct"
+    fireworks_chat_model: str = "accounts/fireworks/models/gpt-oss-20b"
     # Cost estimate input for observability (Issue #261).
     # Keep this explicit because provider pricing can change.
     fireworks_stt_cost_per_minute_usd: float = 0.006
