@@ -290,3 +290,148 @@ class TestMainLoop:
         w.main()
 
         mock_time.sleep.assert_called_once_with(2)
+
+
+# ---------------------------------------------------------------------------
+# Issue #641: worker-loop transient retry classification
+# ---------------------------------------------------------------------------
+
+
+class TestIsTransient:
+    def test_httpx_network_error_is_transient(self):
+        import httpx
+        from app.worker import _is_transient
+
+        assert _is_transient(httpx.NetworkError("connection reset")) is True
+
+    def test_httpx_timeout_is_transient(self):
+        import httpx
+        from app.worker import _is_transient
+
+        assert _is_transient(httpx.ConnectTimeout("timed out")) is True
+
+    def test_oserror_with_unreachable_text_is_transient(self):
+        """The original embed-task strand: plain OSError with 'Network is unreachable'."""
+        from app.worker import _is_transient
+
+        assert _is_transient(OSError("[Errno 101] Network is unreachable")) is True
+
+    def test_dns_failure_is_transient(self):
+        import socket
+        from app.worker import _is_transient
+
+        assert _is_transient(socket.gaierror("nodename nor servname provided")) is True
+
+    def test_connection_refused_text_is_transient(self):
+        from app.worker import _is_transient
+
+        assert _is_transient(RuntimeError("Connection refused upstream")) is True
+
+    def test_value_error_is_not_transient(self):
+        from app.worker import _is_transient
+
+        assert _is_transient(ValueError("bad input")) is False
+
+    def test_assertion_error_is_not_transient(self):
+        from app.worker import _is_transient
+
+        assert _is_transient(AssertionError("invariant broken")) is False
+
+
+class TestHandleTaskException:
+    def _setup(self, *, retry_count=0, retry_max=3, status="embedding", episode_id="ep-1"):
+        episode = MagicMock()
+        episode.id = episode_id
+        episode.retry_count = retry_count
+        episode.retry_max = retry_max
+        episode.status = status
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = episode
+        job = MagicMock()
+        job.episode_id = episode_id
+        job.task = "embed"
+        return db, job, episode
+
+    @patch("app.worker.job_queue")
+    @patch("app.worker.update_episode")
+    @patch("app.worker.mark_failed")
+    @patch("app.worker.settings")
+    def test_transient_under_budget_enqueues_retry(self, mock_settings, mock_fail, mock_update, mock_jq):
+        from app.worker import _handle_task_exception
+
+        mock_settings.retry_max = 3
+        mock_settings.retry_backoff_base = 30
+        db, job, episode = self._setup(retry_count=0, retry_max=3, status="embedding")
+
+        _handle_task_exception(db, job, OSError("[Errno 101] Network is unreachable"))
+
+        # Retry path: episode reset to pending, retry_count bumped, fresh job enqueued.
+        assert mock_update.call_args.args[:2] == (db, "ep-1")
+        kwargs = mock_update.call_args.kwargs
+        assert kwargs["status"] == "pending"
+        assert kwargs["retry_count"] == 1
+        assert kwargs["error_class"] == "TRANSIENT_NETWORK"
+        mock_jq.enqueue.assert_called_once()
+        enqueue_args = mock_jq.enqueue.call_args
+        assert enqueue_args.args[2] == "embed"  # same task, not next stage
+        assert enqueue_args.kwargs["retry_at"] is not None
+        # The original job is still recorded as failed (historical attempt).
+        mock_jq.fail.assert_called_once_with(db, job, "[Errno 101] Network is unreachable")
+        # Terminal-failure notification did NOT fire on the retry path.
+        mock_fail.assert_not_called()
+
+    @patch("app.worker.job_queue")
+    @patch("app.worker.update_episode")
+    @patch("app.worker.mark_failed")
+    @patch("app.worker.settings")
+    def test_transient_at_budget_marks_failed(self, mock_settings, mock_fail, mock_update, mock_jq):
+        from app.worker import _handle_task_exception
+
+        mock_settings.retry_max = 3
+        mock_settings.retry_backoff_base = 30
+        db, job, episode = self._setup(retry_count=3, retry_max=3, status="embedding")
+
+        _handle_task_exception(db, job, OSError("[Errno 101] Network is unreachable"))
+
+        # No retry: budget exhausted. Episode marked failed + job marked failed.
+        mock_jq.enqueue.assert_not_called()
+        mock_fail.assert_called_once()
+        assert mock_fail.call_args.kwargs["error_class"] == "TRANSIENT_NETWORK"
+        assert "Failed after 3 retries" in mock_fail.call_args.kwargs["error_message"]
+        mock_jq.fail.assert_called_once()
+
+    @patch("app.worker.job_queue")
+    @patch("app.worker.update_episode")
+    @patch("app.worker.mark_failed")
+    @patch("app.worker.settings")
+    def test_non_transient_marks_failed_immediately(self, mock_settings, mock_fail, mock_update, mock_jq):
+        from app.worker import _handle_task_exception
+
+        mock_settings.retry_max = 3
+        mock_settings.retry_backoff_base = 30
+        db, job, episode = self._setup(retry_count=0, retry_max=3, status="embedding")
+
+        _handle_task_exception(db, job, ValueError("malformed audio metadata"))
+
+        mock_jq.enqueue.assert_not_called()
+        mock_fail.assert_called_once()
+        assert mock_fail.call_args.kwargs["error_class"] == "SYSTEM_ERROR"
+        assert "Unhandled error in embed" in mock_fail.call_args.kwargs["error_message"]
+        mock_jq.fail.assert_called_once()
+
+    @patch("app.worker.job_queue")
+    @patch("app.worker.update_episode")
+    @patch("app.worker.mark_failed")
+    def test_episode_already_failed_only_records_job(self, mock_fail, mock_update, mock_jq):
+        """If a task pre-marked the episode failed (e.g. DISK_FULL in download.py),
+        the worker should not double-handle — just record this job as failed."""
+        from app.worker import _handle_task_exception
+
+        db, job, episode = self._setup(status="failed")
+
+        _handle_task_exception(db, job, RuntimeError("already failed"))
+
+        mock_update.assert_not_called()
+        mock_fail.assert_not_called()
+        mock_jq.enqueue.assert_not_called()
+        mock_jq.fail.assert_called_once()
