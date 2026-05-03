@@ -85,6 +85,14 @@ export default function AskPage() {
   const abortRef = useRef<AbortController | null>(null);
   const { playEpisode } = useAudioPlayer();
 
+  // Whether the user already had a stored per-session model preference at
+  // mount. Captured before any effect runs so the persist effect below
+  // doesn't mask the "no preference" case (#637).
+  const hadStoredModelAtMount = useRef(
+    typeof window !== "undefined" &&
+      !!localStorage.getItem("podlog-ask-model"),
+  );
+
   useEffect(() => {
     localStorage.setItem("podlog-ask-model", model);
   }, [model]);
@@ -103,8 +111,12 @@ export default function AskPage() {
           data.rag_provider === "fireworks" ? "fireworks" : "local";
         setRagProvider(provider);
         const list = modelsFor(provider);
-        if (!list.some((m) => m.value === model)) {
-          // No valid per-session model — prefer the backend default for local.
+        const modelInList = list.some((m) => m.value === model);
+        const noStoredPreference = !hadStoredModelAtMount.current;
+        if (!modelInList || noStoredPreference) {
+          // Either the active provider's list rejected the current model,
+          // or the user has no per-session preference yet — prefer the
+          // backend default for local.
           const backendDefault =
             provider === "local" &&
             data.rag_local_model &&
