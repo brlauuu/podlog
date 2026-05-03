@@ -1,8 +1,8 @@
 name: Changelog
 
 # Per CLAUDE.md: PRs that ship user-visible behavior must add a one-line
-# entry to CHANGELOG.md under [Unreleased]. This workflow enforces that
-# discipline at the PR level.
+# entry to CHANGELOG.md under the Unreleased heading. This workflow
+# enforces that discipline at the PR level.
 #
 # Escape hatch: add the `no-changelog` label to a PR that genuinely
 # doesn't need an entry — typo fixes, README-only edits, dependency-bot
@@ -53,7 +53,7 @@ jobs:
 
           ❌ This PR does not touch CHANGELOG.md.
 
-          Add a one-line entry under [Unreleased] in CHANGELOG.md describing
+          Add a one-line entry under the "Unreleased" heading in CHANGELOG.md describing
           what changed, grouped under Major changes / Minor changes / Fixes
           (or Internal where appropriate). The entry should read like a
           release note, not a commit message.

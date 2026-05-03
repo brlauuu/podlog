@@ -114,7 +114,7 @@ Services: web (:3000), pipeline API (:8000), ollama (:11434).
   - Web: `jest` + `@testing-library/react` for unit, `playwright` for e2e.
 - **PRD references:** When implementing a feature, cite the PRD section (e.g. "per PRD-02 §5.6") in code comments only where the requirement is non-obvious.
 - **When modifying the design:** Update the relevant PRD and RISKS-AND-GAPS.md. Bump the version number.
-- **Changelog:** PRs that ship user-visible behavior add a one-line entry to `CHANGELOG.md` under `[Unreleased]`, grouped as Major / Minor / Fixes (or Internal where appropriate). The same file is rendered at the bottom of `/about` in the web app, so write entries for a human reading them there.
+- **Changelog:** PRs that ship user-visible behavior add a one-line entry to `CHANGELOG.md` under `## Unreleased`, grouped as Major / Minor / Fixes (or Internal where appropriate). Version headings are bare semver (`## 0.3.0 — 2026-04-24`), not the keepachangelog reference-link form (`## [0.3.0]`) — the latter breaks the About-page anchor lookup (#644). The same file is rendered at the bottom of `/about` in the web app, so write entries for a human reading them there.
 
 ## Operational Gotchas
 

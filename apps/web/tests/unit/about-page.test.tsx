@@ -134,7 +134,7 @@ describe("<AboutPage>", () => {
     mockReadFile
       .mockResolvedValueOnce("# About Podlog\n\nAbout body.")
       .mockResolvedValueOnce(
-        "# Changelog\n\n## [Unreleased]\n\n- foo\n\n## [0.3.0] — 2026-04-24\n\n- bar\n"
+        "# Changelog\n\n## Unreleased\n\n- foo\n\n## 0.3.0 — 2026-04-24\n\n- bar\n"
       );
 
     const jsx = await AboutPage();
@@ -150,9 +150,9 @@ describe("<AboutPage>", () => {
     expect(changelogLink).toHaveAttribute("href", "#changelog");
 
     // Nested versions, date stripped, ids match the renderer slugger.
-    const unreleased = screen.getByRole("link", { name: "[Unreleased]" });
+    const unreleased = screen.getByRole("link", { name: "Unreleased" });
     expect(unreleased).toHaveAttribute("href", "#unreleased");
-    const v030 = screen.getByRole("link", { name: "[0.3.0]" });
+    const v030 = screen.getByRole("link", { name: "0.3.0" });
     expect(v030).toHaveAttribute("href", "#030-2026-04-24");
   });
 

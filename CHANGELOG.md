@@ -13,12 +13,12 @@ Each release section groups changes as:
 
 <!--
 Contributing: every PR with user-visible behavior should add a one-line entry
-under the appropriate `[Unreleased]` heading below. When a release is cut via
-the `release` skill, `[Unreleased]` graduates to a dated version section and a
-fresh empty `[Unreleased]` is left at the top.
+under the appropriate `Unreleased` heading below. When a release is cut via
+the `release` skill, `Unreleased` graduates to a dated version section and a
+fresh empty `Unreleased` is left at the top.
 -->
 
-## [Unreleased]
+## Unreleased
 
 ### Major changes
 - Per-active-provider queue ETA in notifications. The "Est. time left" line in episode notifications now uses the rate of episodes processed by whichever inference provider is currently configured, and tags the line with `(local)` or `(remote)` so the basis is visible. ([#595](https://github.com/brlauuu/podlog/pull/595))
@@ -38,6 +38,7 @@ fresh empty `[Unreleased]` is left at the top.
 - Subtle status indicator for the explore service at the bottom of the Meta-Analysis page. When the container is running, links to the Jupyter URL with a token-fetch hint; when not running, links to the explore guide in the docs. No start/stop UI controls — managed via `make explore` from the CLI by design. ([#607](https://github.com/brlauuu/podlog/issues/607))
 
 ### Fixes
+- Right-rail TOC links on the About page now scroll to the right release. The version headings (`## [0.3.0] — ...`) used markdown reference-link syntax, which made react-markdown render `[0.3.0]` as an anchor pointing to a non-resolvable GitHub compare URL and caused the rendered heading text to drift from the slug used by the TOC, leaving each `<h2>` with no `id`. Reference-link syntax is dropped from version headings (`## 0.3.0 — ...`), the broken compare-URL link defs at the bottom of the file are removed, and the About page version filter is updated to match the new format. ([#644](https://github.com/brlauuu/podlog/issues/644))
 - Curated Fireworks chat models in Settings → Remote Inference → RAG / Ask refreshed. The previous picks (`qwen2p5-7b-instruct`, `llama-v3p1-70b-instruct`, `qwen2p5-72b-instruct`) all returned 404 from Fireworks's serverless endpoint, and the obvious next-generation replacements (`qwen3-8b`, `llama-v3p3-70b-instruct`, `deepseek-v3p1`) were announced as obsolete in a May 2026 Fireworks deprecation notice. Curated trio now follows Fireworks's stated migration targets: `gpt-oss-20b` (Fast), `gpt-oss-120b` (Balanced), `glm-5p1` (Quality). Default `FIREWORKS_CHAT_MODEL` follows. Existing installs with the env var or stored setting set explicitly keep their value. ([#636](https://github.com/brlauuu/podlog/issues/636))
 - Local RAG model selection in Settings → Remote Inference now works. Picking a model from the RAG / Ask step's dropdown persists the choice as `rag_local_model`; the Ask page and episode chat use this as the default when no per-session selection has been made. ([#637](https://github.com/brlauuu/podlog/issues/637))
 - `FIREWORKS_UPLOAD_REJECTED` is now retryable. The TLS-abort signature (`BAD_RECORD_MAC`) was originally classified as non-retryable on the assumption it indicated a hard size/duration cap (#600). Bulk-reprocessing data showed it's actually transient (~14% per-attempt failure rate at any episode size, ~99% recovery on retry), so the standard `retry_max` budget now applies. Episodes only land in `failed` after retries are exhausted; the failure notification copy is updated to reflect this. ([#641](https://github.com/brlauuu/podlog/issues/641))
@@ -63,7 +64,7 @@ fresh empty `[Unreleased]` is left at the top.
 - Surface unavailable audio in the player + add a recovery script. ([#586](https://github.com/brlauuu/podlog/pull/586))
 - Exclude `tests/**` from base tsconfig so `tsc --noEmit` passes. ([#587](https://github.com/brlauuu/podlog/pull/587))
 
-## [0.3.0] — 2026-04-24
+## 0.3.0 — 2026-04-24
 
 ### Major changes
 - **pyannote.ai Precision-2 cloud diarization** as an alternative to local pyannote, selectable per environment via `DIARIZATION_PROVIDER=precision2`. Includes a settings UI, per-episode cost capture (`pyannote_cloud_cost_usd`), and a new `RISK-11` write-up. ([#541](https://github.com/brlauuu/podlog/pull/541), [#542](https://github.com/brlauuu/podlog/pull/542), [#543](https://github.com/brlauuu/podlog/pull/543), [#544](https://github.com/brlauuu/podlog/pull/544))
@@ -95,12 +96,12 @@ fresh empty `[Unreleased]` is left at the top.
 - Remove unused web params, imports, and props. ([#562](https://github.com/brlauuu/podlog/pull/562))
 - Bump web patch/minor deps. ([#574](https://github.com/brlauuu/podlog/pull/574))
 
-## [0.2.0] — 2026-04-24
+## 0.2.0 — 2026-04-24
 
 ### Major changes
 - **Meta-Analysis dashboard** at `/meta-analysis`. Cross-feed metrics — episode counts, durations, words-per-minute, turn density, host/guest share, processing time, token and cost totals — with drill-down charts. ([#538](https://github.com/brlauuu/podlog/pull/538))
 
-## [0.1.3] — 2026-04-20
+## 0.1.3 — 2026-04-20
 
 ### Major changes
 - **Gemma 4 e4b** model option for the Ask AI feature, with per-model `num_ctx` so each model can use its full context window. ([#519](https://github.com/brlauuu/podlog/pull/519))
@@ -112,7 +113,7 @@ fresh empty `[Unreleased]` is left at the top.
 - Ask AI now recovers gracefully from Ollama memory-cap OOMs (unloads cached models and retries once). ([#520](https://github.com/brlauuu/podlog/pull/520))
 - Pipeline boots cleanly under torchaudio 2.8 — pyannote audio-loading restored. ([#447](https://github.com/brlauuu/podlog/pull/447))
 
-## [0.1.2] — 2026-04-20
+## 0.1.2 — 2026-04-20
 
 ### Major changes
 - **Upgrade pyannote diarization to community-1** (from `speaker-diarization-3.1`). Requires a fresh model download on first run. ([#517](https://github.com/brlauuu/podlog/pull/517))
@@ -129,7 +130,7 @@ fresh empty `[Unreleased]` is left at the top.
 ### Other fixes
 - Preserve unicode characters in export filenames. ([#540](https://github.com/brlauuu/podlog/pull/540))
 
-## [0.1.1] — 2026-04-07
+## 0.1.1 — 2026-04-07
 
 ### Major changes
 - **Fireworks AI remote-inference profile** — opt-in alternative to local processing for users who can't or don't want to run Whisper, pyannote, or Ollama locally. Covers transcription/diarization, embeddings, Ask AI generation, retries, observability (latency + cost), and a `docker-compose.remote.yml` overlay. ([#256](https://github.com/brlauuu/podlog/pull/256), [#262](https://github.com/brlauuu/podlog/pull/262), [#263](https://github.com/brlauuu/podlog/pull/263), [#265](https://github.com/brlauuu/podlog/pull/265), [#267](https://github.com/brlauuu/podlog/pull/267), [#268](https://github.com/brlauuu/podlog/pull/268))
@@ -267,7 +268,7 @@ fresh empty `[Unreleased]` is left at the top.
 - Bump minor/patch npm deps. ([#502](https://github.com/brlauuu/podlog/pull/502))
 - Split `search.ts` into per-function modules. ([#504](https://github.com/brlauuu/podlog/pull/504))
 
-## [0.1.0] — 2026-04-04
+## 0.1.0 — 2026-04-04
 
 ### Major changes
 - **Versioning system** introduced — single-source `VERSION` file at the repo root, surfaced in the navbar/About page. ([#162](https://github.com/brlauuu/podlog/pull/162))
@@ -332,7 +333,7 @@ fresh empty `[Unreleased]` is left at the top.
 - Remove unused `@types/dompurify`, add explicit `pydantic` dep. ([#199](https://github.com/brlauuu/podlog/pull/199))
 - Bump `@tanstack/react-query` floor to ^5.96.2. ([#227](https://github.com/brlauuu/podlog/pull/227))
 
-## [0.0.0] — 2026-03-14 to 2026-04-03 (pre-versioning)
+## 0.0.0 — 2026-03-14 to 2026-04-03 (pre-versioning)
 
 The pre-versioning era — initial scaffold and the bulk of foundational features. Not a single release; every notable user-facing addition during this window is bucketed here under one heading.
 
@@ -391,12 +392,3 @@ The early stack was inherited from a more complex design. PRs [#62](https://gith
 
 ### Other internal
 - Split Celery worker into heavy and light queues (later removed in Phase 3). ([#51](https://github.com/brlauuu/podlog/pull/51))
-
-[Unreleased]: https://github.com/brlauuu/podlog/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/brlauuu/podlog/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/brlauuu/podlog/compare/v0.1.3...v0.2.0
-[0.1.3]: https://github.com/brlauuu/podlog/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/brlauuu/podlog/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/brlauuu/podlog/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/brlauuu/podlog/releases/tag/v0.1.0
-[0.0.0]: https://github.com/brlauuu/podlog/commits/main

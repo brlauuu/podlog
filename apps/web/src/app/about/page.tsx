@@ -91,8 +91,15 @@ export default async function AboutPage() {
   const aboutH1 = aboutHeadings.find((h) => h.level === 1);
   const changelogH1 = changelogHeadings.find((h) => h.level === 1);
 
+  // Match version headings — either "Unreleased" or a leading semver
+  // component. Filters out the H1 ("Changelog") and any H2s the markdown
+  // might pick up that aren't releases.
   const versions: AboutTocItem[] = changelogHeadings
-    .filter((h) => h.level === 2 && h.text.startsWith("["))
+    .filter(
+      (h) =>
+        h.level === 2 &&
+        (h.text === "Unreleased" || /^\d+\.\d+\.\d+/.test(h.text)),
+    )
     .map((h) => ({ id: h.id, text: h.text }));
 
   const aboutIdByText = firstOccurrenceMap(aboutHeadings);
