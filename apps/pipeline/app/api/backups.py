@@ -38,7 +38,10 @@ def _list_db_tier(dirname: str) -> list[dict]:
         return []
     out: list[dict] = []
     for entry in tier_dir.iterdir():
-        if not entry.is_file():
+        # Skip symlinks defensively — backup.sh never creates them, so
+        # any link inside /backups was planted out-of-band and would
+        # let stat() report sizes of files outside the mount.
+        if entry.is_symlink() or not entry.is_file():
             continue
         m = _DUMP_RE.match(entry.name)
         if not m:
@@ -62,8 +65,14 @@ def _audio_dir_size(path: Path) -> int:
     not exact disk usage. Walking the tree once per snapshot is cheap
     relative to the page render.
     """
+    # `os.walk(top, followlinks=False)` only refuses to descend into
+    # symlinks discovered during the walk; it still traverses `top`
+    # itself. Refuse a symlinked starting point so a planted symlink
+    # in /backups/audio/<date> can't redirect the walk outside the mount.
+    if path.is_symlink():
+        return 0
     total = 0
-    for root, _dirs, files in os.walk(path):
+    for root, _dirs, files in os.walk(path, followlinks=False):
         for f in files:
             p = Path(root) / f
             try:
@@ -79,7 +88,7 @@ def _list_audio_snapshots() -> list[dict]:
         return []
     out: list[dict] = []
     for entry in audio_dir.iterdir():
-        if not entry.is_dir():
+        if entry.is_symlink() or not entry.is_dir():
             continue
         if not _DATE_DIR_RE.match(entry.name):
             continue
@@ -94,7 +103,10 @@ def _read_last_run() -> str | None:
         return None
     try:
         return p.read_text(encoding="utf-8").strip() or None
-    except OSError:
+    except (OSError, ValueError):
+        # ValueError covers UnicodeDecodeError if .last_run somehow holds
+        # non-UTF-8 bytes. backup.sh writes a clean ISO date so this is
+        # belt-and-braces — but a 500 here would break the whole tab.
         return None
 
 

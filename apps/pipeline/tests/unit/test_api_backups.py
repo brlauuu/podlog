@@ -95,6 +95,51 @@ def test_ignores_non_dump_files_and_unparseable_dirs(tmp_path: Path) -> None:
     assert [s["date"] for s in body["audio"]] == ["2026-05-03"]
 
 
+def test_skips_symlinked_dump_file_and_audio_dir(tmp_path: Path) -> None:
+    # Set up a real backup tree alongside an "outside" target the symlinks
+    # will point to. The endpoint must skip the symlinks so it can't be
+    # tricked into reporting sizes for files outside the mount.
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.dump").write_bytes(b"S" * 9999)
+    (outside / "secret-audio").mkdir()
+    (outside / "secret-audio" / "leak.opus").write_bytes(b"L" * 7777)
+
+    backups = tmp_path / "backups"
+    (backups / "db" / "daily").mkdir(parents=True)
+    (backups / "audio").mkdir()
+
+    # Real, allowed dump.
+    (backups / "db" / "daily" / "podlog-2026-05-03.dump").write_bytes(b"x" * 100)
+
+    # Planted symlinks pretending to be backups.
+    (backups / "db" / "daily" / "podlog-1999-01-01.dump").symlink_to(
+        outside / "secret.dump"
+    )
+    (backups / "audio" / "1999-01-01").symlink_to(outside / "secret-audio")
+
+    with patch("app.api.backups._BACKUPS_ROOT", backups):
+        resp = client.get("/api/backups")
+
+    body = resp.json()
+    daily_dates = [d["date"] for d in body["db"]["daily"]]
+    assert "1999-01-01" not in daily_dates
+    assert daily_dates == ["2026-05-03"]
+    audio_dates = [s["date"] for s in body["audio"]]
+    assert "1999-01-01" not in audio_dates
+
+
+def test_last_run_with_invalid_utf8_falls_back_to_none(tmp_path: Path) -> None:
+    (tmp_path / "db" / "daily").mkdir(parents=True)
+    (tmp_path / ".last_run").write_bytes(b"\xff\xfe\x00bad")
+
+    with patch("app.api.backups._BACKUPS_ROOT", tmp_path):
+        resp = client.get("/api/backups")
+
+    assert resp.status_code == 200
+    assert resp.json()["last_run"] is None
+
+
 def test_reports_retention_zero_as_disabled(tmp_path: Path) -> None:
     (tmp_path / "db" / "daily").mkdir(parents=True)
     with (

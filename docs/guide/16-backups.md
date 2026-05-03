@@ -45,6 +45,10 @@ Set any to `0` to skip that bucket. Set all three to `0` to disable backups enti
 
 The container wakes hourly and checks whether today's date already appears in `/backups/.last_run`. If not, it runs once and writes today's date. Same-day duplicates are impossible. If the host is off when the daily window opens, the backup runs on next start.
 
+## Inspecting backups from the web app
+
+The **Settings → Backups** tab in the web app lists everything currently on disk: daily / weekly / monthly DB dumps with their dates and sizes, audio snapshots, the configured retention per tier, and the date of the most recent run. It's read-only — restore still goes through `make restore-db` / `make restore-audio` (next section). Useful when you want to confirm the daily run actually ran without shelling onto the host.
+
 ## Operational commands
 
 | Command | What it does |

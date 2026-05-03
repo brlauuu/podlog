@@ -103,6 +103,18 @@ describe("<BackupsSection>", () => {
     );
   });
 
+  it("renders an error line when the proxy fetch rejects", async () => {
+    mockFetch.mockReturnValueOnce(Promise.reject(new Error("network down")));
+
+    render(<BackupsSection />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Could not load backup status:/i),
+      ).toBeInTheDocument(),
+    );
+  });
+
   it("renders an empty-state line per tier when the tier has no dumps yet", async () => {
     mockFetch.mockReturnValueOnce(
       jsonResponse({
