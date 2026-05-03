@@ -61,7 +61,7 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `FIREWORKS_STT_MODEL` | `whisper-v3-large` | Fireworks speech-to-text model ID. |
 | `FIREWORKS_STT_DIARIZE` | `true` | Request speaker diarization metadata from Fireworks transcription API. |
 | `FIREWORKS_CHAT_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks OpenAI-compatible chat completions used by Ask generation. |
-| `FIREWORKS_CHAT_MODEL` | `accounts/fireworks/models/qwen2p5-7b-instruct` | Fireworks chat model used when `RAG_PROVIDER=fireworks` for Ask generation. The Settings UI exposes a curated dropdown of currently-deployed models; this env var supplies the default. |
+| `FIREWORKS_CHAT_MODEL` | `accounts/fireworks/models/gpt-oss-20b` | Fireworks chat model used when `RAG_PROVIDER=fireworks` for Ask generation. The Settings UI exposes a curated dropdown of currently-deployed models; this env var supplies the default. |
 | `RAG_PROVIDER` | `local` | Issue #608: dedicated provider for the Ask / RAG step. Decoupled from `INFERENCE_PROVIDER` (transcription) so enabling Fireworks for transcription does not silently send retrieved transcript chunks to Fireworks for answer generation. Set to `fireworks` to opt in. |
 | `FIREWORKS_STT_COST_PER_MINUTE_USD` | `0.006` | Cost estimate assumption used for per-episode observability (`estimated_cost_usd = billed_minutes * rate`). |
 | `EMBEDDING_PROVIDER` | `local` | Runtime provider for query + segment/chunk embeddings (`local` or `fireworks`). |
