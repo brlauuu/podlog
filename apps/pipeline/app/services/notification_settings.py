@@ -83,6 +83,7 @@ _INFERENCE_FIELDS = {
     "fireworks_chat_model",
     "fireworks_stt_cost_per_minute_usd",
     "rag_provider",
+    "rag_local_model",
 }
 _EMBEDDING_FIELDS = {
     "embedding_provider",

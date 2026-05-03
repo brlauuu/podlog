@@ -46,22 +46,28 @@ def _sse_event(event: str, data: dict | list | str) -> str:
     return f"event: {event}\ndata: {payload}\n\n"
 
 
-async def _stream_ask(question: str, model: str, feed_ids: list[str] | None, episode_id: str | None = None, speaker_label: str | None = None):
+async def _stream_ask(question: str, model: str | None, feed_ids: list[str] | None, episode_id: str | None = None, speaker_label: str | None = None):
     db = SessionLocal()
     try:
         runtime = get_runtime_inference_settings(db)
         # Issue #608: RAG/Ask routing reads its own dedicated provider flag,
         # decoupled from inference_provider (which controls transcription).
         provider = runtime.get("rag_provider") or "local"
-        resolved_model = model
+        # Issue #637: when the caller doesn't supply a model, fall back to the
+        # admin-configured rag_local_model (local) or fireworks_chat_model
+        # (fireworks), then to the hardcoded DEFAULT_MODEL.
+        if provider == "local":
+            resolved_model = model or runtime.get("rag_local_model") or DEFAULT_MODEL
+        else:
+            resolved_model = model or DEFAULT_MODEL
         if provider == "fireworks" and not (
-            isinstance(model, str) and model.startswith("accounts/")
+            isinstance(resolved_model, str) and resolved_model.startswith("accounts/")
         ):
             # Caller sent an Ollama-style name (legacy dropdown shipped only
             # Ollama models pre-#608). Fall back to the configured Fireworks
             # chat model. PR 3 makes the Ask page send valid Fireworks paths
             # directly.
-            resolved_model = runtime.get("fireworks_chat_model") or model
+            resolved_model = runtime.get("fireworks_chat_model") or resolved_model
 
         if provider == "local" and not await check_model_available(resolved_model, runtime=runtime):
             yield _sse_event(
@@ -115,15 +121,13 @@ async def _stream_ask(question: str, model: str, feed_ids: list[str] | None, epi
 
 @router.post("/ask")
 async def ask_endpoint(req: AskRequest):
-    model = req.model or DEFAULT_MODEL
-
     # Support both feed_ids (multi-select) and legacy feed_id (single)
     feed_ids = req.feed_ids
     if not feed_ids and req.feed_id:
         feed_ids = [req.feed_id]
 
     return StreamingResponse(
-        _stream_ask(req.question, model, feed_ids, episode_id=req.episode_id, speaker_label=req.speaker_label),
+        _stream_ask(req.question, req.model, feed_ids, episode_id=req.episode_id, speaker_label=req.speaker_label),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
