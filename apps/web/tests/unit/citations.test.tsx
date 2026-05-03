@@ -3,6 +3,7 @@
  */
 import React from "react";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 
 jest.mock("next/link", () => {
@@ -52,7 +53,7 @@ describe("preprocessCitations", () => {
 });
 
 describe("MarkdownAnswer", () => {
-  test("renders a citation as a link to the episode timestamp", () => {
+  test("renders a citation as a link to the episode timestamp (urlTransform passes podlog-cite:// through)", () => {
     render(
       <MarkdownAnswer
         text="See [Episode 42, 2:05] for details."
@@ -63,5 +64,32 @@ describe("MarkdownAnswer", () => {
       "href",
       "/episodes/ep-42#t-125"
     );
+  });
+
+  test("renders citation as a button and fires onCitationClick when provided", async () => {
+    const user = userEvent.setup();
+    const onCitationClick = jest.fn();
+    render(
+      <MarkdownAnswer
+        text="See [Episode 42, 2:05] for details."
+        sources={sources}
+        onCitationClick={onCitationClick}
+      />
+    );
+    const btn = screen.getByRole("button", { name: "Episode 42, 2:05" });
+    await user.click(btn);
+    expect(onCitationClick).toHaveBeenCalledWith("ep-42", 125);
+  });
+
+  test("renders external URLs as target=_blank links", () => {
+    render(
+      <MarkdownAnswer
+        text="Read more at [example](https://example.com)."
+        sources={[]}
+      />
+    );
+    const link = screen.getByRole("link", { name: "example" });
+    expect(link).toHaveAttribute("href", "https://example.com");
+    expect(link).toHaveAttribute("target", "_blank");
   });
 });

@@ -385,7 +385,7 @@ export default function AskPage() {
             <MarkdownAnswer
               text={answer}
               sources={sources}
-              className="prose prose-sm dark:prose-invert max-w-none"
+              className="prose prose-sm dark:prose-invert max-w-none prose-a:text-link prose-a:underline"
             />
           </div>
         </div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useMemo } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { episodeTimestampHref } from "@/lib/episode-link";
 
@@ -47,6 +47,13 @@ export function preprocessCitations(text: string, sources: Source[]): string {
   });
 }
 
+// react-markdown's defaultUrlTransform strips non-standard schemes. Pass
+// podlog-cite:// through so citation links reach the custom a component intact.
+function urlTransform(url: string): string {
+  if (url.startsWith("podlog-cite://")) return url;
+  return defaultUrlTransform(url);
+}
+
 /**
  * Renders an LLM answer as Markdown, with [Episode Title, M:SS] citation
  * patterns resolved to clickable episode-timestamp links.
@@ -66,45 +73,49 @@ export function MarkdownAnswer({
 
   return (
     <div className={className}>
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        a({ href, children }) {
-          if (href?.startsWith("podlog-cite://")) {
-            const rest = href.slice("podlog-cite://".length);
-            const slash = rest.indexOf("/");
-            const episodeId = rest.slice(0, slash);
-            const seconds = parseInt(rest.slice(slash + 1));
-            if (onCitationClick) {
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        urlTransform={urlTransform}
+        components={{
+          a({ href, children }) {
+            if (href?.startsWith("podlog-cite://")) {
+              const rest = href.slice("podlog-cite://".length);
+              const slash = rest.indexOf("/");
+              const episodeId = rest.slice(0, slash);
+              const seconds = parseInt(rest.slice(slash + 1));
+              const title = typeof children === "string" ? children : undefined;
+              if (onCitationClick) {
+                return (
+                  <button
+                    type="button"
+                    title={title}
+                    onClick={() => onCitationClick(episodeId, seconds)}
+                    className="inline-flex items-center gap-0.5 text-link hover:underline font-medium"
+                  >
+                    {children}
+                  </button>
+                );
+              }
               return (
-                <button
-                  type="button"
-                  onClick={() => onCitationClick(episodeId, seconds)}
+                <Link
+                  href={episodeTimestampHref(episodeId, seconds)}
+                  title={title}
                   className="inline-flex items-center gap-0.5 text-link hover:underline font-medium"
                 >
                   {children}
-                </button>
+                </Link>
               );
             }
             return (
-              <Link
-                href={episodeTimestampHref(episodeId, seconds)}
-                className="inline-flex items-center gap-0.5 text-link hover:underline font-medium"
-              >
+              <a href={href} target="_blank" rel="noopener noreferrer" className="text-link hover:underline">
                 {children}
-              </Link>
+              </a>
             );
-          }
-          return (
-            <a href={href} target="_blank" rel="noopener noreferrer" className="text-link hover:underline">
-              {children}
-            </a>
-          );
-        },
-      }}
-    >
-      {processed}
-    </ReactMarkdown>
+          },
+        }}
+      >
+        {processed}
+      </ReactMarkdown>
     </div>
   );
 }

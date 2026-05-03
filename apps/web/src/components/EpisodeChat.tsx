@@ -450,7 +450,7 @@ function MessageBubble({ message, isStreaming }: { message: Message; isStreaming
             text={message.content}
             sources={message.sources ?? []}
             onCitationClick={handleCitationClick}
-            className="prose prose-sm dark:prose-invert max-w-none"
+            className="prose prose-sm dark:prose-invert max-w-none prose-a:text-link prose-a:underline"
           />
         ) : isStreaming ? (
           <div className="flex items-center gap-1.5 text-muted-foreground">
