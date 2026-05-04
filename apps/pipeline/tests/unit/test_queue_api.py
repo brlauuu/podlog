@@ -134,12 +134,9 @@ class TestRetryJob:
 
         local_file = tmp_path / "abc.mp4"
         local_file.write_bytes(b"audio")
-        ep = _make_episode(
-            "failed",
-            error_class="TRANSIENT_NETWORK",
-            audio_url="local://Đorđe_and_Lara_talk.mp4",
-            audio_local_path=str(local_file),
-        )
+        ep = _make_episode("failed", error_class="TRANSIENT_NETWORK")
+        # _make_episode doesn't model audio_url / audio_local_path; set them
+        # directly on the MagicMock so _is_manual_upload classifies this row.
         ep.audio_url = "local://Đorđe_and_Lara_talk.mp4"
         ep.audio_local_path = str(local_file)
 
