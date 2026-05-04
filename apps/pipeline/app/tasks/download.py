@@ -36,6 +36,27 @@ def download_episode(episode_id: str) -> str:
         if not episode:
             raise RuntimeError(f"Episode {episode_id} not found")
 
+        # #650: manual-upload episodes have a synthetic ``local://<filename>``
+        # URL. ``enqueue_episode_ingest`` normally routes them straight to
+        # ``transcribe``, but that check requires the on-disk file to still
+        # be present. If the raw audio is gone (host reboot wiped /data,
+        # manual purge, restored DB without audio, etc.) we'd fall through
+        # to a download attempt — httpx raises ``UnsupportedProtocol`` (or
+        # ``InvalidURL`` on non-ASCII filenames) which is unhelpful to a
+        # user trying to figure out why retry isn't working. Surface a
+        # dedicated terminal error instead.
+        if (episode.audio_url or "").startswith("local://"):
+            mark_failed(
+                db,
+                episode_id,
+                error_class="MANUAL_UPLOAD_FILE_MISSING",
+                error_message=(
+                    "Manual-upload audio file is missing on disk. "
+                    "Re-upload the file and retry."
+                ),
+            )
+            return episode_id
+
         _update_episode(db, episode_id, status="downloading")
 
         # GAP-06: pre-check disk space before downloading

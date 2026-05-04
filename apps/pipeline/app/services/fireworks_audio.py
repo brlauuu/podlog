@@ -73,7 +73,9 @@ def _format_http_error(status: int, response: "httpx.Response") -> str:
     detail = ""
     try:
         body = response.json()
-    except (ValueError, Exception):  # pragma: no cover — JSON parse can raise various
+    except Exception:
+        # Response body wasn't JSON (or wasn't valid). Fall through to the
+        # plain-text path below.
         body = None
     if isinstance(body, dict):
         # OpenAI-compatible error shape: {"error": {"message": "...", ...}}

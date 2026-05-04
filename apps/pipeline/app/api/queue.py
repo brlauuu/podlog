@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Error classes that cannot be auto-retried -- user must resolve the root cause first
-NON_RETRYABLE = {"DISK_FULL", "OOM"}
+NON_RETRYABLE = {"DISK_FULL", "OOM", "MANUAL_UPLOAD_FILE_MISSING"}
 
 # Terminal or known-idle statuses that are always safe to retry
 _RETRYABLE_STATUSES = {"done", "failed", "pending"}

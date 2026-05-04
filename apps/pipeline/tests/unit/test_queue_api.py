@@ -33,6 +33,11 @@ class TestNonRetryable:
     def test_oom_is_non_retryable(self):
         assert "OOM" in NON_RETRYABLE
 
+    def test_manual_upload_file_missing_is_non_retryable(self):
+        # #650: clicking Retry without re-uploading the file would just
+        # re-issue the same MANUAL_UPLOAD_FILE_MISSING terminal failure.
+        assert "MANUAL_UPLOAD_FILE_MISSING" in NON_RETRYABLE
+
 
 class TestRetryJob:
     """Tests for the retry endpoint guard logic (issue #46)."""
@@ -117,6 +122,47 @@ class TestRetryJob:
         ep = _make_episode("transcribing")
         result = self._call_retry(ep, has_active_job=True)
         assert result.status_code == 409
+
+    def test_retry_manual_upload_routes_to_transcribe_not_download(self, tmp_path):
+        # #650: ensure the queue retry endpoint integrates with
+        # enqueue_episode_ingest's manual-upload routing. Without this test,
+        # someone could rewrite enqueue_episode_ingest's call site (or
+        # patching boundary) and the regression in TestEnqueueEpisodeIngest
+        # alone wouldn't catch it. We deliberately do NOT patch
+        # enqueue_episode_ingest here.
+        from app.api.queue import retry_job
+
+        local_file = tmp_path / "abc.mp4"
+        local_file.write_bytes(b"audio")
+        ep = _make_episode(
+            "failed",
+            error_class="TRANSIENT_NETWORK",
+            audio_url="local://Đorđe_and_Lara_talk.mp4",
+            audio_local_path=str(local_file),
+        )
+        ep.audio_url = "local://Đorđe_and_Lara_talk.mp4"
+        ep.audio_local_path = str(local_file)
+
+        db = MagicMock()
+
+        def query_side_effect(model):
+            chain = MagicMock()
+            if model is Episode:
+                chain.filter.return_value.first.return_value = ep
+            elif model is Job:
+                chain.filter.return_value.first.return_value = None
+            return chain
+
+        db.query.side_effect = query_side_effect
+
+        with patch("app.services.pipeline_commands.job_queue.enqueue") as mock_enqueue:
+            retry_job("ep-1", db=db)
+
+        # Exactly one enqueue call, and it must be for `transcribe` — not
+        # `download`, which would feed the local:// URL through httpx.
+        mock_enqueue.assert_called_once()
+        args, kwargs = mock_enqueue.call_args
+        assert args[2] == "transcribe", f"expected transcribe, got {args[2]!r}"
 
 
 def _classify(sql_text: str) -> str:
