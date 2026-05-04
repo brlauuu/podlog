@@ -57,6 +57,28 @@ class TestDownloadEpisode:
         mock_jq.enqueue.assert_called_once()
 
     @patch("app.tasks.download.mark_failed")
+    @patch("app.tasks.download.SessionLocal")
+    def test_local_url_marks_manual_upload_file_missing(self, mock_session_cls, mock_fail):
+        # #650: a local:// URL slipping into download means the manual-upload
+        # raw file is gone — surface a dedicated terminal failure with a
+        # "re-upload" message instead of letting httpx blow up with
+        # UnsupportedProtocol / InvalidURL.
+        ep = _make_episode(audio_url="local://Đorđe_and_Lara_talk.mp4")
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        mock_session_cls.return_value = db
+
+        from app.tasks.download import download_episode
+
+        result = download_episode("ep1")
+
+        assert result == "ep1"
+        mock_fail.assert_called_once()
+        kwargs = mock_fail.call_args.kwargs
+        assert kwargs["error_class"] == "MANUAL_UPLOAD_FILE_MISSING"
+        assert "Re-upload" in kwargs["error_message"]
+
+    @patch("app.tasks.download.mark_failed")
     @patch("app.tasks.download.shutil")
     @patch("app.tasks.download._update_episode")
     @patch("app.tasks.download.SessionLocal")

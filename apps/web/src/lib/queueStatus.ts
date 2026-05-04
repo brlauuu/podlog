@@ -40,7 +40,13 @@ export const ACTIVE_STATUSES = new Set([
   "downloading", "transcribing", "diarizing", "embedding", "inferring", "archiving",
 ]);
 
-export const NON_RETRYABLE = new Set(["DISK_FULL", "OOM"]);
+export const NON_RETRYABLE = new Set([
+  "DISK_FULL",
+  "OOM",
+  // #650: clicking Retry on a manual upload whose file is gone would
+  // just re-issue the same terminal failure. Suppress the button.
+  "MANUAL_UPLOAD_FILE_MISSING",
+]);
 
 export const ERROR_LABELS: Record<string, string> = {
   TRANSIENT_NETWORK: "Network error",
@@ -48,6 +54,7 @@ export const ERROR_LABELS: Record<string, string> = {
   DISK_FULL: "Disk full — free space and retry",
   OOM: "Out of memory — check hardware requirements",
   SYSTEM_ERROR: "Unexpected error",
+  MANUAL_UPLOAD_FILE_MISSING: "Manual upload file missing — re-upload and retry",
 };
 
 export function sortByUpdated(jobs: Job[]): Job[] {

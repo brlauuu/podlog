@@ -95,8 +95,17 @@ function ProviderTag({ provider }: { provider: string | null }) {
   );
 }
 
+// "Hard" errors are non-retryable — styled red rather than amber so the user
+// sees at a glance that this isn't a transient failure they can wait out.
+// Mirrors the NON_RETRYABLE set in apps/web/src/lib/queueStatus.ts.
+const HARD_ERROR_CLASSES = new Set([
+  "DISK_FULL",
+  "OOM",
+  "MANUAL_UPLOAD_FILE_MISSING",
+]);
+
 function ErrorPill({ errorClass }: { errorClass: string }) {
-  const isHard = errorClass === "DISK_FULL" || errorClass === "OOM";
+  const isHard = HARD_ERROR_CLASSES.has(errorClass);
   const color = isHard
     ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
     : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300";

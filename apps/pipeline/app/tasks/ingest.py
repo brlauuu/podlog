@@ -2,7 +2,6 @@
 Top-level ingestion orchestrator.
 
 ingest_feed   -- poll an RSS feed, enqueue any new episodes
-ingest_episode -- run the full pipeline for a single episode
 poll_all_feeds -- poll all registered feeds (called periodically)
 """
 import logging
@@ -133,16 +132,6 @@ def ingest_feed(feed_id: str, selected_guids: Optional[list[str]] = None) -> dic
             feed.mode,
         )
         return {"new_episodes": new_count}
-    finally:
-        db.close()
-
-
-def ingest_episode(episode_id: str) -> dict:
-    """Re-queue a single episode through the full pipeline (used for manual retry)."""
-    db = SessionLocal()
-    try:
-        job_queue.enqueue(db, episode_id, "download")
-        return {"queued": True}
     finally:
         db.close()
 
