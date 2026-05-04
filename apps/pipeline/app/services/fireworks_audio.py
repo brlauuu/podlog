@@ -65,6 +65,34 @@ def _is_upload_rejected_signature(error_text: str) -> bool:
     return any(n in error_text for n in needles)
 
 
+def _format_http_error(status: int, response: "httpx.Response") -> str:
+    """Build a Fireworks HTTP error message that includes the response body
+    detail so the user can see *why* it failed (e.g. unsupported format,
+    file too large, missing field) instead of just ``HTTP 400`` (#650).
+    """
+    detail = ""
+    try:
+        body = response.json()
+    except (ValueError, Exception):  # pragma: no cover — JSON parse can raise various
+        body = None
+    if isinstance(body, dict):
+        # OpenAI-compatible error shape: {"error": {"message": "...", ...}}
+        err = body.get("error")
+        if isinstance(err, dict):
+            detail = str(err.get("message") or "").strip()
+        elif isinstance(err, str):
+            detail = err.strip()
+        if not detail:
+            detail = str(body.get("message") or body.get("detail") or "").strip()
+    if not detail:
+        try:
+            detail = response.text.strip()
+        except Exception:
+            detail = ""
+    detail = detail[:500]
+    return f"Fireworks API HTTP {status}" + (f": {detail}" if detail else "")
+
+
 def _format_upload_rejected_message(audio_path: str, original_error: str) -> str:
     try:
         size_bytes = Path(audio_path).stat().st_size
@@ -139,7 +167,7 @@ def transcribe(
             status = exc.response.status_code
             error_class, retryable = _classify_http_error(status)
             raise FireworksTranscriptionError(
-                f"Fireworks API HTTP {status}",
+                _format_http_error(status, exc.response),
                 error_class=error_class,
                 retryable=retryable,
                 status_code=status,

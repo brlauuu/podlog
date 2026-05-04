@@ -317,3 +317,46 @@ def test_transcribe_wraps_429_as_retryable(tmp_path: Path):
     assert exc.error_class == "TRANSIENT_NETWORK"
     assert exc.retryable is True
     assert exc.status_code == 429
+
+
+class TestHttpErrorMessageFormatting:
+    """#650: surface the response body in HTTP error messages so the user can
+    see *why* Fireworks rejected a request rather than just ``HTTP 400``.
+    """
+
+    def _run(self, status: int, body, *, json_ok: bool = True):
+        from app.services.fireworks_audio import _format_http_error
+
+        resp = MagicMock(spec=httpx.Response)
+        resp.json.side_effect = (
+            (lambda: body) if json_ok else (lambda: (_ for _ in ()).throw(ValueError("not json")))
+        )
+        # text fallback when JSON parsing fails
+        resp.text = body if isinstance(body, str) else ""
+        return _format_http_error(status, resp)
+
+    def test_includes_openai_compatible_error_message(self):
+        msg = self._run(400, {"error": {"message": "Unsupported audio format: opus"}})
+        assert msg == "Fireworks API HTTP 400: Unsupported audio format: opus"
+
+    def test_handles_string_error_field(self):
+        msg = self._run(400, {"error": "File too large"})
+        assert msg == "Fireworks API HTTP 400: File too large"
+
+    def test_falls_back_to_top_level_message_or_detail(self):
+        msg = self._run(404, {"detail": "Model not found"})
+        assert msg == "Fireworks API HTTP 404: Model not found"
+
+    def test_truncates_long_detail(self):
+        long_detail = "x" * 1000
+        msg = self._run(400, {"error": {"message": long_detail}})
+        assert msg.startswith("Fireworks API HTTP 400: ")
+        assert len(msg.removeprefix("Fireworks API HTTP 400: ")) == 500
+
+    def test_falls_back_to_response_text_on_non_json_body(self):
+        msg = self._run(502, "upstream timed out", json_ok=False)
+        assert msg == "Fireworks API HTTP 502: upstream timed out"
+
+    def test_omits_detail_when_body_is_empty(self):
+        msg = self._run(500, "", json_ok=False)
+        assert msg == "Fireworks API HTTP 500"
