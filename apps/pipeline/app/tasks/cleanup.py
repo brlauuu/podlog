@@ -137,6 +137,102 @@ SELECT task, COUNT(*) AS count FROM deleted GROUP BY task ORDER BY task
 """)
 
 
+# Issue #641: episodes can end up "stranded" — sitting in a mid-pipeline
+# status (e.g. ``embedding``) with no active job in the queue. This used
+# to happen when a transient task error escaped the worker without retry.
+# Worker-loop retry now handles the common case, but this sweep is the
+# safety net for anything that still slips through (worker SIGKILL
+# between commit and enqueue, future tasks introduced without classification,
+# pre-fix stragglers from before the worker upgrade).
+_STATUS_TO_TASK = {
+    "downloading": "download",
+    "transcribing": "transcribe",
+    "diarizing": "diarize",
+    "chunking": "chunk",
+    "embedding": "embed",
+    "inferring": "infer",
+    "archiving": "archive",
+}
+
+
+def _resolve_stranded_task(status: str) -> str | None:
+    """Map an episode status to the task that should be re-enqueued.
+
+    Returns None when the status doesn't have a known re-enqueue point —
+    in that case the sweep skips the row and logs it for human review.
+    """
+    if status in _STATUS_TO_TASK:
+        return _STATUS_TO_TASK[status]
+    # ``downloading:NN%`` is a progress-tagged variant of ``downloading``.
+    if status.startswith("downloading"):
+        return "download"
+    return None
+
+
+def recover_stranded_episodes() -> dict:
+    """Re-enqueue episodes stuck in mid-pipeline statuses with no active job.
+
+    "Stranded" = ``status NOT IN ('done','failed','pending')`` AND no row
+    in ``job_queue`` for that episode in ``status IN ('pending','picked')``.
+
+    This is a safety net layered behind the worker-loop transient retry
+    (issue #641). It runs every 30 minutes by default. If something
+    catches an episode mid-stage without enqueueing a follow-up — say a
+    SIGKILL between ``db.commit()`` and ``job_queue.enqueue`` — this
+    sweep notices it within the next interval.
+    """
+    from app import job_queue
+    from app.database import SessionLocal
+    from app.models import Episode, Job
+
+    db = SessionLocal()
+    try:
+        stranded = (
+            db.query(Episode)
+            .filter(~Episode.status.in_(["done", "failed", "pending"]))
+            .filter(
+                ~db.query(Job)
+                .filter(Job.episode_id == Episode.id)
+                .filter(Job.status.in_(["pending", "picked"]))
+                .exists()
+            )
+            .all()
+        )
+
+        recovered: list[str] = []
+        unmapped: list[dict[str, str]] = []
+
+        for episode in stranded:
+            task = _resolve_stranded_task(episode.status)
+            if task is None:
+                unmapped.append({"id": str(episode.id), "status": episode.status})
+                continue
+            episode.status = "pending"
+            job_queue.enqueue(db, str(episode.id), task)
+            recovered.append(str(episode.id))
+
+        if recovered or unmapped:
+            db.commit()
+            logger.warning(
+                'action=recover_stranded_episodes recovered=%d unmapped=%d '
+                'recovered_ids=%s unmapped=%s',
+                len(recovered), len(unmapped),
+                recovered[:10], unmapped[:10],
+            )
+        return {
+            "recovered": len(recovered),
+            "recovered_ids": recovered,
+            "unmapped": len(unmapped),
+            "unmapped_episodes": unmapped,
+        }
+    except Exception:
+        db.rollback()
+        logger.exception("recover_stranded_episodes failed unexpectedly")
+        raise
+    finally:
+        db.close()
+
+
 def prune_superseded_failed_jobs() -> dict:
     """Delete `failed` job_queue rows that have been superseded by a later success.
 

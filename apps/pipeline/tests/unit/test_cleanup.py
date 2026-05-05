@@ -151,3 +151,146 @@ class TestCleanupZombieJobs:
 
         db.rollback.assert_called_once()
         db.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Issue #641: stranded-episode sweep
+# ---------------------------------------------------------------------------
+
+
+class TestResolveStrandedTask:
+    def test_maps_canonical_statuses(self):
+        from app.tasks.cleanup import _resolve_stranded_task
+
+        assert _resolve_stranded_task("downloading") == "download"
+        assert _resolve_stranded_task("transcribing") == "transcribe"
+        assert _resolve_stranded_task("diarizing") == "diarize"
+        assert _resolve_stranded_task("chunking") == "chunk"
+        assert _resolve_stranded_task("embedding") == "embed"
+        assert _resolve_stranded_task("inferring") == "infer"
+        assert _resolve_stranded_task("archiving") == "archive"
+
+    def test_progress_tagged_downloading_maps_to_download(self):
+        """``downloading:70%`` is download.py's progress-tagged variant."""
+        from app.tasks.cleanup import _resolve_stranded_task
+
+        assert _resolve_stranded_task("downloading:0%") == "download"
+        assert _resolve_stranded_task("downloading:70%") == "download"
+        assert _resolve_stranded_task("downloading:100%") == "download"
+
+    def test_unknown_status_returns_none(self):
+        from app.tasks.cleanup import _resolve_stranded_task
+
+        assert _resolve_stranded_task("done") is None
+        assert _resolve_stranded_task("failed") is None
+        assert _resolve_stranded_task("pending") is None
+        assert _resolve_stranded_task("frobnicating") is None
+
+
+class TestRecoverStrandedEpisodes:
+    def _make_episode(self, status: str, episode_id: str = "ep-1") -> MagicMock:
+        ep = MagicMock()
+        ep.id = episode_id
+        ep.status = status
+        return ep
+
+    def _setup_db(self, stranded_episodes: list) -> MagicMock:
+        """Wire a mock DB to return the given list from the stranded query."""
+        db = MagicMock()
+        db.query.return_value.filter.return_value.filter.return_value.all.return_value = (
+            stranded_episodes
+        )
+        return db
+
+    def test_resets_status_and_enqueues_appropriate_task(self):
+        from app.tasks.cleanup import recover_stranded_episodes
+
+        ep = self._make_episode("embedding", "ep-1")
+        db = self._setup_db([ep])
+
+        with patch("app.database.SessionLocal", return_value=db), \
+             patch("app.job_queue.enqueue") as mock_enqueue:
+            result = recover_stranded_episodes()
+
+        assert result["recovered"] == 1
+        assert ep.status == "pending"
+        mock_enqueue.assert_called_once_with(db, "ep-1", "embed")
+        db.commit.assert_called_once()
+
+    def test_handles_progress_tagged_downloading(self):
+        from app.tasks.cleanup import recover_stranded_episodes
+
+        ep = self._make_episode("downloading:42%", "ep-1")
+        db = self._setup_db([ep])
+
+        with patch("app.database.SessionLocal", return_value=db), \
+             patch("app.job_queue.enqueue") as mock_enqueue:
+            recover_stranded_episodes()
+
+        assert ep.status == "pending"
+        mock_enqueue.assert_called_once_with(db, "ep-1", "download")
+
+    def test_skips_unknown_status_without_enqueueing(self):
+        """An unmappable status should be reported, not retried at random."""
+        from app.tasks.cleanup import recover_stranded_episodes
+
+        ep = self._make_episode("frobnicating", "ep-weird")
+        db = self._setup_db([ep])
+
+        with patch("app.database.SessionLocal", return_value=db), \
+             patch("app.job_queue.enqueue") as mock_enqueue:
+            result = recover_stranded_episodes()
+
+        assert result["recovered"] == 0
+        assert result["unmapped"] == 1
+        assert result["unmapped_episodes"] == [{"id": "ep-weird", "status": "frobnicating"}]
+        mock_enqueue.assert_not_called()
+        # Status preserved: don't silently mutate something we don't understand.
+        assert ep.status == "frobnicating"
+
+    def test_no_stranded_episodes_does_not_commit(self):
+        from app.tasks.cleanup import recover_stranded_episodes
+
+        db = self._setup_db([])
+
+        with patch("app.database.SessionLocal", return_value=db), \
+             patch("app.job_queue.enqueue") as mock_enqueue:
+            result = recover_stranded_episodes()
+
+        assert result["recovered"] == 0
+        mock_enqueue.assert_not_called()
+        db.commit.assert_not_called()
+
+    def test_handles_multiple_strandings_in_one_pass(self):
+        from app.tasks.cleanup import recover_stranded_episodes
+
+        eps = [
+            self._make_episode("embedding", "ep-1"),
+            self._make_episode("inferring", "ep-2"),
+            self._make_episode("archiving", "ep-3"),
+        ]
+        db = self._setup_db(eps)
+
+        with patch("app.database.SessionLocal", return_value=db), \
+             patch("app.job_queue.enqueue") as mock_enqueue:
+            result = recover_stranded_episodes()
+
+        assert result["recovered"] == 3
+        assert sorted(result["recovered_ids"]) == ["ep-1", "ep-2", "ep-3"]
+        enqueued_tasks = [c.args[2] for c in mock_enqueue.call_args_list]
+        assert enqueued_tasks == ["embed", "infer", "archive"]
+
+    def test_rolls_back_and_reraises_on_exception(self):
+        from app.tasks.cleanup import recover_stranded_episodes
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.filter.return_value.all.side_effect = (
+            RuntimeError("db gone")
+        )
+
+        with patch("app.database.SessionLocal", return_value=db):
+            with pytest.raises(RuntimeError, match="db gone"):
+                recover_stranded_episodes()
+
+        db.rollback.assert_called_once()
+        db.close.assert_called_once()
