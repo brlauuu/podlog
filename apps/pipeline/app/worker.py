@@ -65,13 +65,14 @@ _TRANSIENT_TEXT_NEEDLES = (
     "EOF occurred in violation of protocol",
 )
 
-# Issue #653: HTTP status codes that download.py historically retried as
-# TRANSIENT_NETWORK. Other HTTP errors (4xx) are also retried — but as
-# HTTP_ACCESS — preserving download.py's pre-#653 behavior verbatim.
+# HTTP status codes treated as transient (worth retrying with backoff).
+# 5xx and 429 are infrastructure-side and recover. Everything else (4xx)
+# is a client-side problem (404, 403, 410, etc.) — retrying won't help,
+# so we fail fast with HTTP_ACCESS.
 _TRANSIENT_HTTP_STATUS = {429, 500, 502, 503, 504}
 
 
-def _classify_for_retry(exc: BaseException) -> tuple[bool, str]:
+def _classify_for_retry(exc: Exception) -> tuple[bool, str]:
     """Classify an exception as ``(retryable, error_class)``.
 
     Order matters:
@@ -81,9 +82,10 @@ def _classify_for_retry(exc: BaseException) -> tuple[bool, str]:
        classes know more about their own failure modes than we do here.
     2. ``MemoryError`` is terminal ``OOM``. This used to live in the
        per-task handlers in transcribe.py.
-    3. ``httpx.HTTPStatusError`` is retryable for all status codes —
-       4xx maps to ``HTTP_ACCESS``, 5xx/429 to ``TRANSIENT_NETWORK``.
-       This preserves download.py's historical behavior (#653).
+    3. ``httpx.HTTPStatusError`` 5xx/429 is retryable ``TRANSIENT_NETWORK``;
+       4xx is terminal ``HTTP_ACCESS`` — a 404 or 403 isn't going to
+       resolve on retry, so failing fast saves bandwidth and gives the
+       user a clear signal.
     4. Known transient exception types or message-substring matches
        map to retryable ``TRANSIENT_NETWORK``.
     5. Anything else is terminal ``SYSTEM_ERROR``.
@@ -100,8 +102,9 @@ def _classify_for_retry(exc: BaseException) -> tuple[bool, str]:
 
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code
-        cls = "TRANSIENT_NETWORK" if status in _TRANSIENT_HTTP_STATUS else "HTTP_ACCESS"
-        return (True, cls)
+        if status in _TRANSIENT_HTTP_STATUS:
+            return (True, "TRANSIENT_NETWORK")
+        return (False, "HTTP_ACCESS")
 
     if isinstance(exc, _TRANSIENT_EXC_TYPES):
         return (True, "TRANSIENT_NETWORK")
@@ -110,16 +113,6 @@ def _classify_for_retry(exc: BaseException) -> tuple[bool, str]:
         return (True, "TRANSIENT_NETWORK")
 
     return (False, "SYSTEM_ERROR")
-
-
-def _is_transient(exc: BaseException) -> bool:
-    """Backwards-compatible predicate.
-
-    Retained only for ``TestIsTransient`` in ``test_worker.py``; production
-    code paths all call ``_classify_for_retry`` directly. If the test cases
-    move over, this can go.
-    """
-    return _classify_for_retry(exc)[0]
 
 
 def _handle_task_exception(db, job, exc: Exception) -> None:
