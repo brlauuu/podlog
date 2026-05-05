@@ -297,45 +297,137 @@ class TestMainLoop:
 # ---------------------------------------------------------------------------
 
 
-class TestIsTransient:
+class TestClassifyForRetryTransientPredicate:
+    """The retryable-ness half of _classify_for_retry, exercising the
+    type-and-needle classification that was originally _is_transient."""
+
     def test_httpx_network_error_is_transient(self):
         import httpx
-        from app.worker import _is_transient
+        from app.worker import _classify_for_retry
 
-        assert _is_transient(httpx.NetworkError("connection reset")) is True
+        assert _classify_for_retry(httpx.NetworkError("connection reset"))[0] is True
 
     def test_httpx_timeout_is_transient(self):
         import httpx
-        from app.worker import _is_transient
+        from app.worker import _classify_for_retry
 
-        assert _is_transient(httpx.ConnectTimeout("timed out")) is True
+        assert _classify_for_retry(httpx.ConnectTimeout("timed out"))[0] is True
 
     def test_oserror_with_unreachable_text_is_transient(self):
         """The original embed-task strand: plain OSError with 'Network is unreachable'."""
-        from app.worker import _is_transient
+        from app.worker import _classify_for_retry
 
-        assert _is_transient(OSError("[Errno 101] Network is unreachable")) is True
+        assert _classify_for_retry(OSError("[Errno 101] Network is unreachable"))[0] is True
 
     def test_dns_failure_is_transient(self):
         import socket
-        from app.worker import _is_transient
+        from app.worker import _classify_for_retry
 
-        assert _is_transient(socket.gaierror("nodename nor servname provided")) is True
+        assert _classify_for_retry(socket.gaierror("nodename nor servname provided"))[0] is True
 
     def test_connection_refused_text_is_transient(self):
-        from app.worker import _is_transient
+        from app.worker import _classify_for_retry
 
-        assert _is_transient(RuntimeError("Connection refused upstream")) is True
+        assert _classify_for_retry(RuntimeError("Connection refused upstream"))[0] is True
 
     def test_value_error_is_not_transient(self):
-        from app.worker import _is_transient
+        from app.worker import _classify_for_retry
 
-        assert _is_transient(ValueError("bad input")) is False
+        assert _classify_for_retry(ValueError("bad input"))[0] is False
 
     def test_assertion_error_is_not_transient(self):
-        from app.worker import _is_transient
+        from app.worker import _classify_for_retry
 
-        assert _is_transient(AssertionError("invariant broken")) is False
+        assert _classify_for_retry(AssertionError("invariant broken"))[0] is False
+
+
+class TestClassifyForRetry:
+    """Issue #653: richer classification including typed metadata, MemoryError,
+    and HTTPStatusError."""
+
+    def test_typed_exception_with_retryable_metadata_wins(self):
+        """An exception carrying ``retryable`` and ``error_class`` attrs (e.g.
+        FireworksTranscriptionError) overrides everything else."""
+        from app.worker import _classify_for_retry
+
+        class TypedError(RuntimeError):
+            def __init__(self, msg, retryable, error_class):
+                super().__init__(msg)
+                self.retryable = retryable
+                self.error_class = error_class
+
+        retryable, ec = _classify_for_retry(
+            TypedError("bad upload", retryable=True, error_class="FIREWORKS_UPLOAD_REJECTED")
+        )
+        assert (retryable, ec) == (True, "FIREWORKS_UPLOAD_REJECTED")
+
+        retryable, ec = _classify_for_retry(
+            TypedError("permanent denial", retryable=False, error_class="HTTP_ACCESS")
+        )
+        assert (retryable, ec) == (False, "HTTP_ACCESS")
+
+    def test_typed_exception_without_error_class_falls_back_to_generic(self):
+        """Defensive: a typed error that sets ``retryable`` but forgot
+        ``error_class`` still classifies sensibly."""
+        from app.worker import _classify_for_retry
+
+        class HalfTyped(RuntimeError):
+            def __init__(self, msg, retryable):
+                super().__init__(msg)
+                self.retryable = retryable
+                # no error_class
+
+        assert _classify_for_retry(HalfTyped("blip", retryable=True)) == (
+            True, "TRANSIENT_NETWORK"
+        )
+        assert _classify_for_retry(HalfTyped("dead", retryable=False)) == (
+            False, "SYSTEM_ERROR"
+        )
+
+    def test_memory_error_is_terminal_oom(self):
+        """transcribe.py used to mark this OOM internally; worker takes over."""
+        from app.worker import _classify_for_retry
+
+        assert _classify_for_retry(MemoryError("out of memory")) == (False, "OOM")
+
+    def test_httpx_5xx_is_transient_network(self):
+        """download.py used to retry 5xx as TRANSIENT_NETWORK; preserve that."""
+        import httpx
+        from app.worker import _classify_for_retry
+
+        for status in (500, 502, 503, 504):
+            req = httpx.Request("GET", "https://example.com/x")
+            resp = httpx.Response(status, request=req)
+            err = httpx.HTTPStatusError(f"HTTP {status}", request=req, response=resp)
+            assert _classify_for_retry(err) == (True, "TRANSIENT_NETWORK"), f"status={status}"
+
+    def test_httpx_429_is_transient_network(self):
+        """Rate-limit responses retry as TRANSIENT_NETWORK."""
+        import httpx
+        from app.worker import _classify_for_retry
+
+        req = httpx.Request("GET", "https://example.com/x")
+        resp = httpx.Response(429, request=req)
+        err = httpx.HTTPStatusError("HTTP 429", request=req, response=resp)
+        assert _classify_for_retry(err) == (True, "TRANSIENT_NETWORK")
+
+    def test_httpx_4xx_is_terminal_http_access(self):
+        """4xx status codes are terminal — a 404/403/410 isn't going to
+        resolve on retry, so we fail fast with HTTP_ACCESS rather than
+        wasting the retry budget."""
+        import httpx
+        from app.worker import _classify_for_retry
+
+        for status in (400, 401, 403, 404, 410):
+            req = httpx.Request("GET", "https://example.com/x")
+            resp = httpx.Response(status, request=req)
+            err = httpx.HTTPStatusError(f"HTTP {status}", request=req, response=resp)
+            assert _classify_for_retry(err) == (False, "HTTP_ACCESS"), f"status={status}"
+
+    def test_value_error_is_terminal_system_error(self):
+        from app.worker import _classify_for_retry
+
+        assert _classify_for_retry(ValueError("nope")) == (False, "SYSTEM_ERROR")
 
 
 class TestHandleTaskException:

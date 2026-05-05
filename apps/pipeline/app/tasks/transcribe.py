@@ -8,18 +8,21 @@ Transcription task -- PRD-01 S5.3, S5.4, Issue #222
 - Fireworks provider path:
   - Sends source audio directly to Fireworks transcription API
 - Both paths persist segments and queue diarization.
+
+Failures (FireworksTranscriptionError, MemoryError, network errors, etc.)
+propagate to the worker loop, which classifies and decides retry vs
+terminal (#641 / #653).
 """
 import gc
 import logging
 import time
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
 from app.services.notification_settings import get_runtime_inference_settings
-from app.tasks.helpers import mark_failed as _mark_failed, update_episode
+from app.tasks.helpers import update_episode
 from app.tasks.transcribe_helpers import (
     compute_fireworks_cost,
     estimate_fireworks_usage,
@@ -72,107 +75,65 @@ def transcribe_episode(episode_id: str) -> str:
         provider = runtime.get("inference_provider") or "local"
         update_episode(db, episode_id, inference_provider_used=provider)
         if provider == "fireworks":
-            try:
-                fireworks_audio = _load_fireworks_service()
-            except Exception as exc:
-                _mark_failed(db, episode_id, "SYSTEM_ERROR", f"Fireworks service import failed: {exc}")
-                logger.exception('"action": "transcribe_failed", "episode_id": "%s"', episode_id)
-                return episode_id
+            fireworks_audio = _load_fireworks_service()
 
-            try:
-                api_key = runtime.get("fireworks_api_key")
-                if not api_key:
-                    raise RuntimeError(
-                        "Fireworks inference provider selected but FIREWORKS_API_KEY is missing"
-                    )
-                audio_file_size_bytes = audio_path.stat().st_size if audio_path.exists() else None
-                update_episode(db, episode_id, audio_file_size_bytes=audio_file_size_bytes)
-                t0 = time.monotonic()
-                segments_data, language, fireworks_result = fireworks_audio.transcribe(
-                    str(audio_path),
-                    api_key=api_key,
-                    audio_base_url=runtime.get("fireworks_audio_base_url")
-                    or settings.fireworks_audio_base_url,
-                    model_name=runtime.get("fireworks_stt_model") or settings.fireworks_stt_model,
-                    diarize=bool(runtime.get("fireworks_stt_diarize", True)),
+            api_key = runtime.get("fireworks_api_key")
+            if not api_key:
+                raise RuntimeError(
+                    "Fireworks inference provider selected but FIREWORKS_API_KEY is missing"
                 )
-                transcribe_secs = round(time.monotonic() - t0, 1)
-                audio_secs = estimate_fireworks_usage(segments_data, episode.duration_secs)
-                runtime_rate = runtime.get("fireworks_stt_cost_per_minute_usd")
-                configured_rate = (
-                    runtime_rate
-                    if runtime_rate is not None
-                    else settings.fireworks_stt_cost_per_minute_usd
-                )
-                stt_rate = float(configured_rate if configured_rate is not None else 0.0)
-                audio_minutes, stt_cost_usd = compute_fireworks_cost(audio_secs, stt_rate)
+            audio_file_size_bytes = audio_path.stat().st_size if audio_path.exists() else None
+            update_episode(db, episode_id, audio_file_size_bytes=audio_file_size_bytes)
+            t0 = time.monotonic()
+            # FireworksTranscriptionError carries retryable + error_class metadata;
+            # the worker's _classify_for_retry reads those, so we just let it propagate.
+            segments_data, language, fireworks_result = fireworks_audio.transcribe(
+                str(audio_path),
+                api_key=api_key,
+                audio_base_url=runtime.get("fireworks_audio_base_url")
+                or settings.fireworks_audio_base_url,
+                model_name=runtime.get("fireworks_stt_model") or settings.fireworks_stt_model,
+                diarize=bool(runtime.get("fireworks_stt_diarize", True)),
+            )
+            transcribe_secs = round(time.monotonic() - t0, 1)
+            audio_secs = estimate_fireworks_usage(segments_data, episode.duration_secs)
+            runtime_rate = runtime.get("fireworks_stt_cost_per_minute_usd")
+            configured_rate = (
+                runtime_rate
+                if runtime_rate is not None
+                else settings.fireworks_stt_cost_per_minute_usd
+            )
+            stt_rate = float(configured_rate if configured_rate is not None else 0.0)
+            audio_minutes, stt_cost_usd = compute_fireworks_cost(audio_secs, stt_rate)
 
-                update_episode(
-                    db,
-                    episode_id,
-                    transcribe_duration_secs=transcribe_secs,
-                    fireworks_audio_secs=round(audio_secs, 1),
-                    fireworks_audio_minutes=audio_minutes,
-                    fireworks_stt_cost_per_minute_usd=stt_rate,
-                    fireworks_stt_cost_usd=stt_cost_usd,
-                )
-                logger.info(
-                    '"action": "fireworks_transcribe_observability", "episode_id": "%s", '
-                    '"audio_secs": %.1f, "audio_minutes": %.3f, "stt_rate_usd_per_min": %.6f, '
-                    '"stt_cost_usd": %.4f',
-                    episode_id,
-                    audio_secs,
-                    audio_minutes,
-                    stt_rate,
-                    stt_cost_usd,
-                )
-            except fireworks_audio.FireworksTranscriptionError as exc:
-                retry_count = int(getattr(episode, "retry_count", 0) or 0)
-                retry_max = int(getattr(episode, "retry_max", settings.retry_max) or settings.retry_max)
-                if exc.retryable:
-                    _handle_transient_failure(
-                        db,
-                        episode_id,
-                        retry_max=retry_max,
-                        retry_count=retry_count,
-                        error_class=exc.error_class,
-                        error_msg=str(exc),
-                    )
-                else:
-                    msg = str(exc)
-                    if exc.error_class == "FIREWORKS_UPLOAD_REJECTED" and episode.duration_secs:
-                        h, rem = divmod(int(episode.duration_secs), 3600)
-                        m, _ = divmod(rem, 60)
-                        dur = f"{h}h {m:02d}m" if h else f"{m}m"
-                        msg = msg.replace(
-                            "Re-run this episode on local inference.",
-                            f"Episode is {dur} long. Re-run this episode on local inference.",
-                            1,
-                        )
-                    _mark_failed(db, episode_id, exc.error_class, msg)
-                logger.warning(
-                    '"action": "fireworks_transcribe_error", "episode_id": "%s", '
-                    '"error_class": "%s", "retryable": %s, "error": "%s"',
-                    episode_id,
-                    exc.error_class,
-                    str(exc.retryable).lower(),
-                    str(exc),
-                )
-                return episode_id
-            except Exception as exc:
-                _mark_failed(db, episode_id, "SYSTEM_ERROR", str(exc))
-                logger.exception('"action": "transcribe_failed", "episode_id": "%s"', episode_id)
-                return episode_id
+            update_episode(
+                db,
+                episode_id,
+                transcribe_duration_secs=transcribe_secs,
+                fireworks_audio_secs=round(audio_secs, 1),
+                fireworks_audio_minutes=audio_minutes,
+                fireworks_stt_cost_per_minute_usd=stt_rate,
+                fireworks_stt_cost_usd=stt_cost_usd,
+            )
+            logger.info(
+                '"action": "fireworks_transcribe_observability", "episode_id": "%s", '
+                '"audio_secs": %.1f, "audio_minutes": %.3f, "stt_rate_usd_per_min": %.6f, '
+                '"stt_cost_usd": %.4f',
+                episode_id,
+                audio_secs,
+                audio_minutes,
+                stt_rate,
+                stt_cost_usd,
+            )
         else:
-            # Step 1: convert to 16kHz mono WAV
+            # Step 1: convert to 16kHz mono WAV. ffmpeg failures propagate
+            # to the worker as SYSTEM_ERROR (#653).
             wav_path = audio_path.with_suffix(".wav")
-            try:
-                _convert_to_wav(audio_path, wav_path)
-            except Exception as exc:
-                _mark_failed(db, episode_id, "SYSTEM_ERROR", f"ffmpeg conversion failed: {exc}")
-                return episode_id
+            _convert_to_wav(audio_path, wav_path)
 
-            # Step 2: transcribe (local WhisperX)
+            # Step 2: transcribe (local WhisperX). MemoryError → OOM
+            # is classified by the worker. Whisper is ALWAYS unloaded
+            # afterwards via the finally clause (PRD-01 S5.4).
             try:
                 from app.services.whisper import transcribe
 
@@ -190,13 +151,6 @@ def transcribe_episode(episode_id: str) -> str:
                     fireworks_stt_cost_per_minute_usd=None,
                     fireworks_stt_cost_usd=None,
                 )
-            except MemoryError as exc:
-                _mark_failed(db, episode_id, "OOM", str(exc))
-                return episode_id
-            except Exception as exc:
-                _mark_failed(db, episode_id, "SYSTEM_ERROR", str(exc))
-                logger.exception('"action": "transcribe_failed", "episode_id": "%s"', episode_id)
-                return episode_id
             finally:
                 # MANDATORY: unload Whisper before pyannote can be loaded (PRD-01 S5.4)
                 _unload_whisper()
@@ -252,43 +206,6 @@ def transcribe_episode(episode_id: str) -> str:
             # If we failed before enqueueing diarize, remove intermediate artifacts.
             remove_artifacts(alignment_path, fireworks_path)
         db.close()
-
-
-def _handle_transient_failure(
-    db, episode_id: str, *, retry_max: int, retry_count: int, error_class: str, error_msg: str
-) -> None:
-    """Schedule transcribe retry with exponential backoff, else mark terminal failure."""
-    new_count = retry_count + 1
-    if new_count <= retry_max:
-        backoff = settings.retry_backoff_base * (2 ** (new_count - 1))
-        update_episode(
-            db,
-            episode_id,
-            status="pending",
-            retry_count=new_count,
-            error_class=error_class,
-            error_message=f"Retrying ({new_count}/{retry_max}) -- {error_msg}. Next in {backoff}s",
-        )
-        retry_at = datetime.now(timezone.utc) + timedelta(seconds=backoff)
-        job_queue.enqueue(db, episode_id, "transcribe", retry_at=retry_at)
-        logger.warning(
-            '"action": "transcribe_retry_scheduled", "episode_id": "%s", "attempt": %d, '
-            '"retry_max": %d, "backoff_secs": %d, "error_class": "%s"',
-            episode_id,
-            new_count,
-            retry_max,
-            backoff,
-            error_class,
-        )
-        return
-
-    update_episode(db, episode_id, retry_count=new_count)
-    _mark_failed(
-        db,
-        episode_id,
-        error_class,
-        f"Failed after {retry_max} retries: {error_msg}",
-    )
 
 
 def _convert_to_wav(src: Path, dest: Path) -> None:

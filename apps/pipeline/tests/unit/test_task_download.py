@@ -17,20 +17,6 @@ def _make_episode(id_="ep1", audio_url="https://example.com/ep.mp3", retry_count
     return ep
 
 
-class TestClassifyHttpError:
-    def test_transient_codes(self):
-        from app.tasks.download import _classify_http_error
-
-        for code in (500, 502, 503, 504):
-            assert _classify_http_error(code) == "TRANSIENT_NETWORK"
-
-    def test_non_transient_codes(self):
-        from app.tasks.download import _classify_http_error
-
-        for code in (403, 404, 410, 301):
-            assert _classify_http_error(code) == "HTTP_ACCESS"
-
-
 class TestDownloadEpisode:
     @patch("app.tasks.download.job_queue")
     @patch("app.tasks.download._download_file")
@@ -101,13 +87,15 @@ class TestDownloadEpisode:
         mock_fail.assert_called_once()
         assert mock_fail.call_args[1]["error_class"] == "DISK_FULL" or mock_fail.call_args[0][2] == "DISK_FULL"
 
-    @patch("app.tasks.download.job_queue")
-    @patch("app.tasks.download._handle_transient_failure")
     @patch("app.tasks.download._download_file")
     @patch("app.tasks.download.shutil")
     @patch("app.tasks.download._update_episode")
     @patch("app.tasks.download.SessionLocal")
-    def test_timeout_triggers_retry(self, mock_session_cls, mock_update, mock_shutil, mock_dl, mock_handle, mock_jq):
+    def test_timeout_propagates_to_worker(
+        self, mock_session_cls, mock_update, mock_shutil, mock_dl
+    ):
+        """Issue #653: download.py no longer catches httpx.TimeoutException; the
+        worker's _classify_for_retry handles it as TRANSIENT_NETWORK."""
         import httpx
 
         ep = _make_episode()
@@ -120,11 +108,8 @@ class TestDownloadEpisode:
         with patch("app.tasks.download.Path"):
             from app.tasks.download import download_episode
 
-            result = download_episode("ep1")
-
-        assert result == "ep1"
-        mock_handle.assert_called_once()
-        assert mock_handle.call_args[0][4] == "TRANSIENT_NETWORK"
+            with pytest.raises(httpx.TimeoutException):
+                download_episode("ep1")
 
     @patch("app.tasks.download.mark_failed")
     @patch("app.tasks.download._download_file")
@@ -182,14 +167,14 @@ class TestDownloadEpisode:
         mock_dl.assert_called_once()
         mock_jq.enqueue.assert_called_once()
 
-    @patch("app.tasks.download._handle_transient_failure")
     @patch("app.tasks.download._download_file")
     @patch("app.tasks.download.shutil")
     @patch("app.tasks.download._update_episode")
     @patch("app.tasks.download.SessionLocal")
-    def test_http_status_error_classifies_and_retries(
-        self, mock_session_cls, mock_update, mock_shutil, mock_dl, mock_handle
+    def test_http_status_error_propagates(
+        self, mock_session_cls, mock_update, mock_shutil, mock_dl
     ):
+        """Issue #653: HTTP errors propagate; worker classifies + retries."""
         import httpx
 
         ep = _make_episode()
@@ -203,20 +188,19 @@ class TestDownloadEpisode:
 
         with patch("app.tasks.download.Path"):
             from app.tasks.download import download_episode
-            result = download_episode("ep1")
 
-        assert result == "ep1"
-        mock_handle.assert_called_once()
-        assert mock_handle.call_args[0][4] == "HTTP_ACCESS"
+            with pytest.raises(httpx.HTTPStatusError):
+                download_episode("ep1")
 
-    @patch("app.tasks.download.mark_failed")
     @patch("app.tasks.download._download_file")
     @patch("app.tasks.download.shutil")
     @patch("app.tasks.download._update_episode")
     @patch("app.tasks.download.SessionLocal")
-    def test_non_disk_oserror_marks_system_error(
-        self, mock_session_cls, mock_update, mock_shutil, mock_dl, mock_fail
+    def test_non_disk_oserror_propagates(
+        self, mock_session_cls, mock_update, mock_shutil, mock_dl
     ):
+        """Issue #653: only DISK_FULL gets a per-task terminal handler;
+        other OSErrors propagate so the worker can classify them."""
         ep = _make_episode()
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = ep
@@ -226,19 +210,18 @@ class TestDownloadEpisode:
 
         with patch("app.tasks.download.Path"):
             from app.tasks.download import download_episode
-            result = download_episode("ep1")
 
-        assert result == "ep1"
-        assert "SYSTEM_ERROR" in str(mock_fail.call_args)
+            with pytest.raises(OSError, match="permission denied"):
+                download_episode("ep1")
 
-    @patch("app.tasks.download.mark_failed")
     @patch("app.tasks.download._download_file")
     @patch("app.tasks.download.shutil")
     @patch("app.tasks.download._update_episode")
     @patch("app.tasks.download.SessionLocal")
-    def test_unexpected_exception_marks_system_error(
-        self, mock_session_cls, mock_update, mock_shutil, mock_dl, mock_fail
+    def test_unexpected_exception_propagates(
+        self, mock_session_cls, mock_update, mock_shutil, mock_dl
     ):
+        """Issue #653: arbitrary exceptions propagate to the worker."""
         ep = _make_episode()
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = ep
@@ -248,10 +231,9 @@ class TestDownloadEpisode:
 
         with patch("app.tasks.download.Path"):
             from app.tasks.download import download_episode
-            result = download_episode("ep1")
 
-        assert result == "ep1"
-        assert "SYSTEM_ERROR" in str(mock_fail.call_args)
+            with pytest.raises(ValueError, match="bad value"):
+                download_episode("ep1")
 
 
 def test_download_file_updates_progress_and_commits(tmp_path):
@@ -284,29 +266,5 @@ def test_download_file_updates_progress_and_commits(tmp_path):
     assert db.query.return_value.filter.return_value.update.call_count >= 1
 
 
-class TestHandleTransientFailure:
-    @patch("app.tasks.download.job_queue")
-    @patch("app.tasks.download._update_episode")
-    def test_retry_when_under_max(self, mock_update, mock_jq):
-        db = MagicMock()
-
-        with patch("app.tasks.download.settings") as mock_settings:
-            mock_settings.retry_backoff_base = 60
-
-            from app.tasks.download import _handle_transient_failure
-
-            _handle_transient_failure(db, "ep1", 3, 0, "TRANSIENT_NETWORK", "timeout")
-
-        mock_update.assert_called_once()
-        mock_jq.enqueue.assert_called_once()
-
-    @patch("app.tasks.download.mark_failed")
-    @patch("app.tasks.download._update_episode")
-    def test_fail_when_at_max(self, mock_update, mock_fail):
-        db = MagicMock()
-
-        from app.tasks.download import _handle_transient_failure
-
-        _handle_transient_failure(db, "ep1", 3, 3, "TRANSIENT_NETWORK", "timeout")
-
-        mock_fail.assert_called_once()
+# Issue #653: TestHandleTransientFailure removed. Retry logic moved to the
+# worker loop (_handle_task_exception) — see test_worker.py for coverage.
