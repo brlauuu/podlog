@@ -71,10 +71,10 @@ class TestTranscribeEpisode:
 
     @patch("app.tasks.transcribe._unload_whisper")
     @patch("app.tasks.transcribe._convert_to_wav")
-    @patch("app.tasks.transcribe._mark_failed")
     @patch("app.tasks.transcribe.update_episode")
     @patch("app.tasks.transcribe.SessionLocal")
-    def test_ffmpeg_failure_marks_system_error(self, mock_session_cls, mock_update, mock_fail, mock_convert, mock_unload):
+    def test_ffmpeg_failure_propagates(self, mock_session_cls, mock_update, mock_convert, mock_unload):
+        """Issue #653: ffmpeg failures propagate; worker classifies as SYSTEM_ERROR."""
         ep = _make_episode()
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = ep
@@ -83,18 +83,18 @@ class TestTranscribeEpisode:
 
         from app.tasks.transcribe import transcribe_episode
 
-        result = transcribe_episode("ep1")
-
-        assert result == "ep1"
-        mock_fail.assert_called_once()
-        assert "SYSTEM_ERROR" in str(mock_fail.call_args)
+        with pytest.raises(RuntimeError, match="ffmpeg crash"):
+            transcribe_episode("ep1")
 
     @patch("app.tasks.transcribe._unload_whisper")
     @patch("app.tasks.transcribe._convert_to_wav")
-    @patch("app.tasks.transcribe._mark_failed")
     @patch("app.tasks.transcribe.update_episode")
     @patch("app.tasks.transcribe.SessionLocal")
-    def test_oom_marks_oom_error(self, mock_session_cls, mock_update, mock_fail, mock_convert, mock_unload):
+    def test_oom_propagates_and_unloads_whisper(
+        self, mock_session_cls, mock_update, mock_convert, mock_unload
+    ):
+        """Issue #653: MemoryError propagates; worker classifies as OOM.
+        The Whisper unload still runs via the finally clause (PRD-01 §5.4)."""
         ep = _make_episode()
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = ep
@@ -108,11 +108,10 @@ class TestTranscribeEpisode:
 
             from app.tasks.transcribe import transcribe_episode
 
-            result = transcribe_episode("ep1")
+            with pytest.raises(MemoryError, match="out of memory"):
+                transcribe_episode("ep1")
 
-        assert result == "ep1"
-        mock_fail.assert_called_once()
-        assert "OOM" in str(mock_fail.call_args)
+        # Mandatory cleanup still runs even when an exception propagates.
         mock_unload.assert_called_once()
 
     @patch("app.tasks.transcribe.SessionLocal")
@@ -188,13 +187,15 @@ class TestTranscribeEpisode:
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "diarize")
 
     @patch("app.tasks.transcribe.job_queue")
-    @patch("app.tasks.transcribe._mark_failed")
     @patch("app.tasks.transcribe.update_episode")
     @patch("app.tasks.transcribe._convert_to_wav")
     @patch("app.tasks.transcribe.SessionLocal")
-    def test_fireworks_transient_error_schedules_retry(
-        self, mock_session_cls, mock_convert, mock_update, mock_fail, mock_jq
+    def test_fireworks_transcription_error_propagates(
+        self, mock_session_cls, mock_convert, mock_update, mock_jq
     ):
+        """Issue #653: FireworksTranscriptionError propagates to the worker, which
+        reads its ``retryable`` and ``error_class`` attributes via ``_classify_for_retry``.
+        Worker behavior for retryable + terminal cases is covered by test_worker.py."""
         ep = _make_episode()
         ep.retry_count = 0
         ep.retry_max = 3
@@ -202,16 +203,14 @@ class TestTranscribeEpisode:
         db.query.return_value.filter.return_value.first.return_value = ep
         mock_session_cls.return_value = db
 
+        err = FireworksTranscriptionError(
+            "Fireworks API HTTP 503",
+            error_class="TRANSIENT_NETWORK",
+            retryable=True,
+            status_code=503,
+        )
         with (
-            patch(
-                "app.services.fireworks_audio.transcribe",
-                side_effect=FireworksTranscriptionError(
-                    "Fireworks API HTTP 429",
-                    error_class="TRANSIENT_NETWORK",
-                    retryable=True,
-                    status_code=429,
-                ),
-            ),
+            patch("app.services.fireworks_audio.transcribe", side_effect=err),
             patch(
                 "app.tasks.transcribe.get_runtime_inference_settings",
                 return_value={
@@ -225,205 +224,30 @@ class TestTranscribeEpisode:
             ),
             patch("app.tasks.transcribe.settings") as mock_settings,
         ):
-            mock_settings.retry_backoff_base = 30
-            mock_settings.retry_max = 3
             mock_settings.fireworks_stt_model = "whisper-v3-large"
             mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
             mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
 
             from app.tasks.transcribe import transcribe_episode
 
-            result = transcribe_episode("ep1")
+            with pytest.raises(FireworksTranscriptionError) as excinfo:
+                transcribe_episode("ep1")
 
-        assert result == "ep1"
-        mock_convert.assert_not_called()
-        mock_fail.assert_not_called()
-        # status="transcribing" then retry state update
-        assert mock_update.call_count >= 2
-        mock_jq.enqueue.assert_called_once()
-        _, enqueue_kwargs = mock_jq.enqueue.call_args
-        assert enqueue_kwargs["retry_at"] is not None
-
-    @patch("app.tasks.transcribe.job_queue")
-    @patch("app.tasks.transcribe._mark_failed")
-    @patch("app.tasks.transcribe.update_episode")
-    @patch("app.tasks.transcribe._convert_to_wav")
-    @patch("app.tasks.transcribe.SessionLocal")
-    def test_fireworks_transient_error_marks_failed_after_max_retries(
-        self, mock_session_cls, mock_convert, mock_update, mock_fail, mock_jq
-    ):
-        ep = _make_episode()
-        ep.retry_count = 3
-        ep.retry_max = 3
-        db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = ep
-        mock_session_cls.return_value = db
-
-        with (
-            patch(
-                "app.services.fireworks_audio.transcribe",
-                side_effect=FireworksTranscriptionError(
-                    "Fireworks API HTTP 503",
-                    error_class="TRANSIENT_NETWORK",
-                    retryable=True,
-                    status_code=503,
-                ),
-            ),
-            patch(
-                "app.tasks.transcribe.get_runtime_inference_settings",
-                return_value={
-                    "inference_provider": "fireworks",
-                    "fireworks_api_key": "fw_test",
-                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
-                    "fireworks_stt_model": "whisper-v3-large",
-                    "fireworks_stt_diarize": True,
-                    "fireworks_stt_cost_per_minute_usd": 0.006,
-                },
-            ),
-            patch("app.tasks.transcribe.settings") as mock_settings,
-        ):
-            mock_settings.retry_backoff_base = 30
-            mock_settings.retry_max = 3
-            mock_settings.fireworks_stt_model = "whisper-v3-large"
-            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
-            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
-
-            from app.tasks.transcribe import transcribe_episode
-
-            result = transcribe_episode("ep1")
-
-        assert result == "ep1"
-        mock_convert.assert_not_called()
+        # Metadata travels intact for the worker to consume.
+        assert excinfo.value.error_class == "TRANSIENT_NETWORK"
+        assert excinfo.value.retryable is True
+        # Diarize was never enqueued because transcribe didn't complete.
         mock_jq.enqueue.assert_not_called()
-        mock_fail.assert_called_once()
-        assert mock_fail.call_args[0][2] == "TRANSIENT_NETWORK"
 
     @patch("app.tasks.transcribe.job_queue")
-    @patch("app.tasks.transcribe._mark_failed")
     @patch("app.tasks.transcribe.update_episode")
     @patch("app.tasks.transcribe._convert_to_wav")
     @patch("app.tasks.transcribe.SessionLocal")
-    def test_fireworks_upload_rejected_retries_with_backoff(
-        self, mock_session_cls, mock_convert, mock_update, mock_fail, mock_jq
+    def test_fireworks_import_failure_propagates(
+        self, mock_session_cls, mock_convert, mock_update, mock_jq
     ):
-        """Issue #641: FIREWORKS_UPLOAD_REJECTED is now retryable (transient TLS abort).
-
-        The original immediate-fail behavior (issue #600) was based on a wrong
-        assumption that this signaled a hard size/duration cap. Bulk-reprocessing
-        showed it's transient with ~99% recovery on retry.
-        """
-        ep = _make_episode()
-        ep.retry_count = 0
-        ep.retry_max = 3
-        ep.duration_secs = 8388  # 2h 19m, the original incident
-        db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = ep
-        mock_session_cls.return_value = db
-
-        with (
-            patch(
-                "app.services.fireworks_audio.transcribe",
-                side_effect=FireworksTranscriptionError(
-                    "Fireworks rejected the upload mid-stream (TLS abort) on a 192 MB file. "
-                    "Will retry up to retry_max attempts. Underlying error: BAD_RECORD_MAC",
-                    error_class="FIREWORKS_UPLOAD_REJECTED",
-                    retryable=True,
-                ),
-            ),
-            patch(
-                "app.tasks.transcribe.get_runtime_inference_settings",
-                return_value={
-                    "inference_provider": "fireworks",
-                    "fireworks_api_key": "fw_test",
-                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
-                    "fireworks_stt_model": "whisper-v3-large",
-                    "fireworks_stt_diarize": True,
-                    "fireworks_stt_cost_per_minute_usd": 0.006,
-                },
-            ),
-            patch("app.tasks.transcribe.settings") as mock_settings,
-        ):
-            mock_settings.retry_backoff_base = 30
-            mock_settings.retry_max = 3
-            mock_settings.fireworks_stt_model = "whisper-v3-large"
-            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
-            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
-
-            from app.tasks.transcribe import transcribe_episode
-
-            result = transcribe_episode("ep1")
-
-        assert result == "ep1"
-        mock_convert.assert_not_called()
-        # Issue #641: retry is now enqueued with backoff, not failed immediately.
-        mock_fail.assert_not_called()
-        mock_jq.enqueue.assert_called_once()
-        _, enqueue_kwargs = mock_jq.enqueue.call_args
-        assert enqueue_kwargs["retry_at"] is not None
-
-    @patch("app.tasks.transcribe.job_queue")
-    @patch("app.tasks.transcribe._mark_failed")
-    @patch("app.tasks.transcribe.update_episode")
-    @patch("app.tasks.transcribe._convert_to_wav")
-    @patch("app.tasks.transcribe.SessionLocal")
-    def test_fireworks_upload_rejected_marks_failed_after_max_retries(
-        self, mock_session_cls, mock_convert, mock_update, mock_fail, mock_jq
-    ):
-        """Once retry_max is exhausted, FIREWORKS_UPLOAD_REJECTED becomes terminal."""
-        ep = _make_episode()
-        ep.retry_count = 3
-        ep.retry_max = 3
-        ep.duration_secs = 8388
-        db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = ep
-        mock_session_cls.return_value = db
-
-        with (
-            patch(
-                "app.services.fireworks_audio.transcribe",
-                side_effect=FireworksTranscriptionError(
-                    "Fireworks rejected the upload mid-stream (TLS abort) on a 192 MB file. "
-                    "Will retry up to retry_max attempts. Underlying error: BAD_RECORD_MAC",
-                    error_class="FIREWORKS_UPLOAD_REJECTED",
-                    retryable=True,
-                ),
-            ),
-            patch(
-                "app.tasks.transcribe.get_runtime_inference_settings",
-                return_value={
-                    "inference_provider": "fireworks",
-                    "fireworks_api_key": "fw_test",
-                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
-                    "fireworks_stt_model": "whisper-v3-large",
-                    "fireworks_stt_diarize": True,
-                    "fireworks_stt_cost_per_minute_usd": 0.006,
-                },
-            ),
-            patch("app.tasks.transcribe.settings") as mock_settings,
-        ):
-            mock_settings.retry_backoff_base = 30
-            mock_settings.retry_max = 3
-            mock_settings.fireworks_stt_model = "whisper-v3-large"
-            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
-            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
-
-            from app.tasks.transcribe import transcribe_episode
-
-            result = transcribe_episode("ep1")
-
-        assert result == "ep1"
-        mock_jq.enqueue.assert_not_called()
-        mock_fail.assert_called_once()
-        assert mock_fail.call_args[0][2] == "FIREWORKS_UPLOAD_REJECTED"
-
-    @patch("app.tasks.transcribe.job_queue")
-    @patch("app.tasks.transcribe._mark_failed")
-    @patch("app.tasks.transcribe.update_episode")
-    @patch("app.tasks.transcribe._convert_to_wav")
-    @patch("app.tasks.transcribe.SessionLocal")
-    def test_fireworks_import_failure_marks_system_error(
-        self, mock_session_cls, mock_convert, mock_update, mock_fail, mock_jq
-    ):
+        """Issue #653: ImportError on the lazy Fireworks load propagates;
+        worker classifies as terminal SYSTEM_ERROR."""
         ep = _make_episode()
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = ep
@@ -444,21 +268,15 @@ class TestTranscribeEpisode:
             patch("app.tasks.transcribe._load_fireworks_service", side_effect=ImportError("boom")),
             patch("app.tasks.transcribe.settings") as mock_settings,
         ):
-            mock_settings.retry_backoff_base = 30
-            mock_settings.retry_max = 3
             mock_settings.fireworks_stt_model = "whisper-v3-large"
-            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
-            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
 
             from app.tasks.transcribe import transcribe_episode
 
-            result = transcribe_episode("ep1")
+            with pytest.raises(ImportError, match="boom"):
+                transcribe_episode("ep1")
 
-        assert result == "ep1"
         mock_convert.assert_not_called()
         mock_jq.enqueue.assert_not_called()
-        mock_fail.assert_called_once()
-        assert mock_fail.call_args[0][2] == "SYSTEM_ERROR"
 
     @patch("app.tasks.transcribe.job_queue")
     @patch("app.tasks.transcribe.update_episode")

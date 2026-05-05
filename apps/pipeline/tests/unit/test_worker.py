@@ -338,6 +338,75 @@ class TestIsTransient:
         assert _is_transient(AssertionError("invariant broken")) is False
 
 
+class TestClassifyForRetry:
+    """Issue #653: richer classification including typed metadata, MemoryError,
+    and HTTPStatusError."""
+
+    def test_typed_exception_with_retryable_metadata_wins(self):
+        """An exception carrying ``retryable`` and ``error_class`` attrs (e.g.
+        FireworksTranscriptionError) overrides everything else."""
+        from app.worker import _classify_for_retry
+
+        class TypedError(RuntimeError):
+            def __init__(self, msg, retryable, error_class):
+                super().__init__(msg)
+                self.retryable = retryable
+                self.error_class = error_class
+
+        retryable, ec = _classify_for_retry(
+            TypedError("bad upload", retryable=True, error_class="FIREWORKS_UPLOAD_REJECTED")
+        )
+        assert (retryable, ec) == (True, "FIREWORKS_UPLOAD_REJECTED")
+
+        retryable, ec = _classify_for_retry(
+            TypedError("permanent denial", retryable=False, error_class="HTTP_ACCESS")
+        )
+        assert (retryable, ec) == (False, "HTTP_ACCESS")
+
+    def test_memory_error_is_terminal_oom(self):
+        """transcribe.py used to mark this OOM internally; worker takes over."""
+        from app.worker import _classify_for_retry
+
+        assert _classify_for_retry(MemoryError("out of memory")) == (False, "OOM")
+
+    def test_httpx_5xx_is_transient_network(self):
+        """download.py used to retry 5xx as TRANSIENT_NETWORK; preserve that."""
+        import httpx
+        from app.worker import _classify_for_retry
+
+        for status in (500, 502, 503, 504):
+            req = httpx.Request("GET", "https://example.com/x")
+            resp = httpx.Response(status, request=req)
+            err = httpx.HTTPStatusError(f"HTTP {status}", request=req, response=resp)
+            assert _classify_for_retry(err) == (True, "TRANSIENT_NETWORK"), f"status={status}"
+
+    def test_httpx_429_is_transient_network(self):
+        """Rate-limit responses retry as TRANSIENT_NETWORK."""
+        import httpx
+        from app.worker import _classify_for_retry
+
+        req = httpx.Request("GET", "https://example.com/x")
+        resp = httpx.Response(429, request=req)
+        err = httpx.HTTPStatusError("HTTP 429", request=req, response=resp)
+        assert _classify_for_retry(err) == (True, "TRANSIENT_NETWORK")
+
+    def test_httpx_4xx_is_retryable_http_access(self):
+        """Preserve download.py's pre-#653 behavior of retrying 4xx as HTTP_ACCESS."""
+        import httpx
+        from app.worker import _classify_for_retry
+
+        for status in (400, 403, 404, 410):
+            req = httpx.Request("GET", "https://example.com/x")
+            resp = httpx.Response(status, request=req)
+            err = httpx.HTTPStatusError(f"HTTP {status}", request=req, response=resp)
+            assert _classify_for_retry(err) == (True, "HTTP_ACCESS"), f"status={status}"
+
+    def test_value_error_is_terminal_system_error(self):
+        from app.worker import _classify_for_retry
+
+        assert _classify_for_retry(ValueError("nope")) == (False, "SYSTEM_ERROR")
+
+
 class TestHandleTaskException:
     def _setup(self, *, retry_count=0, retry_max=3, status="embedding", episode_id="ep-1"):
         episode = MagicMock()

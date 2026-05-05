@@ -43,8 +43,7 @@ def _handle_signal(signum, frame):
 # Issue #641: exception types raised by transient infrastructure failures
 # (network blips, DNS hiccups, momentary connection resets). When a task
 # raises one of these, the episode is re-enqueued with exponential
-# backoff up to ``retry_max`` attempts. Anything else is treated as
-# terminal SYSTEM_ERROR.
+# backoff up to ``retry_max`` attempts.
 _TRANSIENT_EXC_TYPES: tuple[type[BaseException], ...] = (
     httpx.NetworkError,
     httpx.TimeoutException,
@@ -66,13 +65,56 @@ _TRANSIENT_TEXT_NEEDLES = (
     "EOF occurred in violation of protocol",
 )
 
+# Issue #653: HTTP status codes that download.py historically retried as
+# TRANSIENT_NETWORK. Other HTTP errors (4xx) are also retried — but as
+# HTTP_ACCESS — preserving download.py's pre-#653 behavior verbatim.
+_TRANSIENT_HTTP_STATUS = {429, 500, 502, 503, 504}
+
+
+def _classify_for_retry(exc: BaseException) -> tuple[bool, str]:
+    """Classify an exception as ``(retryable, error_class)``.
+
+    Order matters:
+
+    1. Typed errors carrying ``retryable: bool`` and ``error_class: str``
+       attributes (e.g. ``FireworksTranscriptionError``) win — those
+       classes know more about their own failure modes than we do here.
+    2. ``MemoryError`` is terminal ``OOM``. This used to live in the
+       per-task handlers in transcribe.py.
+    3. ``httpx.HTTPStatusError`` is retryable for all status codes —
+       4xx maps to ``HTTP_ACCESS``, 5xx/429 to ``TRANSIENT_NETWORK``.
+       This preserves download.py's historical behavior (#653).
+    4. Known transient exception types or message-substring matches
+       map to retryable ``TRANSIENT_NETWORK``.
+    5. Anything else is terminal ``SYSTEM_ERROR``.
+    """
+    retryable = getattr(exc, "retryable", None)
+    error_class = getattr(exc, "error_class", None)
+    if isinstance(retryable, bool):
+        if isinstance(error_class, str):
+            return (retryable, error_class)
+        return (retryable, "TRANSIENT_NETWORK" if retryable else "SYSTEM_ERROR")
+
+    if isinstance(exc, MemoryError):
+        return (False, "OOM")
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        cls = "TRANSIENT_NETWORK" if status in _TRANSIENT_HTTP_STATUS else "HTTP_ACCESS"
+        return (True, cls)
+
+    if isinstance(exc, _TRANSIENT_EXC_TYPES):
+        return (True, "TRANSIENT_NETWORK")
+
+    if any(needle in str(exc) for needle in _TRANSIENT_TEXT_NEEDLES):
+        return (True, "TRANSIENT_NETWORK")
+
+    return (False, "SYSTEM_ERROR")
+
 
 def _is_transient(exc: BaseException) -> bool:
-    """Classify an exception as a transient infrastructure failure."""
-    if isinstance(exc, _TRANSIENT_EXC_TYPES):
-        return True
-    msg = str(exc)
-    return any(needle in msg for needle in _TRANSIENT_TEXT_NEEDLES)
+    """Backwards-compatible predicate. Prefer ``_classify_for_retry`` for new code."""
+    return _classify_for_retry(exc)[0]
 
 
 def _handle_task_exception(db, job, exc: Exception) -> None:
@@ -88,7 +130,7 @@ def _handle_task_exception(db, job, exc: Exception) -> None:
     historical record of this attempt. The retry (if any) is a separate
     new row.
     """
-    transient = _is_transient(exc)
+    transient, error_class = _classify_for_retry(exc)
     episode = db.query(Episode).filter(Episode.id == job.episode_id).first()
 
     # Episode already terminal (e.g. download.py called mark_failed on
@@ -108,7 +150,7 @@ def _handle_task_exception(db, job, exc: Exception) -> None:
             str(episode.id),
             status="pending",
             retry_count=new_count,
-            error_class="TRANSIENT_NETWORK",
+            error_class=error_class,
             error_message=(
                 f"Transient error in {job.task} (attempt {new_count}/{retry_max}): "
                 f"{exc}. Next retry in {backoff_secs}s."
@@ -119,14 +161,15 @@ def _handle_task_exception(db, job, exc: Exception) -> None:
         job_queue.fail(db, job, str(exc))
         logger.warning(
             '"action": "task_transient_retry", "episode_id": "%s", "task": "%s", '
-            '"attempt": %d, "retry_max": %d, "backoff_secs": %d, "error": "%s"',
-            str(episode.id), job.task, new_count, retry_max, backoff_secs, exc,
+            '"attempt": %d, "retry_max": %d, "backoff_secs": %d, '
+            '"error_class": "%s", "error": "%s"',
+            str(episode.id), job.task, new_count, retry_max, backoff_secs,
+            error_class, exc,
         )
         return
 
     # Terminal: budget exhausted or non-transient. Mark episode failed
     # (emits notification) and record the job failure.
-    error_class = "TRANSIENT_NETWORK" if transient else "SYSTEM_ERROR"
     suffix = (
         f"Failed after {retry_max} retries: {exc}"
         if transient and retry_count >= retry_max

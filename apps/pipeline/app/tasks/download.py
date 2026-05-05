@@ -3,12 +3,15 @@ Episode download task -- PRD-01 S5.2
 
 Handles:
 - GAP-06: disk space pre-check before starting download
-- Auto-retry on transient failures (TRANSIENT_NETWORK, HTTP_ACCESS) up to retry_max
-- Immediate failure for non-transient errors (DISK_FULL, OOM, SYSTEM_ERROR)
+- Disk-full mid-download: immediate ``DISK_FULL`` terminal failure
+- Manual-upload audio missing: ``MANUAL_UPLOAD_FILE_MISSING`` terminal (#650)
+
+Other failures (network, HTTP errors, OS errors) propagate to the worker
+loop, which classifies them and decides retry vs terminal (#641 / #653).
 """
 import logging
 import shutil
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -20,16 +23,14 @@ from app import job_queue
 
 logger = logging.getLogger(__name__)
 
-# HTTP status codes that are considered transient (worth retrying)
-TRANSIENT_HTTP_CODES = {500, 502, 503, 504}
-
-
-def _classify_http_error(status_code: int) -> str:
-    return "TRANSIENT_NETWORK" if status_code in TRANSIENT_HTTP_CODES else "HTTP_ACCESS"
-
 
 def download_episode(episode_id: str) -> str:
-    """Download audio for an episode. Returns the local file path on success."""
+    """Download audio for an episode. Returns the local file path on success.
+
+    Terminal-failure cases are handled here (DISK_FULL, MANUAL_UPLOAD_FILE_MISSING)
+    so we can supply specific error classes and messages. Anything else is
+    raised — the worker classifies and retries.
+    """
     db = SessionLocal()
     try:
         episode = db.query(Episode).filter(Episode.id == episode_id).first()
@@ -91,27 +92,11 @@ def download_episode(episode_id: str) -> str:
         suffix = Path(url_path).suffix or ".mp3"
         dest = raw_dir / f"{episode_id}{suffix}"
 
-        retry_count = episode.retry_count
-
         try:
             _download_file(episode.audio_url, dest, episode_id, db)
-        except httpx.TimeoutException as exc:
-            _handle_transient_failure(
-                db, episode_id, episode.retry_max, retry_count, "TRANSIENT_NETWORK", str(exc)
-            )
-            return episode_id
-        except httpx.HTTPStatusError as exc:
-            error_class = _classify_http_error(exc.response.status_code)
-            _handle_transient_failure(
-                db,
-                episode_id,
-                episode.retry_max,
-                retry_count,
-                error_class,
-                f"HTTP {exc.response.status_code}",
-            )
-            return episode_id
         except OSError as exc:
+            # Disk-full mid-download is terminal (no point retrying without
+            # operator intervention). Re-raise everything else to the worker.
             if "No space left on device" in str(exc) or getattr(exc, "errno", None) == 28:
                 mark_failed(
                     db,
@@ -120,23 +105,7 @@ def download_episode(episode_id: str) -> str:
                     error_message="Disk full during download. Free space and retry.",
                 )
                 return episode_id
-
-            mark_failed(
-                db,
-                episode_id,
-                error_class="SYSTEM_ERROR",
-                error_message=str(exc),
-            )
-            return episode_id
-        except Exception as exc:
-            mark_failed(
-                db,
-                episode_id,
-                error_class="SYSTEM_ERROR",
-                error_message=str(exc),
-            )
-            logger.exception('"action": "download_failed", "episode_id": "%s"', episode_id)
-            return episode_id
+            raise
 
         _update_episode(db, episode_id, audio_local_path=str(dest))
 
@@ -172,43 +141,4 @@ def _download_file(url: str, dest: Path, episode_id: str, db) -> None:
             '"action": "download_complete", "episode_id": "%s", "bytes": %d',
             episode_id,
             downloaded,
-        )
-
-
-def _handle_transient_failure(
-    db, episode_id: str, retry_max: int, retry_count: int, error_class: str, error_msg: str
-) -> None:
-    """
-    Increment retry count. If under retry_max, re-enqueue with exponential backoff.
-    If at max, mark permanently failed.
-    """
-    new_count = retry_count + 1
-
-    if new_count <= retry_max:
-        backoff = settings.retry_backoff_base * (2 ** (new_count - 1))
-        _update_episode(
-            db,
-            episode_id,
-            status="pending",
-            retry_count=new_count,
-            error_class=error_class,
-            error_message=f"Retrying ({new_count}/{retry_max}) -- {error_msg}. Next in {backoff}s",
-        )
-        logger.warning(
-            '"action": "transient_failure_retry", "episode_id": "%s", '
-            '"attempt": %d, "backoff_secs": %d, "error": "%s"',
-            episode_id,
-            new_count,
-            backoff,
-            error_msg,
-        )
-        retry_at = datetime.now(timezone.utc) + timedelta(seconds=backoff)
-        job_queue.enqueue(db, episode_id, "download", retry_at=retry_at)
-    else:
-        _update_episode(db, episode_id, retry_count=new_count)
-        mark_failed(
-            db,
-            episode_id,
-            error_class=error_class,
-            error_message=f"Failed after {retry_max} retries: {error_msg}",
         )
