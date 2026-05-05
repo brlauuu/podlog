@@ -363,6 +363,24 @@ class TestClassifyForRetry:
         )
         assert (retryable, ec) == (False, "HTTP_ACCESS")
 
+    def test_typed_exception_without_error_class_falls_back_to_generic(self):
+        """Defensive: a typed error that sets ``retryable`` but forgot
+        ``error_class`` still classifies sensibly."""
+        from app.worker import _classify_for_retry
+
+        class HalfTyped(RuntimeError):
+            def __init__(self, msg, retryable):
+                super().__init__(msg)
+                self.retryable = retryable
+                # no error_class
+
+        assert _classify_for_retry(HalfTyped("blip", retryable=True)) == (
+            True, "TRANSIENT_NETWORK"
+        )
+        assert _classify_for_retry(HalfTyped("dead", retryable=False)) == (
+            False, "SYSTEM_ERROR"
+        )
+
     def test_memory_error_is_terminal_oom(self):
         """transcribe.py used to mark this OOM internally; worker takes over."""
         from app.worker import _classify_for_retry

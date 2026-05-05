@@ -113,7 +113,12 @@ def _classify_for_retry(exc: BaseException) -> tuple[bool, str]:
 
 
 def _is_transient(exc: BaseException) -> bool:
-    """Backwards-compatible predicate. Prefer ``_classify_for_retry`` for new code."""
+    """Backwards-compatible predicate.
+
+    Retained only for ``TestIsTransient`` in ``test_worker.py``; production
+    code paths all call ``_classify_for_retry`` directly. If the test cases
+    move over, this can go.
+    """
     return _classify_for_retry(exc)[0]
 
 
