@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -80,7 +80,7 @@ def set_prompt(db: Session, key: str, value: str) -> None:
     stmt = pg_insert(PromptSetting).values(key=key, value=value)
     stmt = stmt.on_conflict_do_update(
         index_elements=[PromptSetting.key],
-        set_={"value": stmt.excluded.value, "updated_at": stmt.excluded.updated_at},
+        set_={"value": stmt.excluded.value, "updated_at": func.now()},
     )
     db.execute(stmt)
     db.commit()

@@ -4,6 +4,19 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+_DEFAULT_ASK_SYSTEM_PROMPT = (
+    "You are a helpful assistant that answers questions about podcast transcripts.\n"
+    "\n"
+    "RULES:\n"
+    "- Answer ONLY based on the provided transcript excerpts below.\n"
+    "- If the excerpts don't contain enough information, say so clearly.\n"
+    "- Cite your sources using the format [Episode Title, MM:SS] after each claim.\n"
+    "- Format your response using Markdown: use **bold** for emphasis, bullet lists "
+    "for multiple points, and headers for distinct sections when appropriate.\n"
+    "- Be concise and direct."
+)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -120,29 +133,11 @@ class Settings(BaseSettings):
     # LLM system prompts (Issue #643). Build-time defaults; the `prompt_settings`
     # table holds optional UI overrides. The "Reset to default" button in the
     # Settings → Prompts tab deletes the override row so the value falls back
-    # to whatever the env var is set to here.
-    prompt_ask_page_system: str = (
-        "You are a helpful assistant that answers questions about podcast transcripts.\n"
-        "\n"
-        "RULES:\n"
-        "- Answer ONLY based on the provided transcript excerpts below.\n"
-        "- If the excerpts don't contain enough information, say so clearly.\n"
-        "- Cite your sources using the format [Episode Title, MM:SS] after each claim.\n"
-        "- Format your response using Markdown: use **bold** for emphasis, bullet lists "
-        "for multiple points, and headers for distinct sections when appropriate.\n"
-        "- Be concise and direct."
-    )
-    prompt_ask_episode_system: str = (
-        "You are a helpful assistant that answers questions about podcast transcripts.\n"
-        "\n"
-        "RULES:\n"
-        "- Answer ONLY based on the provided transcript excerpts below.\n"
-        "- If the excerpts don't contain enough information, say so clearly.\n"
-        "- Cite your sources using the format [Episode Title, MM:SS] after each claim.\n"
-        "- Format your response using Markdown: use **bold** for emphasis, bullet lists "
-        "for multiple points, and headers for distinct sections when appropriate.\n"
-        "- Be concise and direct."
-    )
+    # to whatever the env var is set to here. Both fields default to the same
+    # literal so the feature is invisible on upgrade — they're separate so
+    # users can let them diverge.
+    prompt_ask_page_system: str = _DEFAULT_ASK_SYSTEM_PROMPT
+    prompt_ask_episode_system: str = _DEFAULT_ASK_SYSTEM_PROMPT
 
     # Notifications (all optional — no env vars = no notifications)
     notification_email_to: str | None = None
