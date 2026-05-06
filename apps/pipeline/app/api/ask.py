@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from app.database import SessionLocal
 from app.services.notification_settings import get_runtime_inference_settings
+from app.services.prompts import get_prompt
 from app.services.rag import (
     DEFAULT_MODEL,
     build_prompt,
@@ -96,8 +97,12 @@ async def _stream_ask(question: str, model: str | None, feed_ids: list[str] | No
         sources = chunks_to_sources(chunks)
         yield _sse_event("sources", sources)
 
-        # 3. Build prompt and stream response
-        messages = build_prompt(question, chunks)
+        # 3. Build prompt and stream response. Issue #643: per-episode Ask
+        # popup and the global /ask page get separate, user-editable system
+        # prompts (defaulting to the same text).
+        prompt_key = "ask_episode_system" if episode_id else "ask_page_system"
+        system_prompt = get_prompt(db, prompt_key)
+        messages = build_prompt(question, chunks, system_prompt=system_prompt)
 
         async for token in stream_response(messages, model=resolved_model, runtime=runtime):
             yield _sse_event("token", {"content": token})

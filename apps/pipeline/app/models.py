@@ -311,6 +311,23 @@ class NotificationLog(Base):
     )
 
 
+class PromptSetting(Base):
+    """LLM system prompt overrides keyed by feature (Issue #643).
+
+    Sparse: a row exists only when the user has overridden the build-time
+    default. Reset deletes the row so the value falls back to the env var
+    in ``app.config.Settings``.
+    """
+
+    __tablename__ = "prompt_settings"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class MetaAnalysisSnapshot(Base):
     """Single-row cache of the computed meta-analysis dashboard snapshot (Issue #521)."""
 

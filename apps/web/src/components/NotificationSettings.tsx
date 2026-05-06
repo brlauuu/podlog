@@ -7,6 +7,7 @@ import { SettingsSchema } from "@/lib/settings-schema";
 import NotificationSection from "./NotificationSection";
 import RemoteInferenceSection from "./RemoteInferenceSection";
 import BackupsSection from "./BackupsSection";
+import PromptsSection from "./PromptsSection";
 
 const INFERENCE_FIELDS = new Set<keyof Settings>([
   "inference_provider",
@@ -194,6 +195,7 @@ export default function NotificationSettings() {
         <TabsList className="mb-6">
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="inference">Remote Inference</TabsTrigger>
+          <TabsTrigger value="prompts">Prompts</TabsTrigger>
           <TabsTrigger value="backups">Backups</TabsTrigger>
         </TabsList>
 
@@ -226,6 +228,10 @@ export default function NotificationSettings() {
               {savingInference ? "Saving..." : "Save"}
             </button>
           </div>
+        </TabsContent>
+
+        <TabsContent value="prompts">
+          <PromptsSection />
         </TabsContent>
 
         <TabsContent value="backups">
