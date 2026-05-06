@@ -117,6 +117,33 @@ class Settings(BaseSettings):
     fireworks_embedding_base_url: str = "https://api.fireworks.ai/inference/v1"
     fireworks_embedding_model: str = "BAAI/bge-small-en-v1.5"
 
+    # LLM system prompts (Issue #643). Build-time defaults; the `prompt_settings`
+    # table holds optional UI overrides. The "Reset to default" button in the
+    # Settings → Prompts tab deletes the override row so the value falls back
+    # to whatever the env var is set to here.
+    prompt_ask_page_system: str = (
+        "You are a helpful assistant that answers questions about podcast transcripts.\n"
+        "\n"
+        "RULES:\n"
+        "- Answer ONLY based on the provided transcript excerpts below.\n"
+        "- If the excerpts don't contain enough information, say so clearly.\n"
+        "- Cite your sources using the format [Episode Title, MM:SS] after each claim.\n"
+        "- Format your response using Markdown: use **bold** for emphasis, bullet lists "
+        "for multiple points, and headers for distinct sections when appropriate.\n"
+        "- Be concise and direct."
+    )
+    prompt_ask_episode_system: str = (
+        "You are a helpful assistant that answers questions about podcast transcripts.\n"
+        "\n"
+        "RULES:\n"
+        "- Answer ONLY based on the provided transcript excerpts below.\n"
+        "- If the excerpts don't contain enough information, say so clearly.\n"
+        "- Cite your sources using the format [Episode Title, MM:SS] after each claim.\n"
+        "- Format your response using Markdown: use **bold** for emphasis, bullet lists "
+        "for multiple points, and headers for distinct sections when appropriate.\n"
+        "- Be concise and direct."
+    )
+
     # Notifications (all optional — no env vars = no notifications)
     notification_email_to: str | None = None
     notification_email_from: str = "podlog@localhost"

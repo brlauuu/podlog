@@ -152,8 +152,19 @@ def _format_timestamp(seconds: float) -> str:
     return f"{m}:{s:02d}"
 
 
-def build_prompt(question: str, chunks: list[ChunkResult]) -> list[dict]:
-    """Build chat messages for Ollama with retrieved context."""
+def build_prompt(
+    question: str,
+    chunks: list[ChunkResult],
+    system_prompt: str | None = None,
+) -> list[dict]:
+    """Build chat messages for Ollama with retrieved context.
+
+    ``system_prompt`` lets the caller inject the user-editable instructions
+    resolved from the ``prompt_settings`` table (Issue #643). When omitted,
+    the hardcoded ``SYSTEM_PROMPT`` constant is used — this keeps unit tests
+    that don't need a DB session simple, but production callers (``api/ask``)
+    always pass a resolved value.
+    """
     context_parts = []
     for i, c in enumerate(chunks, 1):
         ts = _format_timestamp(c.start_time)
@@ -170,7 +181,7 @@ def build_prompt(question: str, chunks: list[ChunkResult]) -> list[dict]:
 Question: {question}"""
 
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
         {"role": "user", "content": user_msg},
     ]
 

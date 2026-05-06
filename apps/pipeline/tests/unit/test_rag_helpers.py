@@ -47,6 +47,17 @@ class TestBuildPrompt:
         assert len(messages) == 2
         assert "Question: test?" in messages[1]["content"]
 
+    def test_custom_system_prompt_is_used(self):
+        """Issue #643: caller-supplied system prompt overrides the constant."""
+        chunks = [make_chunk()]
+        messages = build_prompt("q?", chunks, system_prompt="CUSTOM_INSTRUCTIONS")
+        assert messages[0]["content"] == "CUSTOM_INSTRUCTIONS"
+
+    def test_default_system_prompt_when_none(self):
+        chunks = [make_chunk()]
+        messages = build_prompt("q?", chunks, system_prompt=None)
+        assert "transcript" in messages[0]["content"].lower()
+
 
 class TestChunksToSources:
     def test_serializes_chunks(self):
