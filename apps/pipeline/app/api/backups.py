@@ -19,9 +19,12 @@ import os
 import re
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.database import get_db
+from app.services.backup_settings import get_backup_retention, save_backup_retention
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -111,30 +114,44 @@ def _read_last_run() -> str | None:
 
 
 @router.get("/backups")
-def get_backups() -> dict:
+def get_backups(db: Session = Depends(get_db)) -> dict:
     """List available backups grouped by tier.
 
-    Returns retention config alongside the inventory so the Settings UI
-    can show "X of N kept" without having to read env vars itself.
+    Returns retention config (with runtime overrides applied — #683) alongside
+    the inventory so the Settings UI can show "X of N kept" without having to
+    read env vars itself.
     """
     daily = _list_db_tier("daily")
     weekly = _list_db_tier("weekly")
     monthly = _list_db_tier("monthly")
     audio = _list_audio_snapshots()
-    enabled = (
-        settings.backup_retention_daily
-        + settings.backup_retention_weekly
-        + settings.backup_retention_monthly
-    ) > 0
+    retention = get_backup_retention(db)
+    enabled = (retention["daily"] + retention["weekly"] + retention["monthly"]) > 0
     return {
         "enabled": enabled,
         "mounted": _BACKUPS_ROOT.is_dir(),
-        "retention": {
-            "daily": settings.backup_retention_daily,
-            "weekly": settings.backup_retention_weekly,
-            "monthly": settings.backup_retention_monthly,
-        },
+        "retention": retention,
         "last_run": _read_last_run(),
         "db": {"daily": daily, "weekly": weekly, "monthly": monthly},
         "audio": audio,
     }
+
+
+@router.get("/backups/retention")
+def get_retention(db: Session = Depends(get_db)) -> dict:
+    """Effective retention values (DB override → env defaults). Used by Settings UI."""
+    return {"retention": get_backup_retention(db)}
+
+
+@router.put("/backups/retention")
+def put_retention(body: dict = Body(...), db: Session = Depends(get_db)) -> dict:
+    """Save retention override. Validates daily=0 + weekly/monthly>0 combos."""
+    try:
+        values = save_backup_retention(db, body)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    logger.info(
+        '"action": "backup_retention_saved", "daily": %d, "weekly": %d, "monthly": %d',
+        values["daily"], values["weekly"], values["monthly"],
+    )
+    return {"retention": values}
