@@ -19,15 +19,32 @@ set -euo pipefail
 : "${BACKUP_RETENTION_MONTHLY:=12}"
 : "${BACKUP_CHECK_INTERVAL_SECS:=3600}"
 
+# Retention values support (#682):
+#   0 — disable that tier (no file written, no promotion, pruning wipes any leftovers)
+#   1 — keep only the latest backup in that tier (rolling overwrite)
+#   N — keep up to N most recent
+#
+# Daily is the source the weekly/monthly tiers hardlink from. Refusing
+# DAILY=0 with WEEKLY>0 or MONTHLY>0 keeps the model simple — a separate
+# follow-up (#683) will introduce decoupled tiers via runtime UI.
+if [ "$BACKUP_RETENTION_DAILY" -eq 0 ] \
+  && { [ "$BACKUP_RETENTION_WEEKLY" -gt 0 ] || [ "$BACKUP_RETENTION_MONTHLY" -gt 0 ]; }; then
+  printf '%s | %s\n' "$(date -Iseconds)" \
+    "FATAL: BACKUP_RETENTION_DAILY=0 requires WEEKLY=0 and MONTHLY=0 (weekly/monthly hardlink from daily)" >&2
+  exit 1
+fi
+
 # When all retention values are 0 the user has effectively opted out.
 RETENTION_TOTAL=$((BACKUP_RETENTION_DAILY + BACKUP_RETENTION_WEEKLY + BACKUP_RETENTION_MONTHLY))
 
-BACKUPS_ROOT="/backups"
+# Path defaults match the production volume mounts in docker-compose.yml.
+# Overridable via env so tests can sandbox without touching the real paths.
+: "${BACKUPS_ROOT:=/backups}"
+: "${AUDIO_SOURCE:=/source/audio/archive}"
 DB_DAILY="$BACKUPS_ROOT/db/daily"
 DB_WEEKLY="$BACKUPS_ROOT/db/weekly"
 DB_MONTHLY="$BACKUPS_ROOT/db/monthly"
 AUDIO_ROOT="$BACKUPS_ROOT/audio"
-AUDIO_SOURCE="/source/audio/archive"
 LAST_RUN_FILE="$BACKUPS_ROOT/.last_run"
 
 mkdir -p "$DB_DAILY" "$DB_WEEKLY" "$DB_MONTHLY" "$AUDIO_ROOT"
@@ -50,8 +67,9 @@ dump_db() {
     --file="$target.partial"
   mv "$target.partial" "$target"
 
-  # Promote to weekly on Sundays (cron-style: %u = 7).
-  if [ "$(date -d "$date_str" +%u)" = "7" ]; then
+  # Promote to weekly on Sundays (cron-style: %u = 7), unless that tier
+  # is disabled (#682).
+  if [ "$BACKUP_RETENTION_WEEKLY" -gt 0 ] && [ "$(date -d "$date_str" +%u)" = "7" ]; then
     # rm first so a same-day re-run keeps the hardlink rather than falling
     # through to the non-link cp on EEXIST.
     rm -f "$DB_WEEKLY/podlog-$date_str.dump"
@@ -60,8 +78,8 @@ dump_db() {
     log "db weekly link → $DB_WEEKLY/podlog-$date_str.dump"
   fi
 
-  # Promote to monthly on the 1st.
-  if [ "$(date -d "$date_str" +%d)" = "01" ]; then
+  # Promote to monthly on the 1st, unless that tier is disabled (#682).
+  if [ "$BACKUP_RETENTION_MONTHLY" -gt 0 ] && [ "$(date -d "$date_str" +%d)" = "01" ]; then
     rm -f "$DB_MONTHLY/podlog-$date_str.dump"
     cp -al "$target" "$DB_MONTHLY/podlog-$date_str.dump" 2>/dev/null \
       || cp "$target" "$DB_MONTHLY/podlog-$date_str.dump"
@@ -189,4 +207,8 @@ main() {
   done
 }
 
-main "$@"
+# Run main only when invoked directly. Allows tests to source this file
+# and call individual functions (run_once, dump_db, prune_db_dir).
+if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
+  main "$@"
+fi
