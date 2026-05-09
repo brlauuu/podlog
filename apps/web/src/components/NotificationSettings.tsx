@@ -194,7 +194,7 @@ export default function NotificationSettings() {
       <Tabs defaultValue="notifications">
         <TabsList className="mb-6">
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="inference">Remote Inference</TabsTrigger>
+          <TabsTrigger value="inference">Inference</TabsTrigger>
           <TabsTrigger value="prompts">Prompts</TabsTrigger>
           <TabsTrigger value="backups">Backups</TabsTrigger>
         </TabsList>

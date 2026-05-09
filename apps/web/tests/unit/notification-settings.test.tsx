@@ -80,7 +80,7 @@ describe("NotificationSettings", () => {
     render(<NotificationSettings />);
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: "Notifications" })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "Remote Inference" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Inference" })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: "Backups" })).toBeInTheDocument();
     });
   });
@@ -112,7 +112,7 @@ describe("NotificationSettings", () => {
     const user = userEvent.setup();
     render(<NotificationSettings />);
     // Wait for tabs to be available
-    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    const inferenceTab = await screen.findByRole("tab", { name: "Inference" });
     await user.click(inferenceTab);
     // Wait for the Remote Inference section to load with pipeline steps
     const transcription = await screen.findByText("Transcription");
@@ -167,7 +167,7 @@ describe("NotificationSettings", () => {
   it("shows fireworks API key field in Remote Inference tab", async () => {
     const user = userEvent.setup();
     render(<NotificationSettings />);
-    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    const inferenceTab = await screen.findByRole("tab", { name: "Inference" });
     await user.click(inferenceTab);
     // The API key field should be available after the tab content is rendered
     const apiKeyLabel = await screen.findByText(/fireworks api key/i);
@@ -177,7 +177,7 @@ describe("NotificationSettings", () => {
   it("links to the Fireworks dashboard for API key generation (#618)", async () => {
     const user = userEvent.setup();
     render(<NotificationSettings />);
-    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    const inferenceTab = await screen.findByRole("tab", { name: "Inference" });
     await user.click(inferenceTab);
     await screen.findByText(/fireworks api key/i);
 
@@ -207,7 +207,7 @@ describe("NotificationSettings", () => {
   it("shows pyannote cloud API key field and explainer in Remote Inference tab", async () => {
     const user = userEvent.setup();
     render(<NotificationSettings />);
-    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    const inferenceTab = await screen.findByRole("tab", { name: "Inference" });
     await user.click(inferenceTab);
     // Two key fields now: Fireworks and pyannote cloud. Both should render.
     await screen.findByText(/fireworks api key/i);
@@ -233,7 +233,7 @@ describe("NotificationSettings", () => {
   it("Remote Inference Save button is disabled when no changes", async () => {
     const user = userEvent.setup();
     render(<NotificationSettings />);
-    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    const inferenceTab = await screen.findByRole("tab", { name: "Inference" });
     await user.click(inferenceTab);
     // After clicking Remote Inference tab, the Save button should be visible and disabled (no changes made)
     await waitFor(() => {
@@ -273,7 +273,7 @@ describe("NotificationSettings", () => {
     });
 
     render(<NotificationSettings />);
-    const inferenceTab = await screen.findByRole("tab", { name: "Remote Inference" });
+    const inferenceTab = await screen.findByRole("tab", { name: "Inference" });
     await user.click(inferenceTab);
 
     // Find the RAG / Ask step's toggle. Each step renders a Switch; the RAG
