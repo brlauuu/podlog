@@ -11,42 +11,81 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 _pipeline = None
+_pipeline_model: Optional[str] = None
+
+
+def _resolve_model() -> str:
+    """Resolve the active pyannote model — runtime DB override beats env default.
+
+    The DB-backed setting is populated by the Settings → Remote Inference UI
+    (#681). Falls back to ``settings.pyannote_model`` (env var) when no
+    override exists or when the DB session can't be opened.
+    """
+    from app.config import settings
+
+    try:
+        from app.database import SessionLocal
+        from app.services.notification_settings import get_runtime_diarization_settings
+
+        with SessionLocal() as db:
+            runtime = get_runtime_diarization_settings(db)
+        override = runtime.get("pyannote_model")
+        if isinstance(override, str) and override.strip():
+            return override
+    except Exception:
+        # Any failure falls back to env default — pipeline boot mustn't depend
+        # on the settings table being readable.
+        logger.exception('"action": "pyannote_runtime_resolve_failed"')
+    return settings.pyannote_model
 
 
 def load_pipeline():
-    """Load pyannote diarization pipeline into module-level cache."""
-    global _pipeline
-    if _pipeline is not None:
+    """Load pyannote diarization pipeline into module-level cache.
+
+    If the cached pipeline was built for a different model than the one
+    currently configured (e.g. user switched in Settings), the old pipeline
+    is unloaded first so the new model can take its place.
+    """
+    global _pipeline, _pipeline_model
+
+    target_model = _resolve_model()
+    if _pipeline is not None and _pipeline_model == target_model:
         return
+    if _pipeline is not None and _pipeline_model != target_model:
+        logger.info(
+            '"action": "pyannote_model_switch", "from": "%s", "to": "%s"',
+            _pipeline_model, target_model,
+        )
+        unload_pipeline()
 
     from pyannote.audio import Pipeline
     from app.config import settings
     import torch
 
-    logger.info('"action": "pyannote_load_start"')
+    logger.info('"action": "pyannote_load_start", "model": "%s"', target_model)
 
     try:
         _pipeline = Pipeline.from_pretrained(
-            settings.pyannote_model,
+            target_model,
             token=settings.hf_token,
         )
     except Exception as exc:
         if _is_hf_auth_error(exc):
-            model = settings.pyannote_model
             msg = (
-                f"pyannote_auth_failed: cannot load {model}. Verify "
+                f"pyannote_auth_failed: cannot load {target_model}. Verify "
                 f"(1) HF_TOKEN is set with 'read' scope, "
                 f"(2) repo id is correct, "
-                f"(3) gate accepted at https://huggingface.co/{model}."
+                f"(3) gate accepted at https://huggingface.co/{target_model}."
             )
-            logger.error('"action": "pyannote_auth_failed", "model": "%s"', model)
+            logger.error('"action": "pyannote_auth_failed", "model": "%s"', target_model)
             raise RuntimeError(msg) from exc
         raise
 
     if torch.cuda.is_available():
         _pipeline = _pipeline.to(torch.device("cuda"))
 
-    logger.info('"action": "pyannote_load_complete"')
+    _pipeline_model = target_model
+    logger.info('"action": "pyannote_load_complete", "model": "%s"', target_model)
 
 
 def _is_hf_auth_error(exc: BaseException) -> bool:
@@ -75,8 +114,9 @@ def _is_hf_auth_error(exc: BaseException) -> bool:
 
 def unload_pipeline() -> None:
     """Explicitly remove pyannote from memory."""
-    global _pipeline
+    global _pipeline, _pipeline_model
     _pipeline = None
+    _pipeline_model = None
     try:
         import torch
         torch.cuda.empty_cache()

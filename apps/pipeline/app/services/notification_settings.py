@@ -49,6 +49,7 @@ _FIELDS = [
     "pyannote_cloud_base_url",
     "pyannote_cloud_model",
     "pyannote_cloud_cost_per_second_usd",
+    "pyannote_model",
 ]
 
 _SENSITIVE_FIELDS = {
@@ -72,6 +73,13 @@ _VALID_FREQUENCIES = {"immediate", "daily", "weekly"}
 _VALID_INFERENCE_PROVIDERS = {"local", "fireworks"}
 _VALID_EMBEDDING_PROVIDERS = {"local", "fireworks"}
 _VALID_DIARIZATION_PROVIDERS = {"local", "precision2"}
+# Curated list of local pyannote diarization models (#681). Restrict to
+# tested IDs so users don't end up with cryptic load failures from typos
+# or unsupported variants.
+_VALID_PYANNOTE_LOCAL_MODELS = {
+    "pyannote/speaker-diarization-community-1",
+    "pyannote/speaker-diarization-3.1",
+}
 _VALID_RAG_PROVIDERS = {"local", "fireworks"}
 _INFERENCE_FIELDS = {
     "inference_provider",
@@ -98,6 +106,7 @@ _DIARIZATION_FIELDS = {
     "pyannote_cloud_base_url",
     "pyannote_cloud_model",
     "pyannote_cloud_cost_per_second_usd",
+    "pyannote_model",
 }
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
@@ -190,6 +199,12 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
             raise ValueError(
                 f"diarization_provider must be one of {_VALID_DIARIZATION_PROVIDERS}, "
                 f"got '{updates['diarization_provider']}'"
+            )
+    if "pyannote_model" in updates:
+        if updates["pyannote_model"] not in _VALID_PYANNOTE_LOCAL_MODELS:
+            raise ValueError(
+                f"pyannote_model must be one of {sorted(_VALID_PYANNOTE_LOCAL_MODELS)}, "
+                f"got '{updates['pyannote_model']}'"
             )
     if "pyannote_cloud_cost_per_second_usd" in updates:
         rate = updates["pyannote_cloud_cost_per_second_usd"]

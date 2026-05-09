@@ -174,6 +174,54 @@ class TestSaveNotificationSettings:
         with pytest.raises(ValueError, match="rag_provider"):
             save_notification_settings(db, {"rag_provider": "openai"})
 
+    def test_rejects_invalid_pyannote_model(self):
+        """#681: only the curated set of HF model IDs is allowed."""
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="pyannote_model"):
+            save_notification_settings(db, {"pyannote_model": "pyannote/random-thing"})
+
+    def test_accepts_valid_pyannote_model(self):
+        """#681: switching to the legacy 3.1 model is accepted."""
+        db = _mock_db(stored_json=None)
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            mock_settings.telegram_bot_token = None
+            mock_settings.telegram_chat_id = None
+            mock_settings.notification_email_to = None
+            mock_settings.notification_email_from = "podlog@localhost"
+            mock_settings.smtp_host = "host.docker.internal"
+            mock_settings.smtp_port = 25
+            mock_settings.smtp_user = None
+            mock_settings.smtp_password = None
+            mock_settings.smtp_use_tls = False
+            mock_settings.notification_frequency = "immediate"
+            mock_settings.health_check_notifications_enabled = True
+            mock_settings.inference_provider = "local"
+            mock_settings.fireworks_api_key = None
+            mock_settings.fireworks_audio_base_url = ""
+            mock_settings.fireworks_stt_model = ""
+            mock_settings.fireworks_stt_diarize = True
+            mock_settings.fireworks_chat_base_url = ""
+            mock_settings.fireworks_chat_model = ""
+            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
+            mock_settings.embedding_provider = "local"
+            mock_settings.embedding_model = ""
+            mock_settings.fireworks_embedding_base_url = ""
+            mock_settings.fireworks_embedding_model = ""
+            mock_settings.diarization_provider = "local"
+            mock_settings.pyannote_api_key = None
+            mock_settings.pyannote_cloud_base_url = ""
+            mock_settings.pyannote_cloud_model = ""
+            mock_settings.pyannote_cloud_cost_per_second_usd = 0.0
+            mock_settings.pyannote_model = "pyannote/speaker-diarization-community-1"
+            mock_settings.rag_provider = "local"
+            mock_settings.rag_local_model = "qwen2.5:3b"
+
+            result = save_notification_settings(
+                db, {"pyannote_model": "pyannote/speaker-diarization-3.1"}
+            )
+
+        assert result["pyannote_model"] == "pyannote/speaker-diarization-3.1"
+
     def test_rag_local_model_persisted_and_returned(self):
         db = _mock_db(stored_json=None)
         with patch("app.services.notification_settings.settings") as mock_settings:
