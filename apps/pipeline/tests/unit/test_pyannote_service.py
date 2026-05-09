@@ -24,10 +24,13 @@ import app.services.pyannote as pyannote_mod
 class TestLoadPipeline:
     def setup_method(self):
         pyannote_mod._pipeline = None
+        pyannote_mod._pipeline_model = None
 
+    @patch("app.services.pyannote._resolve_model")
     @patch("app.config.settings")
-    def test_loads_pipeline(self, mock_settings):
+    def test_loads_pipeline(self, mock_settings, mock_resolve):
         mock_settings.hf_token = "test-token"
+        mock_resolve.return_value = "pyannote/speaker-diarization-community-1"
         mock_pipeline_obj = MagicMock()
 
         torch_mod = sys.modules["torch"]
@@ -43,21 +46,27 @@ class TestLoadPipeline:
             pyannote_mod.load_pipeline()
 
         assert pyannote_mod._pipeline is mock_pipeline_obj
+        assert pyannote_mod._pipeline_model == "pyannote/speaker-diarization-community-1"
 
-    def test_skips_if_already_loaded(self):
+    @patch("app.services.pyannote._resolve_model")
+    def test_skips_if_already_loaded_with_same_model(self, mock_resolve):
+        mock_resolve.return_value = "pyannote/speaker-diarization-community-1"
         sentinel = MagicMock()
         pyannote_mod._pipeline = sentinel
+        pyannote_mod._pipeline_model = "pyannote/speaker-diarization-community-1"
 
         pyannote_mod.load_pipeline()
 
         assert pyannote_mod._pipeline is sentinel
 
+    @patch("app.services.pyannote._resolve_model")
     @patch("app.config.settings")
-    def test_uses_configured_model_id(self, mock_settings):
-        """Regression guard: the HF model id is read from settings.pyannote_model,
-        not hardcoded — see issue #515."""
+    def test_uses_configured_model_id(self, mock_settings, mock_resolve):
+        """Regression guard: the HF model id is read from runtime resolution
+        (settings.pyannote_model env default or DB override), not hardcoded —
+        see issue #515 and #681."""
         mock_settings.hf_token = "test-token"
-        mock_settings.pyannote_model = "pyannote/speaker-diarization-community-1"
+        mock_resolve.return_value = "pyannote/speaker-diarization-community-1"
 
         torch_mod = sys.modules["torch"]
         torch_mod.cuda.is_available.return_value = False
@@ -72,6 +81,39 @@ class TestLoadPipeline:
         args, kwargs = from_pretrained_mock.call_args
         assert args[0] == "pyannote/speaker-diarization-community-1"
         assert kwargs.get("token") == "test-token"
+
+    @patch("app.services.pyannote._resolve_model")
+    @patch("app.config.settings")
+    def test_reloads_when_model_changes(self, mock_settings, mock_resolve):
+        """Issue #681: switching the model in Settings unloads the old
+        pipeline and loads the new one on the next call."""
+        mock_settings.hf_token = "test-token"
+
+        torch_mod = sys.modules["torch"]
+        torch_mod.cuda.is_available.return_value = False
+
+        first_obj = MagicMock(name="community-1")
+        second_obj = MagicMock(name="3.1")
+        from_pretrained_mock = MagicMock(side_effect=[first_obj, second_obj])
+        sys.modules["pyannote.audio"].Pipeline = MagicMock(
+            from_pretrained=from_pretrained_mock
+        )
+
+        # First call → loads community-1
+        mock_resolve.return_value = "pyannote/speaker-diarization-community-1"
+        pyannote_mod.load_pipeline()
+        assert pyannote_mod._pipeline is first_obj
+        assert pyannote_mod._pipeline_model == "pyannote/speaker-diarization-community-1"
+
+        # User switches model in Settings → second call reloads with 3.1
+        mock_resolve.return_value = "pyannote/speaker-diarization-3.1"
+        pyannote_mod.load_pipeline()
+        assert pyannote_mod._pipeline is second_obj
+        assert pyannote_mod._pipeline_model == "pyannote/speaker-diarization-3.1"
+
+        assert from_pretrained_mock.call_count == 2
+        assert from_pretrained_mock.call_args_list[0][0][0] == "pyannote/speaker-diarization-community-1"
+        assert from_pretrained_mock.call_args_list[1][0][0] == "pyannote/speaker-diarization-3.1"
 
 
 class _FakeHfHubAuthErrors:
@@ -101,10 +143,12 @@ def _install_hfhub_errors_mock():
 class TestLoadPipelineAuthErrors:
     def setup_method(self):
         pyannote_mod._pipeline = None
+        pyannote_mod._pipeline_model = None
         _install_hfhub_errors_mock()
 
+    @patch("app.services.pyannote._resolve_model", return_value="pyannote/speaker-diarization-community-1")
     @patch("app.config.settings")
-    def test_gated_repo_error_is_reraised_with_actionable_message(self, mock_settings):
+    def test_gated_repo_error_is_reraised_with_actionable_message(self, mock_settings, _mock_resolve):
         mock_settings.hf_token = "test-token"
         mock_settings.pyannote_model = "pyannote/speaker-diarization-community-1"
 
@@ -129,8 +173,9 @@ class TestLoadPipelineAuthErrors:
         assert "gate accepted" in msg
         assert "https://huggingface.co/pyannote/speaker-diarization-community-1" in msg
 
+    @patch("app.services.pyannote._resolve_model", return_value="pyannote/typo")
     @patch("app.config.settings")
-    def test_repository_not_found_is_reraised_with_actionable_message(self, mock_settings):
+    def test_repository_not_found_is_reraised_with_actionable_message(self, mock_settings, _mock_resolve):
         mock_settings.hf_token = "test-token"
         mock_settings.pyannote_model = "pyannote/typo"
 
@@ -149,8 +194,9 @@ class TestLoadPipelineAuthErrors:
 
         assert "pyannote/typo" in str(exc_info.value)
 
+    @patch("app.services.pyannote._resolve_model", return_value="pyannote/speaker-diarization-community-1")
     @patch("app.config.settings")
-    def test_http_401_is_reraised_with_actionable_message(self, mock_settings):
+    def test_http_401_is_reraised_with_actionable_message(self, mock_settings, _mock_resolve):
         mock_settings.hf_token = "test-token"
         mock_settings.pyannote_model = "pyannote/speaker-diarization-community-1"
 
@@ -171,8 +217,9 @@ class TestLoadPipelineAuthErrors:
 
         assert "pyannote_auth_failed" in str(exc_info.value)
 
+    @patch("app.services.pyannote._resolve_model", return_value="pyannote/speaker-diarization-community-1")
     @patch("app.config.settings")
-    def test_non_auth_exception_is_not_rewrapped(self, mock_settings):
+    def test_non_auth_exception_is_not_rewrapped(self, mock_settings, _mock_resolve):
         """Unrelated errors (e.g. OSError from disk) must bubble up untouched."""
         mock_settings.hf_token = "test-token"
         mock_settings.pyannote_model = "pyannote/speaker-diarization-community-1"
@@ -192,10 +239,12 @@ class TestLoadPipelineAuthErrors:
 class TestUnloadPipeline:
     def test_clears_pipeline(self):
         pyannote_mod._pipeline = MagicMock()
+        pyannote_mod._pipeline_model = "pyannote/speaker-diarization-community-1"
 
         pyannote_mod.unload_pipeline()
 
         assert pyannote_mod._pipeline is None
+        assert pyannote_mod._pipeline_model is None
 
     def test_handles_torch_error(self):
         pyannote_mod._pipeline = MagicMock()

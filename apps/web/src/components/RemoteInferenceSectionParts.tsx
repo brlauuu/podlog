@@ -92,8 +92,12 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     providerField: "diarization_provider",
     localModels: [
       {
-        value: "speaker-diarization-community-1",
-        label: "pyannote speaker-diarization-community-1 (free, local)",
+        value: "pyannote/speaker-diarization-community-1",
+        label: "pyannote speaker-diarization-community-1 (default, free)",
+      },
+      {
+        value: "pyannote/speaker-diarization-3.1",
+        label: "pyannote speaker-diarization-3.1 (legacy, free)",
       },
     ],
     remoteModels: [
@@ -102,7 +106,7 @@ export const PIPELINE_STEPS: PipelineStep[] = [
         label: "pyannote precision-2 (paid, hosted)",
       },
     ],
-    modelField: null,
+    modelField: "pyannote_model",
     remoteModelField: "pyannote_cloud_model",
     remoteProviderValue: "precision2",
     localProviderValue: "local",

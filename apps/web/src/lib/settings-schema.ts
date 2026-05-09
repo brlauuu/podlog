@@ -38,6 +38,7 @@ export const SettingsSchema = z.object({
   fireworks_embedding_model: z.string(),
   pyannote_cloud_base_url: z.string(),
   pyannote_cloud_model: z.string(),
+  pyannote_model: z.string(),
 
   // Numbers.
   smtp_port: z.number(),

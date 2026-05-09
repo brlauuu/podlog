@@ -31,6 +31,7 @@ const validPayload = {
   pyannote_api_key: null,
   pyannote_cloud_base_url: "https://api.pyannote.ai/v1",
   pyannote_cloud_model: "precision-2",
+  pyannote_model: "pyannote/speaker-diarization-community-1",
   pyannote_cloud_cost_per_second_usd: 0.0006,
   rag_provider: "local",
   rag_local_model: "qwen2.5:3b",
