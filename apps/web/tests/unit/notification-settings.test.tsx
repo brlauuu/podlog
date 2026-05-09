@@ -303,6 +303,62 @@ describe("NotificationSettings", () => {
       expect(body.rag_provider).toBe("fireworks");
     });
   });
+
+  it("Inference Save enables and PUTs diarization_provider when toggled (#688)", async () => {
+    // Regression: diarization fields used to land in dirtyNotifications, so
+    // the Inference-tab Save button stayed disabled and the change was lost.
+    // Adding diarization fields to INFERENCE_FIELDS routes them correctly.
+    // Same shape as the #608 RAG-provider regression test above.
+    const user = userEvent.setup();
+    mockFetch.mockImplementation((url: string) => {
+      if (url === "/api/hardware") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            hardware: null,
+            profile: null,
+            profile_label: null,
+            estimates: {},
+          }),
+        });
+      }
+      // pyannote API key set so the provider toggle doesn't open the
+      // "API key required" dialog instead of switching.
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          ...defaultSettings,
+          pyannote_api_key: "pn_test",
+        }),
+      });
+    });
+
+    render(<NotificationSettings />);
+    const inferenceTab = await screen.findByRole("tab", { name: "Inference" });
+    await user.click(inferenceTab);
+
+    const heading = await screen.findByText("Diarization");
+    const card = heading.closest("div.rounded-lg");
+    expect(card).not.toBeNull();
+    const toggle = card!.querySelector("[role='switch']") as HTMLElement;
+    expect(toggle).not.toBeNull();
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      const saveBtn = screen.getByRole("button", { name: /save/i });
+      expect(saveBtn).not.toBeDisabled();
+    });
+    await user.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => {
+      const putCall = mockFetch.mock.calls.find(
+        (c: [string, RequestInit?]) => c[1]?.method === "PUT"
+      );
+      expect(putCall).toBeTruthy();
+      const body = JSON.parse(putCall![1]!.body as string);
+      expect(body.diarization_provider).toBe("precision2");
+    });
+  });
 });
 
 describe("Email tag input", () => {

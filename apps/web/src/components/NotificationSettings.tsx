@@ -26,6 +26,15 @@ const INFERENCE_FIELDS = new Set<keyof Settings>([
   "embedding_model",
   "fireworks_embedding_base_url",
   "fireworks_embedding_model",
+  // Diarization (Issue #688) — without these, edits to diarization fields
+  // landed in dirtyNotifications, so the Inference-tab Save button (which
+  // only flushes dirtyInference) was a silent no-op.
+  "diarization_provider",
+  "pyannote_api_key",
+  "pyannote_cloud_base_url",
+  "pyannote_cloud_model",
+  "pyannote_cloud_cost_per_second_usd",
+  "pyannote_model",
 ]);
 
 export default function NotificationSettings() {
