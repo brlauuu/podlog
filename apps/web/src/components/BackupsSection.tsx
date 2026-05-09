@@ -13,10 +13,16 @@ interface AudioSnapshot {
   size_bytes: number;
 }
 
+interface Retention {
+  daily: number;
+  weekly: number;
+  monthly: number;
+}
+
 interface BackupsResponse {
   enabled: boolean;
   mounted: boolean;
-  retention: { daily: number; weekly: number; monthly: number };
+  retention: Retention;
   last_run: string | null;
   db: { daily: DbDump[]; weekly: DbDump[]; monthly: DbDump[] };
   audio: AudioSnapshot[];
@@ -69,6 +75,121 @@ function DbTier({
   );
 }
 
+function RetentionEditor({
+  initial,
+  onSaved,
+}: {
+  initial: Retention;
+  onSaved: (next: Retention) => void;
+}) {
+  const [draft, setDraft] = useState<Retention>(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  useEffect(() => {
+    setDraft(initial);
+  }, [initial]);
+
+  const dirty =
+    draft.daily !== initial.daily ||
+    draft.weekly !== initial.weekly ||
+    draft.monthly !== initial.monthly;
+
+  // Mirror the script-level rule (#682) so the user sees the problem
+  // before the API rejects.
+  const invalid =
+    draft.daily === 0 && (draft.weekly > 0 || draft.monthly > 0);
+
+  async function save() {
+    setError(null);
+    setSavedFlash(false);
+    setSaving(true);
+    try {
+      const resp = await fetch("/api/backups/retention", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        setError(body.detail || `Save failed (${resp.status})`);
+        return;
+      }
+      const body = await resp.json();
+      const next = body.retention as Retention;
+      onSaved(next);
+      setSavedFlash(true);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function field(key: keyof Retention, label: string) {
+    return (
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="font-medium">{label}</span>
+        <input
+          type="number"
+          min={0}
+          value={draft[key]}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            setDraft((d) => ({ ...d, [key]: Number.isFinite(v) && v >= 0 ? v : 0 }));
+            setSavedFlash(false);
+          }}
+          disabled={saving}
+          className="w-24 rounded-md border border-border bg-background px-2 py-1 font-mono"
+        />
+      </label>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-border p-4 space-y-4">
+      <div>
+        <h3 className="text-sm font-medium">Retention</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          How many backups to keep per tier. <code>0</code> disables a tier (no
+          file written, no promotion). <code>1</code> keeps a single rolling
+          backup that overwrites on each run. Daily must be ≥ 1 if weekly or
+          monthly are set, since they hardlink from the daily file. Changes apply
+          on the next backup tick (within 1 hour).
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-4">
+        {field("daily", "Daily")}
+        {field("weekly", "Weekly")}
+        {field("monthly", "Monthly")}
+      </div>
+      {invalid && (
+        <p className="text-xs text-destructive">
+          Daily=0 requires weekly=0 and monthly=0.
+        </p>
+      )}
+      {error && (
+        <p className="text-xs text-destructive">{error}</p>
+      )}
+      <div className="flex items-center gap-3">
+        <button
+          className="px-4 py-1.5 rounded-md bg-action text-action-foreground text-sm font-medium hover:bg-action/90 disabled:opacity-50"
+          onClick={save}
+          disabled={!dirty || invalid || saving}
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        {savedFlash && (
+          <span className="text-xs text-muted-foreground">
+            Saved. Will apply on the next backup tick.
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function BackupsSection() {
   const [data, setData] = useState<BackupsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +208,18 @@ export default function BackupsSection() {
       cancelled = true;
     };
   }, []);
+
+  function applyRetention(next: Retention) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            retention: next,
+            enabled: next.daily + next.weekly + next.monthly > 0,
+          }
+        : prev,
+    );
+  }
 
   if (error) {
     return (
@@ -114,20 +247,6 @@ export default function BackupsSection() {
     );
   }
 
-  if (!data.enabled) {
-    return (
-      <div className="space-y-2 text-sm text-muted-foreground">
-        <p>
-          All retention values are 0 — the daily backup loop is effectively
-          disabled. Set <code>BACKUP_RETENTION_DAILY</code>,{" "}
-          <code>BACKUP_RETENTION_WEEKLY</code>, or{" "}
-          <code>BACKUP_RETENTION_MONTHLY</code> to a non-zero value in{" "}
-          <code>.env</code> to opt in.
-        </p>
-      </div>
-    );
-  }
-
   const totalDumps =
     data.db.daily.length + data.db.weekly.length + data.db.monthly.length;
 
@@ -147,55 +266,68 @@ export default function BackupsSection() {
         )}
       </div>
 
-      <section className="rounded-lg border border-border p-4 space-y-4">
-        <h3 className="text-sm font-medium">Database dumps ({totalDumps} total)</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <DbTier
-            label="Daily"
-            retention={data.retention.daily}
-            dumps={data.db.daily}
-          />
-          <DbTier
-            label="Weekly"
-            retention={data.retention.weekly}
-            dumps={data.db.weekly}
-          />
-          <DbTier
-            label="Monthly"
-            retention={data.retention.monthly}
-            dumps={data.db.monthly}
-          />
-        </div>
-      </section>
+      <RetentionEditor initial={data.retention} onSaved={applyRetention} />
 
-      <section className="rounded-lg border border-border p-4 space-y-3">
-        <h3 className="text-sm font-medium">
-          Audio snapshots ({data.audio.length} total)
-        </h3>
-        {data.audio.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No audio snapshots yet.
+      {!data.enabled ? (
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            All retention values are 0 — the daily backup loop is effectively
+            disabled. Raise daily retention above to opt in.
           </p>
-        ) : (
-          <ul className="space-y-1 text-sm">
-            {data.audio.map((s) => (
-              <li
-                key={s.date}
-                className="flex justify-between gap-3 font-mono"
-              >
-                <span>{s.date}</span>
-                <span className="text-muted-foreground">
-                  {formatBytes(s.size_bytes)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="text-xs text-muted-foreground">
-          Sizes are tree totals; rsync hardlinks unchanged files across
-          snapshots, so on-disk usage is lower than the sum.
-        </p>
-      </section>
+        </div>
+      ) : (
+        <>
+          <section className="rounded-lg border border-border p-4 space-y-4">
+            <h3 className="text-sm font-medium">Database dumps ({totalDumps} total)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <DbTier
+                label="Daily"
+                retention={data.retention.daily}
+                dumps={data.db.daily}
+              />
+              <DbTier
+                label="Weekly"
+                retention={data.retention.weekly}
+                dumps={data.db.weekly}
+              />
+              <DbTier
+                label="Monthly"
+                retention={data.retention.monthly}
+                dumps={data.db.monthly}
+              />
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-border p-4 space-y-3">
+            <h3 className="text-sm font-medium">
+              Audio snapshots ({data.audio.length} total)
+            </h3>
+            {data.audio.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No audio snapshots yet.
+              </p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {data.audio.map((s) => (
+                  <li
+                    key={s.date}
+                    className="flex justify-between gap-3 font-mono"
+                  >
+                    <span>{s.date}</span>
+                    <span className="text-muted-foreground">
+                      {formatBytes(s.size_bytes)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Sizes are tree totals; rsync hardlinks unchanged files across
+              snapshots, so on-disk usage is lower than the sum.
+            </p>
+          </section>
+        </>
+      )}
     </div>
   );
 }

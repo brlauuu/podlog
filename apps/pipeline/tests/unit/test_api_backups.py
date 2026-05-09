@@ -4,11 +4,36 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
+from app.database import get_db
 from app.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _stub_backup_retention():
+    """Issue #683: /api/backups now resolves retention via the DB. Unit tests
+    don't have a real DB, so stub the lookup to return env defaults and
+    override get_db so FastAPI doesn't try to open a connection.
+    """
+    def _fake_get_db():
+        yield None
+
+    app.dependency_overrides[get_db] = _fake_get_db
+    with patch(
+        "app.api.backups.get_backup_retention",
+        return_value={
+            "daily": int(settings.backup_retention_daily),
+            "weekly": int(settings.backup_retention_weekly),
+            "monthly": int(settings.backup_retention_monthly),
+        },
+    ):
+        yield
+    app.dependency_overrides.pop(get_db, None)
 
 
 def _make_backups_tree(root: Path) -> None:
@@ -144,11 +169,11 @@ def test_reports_retention_zero_as_disabled(tmp_path: Path) -> None:
     (tmp_path / "db" / "daily").mkdir(parents=True)
     with (
         patch("app.api.backups._BACKUPS_ROOT", tmp_path),
-        patch("app.api.backups.settings") as mock_settings,
+        patch(
+            "app.api.backups.get_backup_retention",
+            return_value={"daily": 0, "weekly": 0, "monthly": 0},
+        ),
     ):
-        mock_settings.backup_retention_daily = 0
-        mock_settings.backup_retention_weekly = 0
-        mock_settings.backup_retention_monthly = 0
         resp = client.get("/api/backups")
 
     assert resp.status_code == 200

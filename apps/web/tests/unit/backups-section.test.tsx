@@ -82,6 +82,72 @@ describe("<BackupsSection>", () => {
     );
   });
 
+  it("renders Retention editor and PUTs new values on Save", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    mockFetch
+      // initial GET /api/backups
+      .mockReturnValueOnce(
+        jsonResponse({
+          enabled: true,
+          mounted: true,
+          retention: { daily: 7, weekly: 4, monthly: 12 },
+          last_run: null,
+          db: { daily: [], weekly: [], monthly: [] },
+          audio: [],
+        }),
+      )
+      // PUT /api/backups/retention
+      .mockReturnValueOnce(
+        jsonResponse({ retention: { daily: 5, weekly: 4, monthly: 12 } }),
+      );
+
+    render(<BackupsSection />);
+
+    const dailyInput = (await screen.findByLabelText("Daily")) as HTMLInputElement;
+    expect(dailyInput.value).toBe("7");
+
+    fireEvent.change(dailyInput, { target: { value: "5" } });
+
+    const saveButtons = screen.getAllByRole("button", { name: "Save" });
+    fireEvent.click(saveButtons[0]);
+
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        "/api/backups/retention",
+        expect.objectContaining({
+          method: "PUT",
+          body: JSON.stringify({ daily: 5, weekly: 4, monthly: 12 }),
+        }),
+      ),
+    );
+  });
+
+  it("flags the daily=0 + weekly>0 combo client-side and disables Save", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    mockFetch.mockReturnValueOnce(
+      jsonResponse({
+        enabled: true,
+        mounted: true,
+        retention: { daily: 7, weekly: 4, monthly: 12 },
+        last_run: null,
+        db: { daily: [], weekly: [], monthly: [] },
+        audio: [],
+      }),
+    );
+
+    render(<BackupsSection />);
+
+    const dailyInput = (await screen.findByLabelText("Daily")) as HTMLInputElement;
+    fireEvent.change(dailyInput, { target: { value: "0" } });
+
+    expect(
+      await screen.findByText(/Daily=0 requires weekly=0 and monthly=0/),
+    ).toBeInTheDocument();
+
+    const saveButtons = screen.getAllByRole("button", { name: "Save" });
+    expect(saveButtons[0]).toBeDisabled();
+  });
+
   it("shows the disabled-retention message when all retention values are 0", async () => {
     mockFetch.mockReturnValueOnce(
       jsonResponse({

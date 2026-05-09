@@ -53,6 +53,52 @@ log() {
   printf '%s | %s\n' "$(date -Iseconds)" "$*" >&2
 }
 
+# Read runtime retention overrides from the system_state table (#683). The
+# pipeline writes a JSON blob keyed `backup_retention` when the user saves
+# from Settings → Backups. We re-read every tick so a saved change takes
+# effect by the next hour without restarting this container.
+#
+# Falls back silently to env-var defaults on:
+#   - psql failure (DB unreachable)
+#   - missing row
+#   - malformed JSON
+#   - invalid combo (daily=0 with weekly>0 or monthly>0)
+load_runtime_retention() {
+  local row
+  row=$(PGPASSWORD="$POSTGRES_PASSWORD" psql -tAX \
+    -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+    -c "SELECT value FROM system_state WHERE key='backup_retention';" 2>/dev/null) || return 0
+  [ -z "$row" ] && return 0
+
+  # Parse three integer fields out of the JSON blob. Tolerate whitespace.
+  # `|| true` prevents `set -e -o pipefail` from killing the script when
+  # grep finds nothing (we handle the empty case below).
+  local d w m
+  d=$(echo "$row" | grep -oE '"daily"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$' || true)
+  w=$(echo "$row" | grep -oE '"weekly"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$' || true)
+  m=$(echo "$row" | grep -oE '"monthly"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$' || true)
+
+  if [ -z "$d" ] || [ -z "$w" ] || [ -z "$m" ]; then
+    log "runtime retention row malformed (using env defaults): $row"
+    return 0
+  fi
+
+  if [ "$d" -eq 0 ] && { [ "$w" -gt 0 ] || [ "$m" -gt 0 ]; }; then
+    log "runtime retention invalid (daily=0 with weekly=$w monthly=$m); using env defaults"
+    return 0
+  fi
+
+  if [ "$d" != "$BACKUP_RETENTION_DAILY" ] \
+    || [ "$w" != "$BACKUP_RETENTION_WEEKLY" ] \
+    || [ "$m" != "$BACKUP_RETENTION_MONTHLY" ]; then
+    log "runtime retention applied: daily=$d weekly=$w monthly=$m (env was daily=$BACKUP_RETENTION_DAILY weekly=$BACKUP_RETENTION_WEEKLY monthly=$BACKUP_RETENTION_MONTHLY)"
+  fi
+  BACKUP_RETENTION_DAILY=$d
+  BACKUP_RETENTION_WEEKLY=$w
+  BACKUP_RETENTION_MONTHLY=$m
+  RETENTION_TOTAL=$((d + w + m))
+}
+
 dump_db() {
   local date_str="$1"
   local target="$DB_DAILY/podlog-$date_str.dump"
@@ -167,6 +213,7 @@ prune_audio() {
 }
 
 run_once() {
+  load_runtime_retention
   if [ "$RETENTION_TOTAL" -eq 0 ]; then
     log "all retention values are 0 — backups disabled, skipping"
     return 0

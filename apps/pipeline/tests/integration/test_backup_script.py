@@ -57,6 +57,16 @@ def script_env(tmp_path: Path):
     )
     rsync.chmod(rsync.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
+    # Fake psql (#683): emit whatever's in PSQL_FAKE_OUTPUT, exit 0. Empty
+    # output means "no row" → script falls back to env vars. Tests that
+    # want runtime override behavior set PSQL_FAKE_OUTPUT to a JSON blob.
+    psql = fake_bin / "psql"
+    psql.write_text(
+        "#!/bin/bash\n"
+        "echo -n \"${PSQL_FAKE_OUTPUT:-}\"\n"
+    )
+    psql.chmod(psql.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
     return {
         "backups_root": backups_root,
         "audio_source": audio_source,
@@ -181,3 +191,68 @@ class TestRetentionRollingOne:
         )
         daily = _ls(script_env["backups_root"] / "db" / "daily")
         assert daily == ["podlog-2026-05-09.dump"], daily
+
+
+class TestRuntimeRetentionOverride:
+    """Issue #683: load_runtime_retention reads system_state via psql at the
+    start of each tick, overriding env-var defaults."""
+
+    def test_db_override_replaces_env_values(self, script_env):
+        """psql returns a JSON blob → overrides the env values for this tick."""
+        # Sunday so the env-default WEEKLY=4 would normally promote, but the
+        # override sets weekly=0 — confirm the promotion is suppressed.
+        env = {
+            "BACKUP_RETENTION_DAILY": "7",
+            "BACKUP_RETENTION_WEEKLY": "4",
+            "BACKUP_RETENTION_MONTHLY": "12",
+            "PSQL_FAKE_OUTPUT": '{"daily": 7, "weekly": 0, "monthly": 0}',
+        }
+        result = _run(env, script_env, today="2026-05-10")  # Sunday
+
+        # No weekly file should be created — override suppressed promotion.
+        weekly = _ls(script_env["backups_root"] / "db" / "weekly")
+        assert weekly == [], weekly
+        # And the override should be logged.
+        assert "runtime retention applied" in result.stderr
+
+    def test_no_override_falls_back_to_env(self, script_env):
+        """Empty psql output → env values are used, log line absent."""
+        env = {
+            "BACKUP_RETENTION_DAILY": "7",
+            "BACKUP_RETENTION_WEEKLY": "4",
+            "BACKUP_RETENTION_MONTHLY": "0",
+            "PSQL_FAKE_OUTPUT": "",
+        }
+        result = _run(env, script_env, today="2026-05-10")  # Sunday
+        # WEEKLY=4 from env → Sunday triggers a weekly file.
+        weekly = _ls(script_env["backups_root"] / "db" / "weekly")
+        assert weekly == ["podlog-2026-05-10.dump"], weekly
+        assert "runtime retention applied" not in result.stderr
+
+    def test_malformed_override_falls_back_to_env(self, script_env):
+        """Garbage JSON → log warning + use env values."""
+        env = {
+            "BACKUP_RETENTION_DAILY": "7",
+            "BACKUP_RETENTION_WEEKLY": "0",
+            "BACKUP_RETENTION_MONTHLY": "0",
+            "PSQL_FAKE_OUTPUT": "{this is not valid json}",
+        }
+        result = _run(env, script_env, today="2026-05-09")
+        assert "malformed" in result.stderr
+        # Backup still ran with env values.
+        daily = _ls(script_env["backups_root"] / "db" / "daily")
+        assert daily == ["podlog-2026-05-09.dump"]
+
+    def test_invalid_combo_in_override_falls_back_to_env(self, script_env):
+        """daily=0 + weekly>0 in the override → log + skip override."""
+        env = {
+            "BACKUP_RETENTION_DAILY": "7",
+            "BACKUP_RETENTION_WEEKLY": "4",
+            "BACKUP_RETENTION_MONTHLY": "12",
+            "PSQL_FAKE_OUTPUT": '{"daily": 0, "weekly": 4, "monthly": 0}',
+        }
+        result = _run(env, script_env, today="2026-05-09")
+        assert "runtime retention invalid" in result.stderr
+        # Daily file written using env values, not the broken override.
+        daily = _ls(script_env["backups_root"] / "db" / "daily")
+        assert daily == ["podlog-2026-05-09.dump"]
