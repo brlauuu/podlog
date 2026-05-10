@@ -101,13 +101,22 @@ def retrieve_chunks(
         if conditions:
             feed_filter = f"AND ({' OR '.join(conditions)})"
 
+    # #695: resolve the displayed speaker via three-level fallback:
+    #   1. ``speaker_names`` (per-episode rename — wins if the user touched
+    #      this specific episode)
+    #   2. ``feed_speaker_cache`` (per-feed cache populated when the user
+    #      renames on ANY episode of the feed — gives cross-episode reach)
+    #   3. ``c.speaker_label`` (the raw SPEAKER_00 label from diarization)
+    # The cache can hold multiple rows per (feed_id, speaker_label) when
+    # the user has assigned different display names across episodes; the
+    # LATERAL subquery picks the most-occurring/most-recent winner.
     query = text(f"""
         SELECT
             c.id AS chunk_id,
             c.episode_id,
             e.title AS episode_title,
             e.audio_local_path,
-            COALESCE(sn.display_name, c.speaker_label) AS speaker_label,
+            COALESCE(sn.display_name, fsc.display_name, c.speaker_label) AS speaker_label,
             c.start_time,
             c.end_time,
             c.text,
@@ -116,6 +125,13 @@ def retrieve_chunks(
         JOIN episodes e ON c.episode_id = e.id
         LEFT JOIN speaker_names sn
             ON sn.episode_id = c.episode_id AND sn.speaker_label = c.speaker_label
+        LEFT JOIN LATERAL (
+            SELECT display_name
+            FROM feed_speaker_cache
+            WHERE feed_id = e.feed_id AND speaker_label = c.speaker_label
+            ORDER BY occurrence_count DESC, last_seen_at DESC
+            LIMIT 1
+        ) fsc ON true
         WHERE c.embedding IS NOT NULL
             {episode_filter}
             {feed_filter}
