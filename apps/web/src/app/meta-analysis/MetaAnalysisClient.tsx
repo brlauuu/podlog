@@ -109,6 +109,7 @@ export default function MetaAnalysisClient() {
         </div>
       ) : (
         <>
+          <ExploreStatusPanel />
           <FiltersBar
             feeds={Array.isArray(snap.per_feed) ? snap.per_feed.map((f) => ({ feed_id: f.feed_id, title: f.title })) : []}
             selectedFeedIds={selectedFeedIds}
@@ -188,7 +189,6 @@ export default function MetaAnalysisClient() {
             </ChartCard>
           </div>
           <InfoBlock />
-          <ExploreStatusPanel />
         </>
       )}
     </div>

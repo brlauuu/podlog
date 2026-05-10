@@ -59,7 +59,7 @@ describe("<ExploreStatusPanel> (#607 PR 2)", () => {
     expect(screen.getByText(/make explore-logs/)).toBeInTheDocument();
   });
 
-  test("renders the not-running state with a docs link", async () => {
+  test("renders the not-running state with a docs link and a how-to-start toggle (#690)", async () => {
     global.fetch = mockFetch({
       running: false,
       url: null,
@@ -71,8 +71,19 @@ describe("<ExploreStatusPanel> (#607 PR 2)", () => {
     expect(
       await screen.findByText(/Explore notebook is not running/i),
     ).toBeInTheDocument();
-    const docsLink = screen.getByRole("link", { name: /See the docs/i });
+    const docsLink = screen.getByRole("link", { name: /^Docs/i });
     expect(docsLink).toHaveAttribute("href", "/docs?page=16-explore");
+
+    // CLI commands hidden by default.
+    expect(screen.queryByText(/^make explore$/m)).toBeNull();
+
+    // Expand to see them.
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show how to start it/i }),
+    );
+    // Both commands appear in the same <pre>; assert on the visible text.
+    expect(screen.getByText(/make explore/)).toBeInTheDocument();
+    expect(screen.getByText(/make explore-logs/)).toBeInTheDocument();
   });
 
   test("renders nothing when the probe endpoint itself fails", async () => {
