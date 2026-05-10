@@ -210,6 +210,9 @@ class SpeakerName(Base):
     inferred: Mapped[bool] = mapped_column(Boolean, default=False)
     confidence: Mapped[str | None] = mapped_column(Text)  # HIGH | MEDIUM | LOW | NULL
     confirmed_by_user: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Issue #698: user-assigned speaker role within this episode.
+    # Values: host | guest | other | NULL (unassigned).
+    role: Mapped[str | None] = mapped_column(Text)
 
     episode: Mapped["Episode"] = relationship("Episode", back_populates="speaker_names")
 
