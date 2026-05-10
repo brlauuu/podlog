@@ -1,6 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+type PendingDelete =
+  | { kind: "db"; tier: "daily" | "weekly" | "monthly"; filename: string; size: number; date: string }
+  | { kind: "audio"; date: string; size: number };
 
 interface DbDump {
   date: string;
@@ -42,12 +54,16 @@ function formatBytes(n: number): string {
 
 function DbTier({
   label,
+  tier,
   retention,
   dumps,
+  onRequestDelete,
 }: {
   label: string;
+  tier: "daily" | "weekly" | "monthly";
   retention: number;
   dumps: DbDump[];
+  onRequestDelete: (target: PendingDelete) => void;
 }) {
   const heading = retention === 0
     ? `${label} — disabled`
@@ -63,10 +79,28 @@ function DbTier({
           {dumps.map((d) => (
             <li
               key={d.filename}
-              className="flex justify-between gap-3 font-mono"
+              className="flex items-center justify-between gap-2 font-mono"
             >
               <span>{d.date}</span>
-              <span className="text-muted-foreground">{formatBytes(d.size_bytes)}</span>
+              <span className="flex items-center gap-2">
+                <span className="text-muted-foreground">{formatBytes(d.size_bytes)}</span>
+                <button
+                  type="button"
+                  className="text-xs text-destructive hover:underline disabled:opacity-50"
+                  onClick={() =>
+                    onRequestDelete({
+                      kind: "db",
+                      tier,
+                      filename: d.filename,
+                      date: d.date,
+                      size: d.size_bytes,
+                    })
+                  }
+                  aria-label={`Delete ${tier} dump for ${d.date}`}
+                >
+                  Delete
+                </button>
+              </span>
             </li>
           ))}
         </ul>
@@ -193,6 +227,14 @@ function RetentionEditor({
 export default function BackupsSection() {
   const [data, setData] = useState<BackupsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function refetch() {
+    const r = await fetch("/api/backups", { cache: "no-store" });
+    if (r.ok) setData(await r.json());
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -219,6 +261,36 @@ export default function BackupsSection() {
           }
         : prev,
     );
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const url =
+        pendingDelete.kind === "db"
+          ? `/api/backups/db/${encodeURIComponent(pendingDelete.tier)}/${encodeURIComponent(pendingDelete.filename)}`
+          : `/api/backups/audio/${encodeURIComponent(pendingDelete.date)}`;
+      const resp = await fetch(url, { method: "DELETE" });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        setDeleteError(body.detail || `Delete failed (${resp.status})`);
+        return;
+      }
+      setPendingDelete(null);
+      await refetch();
+    } catch (e) {
+      setDeleteError(String(e));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function cancelDelete() {
+    if (deleting) return;
+    setPendingDelete(null);
+    setDeleteError(null);
   }
 
   if (error) {
@@ -282,18 +354,24 @@ export default function BackupsSection() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <DbTier
                 label="Daily"
+                tier="daily"
                 retention={data.retention.daily}
                 dumps={data.db.daily}
+                onRequestDelete={setPendingDelete}
               />
               <DbTier
                 label="Weekly"
+                tier="weekly"
                 retention={data.retention.weekly}
                 dumps={data.db.weekly}
+                onRequestDelete={setPendingDelete}
               />
               <DbTier
                 label="Monthly"
+                tier="monthly"
                 retention={data.retention.monthly}
                 dumps={data.db.monthly}
+                onRequestDelete={setPendingDelete}
               />
             </div>
           </section>
@@ -311,11 +389,27 @@ export default function BackupsSection() {
                 {data.audio.map((s) => (
                   <li
                     key={s.date}
-                    className="flex justify-between gap-3 font-mono"
+                    className="flex items-center justify-between gap-2 font-mono"
                   >
                     <span>{s.date}</span>
-                    <span className="text-muted-foreground">
-                      {formatBytes(s.size_bytes)}
+                    <span className="flex items-center gap-2">
+                      <span className="text-muted-foreground">
+                        {formatBytes(s.size_bytes)}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs text-destructive hover:underline disabled:opacity-50"
+                        onClick={() =>
+                          setPendingDelete({
+                            kind: "audio",
+                            date: s.date,
+                            size: s.size_bytes,
+                          })
+                        }
+                        aria-label={`Delete audio snapshot for ${s.date}`}
+                      >
+                        Delete
+                      </button>
                     </span>
                   </li>
                 ))}
@@ -328,6 +422,59 @@ export default function BackupsSection() {
           </section>
         </>
       )}
+
+      <Dialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) cancelDelete();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this backup?</DialogTitle>
+            <DialogDescription>
+              {pendingDelete?.kind === "db" ? (
+                <>
+                  Removing <span className="font-mono">{pendingDelete.filename}</span>{" "}
+                  from <span className="font-mono">db/{pendingDelete.tier}/</span>{" "}
+                  ({formatBytes(pendingDelete.size)}). Hardlinks in other tiers will
+                  keep the underlying file alive on disk if they exist; only this
+                  directory entry is removed. This cannot be undone.
+                </>
+              ) : pendingDelete?.kind === "audio" ? (
+                <>
+                  Removing the audio snapshot for{" "}
+                  <span className="font-mono">{pendingDelete.date}</span>{" "}
+                  ({formatBytes(pendingDelete.size)}). Sibling snapshots that
+                  hardlink unchanged files keep their copies — only this date&apos;s
+                  tree is wiped. This cannot be undone.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p className="text-xs text-destructive">{deleteError}</p>
+          )}
+          <DialogFooter>
+            <button
+              type="button"
+              className="px-4 py-1.5 rounded-md border border-border text-sm hover:bg-muted disabled:opacity-50"
+              onClick={cancelDelete}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="px-4 py-1.5 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 disabled:opacity-50"
+              onClick={confirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

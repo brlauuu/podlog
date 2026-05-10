@@ -181,6 +181,91 @@ describe("<BackupsSection>", () => {
     );
   });
 
+  it("opens confirmation dialog on Delete click and DELETEs on confirm (#687)", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    mockFetch
+      .mockReturnValueOnce(
+        jsonResponse({
+          enabled: true,
+          mounted: true,
+          retention: { daily: 7, weekly: 4, monthly: 12 },
+          last_run: "2026-05-10",
+          db: {
+            daily: [
+              { date: "2026-05-09", filename: "podlog-2026-05-09.dump", size_bytes: 1024 },
+            ],
+            weekly: [],
+            monthly: [],
+          },
+          audio: [],
+        }),
+      )
+      .mockReturnValueOnce(jsonResponse({ deleted: true }))
+      // Refetch after delete returns the same shape minus the deleted row.
+      .mockReturnValueOnce(
+        jsonResponse({
+          enabled: true,
+          mounted: true,
+          retention: { daily: 7, weekly: 4, monthly: 12 },
+          last_run: "2026-05-10",
+          db: { daily: [], weekly: [], monthly: [] },
+          audio: [],
+        }),
+      );
+
+    render(<BackupsSection />);
+    const deleteBtn = await screen.findByLabelText(
+      "Delete daily dump for 2026-05-09",
+    );
+    fireEvent.click(deleteBtn);
+
+    expect(
+      await screen.findByRole("heading", { name: /Delete this backup/i }),
+    ).toBeInTheDocument();
+
+    const confirmBtn = await screen.findByRole("button", { name: "Delete" });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/backups/db/daily/podlog-2026-05-09.dump",
+        expect.objectContaining({ method: "DELETE" }),
+      ),
+    );
+  });
+
+  it("Cancel button in delete dialog does not fire DELETE", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    mockFetch.mockReturnValueOnce(
+      jsonResponse({
+        enabled: true,
+        mounted: true,
+        retention: { daily: 7, weekly: 4, monthly: 12 },
+        last_run: "2026-05-10",
+        db: {
+          daily: [
+            { date: "2026-05-09", filename: "podlog-2026-05-09.dump", size_bytes: 1024 },
+          ],
+          weekly: [],
+          monthly: [],
+        },
+        audio: [],
+      }),
+    );
+
+    render(<BackupsSection />);
+    const deleteBtn = await screen.findByLabelText(
+      "Delete daily dump for 2026-05-09",
+    );
+    fireEvent.click(deleteBtn);
+
+    const cancelBtn = await screen.findByRole("button", { name: "Cancel" });
+    fireEvent.click(cancelBtn);
+
+    // Only the initial GET should have been called.
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   it("renders an empty-state line per tier when the tier has no dumps yet", async () => {
     mockFetch.mockReturnValueOnce(
       jsonResponse({

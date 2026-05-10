@@ -178,3 +178,71 @@ def test_reports_retention_zero_as_disabled(tmp_path: Path) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["enabled"] is False
+
+
+# ---------------------------------------------------------------------------
+# DELETE endpoints (#687)
+
+
+class TestDeleteDbBackup:
+    def test_success_returns_200(self) -> None:
+        with patch("app.api.backups.delete_db_dump") as mock:
+            resp = client.delete("/api/backups/db/daily/podlog-2026-05-10.dump")
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": True}
+        mock.assert_called_once_with("daily", "podlog-2026-05-10.dump")
+
+    def test_validation_error_returns_400(self) -> None:
+        with patch(
+            "app.api.backups.delete_db_dump",
+            side_effect=ValueError("bad tier"),
+        ):
+            resp = client.delete("/api/backups/db/hourly/podlog-2026-05-10.dump")
+        assert resp.status_code == 400
+        assert "bad tier" in resp.json()["detail"]
+
+    def test_missing_file_returns_404(self) -> None:
+        with patch(
+            "app.api.backups.delete_db_dump",
+            side_effect=FileNotFoundError("nope"),
+        ):
+            resp = client.delete("/api/backups/db/daily/podlog-1999-01-01.dump")
+        assert resp.status_code == 404
+
+
+class TestDeleteAudioBackup:
+    def test_success_returns_200(self) -> None:
+        with patch("app.api.backups.delete_audio_snapshot") as mock:
+            resp = client.delete("/api/backups/audio/2026-05-09")
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": True}
+        # First positional arg is the date; the `today` kwarg is set to
+        # today's UTC date by the route — assert only the shape we control.
+        args, kwargs = mock.call_args
+        assert args == ("2026-05-09",)
+        assert "today" in kwargs
+
+    def test_validation_error_returns_400(self) -> None:
+        with patch(
+            "app.api.backups.delete_audio_snapshot",
+            side_effect=ValueError("bad date"),
+        ):
+            resp = client.delete("/api/backups/audio/2026-05")
+        assert resp.status_code == 400
+
+    def test_missing_dir_returns_404(self) -> None:
+        with patch(
+            "app.api.backups.delete_audio_snapshot",
+            side_effect=FileNotFoundError("missing"),
+        ):
+            resp = client.delete("/api/backups/audio/1999-01-01")
+        assert resp.status_code == 404
+
+    def test_mid_rsync_returns_409(self) -> None:
+        """Today's snapshot before today's tick has finished — retry later."""
+        with patch(
+            "app.api.backups.delete_audio_snapshot",
+            side_effect=PermissionError("mid-rsync"),
+        ):
+            resp = client.delete("/api/backups/audio/2026-05-10")
+        assert resp.status_code == 409
