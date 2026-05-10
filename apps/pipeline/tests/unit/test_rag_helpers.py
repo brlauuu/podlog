@@ -58,6 +58,28 @@ class TestBuildPrompt:
         messages = build_prompt("q?", chunks, system_prompt=None)
         assert "transcript" in messages[0]["content"].lower()
 
+    def test_history_inserted_between_system_and_user(self):
+        """Issue #699: prior turns sit after system, before the new user msg."""
+        chunks = [make_chunk()]
+        history = [
+            {"role": "user", "content": "First question"},
+            {"role": "assistant", "content": "First answer"},
+        ]
+        messages = build_prompt("Follow-up?", chunks, history=history)
+
+        assert messages[0]["role"] == "system"
+        assert messages[1] == {"role": "user", "content": "First question"}
+        assert messages[2] == {"role": "assistant", "content": "First answer"}
+        assert messages[3]["role"] == "user"
+        assert "Follow-up?" in messages[3]["content"]
+
+    def test_empty_history_is_a_noop(self):
+        chunks = [make_chunk()]
+        no_history = build_prompt("q?", chunks)
+        empty_history = build_prompt("q?", chunks, history=[])
+        none_history = build_prompt("q?", chunks, history=None)
+        assert no_history == empty_history == none_history
+
 
 class TestChunksToSources:
     def test_serializes_chunks(self):

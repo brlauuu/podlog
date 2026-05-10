@@ -128,6 +128,71 @@ describe("EpisodeChat — handleSubmit", () => {
     );
   });
 
+  it("sends an empty history on the first question (#699)", async () => {
+    // Stop after the !resp.ok branch so we don't have to wire a stream;
+    // the body has already been sent at this point.
+    mockFetch.mockImplementation((url: string) => {
+      if (url === "/api/notifications/settings") {
+        return Promise.resolve({ ok: true, json: async () => ({ rag_local_model: "qwen2.5:3b" }) });
+      }
+      return Promise.resolve({ ok: false, status: 500, body: null });
+    });
+
+    const user = userEvent.setup();
+    render(wrap(<EpisodeChat {...baseProps} />));
+
+    await user.click(screen.getByRole("button", { name: /ask about this episode/i }));
+    await user.type(
+      screen.getByPlaceholderText(/ask about this episode\.\.\./i),
+      "first?",
+    );
+    await user.keyboard("{Enter}");
+
+    const askCall = mockFetch.mock.calls.find(
+      ([url]) => url === "/api/pipeline/ask",
+    );
+    expect(askCall).toBeDefined();
+    const body = JSON.parse((askCall![1] as { body: string }).body);
+    expect(body.history).toEqual([]);
+  });
+
+  it("includes the prior completed question in history on the second turn (#699)", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === "/api/notifications/settings") {
+        return Promise.resolve({ ok: true, json: async () => ({ rag_local_model: "qwen2.5:3b" }) });
+      }
+      return Promise.resolve({ ok: false, status: 500, body: null });
+    });
+
+    const user = userEvent.setup();
+    render(wrap(<EpisodeChat {...baseProps} />));
+
+    await user.click(screen.getByRole("button", { name: /ask about this episode/i }));
+    const input = screen.getByPlaceholderText(/ask about this episode\.\.\./i);
+    await user.type(input, "first?");
+    await user.keyboard("{Enter}");
+
+    // The error UI appears; type the next question and submit again.
+    await waitFor(() =>
+      expect(screen.getByText(/Failed to connect to the pipeline API/i)).toBeInTheDocument(),
+    );
+
+    await user.type(input, "follow-up?");
+    await user.keyboard("{Enter}");
+
+    const askCalls = mockFetch.mock.calls.filter(
+      ([url]) => url === "/api/pipeline/ask",
+    );
+    expect(askCalls.length).toBe(2);
+    const secondBody = JSON.parse((askCalls[1][1] as { body: string }).body);
+    // The empty assistant placeholder from the failed first turn is filtered
+    // out; only the completed user message survives in history.
+    expect(secondBody.history).toEqual([
+      { role: "user", content: "first?" },
+    ]);
+    expect(secondBody.question).toBe("follow-up?");
+  });
+
   it("shows an error message when the pipeline response is not ok", async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500, body: null });
 

@@ -172,6 +172,7 @@ def build_prompt(
     question: str,
     chunks: list[ChunkResult],
     system_prompt: str | None = None,
+    history: list[dict] | None = None,
 ) -> list[dict]:
     """Build chat messages for Ollama with retrieved context.
 
@@ -180,6 +181,14 @@ def build_prompt(
     the hardcoded ``SYSTEM_PROMPT`` constant is used — this keeps unit tests
     that don't need a DB session simple, but production callers (``api/ask``)
     always pass a resolved value.
+
+    ``history`` (Issue #699): prior turns of this conversation, ordered
+    oldest-first as ``[{role: user|assistant, content: str}, ...]``. They
+    are inserted between the system prompt and the new user message so
+    follow-up questions ("what about pricing?") have context. The new
+    question's user message still includes freshly-retrieved chunks; we
+    don't re-attach old chunks (the LLM already saw them in the assistant
+    turn it produced last time).
     """
     context_parts = []
     for i, c in enumerate(chunks, 1):
@@ -196,10 +205,13 @@ def build_prompt(
 
 Question: {question}"""
 
-    return [
+    messages: list[dict] = [
         {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
-        {"role": "user", "content": user_msg},
     ]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user_msg})
+    return messages
 
 
 def chunks_to_sources(chunks: list[ChunkResult]) -> list[dict]:

@@ -12,6 +12,7 @@ SSE event types:
 """
 import json
 import logging
+from typing import Literal
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -32,6 +33,17 @@ from app.services.rag import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Issue #699: defensive cap on conversation history length. Even if the
+# client over-sends, we never feed more than this many prior messages to
+# the LLM. Roughly four Q+A pairs — comfortable inside an 8k context for
+# typical answer lengths.
+MAX_HISTORY_MESSAGES = 8
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
 
 class AskRequest(BaseModel):
     question: str
@@ -40,6 +52,8 @@ class AskRequest(BaseModel):
     feed_ids: list[str] | None = None
     episode_id: str | None = None
     speaker_label: str | None = None
+    # Issue #699: prior turns of the conversation for follow-up awareness.
+    history: list[ChatMessage] | None = None
 
 
 def _sse_event(event: str, data: dict | list | str) -> str:
@@ -47,7 +61,14 @@ def _sse_event(event: str, data: dict | list | str) -> str:
     return f"event: {event}\ndata: {payload}\n\n"
 
 
-async def _stream_ask(question: str, model: str | None, feed_ids: list[str] | None, episode_id: str | None = None, speaker_label: str | None = None):
+async def _stream_ask(
+    question: str,
+    model: str | None,
+    feed_ids: list[str] | None,
+    episode_id: str | None = None,
+    speaker_label: str | None = None,
+    history: list[dict] | None = None,
+):
     db = SessionLocal()
     try:
         runtime = get_runtime_inference_settings(db)
@@ -99,10 +120,18 @@ async def _stream_ask(question: str, model: str | None, feed_ids: list[str] | No
 
         # 3. Build prompt and stream response. Issue #643: per-episode Ask
         # popup and the global /ask page get separate, user-editable system
-        # prompts (defaulting to the same text).
+        # prompts (defaulting to the same text). Issue #699: prior turns
+        # are inserted between system and user — capped to MAX_HISTORY_MESSAGES
+        # defensively even if the client over-sent.
         prompt_key = "ask_episode_system" if episode_id else "ask_page_system"
         system_prompt = get_prompt(db, prompt_key)
-        messages = build_prompt(question, chunks, system_prompt=system_prompt)
+        capped_history = (history or [])[-MAX_HISTORY_MESSAGES:]
+        messages = build_prompt(
+            question,
+            chunks,
+            system_prompt=system_prompt,
+            history=capped_history,
+        )
 
         async for token in stream_response(messages, model=resolved_model, runtime=runtime):
             yield _sse_event("token", {"content": token})
@@ -131,8 +160,16 @@ async def ask_endpoint(req: AskRequest):
     if not feed_ids and req.feed_id:
         feed_ids = [req.feed_id]
 
+    history = [m.model_dump() for m in req.history] if req.history else None
     return StreamingResponse(
-        _stream_ask(req.question, req.model, feed_ids, episode_id=req.episode_id, speaker_label=req.speaker_label),
+        _stream_ask(
+            req.question,
+            req.model,
+            feed_ids,
+            episode_id=req.episode_id,
+            speaker_label=req.speaker_label,
+            history=history,
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

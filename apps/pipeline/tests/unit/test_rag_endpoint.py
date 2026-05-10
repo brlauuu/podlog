@@ -1,4 +1,5 @@
 """Unit tests for the /api/ask FastAPI endpoint (SSE stream wiring)."""
+from contextlib import ExitStack
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -118,3 +119,82 @@ class TestAskEndpoint:
             assert resp.status_code == 200
             assert "".join(tokens) == "remote answer"
             mock_check.assert_not_called()
+
+
+class TestAskHistory:
+    """Issue #699: prior turns flow through to build_prompt."""
+
+    def _enter_patches(self, stack: ExitStack, mock_chunks):
+        stack.enter_context(patch("app.api.ask.check_model_available", new_callable=AsyncMock, return_value=True))
+        stack.enter_context(patch("app.api.ask.get_runtime_inference_settings", return_value={"inference_provider": "local"}))
+        stack.enter_context(patch("app.api.ask.retrieve_chunks", return_value=mock_chunks))
+        stack.enter_context(patch("app.api.ask.get_prompt", return_value="SYSTEM"))
+        stack.enter_context(patch("app.api.ask.chunks_to_sources", return_value=[{"chunk_id": 1}]))
+
+    @staticmethod
+    def _fake_stream():
+        async def gen(*_a, **_kw):
+            yield "ok"
+        return gen
+
+    def test_history_passed_through_to_build_prompt(self):
+        with ExitStack() as stack:
+            self._enter_patches(stack, [make_chunk()])
+            mock_build = stack.enter_context(patch("app.api.ask.build_prompt", return_value=[]))
+            mock_stream = stack.enter_context(patch("app.api.ask.stream_response"))
+            mock_stream.return_value = self._fake_stream()()
+
+            history = [
+                {"role": "user", "content": "Q1"},
+                {"role": "assistant", "content": "A1"},
+            ]
+            resp = client.post("/api/ask", json={"question": "Q2", "history": history})
+
+            assert resp.status_code == 200
+            assert mock_build.call_args.kwargs["history"] == history
+
+    def test_omitted_history_yields_empty_list_to_build_prompt(self):
+        """Backwards-compat: callers that don't send history get [] (empty)."""
+        with ExitStack() as stack:
+            self._enter_patches(stack, [make_chunk()])
+            mock_build = stack.enter_context(patch("app.api.ask.build_prompt", return_value=[]))
+            mock_stream = stack.enter_context(patch("app.api.ask.stream_response"))
+            mock_stream.return_value = self._fake_stream()()
+
+            resp = client.post("/api/ask", json={"question": "Q1"})
+
+            assert resp.status_code == 200
+            assert mock_build.call_args.kwargs["history"] == []
+
+    def test_history_capped_to_max_messages(self):
+        """Defensive: server caps over-long histories to MAX_HISTORY_MESSAGES."""
+        from app.api.ask import MAX_HISTORY_MESSAGES
+
+        long_history = [
+            {"role": "user" if i % 2 == 0 else "assistant", "content": f"msg-{i}"}
+            for i in range(20)
+        ]
+        with ExitStack() as stack:
+            self._enter_patches(stack, [make_chunk()])
+            mock_build = stack.enter_context(patch("app.api.ask.build_prompt", return_value=[]))
+            mock_stream = stack.enter_context(patch("app.api.ask.stream_response"))
+            mock_stream.return_value = self._fake_stream()()
+
+            resp = client.post("/api/ask", json={"question": "Q", "history": long_history})
+
+            assert resp.status_code == 200
+            received = mock_build.call_args.kwargs["history"]
+            assert len(received) == MAX_HISTORY_MESSAGES
+            # The cap keeps the tail (most recent) — freshest context for the LLM.
+            assert received[-1]["content"] == "msg-19"
+
+    def test_invalid_history_role_returns_422(self):
+        """Pydantic Literal["user","assistant"] rejects "system" etc."""
+        resp = client.post(
+            "/api/ask",
+            json={
+                "question": "Q",
+                "history": [{"role": "system", "content": "shouldn't work"}],
+            },
+        )
+        assert resp.status_code == 422
