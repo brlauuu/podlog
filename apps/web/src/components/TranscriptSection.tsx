@@ -6,7 +6,7 @@ import SpeakerPanel from "@/components/SpeakerPanel";
 import TranscriptView from "@/components/TranscriptView";
 import TranscriptExportButton from "@/components/TranscriptExportButton";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
-import type { Segment } from "@/lib/types";
+import type { Segment, SpeakerRole } from "@/lib/types";
 
 interface Props {
   episodeId: string;
@@ -67,6 +67,14 @@ export default function TranscriptSection({
     );
   }
 
+  function handleRoleChanged(speakerLabel: string, role: SpeakerRole | null) {
+    setSegments((prev) =>
+      prev.map((seg) =>
+        seg.speaker_label === speakerLabel ? { ...seg, role } : seg,
+      ),
+    );
+  }
+
   function handleMerged(sourceLabels: string[], targetLabel: string) {
     // If the active filter is one of the merged-away speakers, switch to target
     if (activeSpeaker && sourceLabels.includes(activeSpeaker)) {
@@ -122,6 +130,7 @@ export default function TranscriptSection({
           segments={segments}
           onRenamed={handleRenamed}
           onMerged={handleMerged}
+          onRoleChanged={handleRoleChanged}
           activeSpeaker={activeSpeaker}
           onFilterSpeaker={setActiveSpeaker}
         />

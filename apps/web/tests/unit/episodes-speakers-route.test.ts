@@ -67,7 +67,9 @@ describe("PUT /api/episodes/[id]/speakers", () => {
     expect(speakerNamesCall![0]).toContain("ON CONFLICT");
     expect(speakerNamesCall![0]).toContain("inferred = false");
     expect(speakerNamesCall![0]).toContain("confirmed_by_user = true");
-    expect(speakerNamesCall![1]).toEqual(["ep-1", "SPEAKER_00", "Alice"]);
+    // Params: [episode_id, speaker_label, display_name, role_provided, role]
+    // role_provided=false here — caller didn't send a role.
+    expect(speakerNamesCall![1]).toEqual(["ep-1", "SPEAKER_00", "Alice", false, null]);
 
     const cacheCall = mockClientQuery.mock.calls.find((c) =>
       /INSERT INTO feed_speaker_cache/.test(c[0])
@@ -215,5 +217,68 @@ describe("PUT /api/episodes/[id]/speakers", () => {
 
     // pool.connect() must be called exactly once — both upserts share one transaction
     expect(mockConnect).toHaveBeenCalledTimes(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Speaker role (#698)
+
+  it("persists role when provided in the body", async () => {
+    const resp = await call("ep-1", {
+      speaker_label: "SPEAKER_00",
+      display_name: "Alice",
+      role: "host",
+    });
+
+    expect(resp.status).toBe(200);
+    const insertCall = mockClientQuery.mock.calls.find(
+      (c) => /INSERT INTO speaker_names/.test(c[0]),
+    );
+    expect(insertCall).toBeDefined();
+    // The INSERT statement should mention `role` as a column.
+    expect(insertCall![0]).toMatch(/role/);
+    // Params should carry the role value.
+    const params = insertCall![1] as unknown[];
+    expect(params).toContain("host");
+  });
+
+  it("returns 400 for unknown role", async () => {
+    const resp = await call("ep-1", {
+      speaker_label: "SPEAKER_00",
+      display_name: "Alice",
+      role: "narrator",
+    });
+    expect(resp.status).toBe(400);
+    // Bad role short-circuits before the DB transaction starts.
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it("accepts null role to clear a previously-set role", async () => {
+    const resp = await call("ep-1", {
+      speaker_label: "SPEAKER_00",
+      display_name: "Alice",
+      role: null,
+    });
+    expect(resp.status).toBe(200);
+    const insertCall = mockClientQuery.mock.calls.find(
+      (c) => /INSERT INTO speaker_names/.test(c[0]),
+    );
+    const params = insertCall![1] as unknown[];
+    expect(params).toContain(null);
+  });
+
+  it("preserves existing role when role is omitted (legacy callers)", async () => {
+    // No `role` field in the body — the SQL's CASE expression should keep
+    // the existing role on UPDATE rather than clobbering it to NULL. The
+    // $4 param ("role provided?") must be false.
+    await call("ep-1", {
+      speaker_label: "SPEAKER_00",
+      display_name: "Alice",
+    });
+    const insertCall = mockClientQuery.mock.calls.find(
+      (c) => /INSERT INTO speaker_names/.test(c[0]),
+    );
+    expect(insertCall).toBeDefined();
+    const params = insertCall![1] as unknown[];
+    expect(params[3]).toBe(false);
   });
 });

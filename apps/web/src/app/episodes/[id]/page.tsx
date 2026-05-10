@@ -115,7 +115,8 @@ async function getSegments(episodeId: string): Promise<Segment[]> {
     `SELECT s.id, s.start_time, s.end_time, s.speaker_label, s.text,
             sn.display_name,
             COALESCE(sn.inferred, false) AS inferred,
-            COALESCE(sn.confirmed_by_user, false) AS confirmed_by_user
+            COALESCE(sn.confirmed_by_user, false) AS confirmed_by_user,
+            sn.role
      FROM segments s
      LEFT JOIN speaker_names sn ON sn.episode_id = s.episode_id
        AND sn.speaker_label = s.speaker_label

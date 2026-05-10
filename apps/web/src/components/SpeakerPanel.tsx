@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Check, X } from "lucide-react";
 import { getSpeakerColor, getSpeakerInitials, getSpeakerSlot } from "@/lib/speakerColors";
-import type { Segment } from "@/lib/types";
+import type { Segment, SpeakerRole } from "@/lib/types";
 import MergeBar from "@/components/MergeBar";
 
 interface SpeakerInfo {
@@ -12,6 +12,21 @@ interface SpeakerInfo {
   segmentCount: number;
   inferred: boolean;
   confirmedByUser: boolean;
+  /** #698: user-assigned role for this speaker on this episode. */
+  role: SpeakerRole | null;
+}
+
+// #698: sort key per role. Hosts first, then guests, then others, then
+// unassigned. Non-role tie-break uses the speaker slot (existing behavior).
+const ROLE_ORDER: Record<string, number> = {
+  host: 0,
+  guest: 1,
+  other: 2,
+};
+const UNASSIGNED_ROLE_ORDER = 3;
+
+function roleSortKey(role: SpeakerRole | null): number {
+  return role === null ? UNASSIGNED_ROLE_ORDER : ROLE_ORDER[role];
 }
 
 interface Props {
@@ -21,6 +36,9 @@ interface Props {
   onMerged: (sourceLabels: string[], targetLabel: string) => void;
   activeSpeaker: string | null;
   onFilterSpeaker: (speakerLabel: string | null) => void;
+  /** #698: called after a role change is persisted, so the parent can
+   *  update its segment cache without a full refetch. */
+  onRoleChanged?: (speakerLabel: string, role: SpeakerRole | null) => void;
 }
 
 function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
@@ -36,6 +54,10 @@ function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
         existing.confirmedByUser = true;
         existing.inferred = false;
       }
+      // #698: a non-null role on any segment wins (every segment for a label
+      // shares the same role row, so this is just a "use whichever segment
+      // brought the data" guard).
+      if (seg.role && !existing.role) existing.role = seg.role;
     } else {
       map.set(seg.speaker_label, {
         speakerLabel: seg.speaker_label,
@@ -43,18 +65,22 @@ function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
         segmentCount: 1,
         inferred: seg.inferred,
         confirmedByUser: seg.confirmed_by_user,
+        role: seg.role ?? null,
       });
     }
   }
-  return Array.from(map.values()).sort(
-    (a, b) => getSpeakerSlot(a.speakerLabel) - getSpeakerSlot(b.speakerLabel)
-  );
+  return Array.from(map.values()).sort((a, b) => {
+    const roleDiff = roleSortKey(a.role) - roleSortKey(b.role);
+    if (roleDiff !== 0) return roleDiff;
+    return getSpeakerSlot(a.speakerLabel) - getSpeakerSlot(b.speakerLabel);
+  });
 }
 
 function SpeakerCard({
   speaker,
   episodeId,
   onRenamed,
+  onRoleChanged,
   mergeMode,
   selected,
   onToggleSelect,
@@ -64,6 +90,7 @@ function SpeakerCard({
   speaker: SpeakerInfo;
   episodeId: string;
   onRenamed: (newName: string) => void;
+  onRoleChanged?: (role: SpeakerRole | null) => void;
   mergeMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
@@ -73,6 +100,7 @@ function SpeakerCard({
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(speaker.displayName);
   const [saving, setSaving] = useState(false);
+  const [savingRole, setSavingRole] = useState(false);
 
   useEffect(() => {
     if (!editing) setValue(speaker.displayName);
@@ -80,8 +108,6 @@ function SpeakerCard({
 
   const color = getSpeakerColor(speaker.speakerLabel);
   const initials = getSpeakerInitials(speaker.displayName, speaker.speakerLabel);
-  const slot = getSpeakerSlot(speaker.speakerLabel);
-  const hasCustomName = speaker.displayName !== speaker.speakerLabel;
   const isInferredUnconfirmed = speaker.inferred && !speaker.confirmedByUser;
 
   async function persistDisplayName(trimmed: string) {
@@ -128,6 +154,27 @@ function SpeakerCard({
     const trimmed = speaker.displayName.trim();
     if (!trimmed || saving) return;
     await persistDisplayName(trimmed);
+  }
+
+  async function persistRole(nextRole: SpeakerRole | null) {
+    if (savingRole) return;
+    // Toggle: clicking the active role clears it.
+    const target = speaker.role === nextRole ? null : nextRole;
+    setSavingRole(true);
+    try {
+      const resp = await fetch(`/api/episodes/${episodeId}/speakers`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          speaker_label: speaker.speakerLabel,
+          display_name: speaker.displayName,
+          role: target,
+        }),
+      });
+      if (resp.ok) onRoleChanged?.(target);
+    } finally {
+      setSavingRole(false);
+    }
   }
 
   return (
@@ -182,12 +229,13 @@ function SpeakerCard({
             </div>
           )}
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            {hasCustomName && (
+            {/* #698: badge reflects the user-assigned role, not a label-slot guess. */}
+            {speaker.role && (
               <span
-                className="text-[10px] px-1.5 py-0 rounded"
+                className="text-[10px] px-1.5 py-0 rounded capitalize"
                 style={{ background: color.bg, color: color.hex }}
               >
-                {slot === 0 ? "Host" : "Guest"}
+                {speaker.role}
               </span>
             )}
             {isInferredUnconfirmed && (
@@ -206,6 +254,30 @@ function SpeakerCard({
           </div>
           {!mergeMode && !editing && (
             <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+              {/* #698: role selector — click to set, click again to clear. */}
+              {(["host", "guest", "other"] as const).map((r) => {
+                const isActive = speaker.role === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void persistRole(r);
+                    }}
+                    disabled={savingRole}
+                    aria-pressed={isActive}
+                    aria-label={`${isActive ? "Clear" : "Set"} role ${r} for ${speaker.displayName}`}
+                    className={`text-[10px] px-2 py-0.5 rounded border transition-colors capitalize disabled:opacity-50 ${
+                      isActive
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-input text-muted-foreground hover:text-foreground hover:bg-background"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                );
+              })}
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setEditing(true); }}
@@ -246,7 +318,7 @@ function SpeakerCard({
   );
 }
 
-export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged, activeSpeaker, onFilterSpeaker }: Props) {
+export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged, activeSpeaker, onFilterSpeaker, onRoleChanged }: Props) {
   const speakers = deriveSpeakers(segments);
   const [mergeMode, setMergeMode] = useState(false);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
@@ -335,6 +407,7 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged,
             speaker={speaker}
             episodeId={episodeId}
             onRenamed={(newName) => onRenamed(speaker.speakerLabel, newName)}
+            onRoleChanged={(role) => onRoleChanged?.(speaker.speakerLabel, role)}
             mergeMode={mergeMode}
             selected={selectedLabels.has(speaker.speakerLabel)}
             onToggleSelect={() => toggleSelection(speaker.speakerLabel)}
