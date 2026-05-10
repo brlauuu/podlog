@@ -37,10 +37,12 @@ services:
     volumes:
       - audio_data:/data/audio
       - transcript_data:/data/transcripts
-      # Read-only mount so /api/backups (#646) can list available backups
-      # for the Settings page. The backup service writes to the same host
-      # dir; the pipeline only reads.
-      - ./backups:/backups:ro
+      # Read-write mount: /api/backups (#646) lists available backups, and
+      # the DELETE endpoints under /api/backups/{db,audio}/... (#687) remove
+      # individual dumps and snapshots. Those endpoints validate tier and
+      # filename/date with strict regexes and guard against path traversal —
+      # they're the only writes the pipeline ever does under /backups.
+      - ./backups:/backups
     depends_on:
       db:
         condition: service_healthy

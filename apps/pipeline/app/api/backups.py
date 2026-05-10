@@ -22,8 +22,11 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from datetime import datetime, timezone
+
 from app.config import settings
 from app.database import get_db
+from app.services.backup_files import delete_audio_snapshot, delete_db_dump
 from app.services.backup_settings import get_backup_retention, save_backup_retention
 
 logger = logging.getLogger(__name__)
@@ -155,3 +158,43 @@ def put_retention(body: dict = Body(...), db: Session = Depends(get_db)) -> dict
         values["daily"], values["weekly"], values["monthly"],
     )
     return {"retention": values}
+
+
+@router.delete("/backups/db/{tier}/{filename}")
+def delete_db_backup(tier: str, filename: str) -> dict:
+    """Delete a single DB dump from one tier (#687).
+
+    Returns 400 on bad input, 404 when the file isn't there. Hardlinks
+    across tiers stay alive if their own directory entries remain.
+    """
+    try:
+        delete_db_dump(tier, filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    logger.info(
+        '"action": "backup_db_deleted", "tier": "%s", "filename": "%s"', tier, filename,
+    )
+    return {"deleted": True}
+
+
+@router.delete("/backups/audio/{date}")
+def delete_audio_backup(date: str) -> dict:
+    """Delete one audio snapshot directory (#687).
+
+    Refuses today's snapshot if today's backup tick hasn't finished — that
+    snapshot may still be growing under rsync. 409 lets the UI distinguish
+    the retryable case from a hard error.
+    """
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        delete_audio_snapshot(date, today=today)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    logger.info('"action": "backup_audio_deleted", "date": "%s"', date)
+    return {"deleted": True}
