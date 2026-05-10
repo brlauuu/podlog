@@ -28,6 +28,10 @@ interface Message {
   sources?: Source[];
 }
 
+// Issue #699: cap history sent to the backend (mirrors the pipeline's own
+// MAX_HISTORY_MESSAGES). 8 messages = 4 prior Q&A pairs.
+const MAX_HISTORY_MESSAGES = 8;
+
 interface EpisodeChatProps {
   episodeId: string;
   episodeTitle: string;
@@ -226,6 +230,16 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
       setErrorMsg("");
       setStatus("connecting");
 
+      // Issue #699: snapshot completed prior turns before adding the new
+      // placeholder so the LLM has follow-up context. Strip the optional
+      // `sources` field — the server contract is plain {role, content}.
+      // Keep only fully-formed messages (assistant placeholders with empty
+      // content from a still-streaming reply must not leak in).
+      const priorHistory = messages
+        .filter((m) => m.content.length > 0)
+        .slice(-MAX_HISTORY_MESSAGES)
+        .map((m) => ({ role: m.role, content: m.content }));
+
       // Append user message and empty assistant placeholder
       setMessages((prev) => [
         ...prev,
@@ -241,7 +255,12 @@ export default function EpisodeChat({ episodeId, episodeTitle, feedTitle, episod
         const resp = await fetch("/api/pipeline/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: q, episode_id: episodeId, model }),
+          body: JSON.stringify({
+            question: q,
+            episode_id: episodeId,
+            model,
+            history: priorHistory,
+          }),
           signal: controller.signal,
         });
 
