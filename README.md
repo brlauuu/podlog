@@ -26,7 +26,7 @@
 - **Hybrid search** — full-text keyword search (`"exact phrase"`, `OR`, `-exclude`) combined with pgvector semantic similarity, merged via Reciprocal Rank Fusion.
 - **Persistent audio player** — click any timestamp to play; the player keeps going while you navigate other pages.
 - **Ask AI (RAG)** — ask natural-language questions and get streamed, citation-backed answers drawn from your transcript library (local Ollama by default, Fireworks optional).
-- **Export** — download search results or full transcripts as Markdown, plain text, or print-friendly PDF.
+- **Export** — download search results or full transcripts as Markdown or plain text, or open a print-friendly view (`/search/print`) for the browser's print-to-PDF flow.
 - **Queue dashboard** — per-stage status, error classification, auto-retry for transient failures, manual retry for the rest.
 - **Meta-Analysis dashboard** — cross-feed metrics (episode counts, durations, WPM, turn density, host/guest share, processing time, token and cost totals) with drill-down charts at `/meta-analysis`.
 - **Notifications** — Telegram and email alerts when episodes finish or fail, with optional daily/weekly digest.

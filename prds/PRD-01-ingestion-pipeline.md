@@ -6,6 +6,7 @@
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.7 — §5.10 RAG inference is no longer Ollama-only: the Fireworks AI provider was added in #608 with a curated chat-model list (Qwen2.5 7B Instruct, Llama 3.1 70B Instruct, Qwen2.5 72B Instruct). Provider selection is per-environment via the `inference_provider` setting; local Ollama remains the default for both new installs and existing upgrades.
 - v1.6 — §5.5 extended with the pyannote cloud (`precision-2`) provider option (issue #516). Provider routing precedence documented: Fireworks STT diarization metadata wins over `DIARIZATION_PROVIDER`. Cost estimate persistence (`episodes.pyannote_cloud_cost_usd`) and the 20-second per-request minimum billing floor are called out.
 - v1.5 — §5.2 retry copy corrected to match code: backoff formula is `RETRY_BACKOFF_BASE * 2^(attempt-1)` (30s → 60s → 120s), and HTTP 4xx is clarified as classified `HTTP_ACCESS` with retry (not "non-transient and retried").
 - v1.4 — Added optional remote inference provider mode (Fireworks) for transcription and diarization while keeping local-first defaults. Runtime provider settings can be sourced from DB-backed Settings UI (env fallback remains). Added Fireworks configuration vars.

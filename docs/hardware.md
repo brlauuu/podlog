@@ -24,8 +24,8 @@ Podlog was developed and tested on:
 | RAM | 42 GB DDR4 |
 | Storage | 1 TB NVMe SSD |
 | OS | Ubuntu 24.04.4 LTS |
-| Docker | 29.3.0 |
-| Docker Compose | 5.1.0 |
+| Docker | 29.3.1 |
+| Docker Compose | 5.1.1 |
 
 ## Processing Benchmarks
 
