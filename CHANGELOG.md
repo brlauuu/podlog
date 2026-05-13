@@ -22,6 +22,7 @@ fresh empty `Unreleased` is left at the top.
 
 ### Internal
 - `huggingface-hub` is now declared as a direct pipeline dependency. Previously it was only present transitively via `pyannote-audio` and `whisperx`; `app/services/pyannote.py` imports from it directly, so pinning the version here protects pipeline boot from a future upstream change. Resolved version unchanged. ([#657](https://github.com/brlauuu/podlog/issues/657))
+- CLAUDE.md repo-structure tree refreshed to match the current on-disk layout — adds `backups/` and `notebooks/`, drops stale agent-metadata entries, fills in new pipeline `api/`/`services/` modules and new web `api/`/`lib/` files, bumps the Alembic migration count to 20. ([#658](https://github.com/brlauuu/podlog/issues/658))
 
 ### Major changes
 - Per-active-provider queue ETA in notifications. The "Est. time left" line in episode notifications now uses the rate of episodes processed by whichever inference provider is currently configured, and tags the line with `(local)` or `(remote)` so the basis is visible. ([#595](https://github.com/brlauuu/podlog/pull/595))
