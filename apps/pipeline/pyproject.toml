@@ -50,6 +50,12 @@ soundfile = "^0.12.1"
 # pyannote diarization (>=4.0 required by whisperx)
 pyannote-audio = ">=3.1.0"
 
+# Imported directly by app/services/pyannote.py for typed exception classes.
+# Pinned to match the range already required transitively by whisperx (>=0.28.1)
+# and transformers (<1.0); declaring it here protects us from a future upstream
+# change that drops the transitive dep. See issue #657.
+huggingface-hub = ">=0.28.1,<1.0"
+
 # spaCy NER for host/guest inference (PRD-04)
 spacy = "^3.7"
 

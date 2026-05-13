@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Internal
+- `huggingface-hub` is now declared as a direct pipeline dependency. Previously it was only present transitively via `pyannote-audio` and `whisperx`; `app/services/pyannote.py` imports from it directly, so pinning the version here protects pipeline boot from a future upstream change. Resolved version unchanged. ([#657](https://github.com/brlauuu/podlog/issues/657))
+
 ### Major changes
 - Per-active-provider queue ETA in notifications. The "Est. time left" line in episode notifications now uses the rate of episodes processed by whichever inference provider is currently configured, and tags the line with `(local)` or `(remote)` so the basis is visible. ([#595](https://github.com/brlauuu/podlog/pull/595))
 - Distinct error class for Fireworks upload rejections. When Fireworks aborts an upload at the TLS layer (typically size/duration cap), the failure is classified as `FIREWORKS_UPLOAD_REJECTED`, the retry loop is skipped, and notifications carry an "Action required: re-run on local inference" call-to-action. ([#602](https://github.com/brlauuu/podlog/pull/602))
