@@ -25,6 +25,7 @@ jest.mock("next/navigation", () => ({
   notFound: jest.fn(() => {
     throw new Error("notFound");
   }),
+  useRouter: () => ({ push: jest.fn() }),
 }));
 
 jest.mock("@/components/EpisodeDescription", () => () => <div data-testid="episode-description" />);

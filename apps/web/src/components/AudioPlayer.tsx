@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, Volume2, VolumeX, ChevronUp, ChevronDown, SkipBack, SkipForward, X, AlertTriangle } from "lucide-react";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
 import { formatTimestamp } from "@/lib/timestamp";
+import { useKeyboardShortcut } from "@/lib/useKeyboardShortcut";
 
 /**
  * Global persistent audio player bar — fixed to bottom of screen.
@@ -87,6 +88,24 @@ export default function AudioPlayer() {
     audio.muted = !audio.muted;
     setMuted(audio.muted);
   }
+
+  // #702: keyboard shortcuts — only active when there's actually audio
+  // loaded (state.src is set). Otherwise Space/Arrows behave normally.
+  const playerActive = !!state.src;
+  const onSpace = useCallback(
+    (event: KeyboardEvent) => {
+      // Stop the page from scrolling on Space.
+      event.preventDefault();
+      togglePlayPause();
+    },
+    [togglePlayPause],
+  );
+  const onLeft = useCallback(() => skip(-10), [skip]);
+  const onRight = useCallback(() => skip(10), [skip]);
+
+  useKeyboardShortcut({ key: " ", handler: onSpace, enabled: playerActive });
+  useKeyboardShortcut({ key: "ArrowLeft", handler: onLeft, enabled: playerActive });
+  useKeyboardShortcut({ key: "ArrowRight", handler: onRight, enabled: playerActive });
 
   // Reset local UI state when player is closed
   useEffect(() => {

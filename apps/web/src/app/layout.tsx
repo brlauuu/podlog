@@ -7,6 +7,8 @@ import MainContent from "@/components/MainContent";
 import Footer from "@/components/Footer";
 import { AudioPlayerProvider } from "@/components/AudioPlayerContext";
 import QueryProvider from "@/components/QueryProvider";
+import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp";
+import GlobalKeyboardShortcuts from "@/components/GlobalKeyboardShortcuts";
 
 
 const inter = Inter({ subsets: ["latin"] });
@@ -34,6 +36,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Footer />
             {/* Global persistent player — fixed to bottom, persists across navigation */}
             <AudioPlayer />
+            {/* Keyboard shortcuts: global "/" + "?" handlers. Per-page
+                shortcuts (J/K, Space, ←/→) live with their components. */}
+            <KeyboardShortcutsHelp />
+            <GlobalKeyboardShortcuts />
           </AudioPlayerProvider>
         </QueryProvider>
       </body>
