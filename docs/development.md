@@ -17,16 +17,16 @@ podlog/
 │   │   │   ├── models.py           # SQLAlchemy ORM (feeds, episodes, segments)
 │   │   │   ├── database.py         # Engine + session factory
 │   │   │   ├── job_queue.py        # DB-backed job queue (FOR UPDATE SKIP LOCKED)
-│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis)
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis, backups, explore, prompts)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
-│   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, rag, inference, inference_helpers, meta_analysis, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels, prompts, backup_files, backup_settings)
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # Unit, integration, e2e tests
 │   └── web/                        # Next.js 16.2.4 (App Router)
 │       ├── src/app/                # Pages: /, /search, /ask, /podcasts, /episodes/[id], /queue, /feeds, /settings, /docs, /meta-analysis, /about (/notifications redirects to /settings)
-│       │   └── api/                # Route handlers: search, search/grouped, search/mentions, feeds, queue, audio, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, hardware, meta-analysis (coverage, refresh, snapshot), pipeline proxy
+│       │   └── api/                # Route handlers: search, search/grouped, search/mentions, feeds, queue, audio, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, hardware, meta-analysis (coverage, refresh, snapshot), pipeline proxy, backups, prompts
 │       ├── src/components/         # React components (Navbar, AudioPlayer, SearchResult, QueueStatus, …)
-│       └── src/lib/                # Utilities (db, search, searchHybrid, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest, citations, normalizeName, filename, metaAnalysisTypes, rag-models, …)
+│       └── src/lib/                # Utilities (db, search, searchHybrid, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest, citations, normalizeName, filename, dateFormat, docs-index, docs-search, docs-slug, formatFileSize, settings-schema, metaAnalysisTypes, rag-models, keyboardShortcuts, useKeyboardShortcut, …)
 ├── docs/                           # User-facing documentation
 └── prds/                           # Internal design specs and risk register
 ```
@@ -35,9 +35,9 @@ podlog/
 
 ### Prerequisites
 
-- Python 3.11+ with [Poetry](https://python-poetry.org/)
-- Node.js 20.9.0+ with npm (see `.nvmrc` / `.node-version` for pinned local version)
-- Docker and Docker Compose (for the database)
+- Python 3.11+ with [Poetry](https://python-poetry.org/) — for running the pipeline natively
+- Node.js 20.9.0+ with npm (see `.nvmrc` / `.node-version` for pinned local version) — for running the web app natively
+- Docker and Docker Compose — required for the full stack (db, pipeline, worker, ollama, web) and recommended for everyday development
 
 ### Pipeline (Python)
 
@@ -157,21 +157,51 @@ The README shows live status badges for each lane.
 ## Makefile Targets
 
 ```
-make up                 Start all services
-make down               Stop all services
-make build              Rebuild all Docker images
+# Stack lifecycle
+make up                 Start all services (default profile)
+make up-remote          Start the remote-inference (Fireworks) profile, no Ollama
+make down               Stop the default-profile stack
+make down-remote        Stop the remote-inference profile stack
+make build              Rebuild all Docker images (reads version from VERSION)
 make logs               Follow logs for all services
-make migrate            Run database migrations
-make test               Run all tests
+make logs-remote        Follow logs for the remote-inference profile stack
+make migrate            Run database migrations (also runs on pipeline startup)
+
+# Tests
+make test               Run all tests (unit + e2e)
 make test-unit          Run pipeline unit tests + host healthcheck tests (no web unit tests)
-make test-integration   Run integration tests
-make test-e2e           Run Playwright e2e tests
+make test-healthcheck   Run host healthcheck script tests
+make test-integration   Run integration tests (requires HF_TOKEN)
+make test-e2e           Run Playwright end-to-end tests
+
+# Shells / browser
 make shell-db           Open psql shell
 make shell-pipeline     Open pipeline container shell
 make shell-web          Open web container shell
+make web                Open the web app in a browser
+
+# Models
+make ollama-pull        Pull Ollama models used by the Ask feature
+
+# Jupyter exploration (#607)
+make explore            Start the Jupyter DB-exploration service (URL+token in logs)
+make explore-down       Stop the explore service
+make explore-logs       Follow the explore service logs
+
+# Backups
+make backup-now         Force a backup run right now (bypasses the daily flag)
+make backup-list        List available DB dumps and audio snapshots
+make restore-db         DESTRUCTIVE: restore the DB. Usage: make restore-db DATE=YYYY-MM-DD
+make restore-audio      DESTRUCTIVE: restore audio archive. Usage: make restore-audio DATE=YYYY-MM-DD
+
+# Healthcheck cron
 make health-check       Run health check once
 make health-install     Install health check cron job (every 15 min)
 make health-uninstall   Remove health check cron job
+
+# Misc
+make backfill           Run chunk+embed backfill (stops worker, runs backfill, restarts worker)
+make version            Show current version
 make env-check          Validate local Node runtime for apps/web
 make deps-outdated      Run npm outdated with resilient network handling
 make help               List all available commands
