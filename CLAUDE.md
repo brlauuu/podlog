@@ -36,10 +36,9 @@ podlog/
 ├── .node-version                   # Node version for local dev
 ├── .nvmrc                          # Node version for nvm users
 ├── .github/                        # GitHub Actions workflows (ci, ci-full-unit, ci-slow)
-├── .agents/                        # Agent configuration
-├── .superpowers/                   # Superpowers metadata (gitignored)
-├── .omx/                           # Oh-my-codex metadata (gitignored)
 ├── issues/                         # Local issue drafts / notes
+├── backups/                        # Daily DB dumps + rsync audio snapshots (gitignored)
+├── notebooks/                      # Jupyter exploration notebooks (gitignored bind mount)
 ├── apps/
 │   ├── pipeline/                   # Python 3.11 — FastAPI + DB-backed job queue
 │   │   ├── app/
@@ -50,22 +49,24 @@ podlog/
 │   │   │   ├── job_queue.py        # PostgreSQL-backed job queue (enqueue, claim, complete)
 │   │   │   ├── task_registry.py    # Maps pipeline stages to task functions + next-stage routing
 │   │   │   ├── worker.py           # Background job worker + feed polling loop
-│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis)
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis, backups, explore, prompts)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
-│   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, rag, inference, inference_helpers, meta_analysis, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels)
-│   │   ├── alembic/                # Database migrations (17 versions)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels, prompts, backup_files, backup_settings)
+│   │   ├── alembic/                # Database migrations (20 versions)
 │   │   └── tests/                  # unit, integration, e2e
 │   └── web/                        # Next.js 16 (App Router)
 │       ├── Dockerfile              # Production image (standalone output)
 │       ├── Dockerfile.test         # Test image used by docker-compose.test.yml
 │       ├── src/app/                # Pages: /, /about, /podcasts, /podcasts/[id], /episodes/[id], /queue, /feeds, /ask, /search, /search/print, /settings, /docs, /meta-analysis (and /notifications redirects to /settings); DocsClient lives in app/docs/
-│       ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll), queue, audio, ask/coverage, episodes ([id], ingest, upload, retry, speakers, speakers/merge), docs, hardware, notifications (settings, test), meta-analysis (coverage, refresh, snapshot), pipeline (ask, embed, health, queue/retry)
+│       ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll), queue, audio, ask/coverage, episodes ([id], ingest, upload, retry, speakers, speakers/merge), docs, hardware, notifications (settings, test), meta-analysis (coverage, refresh, snapshot), pipeline (ask, embed, health, queue/retry), backups, prompts
 │       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, etc.
-│       └── src/lib/                # db.ts, search.ts, search/ (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, filename.ts, metaAnalysisColors.ts, metaAnalysisStale.ts, metaAnalysisTypes.ts, normalizeName.ts, page-state.ts, queueStatus.ts, rag-models.ts
+│       └── src/lib/                # db.ts, search.ts, search/ (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, filename.ts, dateFormat.ts, docs-index.ts, docs-search.ts, docs-slug.ts, formatFileSize.ts, settings-schema.ts, metaAnalysisColors.ts, metaAnalysisStale.ts, metaAnalysisTypes.ts, normalizeName.ts, page-state.ts, queueStatus.ts, rag-models.ts, keyboardShortcuts.ts, useKeyboardShortcut.ts
 ├── docs/                           # User-facing documentation and guides
 ├── scripts/                        # Operational scripts (nightly audit, health check)
 └── prds/                           # Specifications and risk register
 ```
+
+Agent-tool metadata (`.agents/`, `.superpowers/`, `.omx/`, `.claude/`, `.worktrees/`) lives at the repo root but is gitignored — present locally, not part of the project tree.
 
 ## Tech Stack
 
