@@ -149,8 +149,8 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 **Severity:** Medium  
 **Component:** PRD-01 — Worker  
 **Description:** On first run, ~3 GB of model weights must be downloaded before any job can be processed. Without signalling, the user sees jobs sitting in `PENDING` with no explanation.  
-**Mitigation:** Resolved in PRD-01 v1.1 via the model pre-warm step (§5.11) and the `WARMING_UP` health state surfaced in the queue dashboard banner (PRD-02 §5.6).  
-**Status:** Mitigated in v1.1.
+**Mitigation:** Resolved in PRD-01 v1.1 via the model pre-warm step (§5.11) and a `WARMING_UP` health state exposed at `GET /api/health` (`app/api/health.py`). The queue dashboard banner that originally surfaced this was removed in PRD-02 v1.3 — warm-up is brief enough that a persistent UI element is no longer warranted; the health state remains available for operators and external monitoring.  
+**Status:** Mitigated in v1.1; UI surface simplified in v1.3 (banner removed, health state retained).
 
 ---
 
@@ -293,7 +293,7 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 | ID | Item | Resolution | Version |
 |---|---|---|---|
-| RISK-03 | Model download silently blocks jobs | Model pre-warm step + `WARMING_UP` health state + queue UI banner | v1.1 |
+| RISK-03 | Model download silently blocks jobs | Model pre-warm step + `WARMING_UP` health state at `GET /api/health` (queue UI banner removed in PRD-02 v1.3 — warm-up is brief; health state retained for operators) | v1.1 |
 | RISK-05 | Path traversal in audio serving | Basename extraction + path prefix validation in `/api/audio` route | v1.1 |
 | GAP-N/A | Migration race condition (web starts before schema exists) | Pipeline healthcheck + `web` depends on `service_healthy` | v1.1 |
 | GAP-N/A | Whisper+pyannote simultaneous memory load | Explicit unload + GC between transcription and diarization stages | v1.1 |
