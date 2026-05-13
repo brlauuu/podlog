@@ -12,6 +12,7 @@ import BackToSearchLink from "@/components/BackToSearchLink";
 import EpisodeChat from "@/components/EpisodeChat";
 import EpisodeMetaTags from "@/components/EpisodeMetaTags";
 import CopyIdButton from "@/components/CopyIdButton";
+import EpisodeKeyboardNav from "@/components/EpisodeKeyboardNav";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +139,8 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
+      {/* #702: J / K shortcuts to navigate to the next / previous episode. */}
+      <EpisodeKeyboardNav prevId={prev?.id ?? null} nextId={next?.id ?? null} />
       {/* Header */}
       <div>
         <Suspense fallback={null}>

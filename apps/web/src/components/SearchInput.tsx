@@ -41,6 +41,10 @@ export default function SearchInput({
           className="w-full pl-10 pr-16 py-3 text-left border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-ring text-base transition-shadow"
           disabled={disabled}
           autoFocus={autoFocus}
+          /* #702: "/" keyboard shortcut focuses the first input marked with
+             this data attribute. Lives on SearchInput so every search box
+             (search page, ask page, etc.) opts in for free. */
+          data-shortcut="search-input"
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
           {value && (
