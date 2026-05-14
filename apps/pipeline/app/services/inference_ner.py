@@ -29,6 +29,15 @@ from app.services.inference_types import CandidateName
 # this-episode corroboration before seeding them as candidates.
 _HOST_SLOT_LABEL = "SPEAKER_00"
 
+# Cap how much transcript we feed to spaCy as a fifth NER source (#703
+# PR 4). The "I'm Jacob Shapiro, today I'm joined by Dror Poleg"
+# pattern reliably lives in the first few minutes; running NER over a
+# whole 50-minute conversation adds runtime without adding signal and
+# risks false-positive PERSON entities from casual mentions later in
+# the show. Whichever cap is reached first stops the accumulation.
+DEFAULT_TRANSCRIPT_NER_MAX_SECONDS = 300.0
+DEFAULT_TRANSCRIPT_NER_MAX_SEGMENTS = 150
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,17 +59,52 @@ _ORG_SUFFIX_RE = re.compile(
 )
 
 
+def _build_transcript_intro_text(
+    episode_segments: Optional[list[dict]],
+    max_seconds: float = DEFAULT_TRANSCRIPT_NER_MAX_SECONDS,
+    max_segments: int = DEFAULT_TRANSCRIPT_NER_MAX_SEGMENTS,
+) -> str:
+    """Concatenate the first ≤ `max_seconds` of transcript text for the
+    fifth NER source (#703 PR 4). Stops as soon as either cap is hit
+    (segment count OR end_time reaches the cutoff). Whitespace-only
+    text is skipped. Returns "" when no usable segments are available.
+    """
+    if not episode_segments:
+        return ""
+    pieces: list[str] = []
+    used = 0
+    for seg in episode_segments:
+        if used >= max_segments:
+            break
+        text = (seg.get("text") or "").strip() if isinstance(seg, dict) else ""
+        if text:
+            pieces.append(text)
+            used += 1
+        end = seg.get("end_time", 0) if isinstance(seg, dict) else 0
+        if end is not None and end >= max_seconds:
+            break
+    return " ".join(pieces)
+
+
 def extract_candidates(
     nlp,
     episode_description: Optional[str],
     feed_title: Optional[str],
     feed_description: Optional[str],
     episode_title: Optional[str] = None,
+    episode_segments: Optional[list[dict]] = None,
 ) -> list[CandidateName]:
     """Extract PERSON entities from all available text sources.
 
     episode_title is processed through strip_episode_prefix (PRD-04 E2) so
     patterns like "Ep 42: Jane Smith" don't confuse the NER model.
+
+    When ``episode_segments`` is provided, the first ≤ 300 s of segment
+    text is added as a fifth source (#703 PR 4). Catches host /
+    guest self-introductions ("Today I'm joined by Dror Poleg") that
+    don't show up in the description. Source name is
+    ``transcript_intro``; the rest of the pipeline treats it as a
+    regular NER candidate, so the classifier's heuristics apply on top.
     """
     candidates: list[CandidateName] = []
     seen_normalized: set[str] = set()
@@ -74,6 +118,7 @@ def extract_candidates(
         (title_for_ner, "episode_title"),
         (feed_title, "feed_title"),
         (feed_description, "feed_description"),
+        (_build_transcript_intro_text(episode_segments), "transcript_intro"),
     ]
 
     for text, source_name in sources:
