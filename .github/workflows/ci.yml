@@ -13,6 +13,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  docs-sync:
+    name: Docs sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify CLAUDE.md / docs/development.md reference real paths
+        run: python scripts/check_docs_sync.py
+
   pipeline-unit-fast:
     name: Pipeline Unit Fast
     runs-on: ubuntu-latest
