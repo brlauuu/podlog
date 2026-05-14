@@ -425,6 +425,31 @@ class TestWriteOtherRows:
         # Confirmed row not touched.
         assert existing.role != "other"
 
+    def test_updates_existing_unconfirmed_row(self):
+        """A prior inference run may have written a named row for what
+        is now classified as Other (e.g., re-inference after a tweak).
+        Unconfirmed rows are overwritten with the Other marker."""
+        from app.tasks.infer import _write_other_rows
+        existing = MagicMock()
+        existing.confirmed_by_user = False
+        existing.display_name = "Rob Larity"  # stale name from prior run
+        existing.role = None
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = existing
+        assignment = SlotAssignment(
+            new_labels=[],
+            other_labels={"SPEAKER_02"},
+            label_remap={},
+        )
+
+        _write_other_rows("ep-1", assignment, db)
+
+        assert db.add.call_count == 0  # no new row — existing was updated
+        assert existing.display_name == ""
+        assert existing.role == "other"
+        assert existing.inferred is True
+        assert existing.confidence == "LOW"
+
     def test_no_other_labels_is_noop(self):
         from app.tasks.infer import _write_other_rows
         db = MagicMock()
