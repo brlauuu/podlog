@@ -21,6 +21,7 @@ Podlog is a self-hosted podcast transcription and search app. It downloads episo
 15. [Database Exploration with Jupyter](15-explore.md) — Optional advanced: pandas + Plotly notebooks against the Podlog DB
 16. [Backups](16-backups.md) — Daily DB + audio backups, retention, restore
 17. [Troubleshooting](17-troubleshooting.md) — Common issues and fixes
+18. [Keyboard Shortcuts](18-keyboard-shortcuts.md) — `J`/`K` episode nav, `/` focus search, `Space` / arrows for playback, `?` help overlay
 
 ## Quick Start
 
