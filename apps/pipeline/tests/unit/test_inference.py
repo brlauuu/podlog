@@ -545,18 +545,23 @@ class TestExtractMetadataCandidates:
         assert out[0].source == "feed_speaker_cache"
 
     def test_feed_speaker_cache_multiple_entries_all_emitted_in_order(self):
-        """Multiple cache entries come through in provided order (sorted by count DESC upstream)."""
+        """Multiple SPEAKER_00 cache entries (recurring hosts on a cohost
+        show, both correctly cached on the host slot) come through in
+        provided order. The classifier will sort out which is host vs
+        cohost. #703 PR 3: SPEAKER_NN entries are gated separately, so
+        this test only covers the SPEAKER_00 case."""
         out = extract_metadata_candidates(
             itunes_author=None,
             itunes_owner_name=None,
             episode_author=None,
             feed_speaker_cache_priors=[
                 {"name": "Primary Host", "speaker_label": "SPEAKER_00", "occurrence_count": 10},
-                {"name": "Second Host", "speaker_label": "SPEAKER_01", "occurrence_count": 8},
+                {"name": "Second Cohost", "speaker_label": "SPEAKER_00", "occurrence_count": 8},
             ],
         )
-        assert [c.name for c in out] == ["Primary Host", "Second Host"]
+        assert [c.name for c in out] == ["Primary Host", "Second Cohost"]
         assert all(c.source == "feed_speaker_cache" for c in out)
+        assert all(c.role == "host" for c in out)
         assert all(c.confidence == "HIGH" for c in out)
 
     def test_feed_speaker_cache_company_name_dropped(self):
@@ -595,11 +600,125 @@ class TestExtractMetadataCandidates:
             None,
             feed_speaker_cache_priors=[
                 {"speaker_label": "SPEAKER_00", "occurrence_count": 5},
-                {"name": "Valid Host", "speaker_label": "SPEAKER_01", "occurrence_count": 3},
+                {"name": "Valid Host", "speaker_label": "SPEAKER_00", "occurrence_count": 3},
             ],
         )
         assert len(out) == 1
         assert out[0].name == "Valid Host"
+
+    # --- #703 PR 3: SPEAKER_NN cache entries gated on this-episode signal ---
+
+    def test_speaker_nn_cache_skipped_when_no_episode_text(self):
+        """Without episode_title or episode_description, SPEAKER_NN cache
+        entries can't be corroborated and are dropped (#703 PR 3)."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_speaker_cache_priors=[
+                {"name": "Recurring Guest", "speaker_label": "SPEAKER_01", "occurrence_count": 10},
+            ],
+        )
+        assert out == []
+
+    def test_speaker_nn_cache_emitted_when_mentioned_in_description(self):
+        """SPEAKER_NN cache entry is seeded as guest, HIGH when this
+        episode's description names them (#703 PR 3)."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_speaker_cache_priors=[
+                {"name": "Dror Poleg", "speaker_label": "SPEAKER_01", "occurrence_count": 12},
+            ],
+            episode_description="<p>Jacob sits down with author and analyst Dror Poleg to explore AI.</p>",
+        )
+        assert len(out) == 1
+        assert out[0].name == "Dror Poleg"
+        assert out[0].source == "feed_speaker_cache"
+        assert out[0].role == "guest"
+        assert out[0].confidence == "HIGH"
+
+    def test_speaker_nn_cache_emitted_when_mentioned_in_title(self):
+        """Episode title alone is enough corroboration."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_speaker_cache_priors=[
+                {"name": "Marko Papic", "speaker_label": "SPEAKER_01", "occurrence_count": 12},
+            ],
+            episode_title="The geopolitical outlook with Marko Papic",
+        )
+        assert len(out) == 1
+        assert out[0].name == "Marko Papic"
+        assert out[0].role == "guest"
+
+    def test_speaker_nn_cache_emitted_when_named_in_episode_podcast_persons(self):
+        """podcast:person tags on the episode itself also corroborate."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_speaker_cache_priors=[
+                {"name": "Jane Doe", "speaker_label": "SPEAKER_01", "occurrence_count": 7},
+            ],
+            episode_podcast_persons=[{"name": "Jane Doe", "role": "guest"}],
+        )
+        # The cache entry is corroborated by the episode podcast_person
+        # entry. (Jane Doe is also emitted directly via the podcast_person
+        # pathway; dedup keeps only the cache row since it's listed first.)
+        cache_rows = [c for c in out if c.source == "feed_speaker_cache"]
+        assert len(cache_rows) == 1
+        assert cache_rows[0].role == "guest"
+
+    def test_speaker_nn_cache_substring_match_uses_normalized_name(self):
+        """Honorifics in the cache name (e.g. 'Dr. Jane Smith') don't
+        prevent corroboration when the episode text says 'Jane Smith'."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_speaker_cache_priors=[
+                {"name": "Dr. Jane Smith", "speaker_label": "SPEAKER_01", "occurrence_count": 5},
+            ],
+            episode_description="Today's guest is Jane Smith.",
+        )
+        assert len(out) == 1
+        assert out[0].name == "Dr. Jane Smith"
+
+    def test_speaker_nn_cache_unrelated_name_not_corroborated(self):
+        """Cache entry for a person not mentioned anywhere stays dropped
+        even when other names are in the episode text."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_speaker_cache_priors=[
+                {"name": "Rob Larity", "speaker_label": "SPEAKER_01", "occurrence_count": 123},
+                {"name": "Dror Poleg", "speaker_label": "SPEAKER_01", "occurrence_count": 12},
+            ],
+            episode_description="<p>Jacob sits down with Dror Poleg.</p>",
+        )
+        names = [c.name for c in out]
+        assert "Dror Poleg" in names
+        assert "Rob Larity" not in names
+
+    def test_speaker_00_cache_emitted_without_episode_text(self):
+        """Recurring host (SPEAKER_00 cache) is unaffected by the new
+        gate — it still seeds as host, HIGH regardless of episode text."""
+        out = extract_metadata_candidates(
+            itunes_author=None,
+            itunes_owner_name=None,
+            episode_author=None,
+            feed_speaker_cache_priors=[
+                {"name": "Jacob Shapiro", "speaker_label": "SPEAKER_00", "occurrence_count": 315},
+            ],
+        )
+        assert len(out) == 1
+        assert out[0].name == "Jacob Shapiro"
+        assert out[0].role == "host"
+        assert out[0].confidence == "HIGH"
 
 
 # --- get_recurring_host_name ---
