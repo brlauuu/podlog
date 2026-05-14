@@ -8,8 +8,8 @@ Press <kbd>?</kbd> from any page to bring up a quick reference overlay that list
 
 | Key | Action |
 |---|---|
-| <kbd>J</kbd> | Next episode in the same feed (only on an episode page; ordered by published date) |
-| <kbd>K</kbd> | Previous episode in the same feed (only on an episode page) |
+| <kbd>J</kbd> | Previous episode in the same feed (only on an episode page; ordered by published date) |
+| <kbd>K</kbd> | Next episode in the same feed (only on an episode page) |
 | <kbd>/</kbd> | Focus the nearest search input on the page. If no search input is present, jumps to `/search` |
 
 ## Audio player
