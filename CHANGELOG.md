@@ -53,6 +53,7 @@ fresh empty `Unreleased` is left at the top.
 - **Daily backups of the database and audio archive.** New `backup` Docker service runs as part of the standard stack, writes `pg_dump --format=custom` files and incremental `rsync --link-dest` audio snapshots to `./backups/` on the host. Retention is 7 daily / 4 weekly / 12 monthly (configurable, set any to 0 to disable). Restore via `make restore-db DATE=...` and `make restore-audio DATE=...` with confirmation prompts. Idempotent across container restarts. See `docs/guide/16-backups.md`. ([#630](https://github.com/brlauuu/podlog/issues/630))
 
 ### Fixes
+- Speaker inference no longer writes phantom `speaker_names` rows. When the classifier produced more guest candidates than the episode had real speakers — common on feeds with many recurring guests in the per-feed cache — the surplus candidates were written as SPEAKER_NN rows with no matching segments, surfacing people who weren't in the audio at all. The writer now consults the segments table and skips slots that aren't actually present in this episode. Issue #703 (PR 1 of 5). ([#703](https://github.com/brlauuu/podlog/issues/703))
 - Docs page section anchors no longer hide their heading behind the sticky navbar after a TOC click or `scrollIntoView` jump. Headings now have a `scroll-margin-top` so they land below the navbar with breathing room. ([#729](https://github.com/brlauuu/podlog/issues/729))
 
 ### Minor changes
