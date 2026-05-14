@@ -6,6 +6,10 @@ assigns each a final host/guest role at HIGH / MEDIUM / LOW confidence
 
 Heuristic rules live here so the extraction modules (inference_ner,
 inference_db) stay extraction-only.
+
+End-user-facing description of the host/guest rules and their
+confidences lives in docs/guide/06-speakers.md under "How names get
+classified". Update both files together when changing the rule set.
 """
 import logging
 from typing import Optional

@@ -7,6 +7,11 @@ the final inferred host/guest names.
 Extracted from inference.py to isolate DB I/O from the classification
 logic. Nothing here decides roles or confidences — that belongs in
 inference_classify.
+
+End-user-facing description of the recurring-host rule, the per-feed
+cache, and the SPEAKER_00 vs SPEAKER_NN gating lives in
+docs/guide/06-speakers.md under "Where candidates come from". Update
+both files together when changing these queries.
 """
 import logging
 from typing import Optional

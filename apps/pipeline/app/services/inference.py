@@ -46,8 +46,10 @@ from app.services.inference_types import (
 )
 
 # Defaults for the run-based short-speaker detection in
-# assign_speaker_slots (#703). See docs/guide/06-speakers.md when it
-# lands (PR 5 of the issue) for the rationale.
+# assign_speaker_slots (#703). End-user-facing rationale lives in
+# docs/guide/06-speakers.md under "Slot assignment and run analysis";
+# update both files together if these change or get promoted to
+# environment variables.
 DEFAULT_SHORT_RUN_SECONDS = 15.0
 DEFAULT_SHORT_RUN_SEGMENTS = 20
 DEFAULT_RUN_GAP_SECONDS = 2.0
