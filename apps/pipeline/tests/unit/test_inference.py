@@ -114,6 +114,117 @@ class TestExtractCandidates:
         # Verify nlp was called with stripped text
         nlp.assert_called_with("Guest: Jane Smith")
 
+    # --- #703 PR 4: transcript intro as a fifth NER source ---
+
+    def test_picks_up_name_only_in_transcript(self):
+        """A guest whose name doesn't appear in description/title can
+        still be extracted from the transcript intro."""
+        # nlp is called once per non-empty source; for this test only
+        # the transcript source has a hit.
+        call_count = 0
+        def nlp_side_effect(text):
+            nonlocal call_count
+            doc = MagicMock()
+            if "joined by Dror Poleg" in text:
+                doc.ents = [_make_spacy_ent("Dror Poleg", "PERSON")]
+            else:
+                doc.ents = []
+            call_count += 1
+            return doc
+        nlp = MagicMock(side_effect=nlp_side_effect)
+
+        segments = [
+            {"text": "Welcome to another episode of the podcast.", "start_time": 0, "end_time": 5},
+            {"text": "Today I'm joined by Dror Poleg to talk about AI.", "start_time": 5, "end_time": 12},
+        ]
+
+        result = extract_candidates(
+            nlp,
+            episode_description="A conversation about AI and the economy.",  # no name
+            feed_title=None,
+            feed_description=None,
+            episode_segments=segments,
+        )
+        names = [c.name for c in result]
+        sources = [c.source for c in result]
+        assert "Dror Poleg" in names
+        assert "transcript_intro" in sources
+
+    def test_transcript_intro_deduped_with_description(self):
+        """A name found in both episode_description and the transcript
+        keeps only the description source (the first source wins)."""
+        nlp = _make_nlp([("Dror Poleg", "PERSON")])
+
+        segments = [
+            {"text": "Today I'm joined by Dror Poleg.", "start_time": 0, "end_time": 5},
+        ]
+
+        result = extract_candidates(
+            nlp,
+            episode_description="Jacob sits down with Dror Poleg.",
+            feed_title=None,
+            feed_description=None,
+            episode_segments=segments,
+        )
+        # The dedup is keyed on normalized name, so only one CandidateName
+        # comes out — and it's the first one we saw (description).
+        assert len(result) == 1
+        assert result[0].source == "episode_description"
+
+    def test_no_segments_means_no_transcript_source(self):
+        """Passing no episode_segments leaves behavior identical to
+        pre-PR-4 (the transcript source is empty so nlp isn't called
+        for it)."""
+        nlp = _make_nlp([("Jane Smith", "PERSON")])
+        result = extract_candidates(
+            nlp,
+            "Today's guest is Jane Smith.",
+            None,
+            None,
+            episode_segments=None,
+        )
+        assert len(result) == 1
+        assert result[0].source == "episode_description"
+
+    def test_transcript_text_capped_by_seconds(self):
+        """The transcript text is capped at ~300 s of audio."""
+        from app.services.inference_ner import _build_transcript_intro_text
+        segments = [
+            {"text": f"seg {i}", "start_time": i * 30, "end_time": (i + 1) * 30}
+            for i in range(20)
+        ]
+        # 10 segments × 30s = 300s; cap fires at end_time >= 300
+        text = _build_transcript_intro_text(segments, max_seconds=300, max_segments=1000)
+        # After the cap kicks in (end_time >= 300 at segment 9), we stop.
+        assert "seg 9" in text
+        assert "seg 15" not in text
+
+    def test_transcript_text_capped_by_segment_count(self):
+        """The transcript text is capped at the segment-count limit."""
+        from app.services.inference_ner import _build_transcript_intro_text
+        segments = [
+            {"text": f"seg {i}", "start_time": i, "end_time": i + 0.5}
+            for i in range(200)
+        ]
+        text = _build_transcript_intro_text(segments, max_seconds=10_000, max_segments=50)
+        assert "seg 49" in text
+        assert "seg 50" not in text
+
+    def test_transcript_text_skips_whitespace_only(self):
+        from app.services.inference_ner import _build_transcript_intro_text
+        segments = [
+            {"text": "real content", "start_time": 0, "end_time": 1},
+            {"text": "   ", "start_time": 1, "end_time": 2},
+            {"text": "more content", "start_time": 2, "end_time": 3},
+        ]
+        text = _build_transcript_intro_text(segments)
+        assert text == "real content more content"
+
+    def test_transcript_text_empty_input_returns_empty_string(self):
+        from app.services.inference_ner import _build_transcript_intro_text
+        assert _build_transcript_intro_text(None) == ""
+        assert _build_transcript_intro_text([]) == ""
+
 
 # --- classify_candidates ---
 

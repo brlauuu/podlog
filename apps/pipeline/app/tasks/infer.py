@@ -106,27 +106,9 @@ def infer_speakers(episode_id: str) -> str:
                 episode_description=episode.description,
             )
 
-            # Step 1: NER extraction (episode title included per PRD-04 E1/E2)
-            nlp = load_spacy_model()
-            try:
-                ner_candidates = extract_candidates(
-                    nlp,
-                    episode.description,
-                    feed_title,
-                    feed_description,
-                    episode_title=episode.title,
-                )
-            finally:
-                unload_spacy_model()
-
-            candidates = merge_candidates(
-                metadata_candidates, ner_candidates, feed_title=feed_title
-            )
-
-            # Common step: load segments and compute the slot assignment.
-            # We always run assign_speaker_slots even when no name candidates
-            # were found, because it also fragments fully-short pyannote
-            # labels into per-run "Other" slots (#703 PR 2).
+            # Load segments before NER so the transcript-intro source
+            # (#703 PR 4) has text to feed into spaCy. The same list is
+            # reused for slot assignment further down.
             segments = (
                 db.query(Segment)
                 .filter(Segment.episode_id == episode_id)
@@ -138,9 +120,30 @@ def infer_speakers(episode_id: str) -> str:
                     "speaker_label": s.speaker_label,
                     "start_time": s.start_time,
                     "end_time": s.end_time,
+                    "text": s.text,
                 }
                 for s in segments
             ]
+
+            # Step 1: NER extraction (episode title included per PRD-04 E1/E2;
+            # plus #703 PR 4: first ≤300s of transcript as a fifth source).
+            nlp = load_spacy_model()
+            try:
+                ner_candidates = extract_candidates(
+                    nlp,
+                    episode.description,
+                    feed_title,
+                    feed_description,
+                    episode_title=episode.title,
+                    episode_segments=seg_dicts,
+                )
+            finally:
+                unload_spacy_model()
+
+            candidates = merge_candidates(
+                metadata_candidates, ner_candidates, feed_title=feed_title
+            )
+            # Slot assignment uses the same seg_dicts loaded above.
             assignment = (
                 assign_speaker_slots(result=None, segments=seg_dicts)
                 if seg_dicts
