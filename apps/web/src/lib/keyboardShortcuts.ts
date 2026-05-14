@@ -5,6 +5,10 @@
  * own the relevant state — `useKeyboardShortcut` is the underlying hook.
  * Keep this catalog in lockstep with those handlers; the `?` help overlay
  * renders it verbatim.
+ *
+ * User-facing prose copy of these bindings lives at
+ * `docs/guide/18-keyboard-shortcuts.md` (#730). Update both files when the
+ * binding set changes.
  */
 export interface ShortcutDoc {
   /** Display string, e.g. "J", "/", "Space", "← / →". */
