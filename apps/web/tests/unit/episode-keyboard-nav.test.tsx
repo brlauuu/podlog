@@ -16,26 +16,26 @@ beforeEach(() => {
 });
 
 describe("<EpisodeKeyboardNav>", () => {
-  test("J navigates to the next episode", () => {
+  test("J navigates to the previous episode", () => {
     render(<EpisodeKeyboardNav prevId="ep-prev" nextId="ep-next" />);
     fireEvent.keyDown(window, { key: "j" });
-    expect(pushMock).toHaveBeenCalledWith("/episodes/ep-next");
-  });
-
-  test("K navigates to the previous episode", () => {
-    render(<EpisodeKeyboardNav prevId="ep-prev" nextId="ep-next" />);
-    fireEvent.keyDown(window, { key: "k" });
     expect(pushMock).toHaveBeenCalledWith("/episodes/ep-prev");
   });
 
-  test("J is a no-op when there is no next episode", () => {
-    render(<EpisodeKeyboardNav prevId="ep-prev" nextId={null} />);
+  test("K navigates to the next episode", () => {
+    render(<EpisodeKeyboardNav prevId="ep-prev" nextId="ep-next" />);
+    fireEvent.keyDown(window, { key: "k" });
+    expect(pushMock).toHaveBeenCalledWith("/episodes/ep-next");
+  });
+
+  test("J is a no-op when there is no previous episode", () => {
+    render(<EpisodeKeyboardNav prevId={null} nextId="ep-next" />);
     fireEvent.keyDown(window, { key: "j" });
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  test("K is a no-op when there is no previous episode", () => {
-    render(<EpisodeKeyboardNav prevId={null} nextId="ep-next" />);
+  test("K is a no-op when there is no next episode", () => {
+    render(<EpisodeKeyboardNav prevId="ep-prev" nextId={null} />);
     fireEvent.keyDown(window, { key: "k" });
     expect(pushMock).not.toHaveBeenCalled();
   });

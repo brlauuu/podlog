@@ -25,8 +25,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
     title: "Navigation",
     shortcuts: [
-      { keys: "J", description: "Next episode in this feed (on an episode page)" },
-      { keys: "K", description: "Previous episode in this feed (on an episode page)" },
+      { keys: "J", description: "Previous episode in this feed (on an episode page)" },
+      { keys: "K", description: "Next episode in this feed (on an episode page)" },
       { keys: "/", description: "Focus the search box" },
     ],
   },

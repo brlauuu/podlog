@@ -10,23 +10,25 @@ interface Props {
 }
 
 /**
- * J / K shortcuts for prev/next episode navigation (#702). Mounted on the
- * episode page; the parent already computes the adjacent IDs server-side.
- * Renders nothing — pure side effects.
+ * J / K shortcuts for prev/next episode navigation. Bindings (#739):
+ *   J → previous episode
+ *   K → next episode
+ * Mounted on the episode page; the parent already computes the
+ * adjacent IDs server-side. Renders nothing — pure side effects.
  */
 export default function EpisodeKeyboardNav({ prevId, nextId }: Props) {
   const router = useRouter();
-
-  const goNext = useCallback(() => {
-    if (nextId) router.push(`/episodes/${nextId}`);
-  }, [nextId, router]);
 
   const goPrev = useCallback(() => {
     if (prevId) router.push(`/episodes/${prevId}`);
   }, [prevId, router]);
 
-  useKeyboardShortcut({ key: "j", handler: goNext, enabled: !!nextId });
-  useKeyboardShortcut({ key: "k", handler: goPrev, enabled: !!prevId });
+  const goNext = useCallback(() => {
+    if (nextId) router.push(`/episodes/${nextId}`);
+  }, [nextId, router]);
+
+  useKeyboardShortcut({ key: "j", handler: goPrev, enabled: !!prevId });
+  useKeyboardShortcut({ key: "k", handler: goNext, enabled: !!nextId });
 
   return null;
 }
