@@ -100,6 +100,10 @@ def infer_speakers(episode_id: str) -> str:
                 episode_podcast_persons=episode.podcast_persons,
                 recurring_host_name=recurring_host_name,
                 feed_speaker_cache_priors=feed_speaker_cache_priors,
+                # #703 PR 3: SPEAKER_NN cache entries are only seeded
+                # when the name is corroborated by this episode's text.
+                episode_title=episode.title,
+                episode_description=episode.description,
             )
 
             # Step 1: NER extraction (episode title included per PRD-04 E1/E2)

@@ -23,6 +23,12 @@ from app.services.inference_helpers import (
 )
 from app.services.inference_types import CandidateName
 
+# Slot label the per-feed cache uses for "this name was the host on prior
+# episodes" entries. Cache entries against any other slot are recurring
+# guests / producers / one-off guests, and #703 PR 3 gates those on
+# this-episode corroboration before seeding them as candidates.
+_HOST_SLOT_LABEL = "SPEAKER_00"
+
 logger = logging.getLogger(__name__)
 
 
@@ -140,6 +146,44 @@ def _podcast_person_to_candidate(
     return CandidateName(name=name, source=source, role=role, confidence="HIGH")
 
 
+def _build_corroboration_haystack(
+    episode_title: Optional[str],
+    episode_description: Optional[str],
+    episode_podcast_persons: Optional[list[dict]] = None,
+) -> str:
+    """Build a single lowercased text blob that recurring-guest cache
+    entries are checked against (#703 PR 3). Includes the episode
+    title, the HTML-stripped description, and the names from any
+    episode-level <podcast:person> tags.
+
+    Returns an empty string if nothing is available — in which case
+    nothing corroborates and all SPEAKER_NN cache entries are skipped.
+    """
+    pieces: list[str] = []
+    if episode_title:
+        pieces.append(episode_title)
+    if episode_description:
+        pieces.append(strip_html(episode_description))
+    for entry in episode_podcast_persons or []:
+        if not isinstance(entry, dict):
+            continue
+        name = (entry.get("name") or "").strip()
+        if name:
+            pieces.append(name)
+    return " ".join(pieces).lower()
+
+
+def _is_corroborated_in_episode(name: str, haystack_lower: str) -> bool:
+    """True when the normalized name appears as a substring in the
+    pre-lowercased episode text blob."""
+    if not haystack_lower:
+        return False
+    norm = normalize_name(name)
+    if not norm:
+        return False
+    return norm in haystack_lower
+
+
 def extract_metadata_candidates(
     itunes_author: Optional[str],
     itunes_owner_name: Optional[str],
@@ -148,6 +192,8 @@ def extract_metadata_candidates(
     episode_podcast_persons: Optional[list[dict]] = None,
     recurring_host_name: Optional[str] = None,
     feed_speaker_cache_priors: Optional[list[dict]] = None,
+    episode_title: Optional[str] = None,
+    episode_description: Optional[str] = None,
 ) -> list[CandidateName]:
     """Build pre-classified candidates from RSS person tags (PRD-04 B1/B2/B3),
     the recurring-host observation (PRD-04 A1), and the per-feed speaker
@@ -159,7 +205,12 @@ def extract_metadata_candidates(
     source winning — earlier entries in the iteration order win.
 
     Ordering (strongest first):
-      - feed_speaker_cache (user-confirmed)  → host, HIGH
+      - feed_speaker_cache, SPEAKER_00 entries → host, HIGH (recurring host)
+      - feed_speaker_cache, SPEAKER_NN entries → guest, HIGH — but only
+        when the name is corroborated by this episode's title /
+        description / podcast:person tags (#703 PR 3). Recurring guests
+        used to flood every episode with phantom candidates because
+        the cache returned them unconditionally.
       - <podcast:person> at item level       → role as declared, HIGH
       - <podcast:person> at channel level    → role as declared, HIGH
       - itunes:author                        → host, HIGH
@@ -199,18 +250,47 @@ def extract_metadata_candidates(
         seen.add(norm)
         out.append(candidate)
 
+    # Pre-compute the corroboration haystack once for the SPEAKER_NN
+    # gate (#703 PR 3). Empty when no episode text is available, in
+    # which case every SPEAKER_NN cache entry is skipped.
+    haystack = _build_corroboration_haystack(
+        episode_title=episode_title,
+        episode_description=episode_description,
+        episode_podcast_persons=episode_podcast_persons,
+    )
+
     for entry in feed_speaker_cache_priors or []:
-        name = (entry.get("name") or "").strip() if isinstance(entry, dict) else ""
+        if not isinstance(entry, dict):
+            continue
+        name = (entry.get("name") or "").strip()
         if not name or not _looks_like_person_name(name):
             continue
-        _add(
-            CandidateName(
-                name=name,
-                source="feed_speaker_cache",
-                role="host",
-                confidence="HIGH",
+        slot = (entry.get("speaker_label") or "").strip()
+        if slot == _HOST_SLOT_LABEL:
+            # Recurring host — emit unconditionally as host, HIGH.
+            _add(
+                CandidateName(
+                    name=name,
+                    source="feed_speaker_cache",
+                    role="host",
+                    confidence="HIGH",
+                )
             )
-        )
+        else:
+            # Recurring guest / producer / one-off. Only seed when the
+            # name is corroborated by this episode's text or
+            # podcast:person tags (#703 PR 3); otherwise we'd pollute
+            # every episode with the feed's full guest roster.
+            if not _is_corroborated_in_episode(name, haystack):
+                continue
+            _add(
+                CandidateName(
+                    name=name,
+                    source="feed_speaker_cache",
+                    role="guest",
+                    confidence="HIGH",
+                )
+            )
 
     for entry in episode_podcast_persons or []:
         _add(_podcast_person_to_candidate(entry, "podcast_person_episode"))
