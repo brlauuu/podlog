@@ -204,8 +204,16 @@ def write_speaker_names(
     result: InferenceResult,
     db,
 ) -> None:
-    """Write inferred display names to the speaker_names table."""
-    from app.models import SpeakerName
+    """Write inferred display names to the speaker_names table.
+
+    Only writes a row when the candidate's SPEAKER_NN slot actually exists
+    in this episode's segments (#703). The classifier produces a guest
+    list that includes every recurring-guest name from the feed cache,
+    which is typically much larger than the number of distinct speakers
+    in any single episode; writing the surplus produced phantom rows
+    that listed people who were not in the audio at all.
+    """
+    from app.models import Segment, SpeakerName
 
     # Build a map of new_label → candidate name
     name_assignments: dict[str, CandidateName] = {}
@@ -218,7 +226,23 @@ def write_speaker_names(
         slot = f"SPEAKER_{i + 1:02d}"
         name_assignments[slot] = guest
 
+    # The set of speaker_labels that actually appear in this episode's
+    # segments. Computed once instead of per-candidate.
+    existing_labels = {
+        row[0]
+        for row in db.query(Segment.speaker_label)
+        .filter(Segment.episode_id == episode_id)
+        .filter(Segment.speaker_label.isnot(None))
+        .distinct()
+        .all()
+    }
+
     for new_label, candidate in name_assignments.items():
+        if new_label not in existing_labels:
+            # No segment carries this label — writing a row would create
+            # a phantom speaker entry. Skip silently; the classifier had
+            # more candidates than the episode has speakers.
+            continue
         existing = (
             db.query(SpeakerName)
             .filter(

@@ -1291,10 +1291,42 @@ class TestAssignSpeakerSlots:
 
 # --- write_speaker_names ---
 
+
+def _mock_db_with_segments(existing_labels: list[str], existing_speaker_name=None) -> MagicMock:
+    """Build a MagicMock db that returns `existing_labels` for the
+    segments-query in write_speaker_names and `existing_speaker_name`
+    (which may be None) for the speaker_names lookups.
+
+    The two queries are dispatched off the SQLAlchemy model class passed
+    to `db.query(...)` — Segment for the bound-labels query, SpeakerName
+    for the per-slot upsert lookup.
+    """
+    from app.models import Segment, SpeakerName
+
+    db = MagicMock()
+
+    segments_q = MagicMock()
+    segments_q.filter.return_value.filter.return_value.distinct.return_value.all.return_value = [
+        (label,) for label in existing_labels
+    ]
+
+    speaker_names_q = MagicMock()
+    speaker_names_q.filter.return_value.first.return_value = existing_speaker_name
+
+    def _route_query(model):
+        if model is SpeakerName:
+            return speaker_names_q
+        # Otherwise treat as the segments scalar select (Segment.speaker_label).
+        return segments_q
+
+    db.query.side_effect = _route_query
+    return db
+
+
 class TestWriteSpeakerNames:
     def test_writes_inferred_host_and_guest(self):
-        db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = None
+        # Both SPEAKER_00 and SPEAKER_01 exist in the episode's segments.
+        db = _mock_db_with_segments(["SPEAKER_00", "SPEAKER_01"])
 
         host = CandidateName(name="Tim Ferriss", source="feed_title", role="host", confidence="HIGH")
         guest = CandidateName(name="Jane Smith", source="episode_description", role="guest", confidence="MEDIUM")
@@ -1311,8 +1343,7 @@ class TestWriteSpeakerNames:
         existing = MagicMock()
         existing.confirmed_by_user = True
 
-        db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = existing
+        db = _mock_db_with_segments(["SPEAKER_00"], existing_speaker_name=existing)
 
         host = CandidateName(name="Tim Ferriss", source="feed_title", role="host", confidence="HIGH")
         result = InferenceResult(host=host, guests=[])
@@ -1323,6 +1354,43 @@ class TestWriteSpeakerNames:
         # Should NOT have been modified
         assert db.add.call_count == 0
         assert existing.display_name != "Tim Ferriss"  # unchanged (still mock default)
+
+    def test_skips_slots_with_no_segments(self):
+        """#703: the classifier can produce far more guest candidates than
+        the episode has real speakers. write_speaker_names must not write
+        phantom rows for SPEAKER_NN slots that no segment carries."""
+        # Episode has only two actual speakers; classifier produced four
+        # guest candidates so it tried to fill SPEAKER_01..SPEAKER_04.
+        db = _mock_db_with_segments(["SPEAKER_00", "SPEAKER_01"])
+
+        host = CandidateName(name="Tim Ferriss", source="feed_title", role="host", confidence="HIGH")
+        guests = [
+            CandidateName(name="Jane Smith", source="ner", role="guest", confidence="HIGH"),
+            CandidateName(name="Carlos Garcia", source="feed_speaker_cache", role="guest", confidence="HIGH"),
+            CandidateName(name="Marie Curie", source="feed_speaker_cache", role="guest", confidence="HIGH"),
+            CandidateName(name="Ada Lovelace", source="feed_speaker_cache", role="guest", confidence="HIGH"),
+        ]
+        result = InferenceResult(host=host, guests=guests)
+        label_map = {}
+
+        write_speaker_names("ep-1", label_map, result, db)
+
+        # Only SPEAKER_00 (host) and SPEAKER_01 (first guest) should be
+        # written; SPEAKER_02..04 had no segments so they're skipped.
+        assert db.add.call_count == 2
+
+    def test_skips_host_slot_when_no_segments_match(self):
+        """If even SPEAKER_00 has no segments — e.g., diarization failed
+        and the table is empty — the host row is also skipped."""
+        db = _mock_db_with_segments([])
+
+        host = CandidateName(name="Solo Speaker", source="feed_title", role="host", confidence="HIGH")
+        result = InferenceResult(host=host, guests=[])
+        label_map = {}
+
+        write_speaker_names("ep-1", label_map, result, db)
+
+        assert db.add.call_count == 0
 
 
 # --- Soft failure in task ---
