@@ -137,6 +137,8 @@ Lessons from active development. Short rules; rationale linked to the incident o
 
 - **Split large issues into sequential PRs, not one bundle.** Issue #523 was shipped as 5 PRs (#525, #526, #527, #529, #531 + hotfix #532). Each PR had its own review / merge / prod-smoke loop. The hotfix pattern (#532 as a 2-line follow-up to #531) is cheaper than reverting or force-pushing over a merged PR.
 
+- **ESLint 9 → 10 is blocked upstream — verify readiness before re-attempting.** Codebase audits keep surfacing this as a major-version bump available (#494, #551, #676 are all the same finding). The block is in `eslint-config-next`'s bundled `eslint-plugin-react@7.37.5`, which uses the `context.getFilename()` method removed in ESLint 10 and crashes on every file with `TypeError: contextOrFilename.getFilename is not a function`. Before opening a new bump issue, check `apps/web/node_modules/eslint-config-next/node_modules/eslint-plugin-react/package.json` — if the bundled plugin version is still ≤ 7.37.x, the block stands and the audit finding should be treated as a known-blocked duplicate of #494. When the bundled version is ≥ 7.38, attempt the bump fresh. (Remove this note once the bump lands.)
+
 ## Current State & What's Next
 
 **Done:**

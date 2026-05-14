@@ -54,8 +54,14 @@ def _strip_trailing_punct(token: str) -> str:
 def _is_template_path(p: str) -> bool:
     """Skip paths that contain a documented placeholder rather than a real
     name — these are intentionally not on disk (e.g. `docs/audit/YYYY-MM-DD/`).
+    Also skip references into `node_modules/` — those resolve at install
+    time, not in the working tree, and are gitignored.
     """
-    return any(token in p for token in ("YYYY", "MM-DD", "<", "${"))
+    if any(token in p for token in ("YYYY", "MM-DD", "<", "${")):
+        return True
+    if "/node_modules/" in p or p.endswith("/node_modules"):
+        return True
+    return False
 
 
 def extract_paths(text: str) -> list[str]:
