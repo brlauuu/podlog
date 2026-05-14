@@ -1244,49 +1244,134 @@ class TestClassifyWithMetadata:
 
 # --- assign_speaker_slots ---
 
-class TestAssignSpeakerSlots:
-    def test_first_appearance_gets_speaker_00(self):
-        """PRD-04 §4.5: first speaker to appear → SPEAKER_00"""
-        segments = [
-            {"speaker_label": "SPEAKER_01", "start_time": 0, "end_time": 60},   # appears first
-            {"speaker_label": "SPEAKER_00", "start_time": 60, "end_time": 100},  # appears second
-        ]
-        result = InferenceResult()
-        label_map = assign_speaker_slots(result, segments)
-        assert label_map["SPEAKER_01"] == "SPEAKER_00"  # first to appear
-        assert label_map["SPEAKER_00"] == "SPEAKER_01"
 
-    def test_all_speakers_ordered_by_first_appearance(self):
-        """PRD-04 §4.4: all speakers ordered by first appearance"""
+def _seg(label, start, end):
+    return {"speaker_label": label, "start_time": start, "end_time": end}
+
+
+class TestAssignSpeakerSlots:
+    """Slot assignment now folds in the run-based short-speaker
+    detection (#703 PR 2). Real labels (those with at least one run
+    that satisfies ``run_seconds >= 15 OR run_segments >= 20``) keep
+    all their segments together; fully-short labels fragment into
+    one new slot per run, each marked as 'other'.
+    """
+
+    def test_first_appearance_gets_speaker_00_when_both_real(self):
+        """Two long single-segment speakers — both real (each >15s);
+        the first to appear takes SPEAKER_00."""
         segments = [
-            {"speaker_label": "SPEAKER_02", "start_time": 0, "end_time": 10},    # appears first
-            {"speaker_label": "SPEAKER_00", "start_time": 10, "end_time": 100},   # appears second
-            {"speaker_label": "SPEAKER_01", "start_time": 100, "end_time": 110},  # appears third
+            _seg("SPEAKER_X", 0, 60),    # 60s, real
+            _seg("SPEAKER_Y", 60, 100),  # 40s, real
         ]
-        result = InferenceResult()
-        label_map = assign_speaker_slots(result, segments)
-        assert label_map["SPEAKER_02"] == "SPEAKER_00"  # first to appear → SPEAKER_00
-        assert label_map["SPEAKER_00"] == "SPEAKER_01"  # second to appear
-        assert label_map["SPEAKER_01"] == "SPEAKER_02"  # third to appear
+        a = assign_speaker_slots(None, segments)
+        assert a.new_labels == ["SPEAKER_00", "SPEAKER_01"]
+        assert a.other_labels == set()
+        assert a.label_remap == {"SPEAKER_X": "SPEAKER_00", "SPEAKER_Y": "SPEAKER_01"}
+
+    def test_short_first_speaker_falls_through_to_other(self):
+        """Cold-open / skit voice (a single 4s run, fails both
+        thresholds) is fragmented as 'other'; the real speakers fill
+        SPEAKER_00/01 in their relative appearance order."""
+        segments = [
+            _seg("SPEAKER_X", 0.5, 4.5),    # 4s, fully-short
+            _seg("SPEAKER_Y", 9, 50),       # 41s, real
+            _seg("SPEAKER_Z", 50, 200),     # 150s, real
+        ]
+        a = assign_speaker_slots(None, segments)
+        # Real labels SPEAKER_Y and SPEAKER_Z fill the first two slots
+        # by appearance order; fully-short SPEAKER_X gets SPEAKER_02.
+        assert a.new_labels[1] == "SPEAKER_00"  # SPEAKER_Y → 00
+        assert a.new_labels[2] == "SPEAKER_01"  # SPEAKER_Z → 01
+        assert a.new_labels[0] == "SPEAKER_02"  # SPEAKER_X (cold open) → 02
+        assert a.other_labels == {"SPEAKER_02"}
+        assert a.label_remap == {"SPEAKER_Y": "SPEAKER_00", "SPEAKER_Z": "SPEAKER_01"}
+
+    def test_each_short_run_becomes_its_own_other(self):
+        """A fully-short pyannote label split across multiple runs
+        produces one new SPEAKER_NN per run — so the user can merge
+        each one to whichever real speaker it actually belongs to."""
+        segments = [
+            _seg("SPEAKER_X", 0, 4),        # run 1 of X (4s, short)
+            _seg("SPEAKER_Y", 10, 60),      # 50s, real
+            _seg("SPEAKER_X", 60, 60.5),    # run 2 of X (0.5s, short)
+            _seg("SPEAKER_X", 65, 66),      # run 3 of X (1s, short — broken by 5s gap)
+        ]
+        a = assign_speaker_slots(None, segments)
+        # SPEAKER_Y is the only real label, gets SPEAKER_00.
+        assert a.new_labels[1] == "SPEAKER_00"
+        # SPEAKER_X has three runs → SPEAKER_01, SPEAKER_02, SPEAKER_03 in run order.
+        assert a.new_labels[0] == "SPEAKER_01"
+        assert a.new_labels[2] == "SPEAKER_02"
+        assert a.new_labels[3] == "SPEAKER_03"
+        assert a.other_labels == {"SPEAKER_01", "SPEAKER_02", "SPEAKER_03"}
+
+    def test_real_label_keeps_short_interjections_together(self):
+        """Option B: a pyannote label with at least one real run keeps
+        all its segments — even brief interjections — together. Trust
+        pyannote at the label level when the speaker is established."""
+        segments = [
+            _seg("SPEAKER_X", 0, 50),       # X: 50s real monologue
+            _seg("SPEAKER_Y", 50, 100),     # Y: 50s real monologue
+            _seg("SPEAKER_X", 105, 105.5),  # X says "yeah" (0.5s, breaks run)
+            _seg("SPEAKER_Y", 106, 150),    # Y continues
+        ]
+        a = assign_speaker_slots(None, segments)
+        # SPEAKER_X is real (50s run), so its short interjection stays with it.
+        assert a.new_labels[0] == "SPEAKER_00"
+        assert a.new_labels[2] == "SPEAKER_00"  # short "yeah" stays with X
+        assert a.new_labels[1] == "SPEAKER_01"
+        assert a.new_labels[3] == "SPEAKER_01"
+        assert a.other_labels == set()
+
+    def test_run_extends_across_small_gap(self):
+        """Two segments by the same speaker separated by < 2s are one run."""
+        segments = [
+            _seg("SPEAKER_X", 0, 7),     # 7s
+            _seg("SPEAKER_X", 8, 14),    # 6s, gap=1s — same run, total 13s
+            _seg("SPEAKER_X", 14.5, 16), # 1.5s, gap=0.5s — same run, total 14.5s
+        ]
+        # All three segments belong to one run; 14.5s + 3 segments — fails
+        # both thresholds (< 15s AND < 20 segs) so SPEAKER_X is fully-short.
+        a = assign_speaker_slots(None, segments)
+        assert a.other_labels == {"SPEAKER_00"}
+        assert a.new_labels == ["SPEAKER_00", "SPEAKER_00", "SPEAKER_00"]
+
+    def test_run_breaks_on_large_gap(self):
+        """A > 2s gap of silence breaks the run, even with no other speaker."""
+        segments = [
+            _seg("SPEAKER_X", 0, 5),      # run 1 (5s)
+            _seg("SPEAKER_X", 30, 35),    # run 2 (5s) — 25s gap, breaks run
+        ]
+        a = assign_speaker_slots(None, segments)
+        # Two short runs of the same label → two Other slots.
+        assert a.other_labels == {"SPEAKER_00", "SPEAKER_01"}
+        assert a.new_labels[0] == "SPEAKER_00"
+        assert a.new_labels[1] == "SPEAKER_01"
+
+    def test_segment_count_threshold_alone_makes_real(self):
+        """A label with 20+ short segments still counts as real even
+        when total seconds are below the seconds threshold."""
+        segments = [
+            _seg("SPEAKER_X", i * 1.5, i * 1.5 + 0.5) for i in range(20)
+        ]
+        # 20 segments × 0.5s = 10s total. Fails seconds (10<15) but
+        # passes segments (>=20) → real.
+        a = assign_speaker_slots(None, segments)
+        assert a.other_labels == set()
+        assert all(label == "SPEAKER_00" for label in a.new_labels)
 
     def test_empty_segments(self):
-        result = InferenceResult()
-        assert assign_speaker_slots(result, []) == {}
+        a = assign_speaker_slots(None, [])
+        assert a.new_labels == []
+        assert a.other_labels == set()
+        assert a.label_remap == {}
 
     def test_no_speaker_labels(self):
-        segments = [
-            {"speaker_label": None, "start_time": 0, "end_time": 10},
-        ]
-        result = InferenceResult()
-        assert assign_speaker_slots(result, segments) == {}
-
-    def test_single_speaker(self):
-        segments = [
-            {"speaker_label": "SPEAKER_00", "start_time": 0, "end_time": 100},
-        ]
-        result = InferenceResult()
-        label_map = assign_speaker_slots(result, segments)
-        assert label_map == {"SPEAKER_00": "SPEAKER_00"}
+        segments = [_seg(None, 0, 10)]
+        a = assign_speaker_slots(None, segments)
+        assert a.new_labels == [None]
+        assert a.other_labels == set()
 
 
 # --- write_speaker_names ---
