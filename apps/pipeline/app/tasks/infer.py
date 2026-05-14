@@ -119,22 +119,37 @@ def infer_speakers(episode_id: str) -> str:
                 metadata_candidates, ner_candidates, feed_title=feed_title
             )
 
+            # Common step: load segments and compute the slot assignment.
+            # We always run assign_speaker_slots even when no name candidates
+            # were found, because it also fragments fully-short pyannote
+            # labels into per-run "Other" slots (#703 PR 2).
+            segments = (
+                db.query(Segment)
+                .filter(Segment.episode_id == episode_id)
+                .order_by(Segment.start_time)
+                .all()
+            )
+            seg_dicts = [
+                {
+                    "speaker_label": s.speaker_label,
+                    "start_time": s.start_time,
+                    "end_time": s.end_time,
+                }
+                for s in segments
+            ]
+            assignment = (
+                assign_speaker_slots(result=None, segments=seg_dicts)
+                if seg_dicts
+                else None
+            )
+
             if not candidates:
-                # No names found -- still remap speaker slots by first appearance
-                segments = (
-                    db.query(Segment)
-                    .filter(Segment.episode_id == episode_id)
-                    .order_by(Segment.start_time)
-                    .all()
-                )
-                seg_dicts = [
-                    {"speaker_label": s.speaker_label, "start_time": s.start_time, "end_time": s.end_time}
-                    for s in segments
-                ]
-                label_map = assign_speaker_slots(
-                    result=None, segments=seg_dicts
-                ) if seg_dicts else {}
-                _apply_label_remap(db, episode_id, label_map)
+                # No names found — still apply slot assignment so the
+                # segment labels are normalized and any fully-short runs
+                # get role='other' rows.
+                if assignment is not None:
+                    _apply_segment_remap(segments, assignment)
+                    _write_other_rows(episode_id, assignment, db)
                 db.commit()
             else:
                 # Step 2: classify
@@ -146,22 +161,20 @@ def infer_speakers(episode_id: str) -> str:
                     episode_title=episode.title,
                 )
 
-                # Step 3: remap speaker labels by first appearance
-                segments = (
-                    db.query(Segment)
-                    .filter(Segment.episode_id == episode_id)
-                    .order_by(Segment.start_time)
-                    .all()
-                )
-                seg_dicts = [
-                    {"speaker_label": s.speaker_label, "start_time": s.start_time, "end_time": s.end_time}
-                    for s in segments
-                ]
-                label_map = assign_speaker_slots(result, seg_dicts)
-                _apply_label_remap(db, episode_id, label_map)
+                # Step 3: apply slot assignment
+                if assignment is not None:
+                    _apply_segment_remap(segments, assignment)
 
-                # Step 4: write inferred names
-                write_speaker_names(episode_id, label_map, result, db)
+                # Step 4: write inferred names (bounded by #703 PR 1) +
+                # role='other' rows for fully-short runs (#703 PR 2).
+                write_speaker_names(
+                    episode_id,
+                    assignment.label_remap if assignment else {},
+                    result,
+                    db,
+                )
+                if assignment is not None:
+                    _write_other_rows(episode_id, assignment, db)
                 db.commit()
 
             logger.info(
@@ -194,22 +207,60 @@ def infer_speakers(episode_id: str) -> str:
         db.close()
 
 
-def _apply_label_remap(db, episode_id: str, label_map: dict[str, str]) -> None:
-    """Apply speaker label remapping to segments in the database."""
-    if not label_map:
-        return
+def _apply_segment_remap(segments, assignment) -> None:
+    """Write the per-segment new label from a SlotAssignment back onto
+    the SQLAlchemy ORM objects (mutates in place; caller commits).
 
-    # Check if remapping is actually needed (i.e., labels would change)
-    identity = all(k == v for k, v in label_map.items())
-    if identity:
+    Replaces the old _apply_label_remap, which assumed a 1:1
+    pyannote_label → new_label dict. The new function handles the
+    per-run fragmentation that the run-based short-speaker logic
+    introduces (#703 PR 2): segments sharing a pyannote label may end
+    up with different new labels if that label was fully-short.
+    """
+    if assignment is None or not segments:
         return
+    for seg, new_label in zip(segments, assignment.new_labels):
+        if new_label is None:
+            continue
+        if seg.speaker_label != new_label:
+            seg.speaker_label = new_label
 
-    # Use temporary labels to avoid unique constraint violations during swap
-    segments = (
-        db.query(Segment)
-        .filter(Segment.episode_id == episode_id)
-        .all()
-    )
-    for seg in segments:
-        if seg.speaker_label and seg.speaker_label in label_map:
-            seg.speaker_label = label_map[seg.speaker_label]
+
+def _write_other_rows(episode_id: str, assignment, db) -> None:
+    """Persist a `role='other'` speaker_names row for each SPEAKER_NN
+    slot that came from a fragmented fully-short pyannote label (#703
+    PR 2). User-confirmed rows are never overwritten.
+    """
+    if assignment is None or not assignment.other_labels:
+        return
+    from app.models import SpeakerName
+
+    for new_label in assignment.other_labels:
+        existing = (
+            db.query(SpeakerName)
+            .filter(
+                SpeakerName.episode_id == episode_id,
+                SpeakerName.speaker_label == new_label,
+            )
+            .first()
+        )
+        if existing and existing.confirmed_by_user:
+            continue
+        if existing:
+            existing.display_name = ""
+            existing.inferred = True
+            existing.confidence = "LOW"
+            existing.confirmed_by_user = False
+            existing.role = "other"
+        else:
+            db.add(
+                SpeakerName(
+                    episode_id=episode_id,
+                    speaker_label=new_label,
+                    display_name="",
+                    inferred=True,
+                    confidence="LOW",
+                    confirmed_by_user=False,
+                    role="other",
+                )
+            )

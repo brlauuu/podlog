@@ -3,6 +3,20 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.services.inference import SlotAssignment
+
+
+def _empty_assignment() -> SlotAssignment:
+    """A SlotAssignment placeholder for tests that don't care about
+    slot-assignment specifics — the run-based logic is exercised by
+    test_inference.py::TestAssignSpeakerSlots."""
+    return SlotAssignment(new_labels=[], other_labels=set(), label_remap={})
+
+
+def _assignment_from_label_map(label_map: dict[str, str]) -> SlotAssignment:
+    """Build a SlotAssignment for a simple identity-style remap."""
+    return SlotAssignment(new_labels=[], other_labels=set(), label_remap=label_map)
+
 
 def _make_episode(id_="ep1", has_diarization=True, description="With guest Jane Smith",
                   feed_id="feed1", title=None, episode_author=None, podcast_persons=None):
@@ -101,10 +115,10 @@ class TestInferSpeakers:
             patch("app.services.inference.unload_spacy_model"),
             patch("app.services.inference.extract_candidates", return_value=candidates),
             patch("app.services.inference.classify_candidates", return_value=mock_result),
-            patch("app.services.inference.assign_speaker_slots", return_value=label_map),
+            patch("app.services.inference.assign_speaker_slots", return_value=_assignment_from_label_map(label_map)),
             patch("app.services.inference.write_speaker_names"),
             patch("app.services.inference.get_feed_speaker_cache_priors", return_value=[]),
-            patch("app.tasks.infer._apply_label_remap"),
+            patch("app.tasks.infer._apply_segment_remap"), patch("app.tasks.infer._write_other_rows"),
         ):
             mock_settings.inference_enabled = True
 
@@ -135,9 +149,9 @@ class TestInferSpeakers:
             patch("app.services.inference.load_spacy_model", return_value=MagicMock()),
             patch("app.services.inference.unload_spacy_model"),
             patch("app.services.inference.extract_candidates", return_value=[]),
-            patch("app.services.inference.assign_speaker_slots", return_value=label_map),
+            patch("app.services.inference.assign_speaker_slots", return_value=_assignment_from_label_map(label_map)),
             patch("app.services.inference.get_feed_speaker_cache_priors", return_value=[]),
-            patch("app.tasks.infer._apply_label_remap"),
+            patch("app.tasks.infer._apply_segment_remap"), patch("app.tasks.infer._write_other_rows"),
         ):
             mock_settings.inference_enabled = True
 
@@ -175,9 +189,9 @@ class TestInferSpeakers:
                 "app.services.inference.extract_metadata_candidates",
                 return_value=[],
             ) as mock_meta,
-            patch("app.services.inference.assign_speaker_slots", return_value={}),
+            patch("app.services.inference.assign_speaker_slots", return_value=_empty_assignment()),
             patch("app.services.inference.get_feed_speaker_cache_priors", return_value=[]),
-            patch("app.tasks.infer._apply_label_remap"),
+            patch("app.tasks.infer._apply_segment_remap"), patch("app.tasks.infer._write_other_rows"),
         ):
             mock_settings.inference_enabled = True
             mock_settings.recurring_host_window = 10
@@ -217,12 +231,12 @@ class TestInferSpeakers:
                 "app.services.inference.extract_metadata_candidates",
                 return_value=[],
             ) as mock_meta,
-            patch("app.services.inference.assign_speaker_slots", return_value={}),
+            patch("app.services.inference.assign_speaker_slots", return_value=_empty_assignment()),
             patch(
                 "app.services.inference.get_feed_speaker_cache_priors",
                 return_value=[],
             ) as mock_cache,
-            patch("app.tasks.infer._apply_label_remap"),
+            patch("app.tasks.infer._apply_segment_remap"), patch("app.tasks.infer._write_other_rows"),
         ):
             mock_settings.inference_enabled = True
             mock_settings.recurring_host_window = 10
@@ -273,8 +287,8 @@ class TestInferSpeakers:
                 "app.services.inference.extract_metadata_candidates",
                 return_value=[],
             ) as mock_meta,
-            patch("app.services.inference.assign_speaker_slots", return_value={}),
-            patch("app.tasks.infer._apply_label_remap"),
+            patch("app.services.inference.assign_speaker_slots", return_value=_empty_assignment()),
+            patch("app.tasks.infer._apply_segment_remap"), patch("app.tasks.infer._write_other_rows"),
         ):
             mock_settings.inference_enabled = True
             mock_settings.recurring_host_window = 10
@@ -316,31 +330,130 @@ class TestInferSpeakers:
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "archive")
 
 
-class TestApplyLabelRemap:
-    def test_identity_map_is_noop(self):
+class TestApplySegmentRemap:
+    """The remap is now per-segment, not per-label (#703 PR 2) — fully
+    short pyannote labels can fragment across multiple new slots."""
+
+    def test_none_assignment_is_noop(self):
+        from app.tasks.infer import _apply_segment_remap
+        _apply_segment_remap([MagicMock()], None)  # must not raise
+
+    def test_empty_segments_is_noop(self):
+        from app.tasks.infer import _apply_segment_remap
+        _apply_segment_remap([], _empty_assignment())  # must not raise
+
+    def test_per_segment_remap_overrides_label_when_changed(self):
+        from app.tasks.infer import _apply_segment_remap
+        seg1 = MagicMock(); seg1.speaker_label = "SPEAKER_X"
+        seg2 = MagicMock(); seg2.speaker_label = "SPEAKER_Y"
+        assignment = SlotAssignment(
+            new_labels=["SPEAKER_00", "SPEAKER_01"],
+            other_labels=set(),
+            label_remap={"SPEAKER_X": "SPEAKER_00", "SPEAKER_Y": "SPEAKER_01"},
+        )
+
+        _apply_segment_remap([seg1, seg2], assignment)
+
+        assert seg1.speaker_label == "SPEAKER_00"
+        assert seg2.speaker_label == "SPEAKER_01"
+
+    def test_per_segment_remap_handles_fragmented_label(self):
+        """A fully-short pyannote label fragmenting across runs writes
+        different new labels to segments with the same source label."""
+        from app.tasks.infer import _apply_segment_remap
+        seg1 = MagicMock(); seg1.speaker_label = "SPEAKER_X"  # cold open run
+        seg2 = MagicMock(); seg2.speaker_label = "SPEAKER_Y"  # host
+        seg3 = MagicMock(); seg3.speaker_label = "SPEAKER_X"  # later short run
+        assignment = SlotAssignment(
+            new_labels=["SPEAKER_01", "SPEAKER_00", "SPEAKER_02"],
+            other_labels={"SPEAKER_01", "SPEAKER_02"},
+            label_remap={"SPEAKER_Y": "SPEAKER_00"},
+        )
+
+        _apply_segment_remap([seg1, seg2, seg3], assignment)
+
+        # Same source label SPEAKER_X became two different new labels
+        # (one per run) — pre-#703 logic could not express this.
+        assert seg1.speaker_label == "SPEAKER_01"
+        assert seg2.speaker_label == "SPEAKER_00"
+        assert seg3.speaker_label == "SPEAKER_02"
+
+    def test_none_in_new_labels_leaves_segment_unchanged(self):
+        from app.tasks.infer import _apply_segment_remap
+        seg = MagicMock(); seg.speaker_label = "SPEAKER_X"
+        assignment = SlotAssignment(
+            new_labels=[None],
+            other_labels=set(),
+            label_remap={},
+        )
+
+        _apply_segment_remap([seg], assignment)
+
+        assert seg.speaker_label == "SPEAKER_X"  # unchanged
+
+
+class TestWriteOtherRows:
+    def test_writes_one_row_per_other_label(self):
+        from app.tasks.infer import _write_other_rows
         db = MagicMock()
-        from app.tasks.infer import _apply_label_remap
+        db.query.return_value.filter.return_value.first.return_value = None
+        assignment = SlotAssignment(
+            new_labels=[],
+            other_labels={"SPEAKER_02", "SPEAKER_03"},
+            label_remap={},
+        )
 
-        _apply_label_remap(db, "ep1", {"SPEAKER_00": "SPEAKER_00"})
+        _write_other_rows("ep-1", assignment, db)
 
-        db.query.assert_not_called()
+        assert db.add.call_count == 2
 
-    def test_empty_map_is_noop(self):
+    def test_skips_user_confirmed_rows(self):
+        from app.tasks.infer import _write_other_rows
+        existing = MagicMock()
+        existing.confirmed_by_user = True
         db = MagicMock()
-        from app.tasks.infer import _apply_label_remap
+        db.query.return_value.filter.return_value.first.return_value = existing
+        assignment = SlotAssignment(
+            new_labels=[],
+            other_labels={"SPEAKER_02"},
+            label_remap={},
+        )
 
-        _apply_label_remap(db, "ep1", {})
+        _write_other_rows("ep-1", assignment, db)
 
-        db.query.assert_not_called()
+        assert db.add.call_count == 0
+        # Confirmed row not touched.
+        assert existing.role != "other"
 
-    def test_remaps_labels(self):
-        seg = MagicMock()
-        seg.speaker_label = "SPEAKER_01"
+    def test_updates_existing_unconfirmed_row(self):
+        """A prior inference run may have written a named row for what
+        is now classified as Other (e.g., re-inference after a tweak).
+        Unconfirmed rows are overwritten with the Other marker."""
+        from app.tasks.infer import _write_other_rows
+        existing = MagicMock()
+        existing.confirmed_by_user = False
+        existing.display_name = "Rob Larity"  # stale name from prior run
+        existing.role = None
         db = MagicMock()
-        db.query.return_value.filter.return_value.all.return_value = [seg]
+        db.query.return_value.filter.return_value.first.return_value = existing
+        assignment = SlotAssignment(
+            new_labels=[],
+            other_labels={"SPEAKER_02"},
+            label_remap={},
+        )
 
-        from app.tasks.infer import _apply_label_remap
+        _write_other_rows("ep-1", assignment, db)
 
-        _apply_label_remap(db, "ep1", {"SPEAKER_01": "SPEAKER_00"})
+        assert db.add.call_count == 0  # no new row — existing was updated
+        assert existing.display_name == ""
+        assert existing.role == "other"
+        assert existing.inferred is True
+        assert existing.confidence == "LOW"
 
-        assert seg.speaker_label == "SPEAKER_00"
+    def test_no_other_labels_is_noop(self):
+        from app.tasks.infer import _write_other_rows
+        db = MagicMock()
+
+        _write_other_rows("ep-1", _empty_assignment(), db)
+
+        db.add.assert_not_called()
