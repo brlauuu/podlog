@@ -11,6 +11,11 @@ Covers two input pathways that both produce `CandidateName` lists:
 These feed into merge_candidates + classify_candidates in
 inference_classify. Split out so the role/confidence reconciliation
 rules live in one place and extraction stays free of them.
+
+End-user-facing description of which sources feed inference and what
+each one contributes lives in docs/guide/06-speakers.md (sections
+"Where candidates come from" and "How names get classified"). Update
+both files together when adding or changing a source.
 """
 import logging
 import re
