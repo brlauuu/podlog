@@ -370,15 +370,18 @@ export default function DocsClient({ docs, searchIndex }: DocsClientProps) {
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
               components={{
+                // scroll-mt-24 offsets anchor jumps and scrollIntoView so
+                // the heading clears the sticky navbar instead of landing
+                // underneath it (#729).
                 h2: ({ children }) => {
                   const text = textFromNode(children).trim();
                   const id = renderHeadingId(text);
-                  return <h2 id={id}>{children}</h2>;
+                  return <h2 id={id} className="scroll-mt-24">{children}</h2>;
                 },
                 h3: ({ children }) => {
                   const text = textFromNode(children).trim();
                   const id = renderHeadingId(text);
-                  return <h3 id={id}>{children}</h3>;
+                  return <h3 id={id} className="scroll-mt-24">{children}</h3>;
                 },
                 a: ({ href, children }) => {
                   const resolvedHref = resolveMarkdownHref(href as string | undefined, docs);
