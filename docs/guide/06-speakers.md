@@ -116,7 +116,9 @@ This is the step that handles the "first speaker isn't always the host" problem.
 
 Why "real" looks at runs not totals: a speaker who talks for 30 seconds in one block is a real participant even if they only have 1 or 2 segments; a speaker with 13 scattered 1-second interjections is almost always a diarization slip or a multi-voice misclustering, not a real participant.
 
-Defaults are exposed as module constants in [`inference.py`](https://github.com/brlauuu/podlog/blob/9237a61b712ccb288a6ef5b89ce4bc5c39e4c60c/apps/pipeline/app/services/inference.py#L51) — `DEFAULT_SHORT_RUN_SECONDS = 15.0`, `DEFAULT_SHORT_RUN_SEGMENTS = 20`, `DEFAULT_RUN_GAP_SECONDS = 2.0`.
+**Isolated-short-run carve-out.** Step 4 above keeps short interjections glued to a real pyannote label by default, which trusts pyannote's clustering at the label level. That trust breaks down when pyannote conflates two different voices into one label — for example, a 4-second cold-open / pre-roll voice that gets clustered with the guest because both clips are short. To catch this without over-fragmenting normal back-and-forth, a short run is *also* split off as Other when its temporally-nearest same-label neighbour (previous or next run with the same pyannote label) is more than `DEFAULT_ISOLATION_GAP_SECONDS = 60.0` away. Typical mid-conversation interjections sit within a few seconds of surrounding same-label runs, so they stay; an isolated intro voice with a > 60 s gap before its parent label reappears gets the Other treatment.
+
+Defaults are exposed as module constants in `inference.py` — `DEFAULT_SHORT_RUN_SECONDS = 15.0`, `DEFAULT_SHORT_RUN_SEGMENTS = 20`, `DEFAULT_RUN_GAP_SECONDS = 2.0`, `DEFAULT_ISOLATION_GAP_SECONDS = 60.0`.
 
 ### Why some speakers come up as Other
 
