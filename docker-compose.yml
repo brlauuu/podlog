@@ -104,6 +104,11 @@ services:
       - ./docs/guide:/docs/guide:ro
       - ./docs/about.md:/docs/about.md:ro
       - ./CHANGELOG.md:/docs/CHANGELOG.md:ro
+      # /api/version reads this at request time and compares against
+      # NEXT_PUBLIC_APP_VERSION (baked at build time) so the footer can
+      # signal "your running image is stale, rebuild it" when VERSION
+      # bumps between rebuilds.
+      - ./VERSION:/version:ro
     depends_on:
       db:
         condition: service_healthy

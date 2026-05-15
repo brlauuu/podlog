@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+- Footer shows the version of the running build and warns when a newer one is on disk. The footer reads `process.env.NEXT_PUBLIC_APP_VERSION` (baked into the image at build time) for "what's running," and fetches `/api/version` (which reads the `VERSION` file bind-mounted into the container at `/version`) for "what's on disk." When the on-disk semver is strictly greater than the built-in one, the footer renders `v0.X.Y → 0.X.Z (rebuild available)` in amber as a nudge to rebuild + restart. Silent in matched / downgrade / file-missing / fetch-failed cases.
+
 ### Fixes
 - Speaker inference: a short pyannote run inside an otherwise-real label is now split off as Other when its nearest same-label neighbour is more than 60 s away. Catches the case where pyannote conflates a short cold-open / pre-roll voice with a real speaker's voice into one label — previously the cold-open got silently attached to the real speaker. Mid-conversation interjections (host's "yeah" between guest answers) stay with the parent speaker because their gap-to-nearest-same-label is small. Follow-up to #703. ([#703](https://github.com/brlauuu/podlog/issues/703))
 
