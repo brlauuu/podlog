@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+- Speaker inference: a short pyannote run inside an otherwise-real label is now split off as Other when its nearest same-label neighbour is more than 60 s away. Catches the case where pyannote conflates a short cold-open / pre-roll voice with a real speaker's voice into one label — previously the cold-open got silently attached to the real speaker. Mid-conversation interjections (host's "yeah" between guest answers) stay with the parent speaker because their gap-to-nearest-same-label is small. Follow-up to #703. ([#703](https://github.com/brlauuu/podlog/issues/703))
+
 ## 0.4.6 — 2026-05-14
 
 ### Major changes

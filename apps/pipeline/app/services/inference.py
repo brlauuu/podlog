@@ -53,6 +53,14 @@ from app.services.inference_types import (
 DEFAULT_SHORT_RUN_SECONDS = 15.0
 DEFAULT_SHORT_RUN_SEGMENTS = 20
 DEFAULT_RUN_GAP_SECONDS = 2.0
+# Follow-up to #703 PR 2 (option C refinement): a short run inside an
+# otherwise-real pyannote label still gets split off as Other when its
+# nearest same-label neighbour (previous or next run with the same
+# pyannote label) is more than this many seconds away. Catches the
+# "cold-open / outro voice that pyannote mis-clustered into a real
+# speaker" case without breaking mid-conversation interjections, which
+# typically sit within 5-30s of the speaker's surrounding monologue.
+DEFAULT_ISOLATION_GAP_SECONDS = 60.0
 
 __all__ = [
     "CandidateName",
@@ -144,6 +152,7 @@ def assign_speaker_slots(
     short_run_seconds: float = DEFAULT_SHORT_RUN_SECONDS,
     short_run_segments: int = DEFAULT_SHORT_RUN_SEGMENTS,
     run_gap_seconds: float = DEFAULT_RUN_GAP_SECONDS,
+    isolation_gap_seconds: float = DEFAULT_ISOLATION_GAP_SECONDS,
 ) -> SlotAssignment:
     """Remap pyannote speaker labels into final SPEAKER_NN slots (#703).
 
@@ -166,6 +175,16 @@ def assign_speaker_slots(
     where adjacent pairs are at most ``run_gap_seconds`` apart and no
     other speaker spoke in between (the "no other speaker" condition
     is automatic because the input is time-sorted).
+
+    **Isolated-short-run carve-out** (option C follow-up to PR 2): a
+    short run inside an otherwise-real pyannote label is *also* split
+    off as its own ``role='other'`` slot when its temporally-nearest
+    same-label neighbour is more than ``isolation_gap_seconds`` away.
+    Catches the case where pyannote mis-clusters a short intro / outro
+    voice into a real speaker's cluster. Mid-conversation interjections
+    (host's "yeah" between guest answers) typically sit within a few
+    seconds of surrounding same-label runs, so they stay with the
+    parent speaker.
 
     ``result`` is currently accepted for backward-compat with prior
     call sites but is unused — the function only inspects the segment
@@ -227,13 +246,51 @@ def assign_speaker_slots(
 
     real_labels = {lbl for lbl, real in label_has_real_run.items() if real}
 
+    # --- Step 2.5: flag isolated short runs of real labels for splitting ---
+    # Compare each short run inside a real label against its temporally-
+    # nearest same-label neighbour. If the gap exceeds isolation_gap_seconds,
+    # the run is split off as Other even though its parent label has real
+    # runs elsewhere — protects against the "cold-open mis-clustered into
+    # the host slot" case (issue #703 follow-up).
+    runs_by_label: dict[str, list[dict]] = {}
+    for run in runs:
+        runs_by_label.setdefault(run["label"], []).append(run)
+    isolated_real_short_run_ids: set[int] = set()
+    for lbl in real_labels:
+        same = runs_by_label[lbl]  # already in time order
+        for i, run in enumerate(same):
+            is_real = (
+                run["duration"] >= short_run_seconds
+                or run["seg_count"] >= short_run_segments
+            )
+            if is_real:
+                continue
+            prev_gap = (
+                run["start_time"] - same[i - 1]["last_end"]
+                if i > 0
+                else float("inf")
+            )
+            next_gap = (
+                same[i + 1]["start_time"] - run["last_end"]
+                if i + 1 < len(same)
+                else float("inf")
+            )
+            if min(prev_gap, next_gap) > isolation_gap_seconds:
+                isolated_real_short_run_ids.add(id(run))
+
     # --- Step 3: number real labels (SPEAKER_00..) and short runs after them ---
     real_sorted = sorted(real_labels, key=lambda lbl: (label_first_appearance[lbl], lbl))
     label_remap: dict[str, str] = {
         old: f"SPEAKER_{i:02d}" for i, old in enumerate(real_sorted)
     }
 
-    short_runs = [r for r in runs if r["label"] not in real_labels]
+    # Pool of runs that get their own Other slot: every run from a
+    # fully-short label, plus isolated short runs flagged in step 2.5.
+    short_runs = [
+        r for r in runs
+        if r["label"] not in real_labels
+        or id(r) in isolated_real_short_run_ids
+    ]
     short_runs.sort(key=lambda r: (r["start_time"], r["label"]))
     next_slot = len(real_sorted)
     other_labels: set[str] = set()
@@ -248,11 +305,10 @@ def assign_speaker_slots(
     # --- Step 4: build per-segment new label list ---
     new_labels: list[str | None] = [None] * len(segments)
     for run in runs:
-        lbl = run["label"]
-        if lbl in real_labels:
-            target = label_remap[lbl]
-        else:
+        if id(run) in run_to_new:
             target = run_to_new[id(run)]
+        else:
+            target = label_remap[run["label"]]
         for idx in run["members"]:
             new_labels[idx] = target
 

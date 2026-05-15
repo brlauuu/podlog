@@ -1538,21 +1538,124 @@ class TestAssignSpeakerSlots:
 
     def test_real_label_keeps_short_interjections_together(self):
         """Option B: a pyannote label with at least one real run keeps
-        all its segments — even brief interjections — together. Trust
-        pyannote at the label level when the speaker is established."""
+        all its segments — even brief interjections — together when
+        the interjection sits within the isolation-gap window of the
+        rest of the label's runs."""
         segments = [
             _seg("SPEAKER_X", 0, 50),       # X: 50s real monologue
             _seg("SPEAKER_Y", 50, 100),     # Y: 50s real monologue
-            _seg("SPEAKER_X", 105, 105.5),  # X says "yeah" (0.5s, breaks run)
+            _seg("SPEAKER_X", 105, 105.5),  # X says "yeah" 55s after run 1 ends
             _seg("SPEAKER_Y", 106, 150),    # Y continues
         ]
         a = assign_speaker_slots(None, segments)
-        # SPEAKER_X is real (50s run), so its short interjection stays with it.
+        # SPEAKER_X is real (50s run), short interjection is within the
+        # default 60s isolation window → stays with X.
         assert a.new_labels[0] == "SPEAKER_00"
         assert a.new_labels[2] == "SPEAKER_00"  # short "yeah" stays with X
         assert a.new_labels[1] == "SPEAKER_01"
         assert a.new_labels[3] == "SPEAKER_01"
         assert a.other_labels == set()
+
+    def test_isolated_short_run_of_real_label_splits_off_as_other(self):
+        """Option C (#703 follow-up): a short run inside an otherwise-
+        real pyannote label is split off as Other when its nearest
+        same-label neighbour is more than isolation_gap_seconds away.
+        Targets the cold-open-mis-clustered case."""
+        segments = [
+            # SPEAKER_X has a 4s cold open at 0, then doesn't reappear
+            # until 200s — pyannote conflated two voices into one
+            # label.
+            _seg("SPEAKER_X", 0, 4),         # cold open (4s, short run)
+            _seg("SPEAKER_Y", 10, 80),       # Y monologue (real)
+            _seg("SPEAKER_Y", 81, 199),      # Y continues
+            _seg("SPEAKER_X", 200, 280),     # X's real content (80s, real)
+            _seg("SPEAKER_X", 281, 360),     # X continues
+        ]
+        a = assign_speaker_slots(None, segments)
+        # X is "real" (has the 200-280 run), Y is real. Real-label
+        # assignment by first appearance: Y first (10s) → SPEAKER_00 (no,
+        # wait — X appears first at t=0, so X → SPEAKER_00 if it's real).
+        # X *is* real because of the 80s run at 200-280. So:
+        #   X → SPEAKER_00, Y → SPEAKER_01.
+        # But the cold-open at 0-4 is isolated from X's next run by
+        # 196s (>60s) → split off as Other.
+        assert a.new_labels[0] != a.new_labels[3]  # cold-open ≠ X's real run
+        assert a.new_labels[0] in a.other_labels
+        assert a.new_labels[3] == "SPEAKER_00"  # X's real run keeps the slot
+        assert a.new_labels[4] == "SPEAKER_00"
+        # Y is unaffected.
+        assert a.new_labels[1] == "SPEAKER_01"
+        assert a.new_labels[2] == "SPEAKER_01"
+
+    def test_isolation_threshold_is_configurable(self):
+        """Bumping isolation_gap_seconds preserves short runs that
+        would otherwise split off."""
+        # 113s gap between SPEAKER_X's two runs.
+        segments = [
+            _seg("SPEAKER_X", 0, 4),         # short run
+            _seg("SPEAKER_Y", 10, 100),      # Y real
+            _seg("SPEAKER_X", 117, 200),     # X real run (83s away)
+        ]
+        # Default 60s isolation: split.
+        a_default = assign_speaker_slots(None, segments)
+        assert a_default.new_labels[0] in a_default.other_labels
+
+        # Relaxed 200s isolation: keep together.
+        a_relaxed = assign_speaker_slots(
+            None, segments, isolation_gap_seconds=200.0
+        )
+        assert a_relaxed.other_labels == set()
+        assert a_relaxed.new_labels[0] == a_relaxed.new_labels[2]
+
+    def test_real_label_with_mixed_short_runs_splits_only_isolated_ones(self):
+        """A real label can have both isolated short runs (split off as
+        Other) and adjacent short interjections (stay glued) — they're
+        evaluated independently."""
+        segments = [
+            _seg("SPEAKER_X", 0, 4),         # cold-open: 4s short, isolated from rest
+            _seg("SPEAKER_Y", 10, 80),       # Y monologue (real, 70s)
+            _seg("SPEAKER_X", 200, 280),     # X real (80s)
+            _seg("SPEAKER_Y", 280, 281),     # Y "yeah" (1s, 200s after Y's first run)
+            _seg("SPEAKER_Y", 282, 360),     # Y resumes (real, 78s)
+            _seg("SPEAKER_X", 365, 365.5),   # X says "right" 85s after X's real run
+        ]
+        a = assign_speaker_slots(None, segments)
+        # Real labels (X has the 200-280 run, Y has 10-80 and 282-360) get
+        # the first two SPEAKER_NN slots by first-appearance time:
+        #   X first appears at 0s, Y at 10s → X=SPEAKER_00, Y=SPEAKER_01.
+        # Y's "yeah" at 280-281 is 200s after Y's run ended at 80s, BUT
+        # 1s before Y's next run starts at 282s. min_gap = 1s < 60s → stay
+        # with Y.
+        assert a.new_labels[3] == "SPEAKER_01"
+        # X's cold-open at 0-4 has nearest same-label neighbour 196s away
+        # → split off as Other.
+        assert a.new_labels[0] in a.other_labels
+        # X's "right" at 365-365.5 is 85s after X's real run ended at 280s
+        # AND no later X runs → only prev_gap counts, 85s > 60s → split.
+        assert a.new_labels[5] in a.other_labels
+        # The two split-off slots are distinct.
+        assert a.new_labels[0] != a.new_labels[5]
+        # The real-label slots are unchanged.
+        assert a.new_labels[1] == "SPEAKER_01"
+        assert a.new_labels[2] == "SPEAKER_00"
+        assert a.new_labels[4] == "SPEAKER_01"
+
+    def test_short_run_at_label_boundary_uses_only_existing_neighbour(self):
+        """A short run that's the first run of its label (no
+        previous-same-label run) only has to clear the gap to the
+        next same-label run, not the missing previous one."""
+        segments = [
+            # X cold open at 0, X's next run is 10s later (well within
+            # the 60s isolation window).
+            _seg("SPEAKER_X", 0, 4),         # short run, no prev neighbour
+            _seg("SPEAKER_X", 14, 80),       # X's real run, 10s gap
+            _seg("SPEAKER_Y", 80, 130),
+        ]
+        a = assign_speaker_slots(None, segments)
+        # Cold open's nearest neighbour is X's run at 14s (10s gap)
+        # — under threshold, stay glued to X.
+        assert a.other_labels == set()
+        assert a.new_labels[0] == a.new_labels[1] == "SPEAKER_00"
 
     def test_run_extends_across_small_gap(self):
         """Two segments by the same speaker separated by < 2s are one run."""
