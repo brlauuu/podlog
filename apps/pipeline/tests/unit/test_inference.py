@@ -1607,6 +1607,39 @@ class TestAssignSpeakerSlots:
         assert a_relaxed.other_labels == set()
         assert a_relaxed.new_labels[0] == a_relaxed.new_labels[2]
 
+    def test_real_label_with_mixed_short_runs_splits_only_isolated_ones(self):
+        """A real label can have both isolated short runs (split off as
+        Other) and adjacent short interjections (stay glued) — they're
+        evaluated independently."""
+        segments = [
+            _seg("SPEAKER_X", 0, 4),         # cold-open: 4s short, isolated from rest
+            _seg("SPEAKER_Y", 10, 80),       # Y monologue (real, 70s)
+            _seg("SPEAKER_X", 200, 280),     # X real (80s)
+            _seg("SPEAKER_Y", 280, 281),     # Y "yeah" (1s, 200s after Y's first run)
+            _seg("SPEAKER_Y", 282, 360),     # Y resumes (real, 78s)
+            _seg("SPEAKER_X", 365, 365.5),   # X says "right" 85s after X's real run
+        ]
+        a = assign_speaker_slots(None, segments)
+        # Real labels (X has the 200-280 run, Y has 10-80 and 282-360) get
+        # the first two SPEAKER_NN slots by first-appearance time:
+        #   X first appears at 0s, Y at 10s → X=SPEAKER_00, Y=SPEAKER_01.
+        # Y's "yeah" at 280-281 is 200s after Y's run ended at 80s, BUT
+        # 1s before Y's next run starts at 282s. min_gap = 1s < 60s → stay
+        # with Y.
+        assert a.new_labels[3] == "SPEAKER_01"
+        # X's cold-open at 0-4 has nearest same-label neighbour 196s away
+        # → split off as Other.
+        assert a.new_labels[0] in a.other_labels
+        # X's "right" at 365-365.5 is 85s after X's real run ended at 280s
+        # AND no later X runs → only prev_gap counts, 85s > 60s → split.
+        assert a.new_labels[5] in a.other_labels
+        # The two split-off slots are distinct.
+        assert a.new_labels[0] != a.new_labels[5]
+        # The real-label slots are unchanged.
+        assert a.new_labels[1] == "SPEAKER_01"
+        assert a.new_labels[2] == "SPEAKER_00"
+        assert a.new_labels[4] == "SPEAKER_01"
+
     def test_short_run_at_label_boundary_uses_only_existing_neighbour(self):
         """A short run that's the first run of its label (no
         previous-same-label run) only has to clear the gap to the
