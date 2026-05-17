@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Major changes
+- **Meta-Analysis page rewrite (PRD-06):** Replaced the nine Recharts cards with six Plotly figures — per-speaker minutes per episode, per-speaker word count per episode, and host-vs-guest talking-time diff, each shown for both Confirmed and Inferred-HIGH speaker sources. Each chart has a per-feed dropdown, click-to-open-episode (Next.js router push to `/episodes/{id}`), unified hover with spike lines, and dark/light theme switching tied to the app's `<html class="dark">`. Existing chrome (refresh, FiltersBar, CoverageStrip, MissingSpeakersModal, ExploreStatusPanel, InfoBlock) preserved. Backed by two new snapshot arrays (`per_episode_speaker`, `episode_speaker_diff`) computed by `apps/pipeline/app/services/meta_analysis_aggregations.py`; no DB migration required (single-row JSONB snapshot table).
+- **Speaker analytics in the explore notebook (PRD-06 bonus):** New `notebooks/lib/podlog_plots.py` module (port of the prototype) + three new figure cells in `01_explore_db.ipynb` driven by an ipywidgets source toggle (Confirmed / Inferred-HIGH).
+
 ### Minor changes
 - Footer shows the version of the running build and warns when a newer one is on disk. The footer reads `process.env.NEXT_PUBLIC_APP_VERSION` (baked into the image at build time) for "what's running," and fetches `/api/version` (which reads the `VERSION` file bind-mounted into the container at `/version`) for "what's on disk." When the on-disk semver is strictly greater than the built-in one, the footer renders `v0.X.Y → 0.X.Z (rebuild available)` in amber as a nudge to rebuild + restart. Silent in matched / downgrade / file-missing / fetch-failed cases.
 
