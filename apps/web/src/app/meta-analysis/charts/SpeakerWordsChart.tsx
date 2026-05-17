@@ -124,6 +124,7 @@ export default function SpeakerWordsChart({ rows, source, enableClickOpen = true
       spikedash: "dot",
       spikethickness: 1,
     },
+    yaxis: { tickformat: ",.0f" },
     // UpdateMenu buttons are typed as Partial<UpdateMenuButton>[] in @types/plotly.js,
     // so the object literal satisfies it without a cast.
     updatemenus: [{
