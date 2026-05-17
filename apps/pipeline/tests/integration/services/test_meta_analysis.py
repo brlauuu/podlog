@@ -582,6 +582,27 @@ def test_episode_speaker_diff_band_math(db_session):
         assert r["diff"] <= r["band_hi"] + 1e-9
 
 
+def test_compute_snapshot_contains_speaker_analytics_arrays(db_session):
+    """PRD-06: snapshot must contain per_episode_speaker + episode_speaker_diff."""
+    feed = _make_feed(db_session, "Speaker Snapshot Feed")
+    ep = _make_episode(db_session, feed, duration_secs=600)
+    _add_segments(db_session, ep, ["one two three"], speaker="SPEAKER_00")
+    _add_speaker_name(
+        db_session, ep, "SPEAKER_00", "Snapshot Host",
+        confirmed_by_user=True, role="host",
+    )
+    snap = compute_snapshot(db_session)
+    assert "per_episode_speaker" in snap
+    assert "episode_speaker_diff" in snap
+    assert isinstance(snap["per_episode_speaker"], list)
+    assert isinstance(snap["episode_speaker_diff"], list)
+    # Sanity: the confirmed row we seeded made it in.
+    assert any(
+        r["display_name"] == "Snapshot Host" and r["source"] == "confirmed"
+        for r in snap["per_episode_speaker"]
+    )
+
+
 def test_episode_speaker_diff_inferred_uses_inheritance_then_heuristic(db_session):
     """Inferred-HIGH classification: inheritance from confirmed first,
     then 25%-of-episodes heuristic.
