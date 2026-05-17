@@ -25,15 +25,39 @@ interface Props {
 
 export default function PlotlyChart({ data, layout, config, onPointClick, height = 360 }: Props) {
   const template = usePlotlyTheme();
+
+  const themeLayout: Partial<Layout> = template === "plotly_dark"
+    ? {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: "#e2e8f0" },
+        xaxis: { gridcolor: "rgba(148,163,184,0.15)", zerolinecolor: "rgba(148,163,184,0.3)" },
+        yaxis: { gridcolor: "rgba(148,163,184,0.15)", zerolinecolor: "rgba(148,163,184,0.3)" },
+        legend: { bgcolor: "rgba(0,0,0,0)", font: { color: "#e2e8f0" } },
+      }
+    : {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: "#0f172a" },
+        xaxis: { gridcolor: "rgba(15,23,42,0.08)", zerolinecolor: "rgba(15,23,42,0.2)" },
+        yaxis: { gridcolor: "rgba(15,23,42,0.08)", zerolinecolor: "rgba(15,23,42,0.2)" },
+        legend: { bgcolor: "rgba(0,0,0,0)", font: { color: "#0f172a" } },
+      };
+
   return (
     <div style={{ width: "100%", height }}>
       <Plot
         data={data}
         layout={{
           autosize: true,
-          template: template as unknown as Layout["template"],
           margin: { l: 60, r: 20, t: 70, b: 110 },
+          ...themeLayout,
           ...layout,
+          // Deep-merge xaxis/yaxis so theme grid colors stay applied:
+          xaxis: { ...themeLayout.xaxis, ...layout?.xaxis },
+          yaxis: { ...themeLayout.yaxis, ...layout?.yaxis },
+          font: { ...themeLayout.font, ...layout?.font },
+          legend: { ...themeLayout.legend, ...layout?.legend },
         }}
         config={{ displaylogo: false, responsive: true, ...config }}
         useResizeHandler
