@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import type { SnapshotResponse, MissingSpeakersResponse } from "@/lib/metaAnalysisTypes";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import FiltersBar from "./FiltersBar";
 import CoverageStrip from "./CoverageStrip";
 import MissingSpeakersModal from "./MissingSpeakersModal";
@@ -43,6 +44,7 @@ export default function MetaAnalysisClient() {
   const snap = data?.snapshot ?? null;
 
   const [selectedFeedIds, setSelectedFeedIds] = useState<string[]>([]);
+  const [source, setSource] = useState<"confirmed" | "inferred_high">("confirmed");
   const [missingOpen, setMissingOpen] = useState(false);
   const [missingData, setMissingData] = useState<MissingSpeakersResponse | null>(null);
 
@@ -128,46 +130,29 @@ export default function MetaAnalysisClient() {
             onClose={() => setMissingOpen(false)}
             data={missingData}
           />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <ChartCard
-              title="Per-speaker minutes per episode"
-              subtitle="Confirmed speakers"
-            >
-              <SpeakerMinutesChart rows={filteredSpeakerRows} source="confirmed" />
-            </ChartCard>
-            <ChartCard
-              title="Per-speaker minutes per episode"
-              subtitle="Inferred — HIGH confidence"
-            >
-              <SpeakerMinutesChart rows={filteredSpeakerRows} source="inferred_high" />
-            </ChartCard>
-
-            <ChartCard
-              title="Per-speaker word count per episode"
-              subtitle="Confirmed speakers"
-            >
-              <SpeakerWordsChart rows={filteredSpeakerRows} source="confirmed" />
-            </ChartCard>
-            <ChartCard
-              title="Per-speaker word count per episode"
-              subtitle="Inferred — HIGH confidence"
-            >
-              <SpeakerWordsChart rows={filteredSpeakerRows} source="inferred_high" />
-            </ChartCard>
-
-            <ChartCard
-              title="Host vs Guest talking time per episode"
-              subtitle="Confirmed speakers"
-            >
-              <HostGuestDiffChart rows={filteredDiffRows} source="confirmed" />
-            </ChartCard>
-            <ChartCard
-              title="Host vs Guest talking time per episode"
-              subtitle="Inferred — HIGH confidence"
-            >
-              <HostGuestDiffChart rows={filteredDiffRows} source="inferred_high" />
-            </ChartCard>
-          </div>
+          <Tabs value={source} onValueChange={(v) => setSource(v as "confirmed" | "inferred_high")}>
+            <TabsList>
+              <TabsTrigger value="confirmed">Confirmed</TabsTrigger>
+              <TabsTrigger value="inferred_high">Inferred — HIGH</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {(() => {
+            const sourceSubtitle =
+              source === "confirmed" ? "Confirmed speakers" : "Inferred — HIGH confidence";
+            return (
+              <div className="grid grid-cols-1 gap-4">
+                <ChartCard title="Per-speaker minutes per episode" subtitle={sourceSubtitle}>
+                  <SpeakerMinutesChart rows={filteredSpeakerRows} source={source} />
+                </ChartCard>
+                <ChartCard title="Per-speaker word count per episode" subtitle={sourceSubtitle}>
+                  <SpeakerWordsChart rows={filteredSpeakerRows} source={source} />
+                </ChartCard>
+                <ChartCard title="Host vs Guest talking time per episode" subtitle={sourceSubtitle}>
+                  <HostGuestDiffChart rows={filteredDiffRows} source={source} />
+                </ChartCard>
+              </div>
+            );
+          })()}
           <InfoBlock />
         </>
       )}
