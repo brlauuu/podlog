@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import type { SnapshotResponse, MissingSpeakersResponse } from "@/lib/metaAnalysisTypes";
 import FiltersBar from "./FiltersBar";
 import CoverageStrip from "./CoverageStrip";
@@ -63,7 +64,14 @@ export default function MetaAnalysisClient() {
     setMissingOpen(true);
   };
 
-  if (isLoading) return <p className="text-muted-foreground">Loading meta-analysis…</p>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading meta-analysis…
+      </div>
+    );
+  }
   if (isError) return <p className="text-red-500">Could not load meta-analysis.</p>;
 
   return (
