@@ -33,7 +33,7 @@ export default function SpeakerWordsChart({ rows, source, enableClickOpen = true
   const feedIds = Array.from(series.keys());
   const traces: Data[] = [];
 
-  feedIds.forEach((feedId, fIdx) => {
+  feedIds.forEach((feedId) => {
     const fs = series.get(feedId)!;
     fs.hosts.forEach((h, hIdx) => {
       const color = HOST_PALETTE[hIdx % HOST_PALETTE.length];
@@ -79,7 +79,6 @@ export default function SpeakerWordsChart({ rows, source, enableClickOpen = true
         visible: true,
       });
     }
-    void fIdx; // all traces always visible — fIdx unused
   });
 
   const feedTitleText =
