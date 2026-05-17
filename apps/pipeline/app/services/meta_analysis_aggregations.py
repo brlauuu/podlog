@@ -268,6 +268,98 @@ def _per_speaker(db: Session) -> list[dict[str, Any]]:
     return out
 
 
+def _per_episode_speaker(db: Session) -> list[dict[str, Any]]:
+    """Per-(episode, speaker, source) aggregates for PRD-06 plots.
+
+    Returns one row per unique (episode_id, display_name, source) triple with:
+      feed_id, feed_title, episode_id, episode_title, published_at (ISO 8601 or None),
+      display_name, role ("host"|"guest" for confirmed; None for inferred_high),
+      source ("confirmed"|"inferred_high"), minutes (float), words (int).
+
+    Source predicates:
+      confirmed      — confirmed_by_user=True AND role IN ('host', 'guest')
+      inferred_high  — inferred=True AND confidence='HIGH'
+
+    Only episodes with published_at IS NOT NULL are included.
+    Output is sorted by (feed_title, published_at or "", display_name, source).
+    """
+    from sqlalchemy import and_, case, or_
+
+    sn_pred = or_(
+        and_(
+            SpeakerName.confirmed_by_user == True,  # noqa: E712
+            SpeakerName.role.in_(("host", "guest")),
+        ),
+        and_(
+            SpeakerName.inferred == True,  # noqa: E712
+            SpeakerName.confidence == "HIGH",
+        ),
+    )
+    source_expr = case(
+        (SpeakerName.confirmed_by_user == True, "confirmed"),  # noqa: E712
+        else_="inferred_high",
+    ).label("source")
+
+    seg_rows = db.execute(
+        select(
+            Feed.id.label("feed_id"),
+            Feed.title.label("feed_title"),
+            Episode.id.label("episode_id"),
+            Episode.title.label("episode_title"),
+            Episode.published_at,
+            SpeakerName.display_name,
+            SpeakerName.role,
+            source_expr,
+            Segment.start_time,
+            Segment.end_time,
+            Segment.text,
+        )
+        .select_from(Segment)
+        .join(Episode, Episode.id == Segment.episode_id)
+        .join(Feed, Feed.id == Episode.feed_id)
+        .join(
+            SpeakerName,
+            and_(
+                SpeakerName.episode_id == Segment.episode_id,
+                SpeakerName.speaker_label == Segment.speaker_label,
+            ),
+        )
+        .where(Episode.published_at.isnot(None))
+        .where(sn_pred)
+    ).all()
+
+    # Aggregate minutes + words per (feed_id, episode_id, display_name, source).
+    agg: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for s in seg_rows:
+        key = (s.feed_id, s.episode_id, s.display_name, s.source)
+        if key not in agg:
+            pub = s.published_at.isoformat() if s.published_at else None
+            agg[key] = {
+                "feed_id": s.feed_id,
+                "feed_title": s.feed_title or "",
+                "episode_id": s.episode_id,
+                "episode_title": s.episode_title or "",
+                "published_at": pub,
+                "display_name": s.display_name,
+                "role": s.role,
+                "source": s.source,
+                "minutes": 0.0,
+                "words": 0,
+            }
+        entry = agg[key]
+        entry["minutes"] += max(0.0, s.end_time - s.start_time) / 60.0
+        entry["words"] += len(s.text.split()) if s.text else 0
+
+    out = list(agg.values())
+    out.sort(key=lambda r: (
+        r["feed_title"],
+        r["published_at"] or "",
+        r["display_name"],
+        r["source"],
+    ))
+    return out
+
+
 def _identify_feed_host(feed: Feed, feed_speaker_cache_top: dict[str, str]) -> str | None:
     """Resolve host display name for a feed. Order per spec:
        feed_speaker_cache top entry → podcast_persons role=host →

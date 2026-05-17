@@ -2,6 +2,8 @@
 import uuid
 from datetime import datetime, timezone
 
+import pytest
+
 from app.services import meta_analysis as ma
 from app.services.meta_analysis import (
     is_stale,
@@ -356,3 +358,100 @@ def test_compute_snapshot_excludes_manual_uploads(db_session):
     speaker_names = {s["speaker_display_name"] for s in snap["per_speaker"]}
     assert "Bob" not in speaker_names
     assert "Alice" in speaker_names
+
+
+# ---------------------------------------------------------------------------
+# _per_episode_speaker tests (TDD — Task 1.1)
+# ---------------------------------------------------------------------------
+
+from app.services.meta_analysis_aggregations import _per_episode_speaker  # noqa: E402
+
+
+def _add_speaker_name(db_session, ep, speaker_label, display_name, **kwargs):
+    """Helper: add a SpeakerName row and commit."""
+    sn = SpeakerName(
+        episode_id=ep.id,
+        speaker_label=speaker_label,
+        display_name=display_name,
+        **kwargs,
+    )
+    db_session.add(sn)
+    db_session.commit()
+    return sn
+
+
+def test_per_episode_speaker_returns_confirmed_rows(db_session):
+    """Confirmed host/guest rows must appear with correct key set and types."""
+    feed = _make_feed(db_session, "Feed PES A")
+    ep = _make_episode(
+        db_session, feed,
+        published_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+        duration_secs=120,
+    )
+    _add_segments(db_session, ep, ["hello world foo", "bar baz"], speaker="SPEAKER_00")
+    _add_speaker_name(
+        db_session, ep, "SPEAKER_00", "Alice Host",
+        confirmed_by_user=True, role="host",
+    )
+
+    rows = _per_episode_speaker(db_session)
+    alice_rows = [r for r in rows if r["display_name"] == "Alice Host"]
+    assert len(alice_rows) == 1
+
+    row = alice_rows[0]
+    # Key set
+    for key in ("feed_id", "feed_title", "episode_id", "episode_title",
+                "published_at", "display_name", "role", "source", "minutes", "words"):
+        assert key in row, f"missing key: {key}"
+
+    assert row["source"] == "confirmed"
+    assert row["role"] in ("host", "guest")
+    assert isinstance(row["minutes"], float)
+    assert isinstance(row["words"], int)
+    assert row["feed_id"] == feed.id
+    assert row["episode_id"] == ep.id
+    assert row["words"] == 5   # "hello world foo" + "bar baz"
+    assert row["minutes"] == pytest.approx(20.0 / 60.0, rel=1e-4)
+
+
+def test_per_episode_speaker_returns_inferred_high_rows(db_session):
+    """Inferred-HIGH rows must have source='inferred_high' and role=None."""
+    feed = _make_feed(db_session, "Feed PES B")
+    ep = _make_episode(
+        db_session, feed,
+        published_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
+        duration_secs=60,
+    )
+    _add_segments(db_session, ep, ["one two", "three"], speaker="SPEAKER_00")
+    _add_speaker_name(
+        db_session, ep, "SPEAKER_00", "Bob Inferred",
+        inferred=True, confidence="HIGH", role=None,
+    )
+
+    rows = _per_episode_speaker(db_session)
+    inferred = [r for r in rows if r["source"] == "inferred_high"]
+    assert len(inferred) >= 1
+
+    bob_rows = [r for r in inferred if r["display_name"] == "Bob Inferred"]
+    assert len(bob_rows) == 1
+    assert bob_rows[0]["role"] is None
+
+
+def test_per_episode_speaker_excludes_role_other(db_session):
+    """Confirmed rows with role='other' must be excluded entirely."""
+    feed = _make_feed(db_session, "Feed PES C")
+    ep = _make_episode(
+        db_session, feed,
+        published_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+        duration_secs=60,
+    )
+    _add_segments(db_session, ep, ["noise filler"], speaker="SPEAKER_00")
+    _add_speaker_name(
+        db_session, ep, "SPEAKER_00", "Other Person",
+        confirmed_by_user=True, role="other",
+    )
+
+    rows = _per_episode_speaker(db_session)
+    confirmed = [r for r in rows if r["source"] == "confirmed"]
+    assert all(r["role"] != "other" for r in confirmed)
+    assert all(r["role"] is not None for r in confirmed)
