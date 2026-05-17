@@ -108,7 +108,7 @@ The notebook is intended to render inside the podlog app shell. Plot styling (pa
 The first is simpler and is the default unless the second turns out to be needed for instant switching without re-render.
 
 ### 3.7 Per-feed dropdown
-Each speaker plot keeps PRD-05 §6.5's per-feed `updatemenus` dropdown (top-left of plot area, `direction="down"`, `x=0.0`, `y=1.18`). Only one feed's traces are visible at a time. The title updates with the feed name, the source label (§3.1), and any plot-specific subtitle (e.g. detected-hosts list, or per-feed summary stats for the diff plot).
+Each speaker plot keeps PRD-05 §6.5's per-feed `updatemenus` dropdown (top-left of plot area, `direction="down"`, `x=0.0`, `y=1.18`). Only one feed's traces are visible at a time. The title updates with the feed name, the source label (§3.1a / §3.1b), and any plot-specific subtitle (e.g. detected-hosts list, or per-feed summary stats for the diff plot).
 
 ---
 
@@ -303,7 +303,7 @@ These appear across every plot in this PRD and should be implemented at the help
 
 | # | Requirement | Default | Where it lives |
 |---|-------------|---------|----------------|
-| 1 | Source toggle (Confirmed / Inferred-HIGH) | `confirmed` | Single notebook-wide widget (§3.1) |
+| 1 | Source variant (Confirmed / Inferred-HIGH) | `confirmed` | Web page: both rendered statically (§3.1a). Notebook: ipywidgets toggle (§3.1b). |
 | 2 | Click-to-open episode (per-plot) | `True` | `enable_click_open: bool = True` param on each speaker plot function (§3.2) |
 | 3 | Theme follows podlog app | (auto) | Helper that sets `template` and listens for theme changes (§3.6) |
 
