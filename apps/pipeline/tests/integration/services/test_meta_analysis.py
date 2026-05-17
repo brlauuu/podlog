@@ -590,8 +590,8 @@ def test_episode_speaker_diff_inferred_uses_inheritance_then_heuristic(db_sessio
     Alice should still be classified as host (inheritance).
 
     Feed G: no confirmed data. Bob appears in 1 out of 8 inferred episodes
-    (12.5% < 25%) — should classify as guest. Dave appears in 3 out of 8
-    (37.5% >= 25%) — should classify as host. The episode where both appear
+    (12.5% < 25%) — should classify as guest. Dave appears in all 8 inferred
+    episodes (100% >= 25%) — should classify as host. The episode where both appear
     must show host_names=[Dave] and guest_names=[Bob].
     """
     # --- Feed F: confirmed Alice + inferred episode with Alice ---
@@ -646,7 +646,7 @@ def test_episode_speaker_diff_inferred_uses_inheritance_then_heuristic(db_sessio
     feed_g = _make_feed(db_session, "Feed ESD G")
 
     # Seed 8 inferred episodes in feed G.
-    # Dave appears in 3 of 8 (37.5%) → host.
+    # Dave appears in all 8 episodes (100%) → host.
     # Bob appears in 1 of 8 (12.5%) → guest.
     # The last episode (ep_g_both) has both Dave and Bob → must produce a diff row.
     ep_g_episodes = []
