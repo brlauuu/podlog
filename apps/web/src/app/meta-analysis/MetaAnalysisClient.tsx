@@ -7,15 +7,9 @@ import FiltersBar from "./FiltersBar";
 import CoverageStrip from "./CoverageStrip";
 import MissingSpeakersModal from "./MissingSpeakersModal";
 import ChartCard from "./ChartCard";
-import CostPerFeed from "./charts/CostPerFeed";
-import EpisodeLengthTrend from "./charts/EpisodeLengthTrend";
-import HostGuestShare from "./charts/HostGuestShare";
-import LengthPerFeed from "./charts/LengthPerFeed";
-import ProcessingTimeDistribution from "./charts/ProcessingTimeDistribution";
-import ReleaseTimeline from "./charts/ReleaseTimeline";
-import TurnDensity from "./charts/TurnDensity";
-import WpmPerSpeaker from "./charts/WpmPerSpeaker";
-import TokensPerEpisode from "./charts/TokensPerEpisode";
+import SpeakerMinutesChart from "./charts/SpeakerMinutesChart";
+import SpeakerWordsChart from "./charts/SpeakerWordsChart";
+import HostGuestDiffChart from "./charts/HostGuestDiffChart";
 import InfoBlock from "./InfoBlock";
 import ExploreStatusPanel from "./ExploreStatusPanel";
 import { formatDateTime } from "@/lib/dateFormat";
@@ -51,13 +45,11 @@ export default function MetaAnalysisClient() {
   const [missingOpen, setMissingOpen] = useState(false);
   const [missingData, setMissingData] = useState<MissingSpeakersResponse | null>(null);
 
-  const filteredFeeds = snap
-    ? (Array.isArray(snap.per_feed)
-        ? (selectedFeedIds.length === 0
-            ? snap.per_feed
-            : snap.per_feed.filter((f) => selectedFeedIds.includes(f.feed_id)))
-        : [])
-    : [];
+  const selectedSet = new Set(selectedFeedIds);
+  const filteredSpeakerRows = (Array.isArray(snap?.per_episode_speaker) ? snap!.per_episode_speaker : [])
+    .filter((r) => selectedSet.size === 0 || selectedSet.has(r.feed_id));
+  const filteredDiffRows = (Array.isArray(snap?.episode_speaker_diff) ? snap!.episode_speaker_diff : [])
+    .filter((r) => selectedSet.size === 0 || selectedSet.has(r.feed_id));
 
   const openMissing = async () => {
     try {
@@ -128,64 +120,44 @@ export default function MetaAnalysisClient() {
             onClose={() => setMissingOpen(false)}
             data={missingData}
           />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <ChartCard title="Episode length per podcast" subtitle="Avg (min) · σ error bars">
-              <LengthPerFeed feeds={filteredFeeds} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard
+              title="Per-speaker minutes per episode"
+              subtitle="Confirmed speakers"
+            >
+              <SpeakerMinutesChart rows={filteredSpeakerRows} source="confirmed" />
             </ChartCard>
-            <ChartCard title="Episodes published per month" subtitle="Stacked by podcast">
-              <ReleaseTimeline
-                timeline={Array.isArray(snap.timeline_monthly) ? snap.timeline_monthly : []}
-                feeds={filteredFeeds}
-              />
+            <ChartCard
+              title="Per-speaker minutes per episode"
+              subtitle="Inferred — HIGH confidence"
+            >
+              <SpeakerMinutesChart rows={filteredSpeakerRows} source="inferred_high" />
             </ChartCard>
-            <ChartCard title="Episode length trend" subtitle="Per podcast over time">
-              <EpisodeLengthTrend
-                episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
-                feeds={filteredFeeds}
-              />
+
+            <ChartCard
+              title="Per-speaker word count per episode"
+              subtitle="Confirmed speakers"
+            >
+              <SpeakerWordsChart rows={filteredSpeakerRows} source="confirmed" />
             </ChartCard>
-            {(() => {
-              const hostShareCoverage = snap.coverage?.host_share;
-              return (
-                <ChartCard
-                  title="Host vs guest share"
-                  subtitle="% speech · confirmed hosts only"
-                  coverage={hostShareCoverage ? {
-                    included: hostShareCoverage.included_count,
-                    total: hostShareCoverage.included_count + (Array.isArray(hostShareCoverage.excluded) ? hostShareCoverage.excluded.length : 0),
-                    onClickExcluded: openMissing,
-                  } : undefined}
-                >
-                  <HostGuestShare
-                    episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
-                    feeds={filteredFeeds}
-                  />
-                </ChartCard>
-              );
-            })()}
-            <ChartCard title="Turn density" subtitle="Episode length × speaker turns/min">
-              <TurnDensity
-                episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
-                feeds={filteredFeeds}
-              />
+            <ChartCard
+              title="Per-speaker word count per episode"
+              subtitle="Inferred — HIGH confidence"
+            >
+              <SpeakerWordsChart rows={filteredSpeakerRows} source="inferred_high" />
             </ChartCard>
-            <ChartCard title="Words per minute per speaker"
-              subtitle="Top 20 per podcast · confirmed speakers only">
-              <WpmPerSpeaker
-                speakers={Array.isArray(snap.per_speaker) ? snap.per_speaker : []}
-                feeds={filteredFeeds}
-              />
+
+            <ChartCard
+              title="Host vs Guest talking time per episode"
+              subtitle="Confirmed speakers"
+            >
+              <HostGuestDiffChart rows={filteredDiffRows} source="confirmed" />
             </ChartCard>
-            <ChartCard title="Tokens per episode" subtitle="Segments vs chunks · estimated (cl100k_base)">
-              <TokensPerEpisode episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []} />
-            </ChartCard>
-            <ChartCard title="Total remote cost per podcast" subtitle="USD · Fireworks">
-              <CostPerFeed feeds={filteredFeeds} />
-            </ChartCard>
-            <ChartCard title="Processing time distribution" subtitle="Total (transcribe + diarize) seconds · local vs remote">
-              <ProcessingTimeDistribution
-                episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
-              />
+            <ChartCard
+              title="Host vs Guest talking time per episode"
+              subtitle="Inferred — HIGH confidence"
+            >
+              <HostGuestDiffChart rows={filteredDiffRows} source="inferred_high" />
             </ChartCard>
           </div>
           <InfoBlock />
