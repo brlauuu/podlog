@@ -34,6 +34,11 @@ export default function PlotlyChart({ data, layout, config, onPointClick, height
         xaxis: { gridcolor: "rgba(148,163,184,0.15)", zerolinecolor: "rgba(148,163,184,0.3)" },
         yaxis: { gridcolor: "rgba(148,163,184,0.15)", zerolinecolor: "rgba(148,163,184,0.3)" },
         legend: { bgcolor: "rgba(0,0,0,0)", font: { color: "#e2e8f0" } },
+        hoverlabel: {
+          bgcolor: "#1e293b",
+          bordercolor: "rgba(148,163,184,0.3)",
+          font: { color: "#e2e8f0" },
+        },
       }
     : {
         paper_bgcolor: "rgba(0,0,0,0)",
@@ -42,6 +47,11 @@ export default function PlotlyChart({ data, layout, config, onPointClick, height
         xaxis: { gridcolor: "rgba(15,23,42,0.08)", zerolinecolor: "rgba(15,23,42,0.2)" },
         yaxis: { gridcolor: "rgba(15,23,42,0.08)", zerolinecolor: "rgba(15,23,42,0.2)" },
         legend: { bgcolor: "rgba(0,0,0,0)", font: { color: "#0f172a" } },
+        hoverlabel: {
+          bgcolor: "#ffffff",
+          bordercolor: "rgba(15,23,42,0.2)",
+          font: { color: "#0f172a" },
+        },
       };
 
   return (
@@ -58,6 +68,7 @@ export default function PlotlyChart({ data, layout, config, onPointClick, height
           yaxis: { ...themeLayout.yaxis, ...layout?.yaxis },
           font: { ...themeLayout.font, ...layout?.font },
           legend: { ...themeLayout.legend, ...layout?.legend },
+          hoverlabel: { ...themeLayout.hoverlabel, ...layout?.hoverlabel },
         }}
         config={{ displaylogo: false, responsive: true, ...config }}
         useResizeHandler
