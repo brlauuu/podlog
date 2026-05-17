@@ -11,7 +11,7 @@ tests refer to e.g. `svc._count_turns` through the orchestrator module.
 import logging
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -283,8 +283,6 @@ def _per_episode_speaker(db: Session) -> list[dict[str, Any]]:
     Only episodes with published_at IS NOT NULL are included.
     Output is sorted by (feed_title, published_at or "", display_name, source).
     """
-    from sqlalchemy import and_, case, or_
-
     sn_pred = or_(
         and_(
             SpeakerName.confirmed_by_user == True,  # noqa: E712
