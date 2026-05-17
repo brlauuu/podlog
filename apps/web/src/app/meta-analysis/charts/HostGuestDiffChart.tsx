@@ -37,7 +37,6 @@ export default function HostGuestDiffChart({ rows, source, enableClickOpen = tru
   const feedIds = Array.from(byFeed.keys());
 
   const traces: Data[] = [];
-  const traceFeed: string[] = [];
 
   feedIds.forEach((fid, fIdx) => {
     const sub = byFeed.get(fid)!;
@@ -53,9 +52,8 @@ export default function HostGuestDiffChart({ rows, source, enableClickOpen = tru
       line: { width: 0 },
       hoverinfo: "skip",
       showlegend: false,
-      visible: fIdx === 0,
+      visible: true,
     });
-    traceFeed.push(fid);
 
     // Lower-band line with fill.
     traces.push({
@@ -68,9 +66,8 @@ export default function HostGuestDiffChart({ rows, source, enableClickOpen = tru
       fillcolor: fill,
       hoverinfo: "skip",
       showlegend: false,
-      visible: fIdx === 0,
+      visible: true,
     });
-    traceFeed.push(fid);
 
     // Center line — signed diff per episode.
     const clickHint = enableClickOpen ? "<br><i>(click to open episode)</i>" : "";
@@ -100,44 +97,29 @@ export default function HostGuestDiffChart({ rows, source, enableClickOpen = tru
         "%{customdata[0]}" +
         clickHint +
         `<extra>${feedShort(sub[0].feed_title)}</extra>`,
-      visible: fIdx === 0,
+      visible: true,
     });
-    traceFeed.push(fid);
   });
 
-  const buttons = feedIds.map((fid) => {
-    const sub = byFeed.get(fid)!;
-    const s = summarizeDiff(sub);
-    const subtitle = `${s.total} episode(s) compared — guests talked more in ${s.guestsMore}, hosts in ${s.hostsMore}`;
-    return {
-      method: "update" as const,
-      label: feedShort(sub[0].feed_title),
-      args: [
-        { visible: traceFeed.map((tf) => tf === fid) },
-        {
-          title: {
-            text:
-              `Host vs Guest talking time per episode — ${feedShort(sub[0].feed_title)} ` +
-              `<i>(${sourceLabel})</i><br><sub>${subtitle}</sub>`,
-          },
-        },
-      ],
-    };
-  });
+  const feedTitleText = feedIds.length === 1
+    ? feedShort(byFeed.get(feedIds[0])![0].feed_title)
+    : "All podcasts";
 
-  const initial = byFeed.get(feedIds[0])!;
-  const initSummary = summarizeDiff(initial);
+  // Summarize across all feeds in the current dataset.
+  const allRows = feedIds.flatMap((fid) => byFeed.get(fid)!);
+  const summary = summarizeDiff(allRows);
+  const subtitle =
+    `${summary.total} episode(s) compared — guests talked more in ${summary.guestsMore}, hosts in ${summary.hostsMore}`;
 
   const layout: Partial<Layout> = {
     title: {
       text:
-        `Host vs Guest talking time per episode — ${feedShort(initial[0].feed_title)} ` +
-        `<i>(${sourceLabel})</i><br><sub>${initSummary.total} episode(s) compared — ` +
-        `guests talked more in ${initSummary.guestsMore}, hosts in ${initSummary.hostsMore}</sub>`,
+        `Host vs Guest talking time per episode — ${feedTitleText} ` +
+        `<i>(${sourceLabel})</i><br><sub>${subtitle}</sub>`,
     },
     hovermode: "x unified",
     legend: { orientation: "h", yanchor: "top", y: -0.2, xanchor: "center", x: 0.5 },
-    margin: { l: 60, r: 20, t: 110, b: 160 },
+    margin: { l: 60, r: 20, t: 70, b: 160 },
     xaxis: {
       showspikes: true,
       spikemode: "across",
@@ -158,15 +140,6 @@ export default function HostGuestDiffChart({ rows, source, enableClickOpen = tru
       y0: 0,
       y1: 0,
       line: { color: "#888", width: 1, dash: "dot" },
-    }],
-    updatemenus: [{
-      type: "dropdown",
-      buttons,
-      direction: "down",
-      x: 0,
-      y: 1.18,
-      xanchor: "left",
-      yanchor: "top",
     }],
   };
 

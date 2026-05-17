@@ -32,7 +32,6 @@ export default function SpeakerMinutesChart({ rows, source, enableClickOpen = tr
 
   const feedIds = Array.from(series.keys());
   const traces: Data[] = [];
-  const traceFeed: string[] = [];
 
   feedIds.forEach((feedId, fIdx) => {
     const fs = series.get(feedId)!;
@@ -52,9 +51,8 @@ export default function SpeakerMinutesChart({ rows, source, enableClickOpen = tr
           "%{x|%Y-%m-%d}<br>%{y:.1f} min<br>%{customdata[0]}" +
           clickHint +
           `<extra><b>${h.display_name}</b> (host)</extra>`,
-        visible: fIdx === 0,
+        visible: true,
       });
-      traceFeed.push(feedId);
     });
     if (fs.combinedGuests.length > 0) {
       const color = GUEST_PALETTE[0];
@@ -78,45 +76,28 @@ export default function SpeakerMinutesChart({ rows, source, enableClickOpen = tr
           "%{customdata[1]} guest(s): %{customdata[2]}<br>%{customdata[0]}" +
           clickHint +
           "<extra><b>Guests</b> (combined)</extra>",
-        visible: fIdx === 0,
+        visible: true,
       });
-      traceFeed.push(feedId);
     }
+    void fIdx; // all traces always visible — fIdx unused
   });
 
-  const buttons = feedIds.map((fid) => {
-    const fs = series.get(fid)!;
-    const hostsLabel =
-      fs.hosts.map((h) => h.display_name).join(", ") || "(none detected)";
-    return {
-      method: "update" as const,
-      label: feedShort(fs.feed_title),
-      args: [
-        { visible: traceFeed.map((tf) => tf === fid) },
-        {
-          title: {
-            text:
-              `Per-speaker minutes per episode — ${feedShort(fs.feed_title)} ` +
-              `<i>(${sourceLabel})</i><br><sub>Detected hosts: ${hostsLabel}</sub>`,
-          },
-        },
-      ],
-    };
-  });
-
-  const initial = series.get(feedIds[0])!;
-  const initialHosts =
-    initial.hosts.map((h) => h.display_name).join(", ") || "(none detected)";
+  const feedTitleText =
+    feedIds.length === 1 ? feedShort(series.get(feedIds[0])!.feed_title) : "All podcasts";
+  const hostsLabel =
+    feedIds
+      .flatMap((fid) => series.get(fid)!.hosts.map((h) => h.display_name))
+      .join(", ") || "(none detected)";
 
   const layout: Partial<Layout> = {
     title: {
       text:
-        `Per-speaker minutes per episode — ${feedShort(initial.feed_title)} ` +
-        `<i>(${sourceLabel})</i><br><sub>Detected hosts: ${initialHosts}</sub>`,
+        `Per-speaker minutes per episode — ${feedTitleText} ` +
+        `<i>(${sourceLabel})</i><br><sub>Detected hosts: ${hostsLabel}</sub>`,
     },
     hovermode: "x unified",
     legend: { orientation: "h", yanchor: "top", y: -0.2, xanchor: "center", x: 0.5 },
-    margin: { l: 60, r: 20, t: 110, b: 160 },
+    margin: { l: 60, r: 20, t: 70, b: 160 },
     xaxis: {
       showspikes: true,
       spikemode: "across",
@@ -125,17 +106,6 @@ export default function SpeakerMinutesChart({ rows, source, enableClickOpen = tr
       spikethickness: 1,
     },
     yaxis: { ticksuffix: " min" },
-    // UpdateMenu buttons are typed as Partial<UpdateMenuButton>[] in @types/plotly.js,
-    // so the object literal satisfies it without a cast.
-    updatemenus: [{
-      type: "dropdown",
-      buttons,
-      direction: "down",
-      x: 0,
-      y: 1.18,
-      xanchor: "left",
-      yanchor: "top",
-    }],
   };
 
   return (

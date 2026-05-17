@@ -43,16 +43,15 @@ export default function MetaAnalysisClient() {
 
   const snap = data?.snapshot ?? null;
 
-  const [selectedFeedIds, setSelectedFeedIds] = useState<string[]>([]);
+  const [selectedFeedId, setSelectedFeedId] = useState<string | null>(null);
   const [source, setSource] = useState<"confirmed" | "inferred_high">("confirmed");
   const [missingOpen, setMissingOpen] = useState(false);
   const [missingData, setMissingData] = useState<MissingSpeakersResponse | null>(null);
 
-  const selectedSet = new Set(selectedFeedIds);
   const filteredSpeakerRows = (Array.isArray(snap?.per_episode_speaker) ? snap!.per_episode_speaker : [])
-    .filter((r) => selectedSet.size === 0 || selectedSet.has(r.feed_id));
+    .filter((r) => selectedFeedId === null || r.feed_id === selectedFeedId);
   const filteredDiffRows = (Array.isArray(snap?.episode_speaker_diff) ? snap!.episode_speaker_diff : [])
-    .filter((r) => selectedSet.size === 0 || selectedSet.has(r.feed_id));
+    .filter((r) => selectedFeedId === null || r.feed_id === selectedFeedId);
 
   const openMissing = async () => {
     try {
@@ -114,8 +113,8 @@ export default function MetaAnalysisClient() {
           <ExploreStatusPanel />
           <FiltersBar
             feeds={Array.isArray(snap.per_feed) ? snap.per_feed.map((f) => ({ feed_id: f.feed_id, title: f.title })) : []}
-            selectedFeedIds={selectedFeedIds}
-            onSelectedChange={setSelectedFeedIds}
+            selectedFeedId={selectedFeedId}
+            onSelectionChange={setSelectedFeedId}
           />
           <CoverageStrip
             feedCount={data?.feed_count ?? 0}
