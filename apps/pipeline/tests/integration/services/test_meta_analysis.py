@@ -455,3 +455,256 @@ def test_per_episode_speaker_excludes_role_other(db_session):
     confirmed = [r for r in rows if r["source"] == "confirmed"]
     assert all(r["role"] != "other" for r in confirmed)
     assert all(r["role"] is not None for r in confirmed)
+
+
+# ---------------------------------------------------------------------------
+# _episode_speaker_diff tests (TDD — Task 1.2)
+# ---------------------------------------------------------------------------
+
+from app.services.meta_analysis_aggregations import _episode_speaker_diff  # noqa: E402
+
+
+def test_episode_speaker_diff_only_episodes_with_both_sides(db_session):
+    """Episodes that have only hosts (or only guests) must NOT appear in
+    the diff output. Episodes with both hosts AND guests must appear."""
+    feed = _make_feed(db_session, "Feed ESD A")
+
+    # Episode with only a host — should be excluded.
+    ep_host_only = _make_episode(
+        db_session, feed,
+        published_at=datetime(2026, 4, 1, tzinfo=timezone.utc),
+        duration_secs=120,
+    )
+    _add_segments(db_session, ep_host_only, ["one two three"], speaker="SPEAKER_00")
+    _add_speaker_name(
+        db_session, ep_host_only, "SPEAKER_00", "Alice Host",
+        confirmed_by_user=True, role="host",
+    )
+
+    # Episode with both host and guest — should be included.
+    ep_both = _make_episode(
+        db_session, feed,
+        published_at=datetime(2026, 4, 2, tzinfo=timezone.utc),
+        duration_secs=180,
+    )
+    _add_segments(db_session, ep_both, ["host line one", "host line two"], speaker="SPEAKER_00")
+    _add_segments(db_session, ep_both, ["guest line one"], speaker="SPEAKER_01")
+    _add_speaker_name(
+        db_session, ep_both, "SPEAKER_00", "Alice Host",
+        confirmed_by_user=True, role="host",
+    )
+    _add_speaker_name(
+        db_session, ep_both, "SPEAKER_01", "Bob Guest",
+        confirmed_by_user=True, role="guest",
+    )
+
+    speakers = _per_episode_speaker(db_session)
+    diff_rows = _episode_speaker_diff(speakers)
+
+    episode_ids = {r["episode_id"] for r in diff_rows}
+    assert ep_host_only.id not in episode_ids, "host-only episode must be excluded"
+    assert ep_both.id in episode_ids, "episode with both host and guest must appear"
+
+    both_row = next(r for r in diff_rows if r["episode_id"] == ep_both.id)
+    assert both_row["host_count"] >= 1
+    assert both_row["guest_count"] >= 1
+
+
+def test_episode_speaker_diff_band_math(db_session):
+    """Band math identities must hold for all diff rows:
+        diff == guest_mean - host_mean
+        band_lo == guest_min - host_max
+        band_hi == guest_max - host_min
+        band_lo <= diff <= band_hi
+    """
+    feed = _make_feed(db_session, "Feed ESD B")
+    ep = _make_episode(
+        db_session, feed,
+        published_at=datetime(2026, 4, 10, tzinfo=timezone.utc),
+        duration_secs=600,
+    )
+
+    # Host 1: 2 segments of 10s each → 20s = 1/3 min
+    db_session.add(Segment(
+        episode_id=ep.id, speaker_label="SPEAKER_00",
+        start_time=0.0, end_time=10.0, text="host one seg one",
+    ))
+    db_session.add(Segment(
+        episode_id=ep.id, speaker_label="SPEAKER_00",
+        start_time=10.0, end_time=20.0, text="host one seg two",
+    ))
+    # Host 2: 1 segment of 30s
+    db_session.add(Segment(
+        episode_id=ep.id, speaker_label="SPEAKER_01",
+        start_time=20.0, end_time=50.0, text="host two seg one",
+    ))
+    # Guest 1: 1 segment of 60s
+    db_session.add(Segment(
+        episode_id=ep.id, speaker_label="SPEAKER_02",
+        start_time=50.0, end_time=110.0, text="guest one seg one",
+    ))
+    # Guest 2: 1 segment of 90s
+    db_session.add(Segment(
+        episode_id=ep.id, speaker_label="SPEAKER_03",
+        start_time=110.0, end_time=200.0, text="guest two seg one",
+    ))
+    db_session.commit()
+
+    _add_speaker_name(
+        db_session, ep, "SPEAKER_00", "Alice Host",
+        confirmed_by_user=True, role="host",
+    )
+    _add_speaker_name(
+        db_session, ep, "SPEAKER_01", "Carol Host",
+        confirmed_by_user=True, role="host",
+    )
+    _add_speaker_name(
+        db_session, ep, "SPEAKER_02", "Bob Guest",
+        confirmed_by_user=True, role="guest",
+    )
+    _add_speaker_name(
+        db_session, ep, "SPEAKER_03", "Dan Guest",
+        confirmed_by_user=True, role="guest",
+    )
+
+    speakers = _per_episode_speaker(db_session)
+    diff_rows = _episode_speaker_diff(speakers)
+
+    ep_rows = [r for r in diff_rows if r["episode_id"] == ep.id]
+    assert len(ep_rows) >= 1, "episode with multiple hosts + guests must appear"
+
+    for r in ep_rows:
+        assert r["diff"] == pytest.approx(r["guest_mean"] - r["host_mean"])
+        assert r["band_lo"] == pytest.approx(r["guest_min"] - r["host_max"])
+        assert r["band_hi"] == pytest.approx(r["guest_max"] - r["host_min"])
+        # band_lo <= diff <= band_hi (with small float tolerance)
+        assert r["band_lo"] <= r["diff"] + 1e-9
+        assert r["diff"] <= r["band_hi"] + 1e-9
+
+
+def test_episode_speaker_diff_inferred_uses_inheritance_then_heuristic(db_session):
+    """Inferred-HIGH classification: inheritance from confirmed first,
+    then 25%-of-episodes heuristic.
+
+    Feed F: Alice is a confirmed host. In a separate inferred-HIGH episode,
+    Alice should still be classified as host (inheritance).
+
+    Feed G: no confirmed data. Bob appears in 1 out of 8 inferred episodes
+    (12.5% < 25%) — should classify as guest. Dave appears in 3 out of 8
+    (37.5% >= 25%) — should classify as host. The episode where both appear
+    must show host_names=[Dave] and guest_names=[Bob].
+    """
+    # --- Feed F: confirmed Alice + inferred episode with Alice ---
+    feed_f = _make_feed(db_session, "Feed ESD F")
+
+    # Confirmed episode — primes _confirmed_role_map so Alice → host.
+    ep_confirmed = _make_episode(
+        db_session, feed_f,
+        published_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        duration_secs=60,
+    )
+    _add_segments(db_session, ep_confirmed, ["confirmed host line"], speaker="SPEAKER_00")
+    _add_speaker_name(
+        db_session, ep_confirmed, "SPEAKER_00", "Alice",
+        confirmed_by_user=True, role="host",
+    )
+
+    # Add 4 Alice-only inferred episodes so Zara's fraction is 1/5 = 20% < 25%.
+    for i in range(4):
+        ep_alice_only = _make_episode(
+            db_session, feed_f,
+            published_at=datetime(2026, 5, 10 + i, tzinfo=timezone.utc),
+            duration_secs=60,
+        )
+        _add_segments(db_session, ep_alice_only, [f"alice only line {i}"], speaker="SPEAKER_00")
+        _add_speaker_name(
+            db_session, ep_alice_only, "SPEAKER_00", "Alice",
+            inferred=True, confidence="HIGH", role=None,
+        )
+
+    # Inferred-HIGH episode with Alice (host via inheritance) and Zara (guest via heuristic).
+    # Alice appears in all 5 inferred episodes (100% >= 25% → host if no confirmed entry, but
+    # Alice IS in confirmed_map → inheritance wins regardless).
+    # Zara appears in only 1 of 5 inferred episodes (20% < 25% → guest by heuristic).
+    ep_inferred_f = _make_episode(
+        db_session, feed_f,
+        published_at=datetime(2026, 5, 2, tzinfo=timezone.utc),
+        duration_secs=120,
+    )
+    _add_segments(db_session, ep_inferred_f, ["alice inferred line"], speaker="SPEAKER_00")
+    _add_segments(db_session, ep_inferred_f, ["guest inferred line"], speaker="SPEAKER_01")
+    _add_speaker_name(
+        db_session, ep_inferred_f, "SPEAKER_00", "Alice",
+        inferred=True, confidence="HIGH", role=None,
+    )
+    _add_speaker_name(
+        db_session, ep_inferred_f, "SPEAKER_01", "Zara Guest",
+        inferred=True, confidence="HIGH", role=None,
+    )
+
+    # --- Feed G: no confirmed data; heuristic only ---
+    feed_g = _make_feed(db_session, "Feed ESD G")
+
+    # Seed 8 inferred episodes in feed G.
+    # Dave appears in 3 of 8 (37.5%) → host.
+    # Bob appears in 1 of 8 (12.5%) → guest.
+    # The last episode (ep_g_both) has both Dave and Bob → must produce a diff row.
+    ep_g_episodes = []
+    for i in range(7):
+        pub = datetime(2026, 5, 1 + i, tzinfo=timezone.utc)
+        ep_g = _make_episode(db_session, feed_g, published_at=pub, duration_secs=60)
+        ep_g_episodes.append(ep_g)
+        _add_segments(db_session, ep_g, [f"dave line {i}"], speaker="SPEAKER_00")
+        _add_speaker_name(
+            db_session, ep_g, "SPEAKER_00", "Dave",
+            inferred=True, confidence="HIGH", role=None,
+        )
+        if i < 2:
+            # Dave appears in ep_g_episodes[0] and [1] (indices 0,1)
+            # plus ep_g_both below → 3 total out of 8.
+            pass
+
+    # ep_g_both: Dave AND Bob both appear. Dave=host (3/8), Bob=guest (1/8).
+    ep_g_both = _make_episode(
+        db_session, feed_g,
+        published_at=datetime(2026, 5, 8, tzinfo=timezone.utc),
+        duration_secs=120,
+    )
+    ep_g_episodes.append(ep_g_both)
+    _add_segments(db_session, ep_g_both, ["dave line final"], speaker="SPEAKER_00")
+    _add_segments(db_session, ep_g_both, ["bob line only"], speaker="SPEAKER_01")
+    _add_speaker_name(
+        db_session, ep_g_both, "SPEAKER_00", "Dave",
+        inferred=True, confidence="HIGH", role=None,
+    )
+    _add_speaker_name(
+        db_session, ep_g_both, "SPEAKER_01", "Bob",
+        inferred=True, confidence="HIGH", role=None,
+    )
+
+    speakers = _per_episode_speaker(db_session)
+    diff_rows = _episode_speaker_diff(speakers)
+
+    # --- Feed F inferred episode check ---
+    f_inferred_rows = [
+        r for r in diff_rows
+        if r["episode_id"] == ep_inferred_f.id and r["source"] == "inferred_high"
+    ]
+    assert len(f_inferred_rows) == 1, "inferred episode in feed F must produce a diff row"
+    f_row = f_inferred_rows[0]
+    assert "Alice" in f_row["host_names"], (
+        "Alice should be classified as host via inheritance from confirmed map"
+    )
+    assert "Zara Guest" in f_row["guest_names"], (
+        "Zara Guest has no confirmed entry — must fall back to heuristic (guest, < 25%)"
+    )
+
+    # --- Feed G diff row check ---
+    g_both_rows = [
+        r for r in diff_rows
+        if r["episode_id"] == ep_g_both.id and r["source"] == "inferred_high"
+    ]
+    assert len(g_both_rows) == 1, "ep_g_both must produce exactly one diff row"
+    g_row = g_both_rows[0]
+    assert "Dave" in g_row["host_names"], "Dave (3/8 = 37.5% >= 25%) should be host"
+    assert "Bob" in g_row["guest_names"], "Bob (1/8 = 12.5% < 25%) should be guest"
