@@ -19,9 +19,9 @@ export default function InfoBlock() {
         <div className="mt-2 space-y-2 text-muted-foreground">
           <p>
             <strong>Per-speaker minutes / words per episode</strong> show how
-            each host's airtime (or word count) evolves across a podcast's run.
-            Guests are collapsed into a single dashed trace per feed; hover to
-            see the names.
+            each host&apos;s airtime (or word count) evolves across a podcast&apos;s
+            run. Guests are collapsed into a single dashed trace per feed; hover
+            to see the names.
           </p>
           <p>
             <strong>Host vs Guest talking time</strong> plots a single signed
@@ -34,7 +34,7 @@ export default function InfoBlock() {
             speakers (user-validated names) and once for{" "}
             <strong>Inferred — HIGH</strong> confidence (automatic detections).
             The inferred view includes more rows but some noise (name fragments,
-            false positives like "Twitter", "Linkedin").
+            false positives like &ldquo;Twitter&rdquo;, &ldquo;Linkedin&rdquo;).
           </p>
         </div>
       )}
