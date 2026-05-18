@@ -11,7 +11,7 @@ tests refer to e.g. `svc._count_turns` through the orchestrator module.
 import logging
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -268,6 +268,96 @@ def _per_speaker(db: Session) -> list[dict[str, Any]]:
     return out
 
 
+def _per_episode_speaker(db: Session) -> list[dict[str, Any]]:
+    """Per-(episode, speaker, source) aggregates for PRD-06 plots.
+
+    Returns one row per unique (episode_id, display_name, source) triple with:
+      feed_id, feed_title, episode_id, episode_title, published_at (ISO 8601 or None),
+      display_name, role ("host"|"guest" for confirmed; None for inferred_high),
+      source ("confirmed"|"inferred_high"), minutes (float), words (int).
+
+    Source predicates:
+      confirmed      — confirmed_by_user=True AND role IN ('host', 'guest')
+      inferred_high  — inferred=True AND confidence='HIGH'
+
+    Only episodes with published_at IS NOT NULL are included.
+    Output is sorted by (feed_title, published_at or "", display_name, source).
+    """
+    sn_pred = or_(
+        and_(
+            SpeakerName.confirmed_by_user == True,  # noqa: E712
+            SpeakerName.role.in_(("host", "guest")),
+        ),
+        and_(
+            SpeakerName.inferred == True,  # noqa: E712
+            SpeakerName.confidence == "HIGH",
+        ),
+    )
+    source_expr = case(
+        (SpeakerName.confirmed_by_user == True, "confirmed"),  # noqa: E712
+        else_="inferred_high",
+    ).label("source")
+
+    seg_rows = db.execute(
+        select(
+            Feed.id.label("feed_id"),
+            Feed.title.label("feed_title"),
+            Episode.id.label("episode_id"),
+            Episode.title.label("episode_title"),
+            Episode.published_at,
+            SpeakerName.display_name,
+            SpeakerName.role,
+            source_expr,
+            Segment.start_time,
+            Segment.end_time,
+            Segment.text,
+        )
+        .select_from(Segment)
+        .join(Episode, Episode.id == Segment.episode_id)
+        .join(Feed, Feed.id == Episode.feed_id)
+        .join(
+            SpeakerName,
+            and_(
+                SpeakerName.episode_id == Segment.episode_id,
+                SpeakerName.speaker_label == Segment.speaker_label,
+            ),
+        )
+        .where(Episode.published_at.isnot(None))
+        .where(sn_pred)
+    ).all()
+
+    # Aggregate minutes + words per (feed_id, episode_id, display_name, source).
+    agg: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for s in seg_rows:
+        key = (s.feed_id, s.episode_id, s.display_name, s.source)
+        if key not in agg:
+            pub = s.published_at.isoformat() if s.published_at else None
+            agg[key] = {
+                "feed_id": s.feed_id,
+                "feed_title": s.feed_title or "",
+                "episode_id": s.episode_id,
+                "episode_title": s.episode_title or "",
+                "published_at": pub,
+                "display_name": s.display_name,
+                "role": s.role,
+                "source": s.source,
+                "minutes": 0.0,
+                "words": 0,
+            }
+        entry = agg[key]
+        entry["minutes"] += max(0.0, s.end_time - s.start_time) / 60.0
+        entry["words"] += len(s.text.split()) if s.text else 0
+
+    out = list(agg.values())
+    out.sort(key=lambda r: (
+        r["feed_title"],
+        r["published_at"] or "",
+        r["display_name"],
+        r["source"],
+    ))
+    return out
+
+
 def _identify_feed_host(feed: Feed, feed_speaker_cache_top: dict[str, str]) -> str | None:
     """Resolve host display name for a feed. Order per spec:
        feed_speaker_cache top entry → podcast_persons role=host →
@@ -422,6 +512,151 @@ def _coverage_and_host_share(
             "excluded": tokens_chunks_excluded,
         },
     }
+
+
+HOST_THRESHOLD = 0.25  # PRD-06 §3.3 — 25%-of-episodes fallback for inferred speakers
+
+
+def _confirmed_role_map(speakers: list[dict[str, Any]]) -> dict[tuple, bool]:
+    """Build a (feed_id, display_name) → is_host map from confirmed rows.
+
+    Only considers rows with source == "confirmed". When a name has
+    conflicting roles across episodes (e.g. labelled "host" in one and
+    "guest" in another), the majority wins; ties break toward host=True.
+    """
+    # Accumulate (host_count, guest_count) per (feed_id, display_name).
+    counts: dict[tuple, list[int]] = {}
+    for row in speakers:
+        if row["source"] != "confirmed":
+            continue
+        key = (row["feed_id"], row["display_name"])
+        entry = counts.setdefault(key, [0, 0])  # [host_votes, guest_votes]
+        if row["role"] == "host":
+            entry[0] += 1
+        elif row["role"] == "guest":
+            entry[1] += 1
+
+    # Majority wins; ties → host.
+    return {key: (h >= g) for key, (h, g) in counts.items()}
+
+
+def _episode_speaker_diff(speakers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Per-(feed, episode, source) host-vs-guest diff rows.
+
+    Input is the output of _per_episode_speaker(). Returns one row per
+    (feed_id, episode_id, source) where the episode has at least one host
+    AND at least one guest after classification.
+
+    Classification rules (PRD-06 §3.3):
+      confirmed rows    — use _confirmed_role_map majority-vote result.
+      inferred_high rows — inherit from _confirmed_role_map if present;
+                           else fall back to HOST_THRESHOLD heuristic.
+    """
+    confirmed_map = _confirmed_role_map(speakers)
+
+    # For the inferred heuristic we need:
+    #   feed_episodes: total distinct episode_ids per feed (inferred source only).
+    #   speaker_episodes: distinct episode_ids per (feed, display_name) (inferred).
+    feed_ep_sets: dict[str, set[str]] = {}
+    speaker_ep_sets: dict[tuple, set[str]] = {}
+    for row in speakers:
+        if row["source"] != "inferred_high":
+            continue
+        fid = row["feed_id"]
+        eid = row["episode_id"]
+        feed_ep_sets.setdefault(fid, set()).add(eid)
+        key = (fid, row["display_name"])
+        speaker_ep_sets.setdefault(key, set()).add(eid)
+
+    def _is_host_inferred(feed_id: str, display_name: str) -> bool:
+        key = (feed_id, display_name)
+        # Inheritance from confirmed map.
+        if key in confirmed_map:
+            return confirmed_map[key]
+        # Heuristic fallback.
+        n_speaker = len(speaker_ep_sets.get(key, set()))
+        n_feed = len(feed_ep_sets.get(feed_id, set()))
+        if n_feed == 0:
+            return False
+        return (n_speaker / n_feed) >= HOST_THRESHOLD
+
+    # Classify each speaker row and bucket by (feed_id, episode_id, source).
+    # Each bucket entry: hosts list and guests list of minutes values.
+    Bucket = dict[str, Any]
+    buckets: dict[tuple, Bucket] = {}
+
+    for row in speakers:
+        fid = row["feed_id"]
+        eid = row["episode_id"]
+        src = row["source"]
+
+        if src == "confirmed":
+            is_host = confirmed_map.get((fid, row["display_name"]), False)
+        elif src == "inferred_high":
+            is_host = _is_host_inferred(fid, row["display_name"])
+        else:
+            continue
+
+        bkey = (fid, eid, src)
+        if bkey not in buckets:
+            buckets[bkey] = {
+                "feed_id": fid,
+                "feed_title": row["feed_title"],
+                "episode_id": eid,
+                "episode_title": row["episode_title"],
+                "published_at": row["published_at"],
+                "source": src,
+                "hosts": [],   # list of (display_name, minutes)
+                "guests": [],  # list of (display_name, minutes)
+            }
+        b = buckets[bkey]
+        entry = (row["display_name"], row["minutes"])
+        if is_host:
+            b["hosts"].append(entry)
+        else:
+            b["guests"].append(entry)
+
+    out = []
+    for b in buckets.values():
+        hosts = b["hosts"]
+        guests = b["guests"]
+        if not hosts or not guests:
+            continue  # must have at least one of each
+
+        host_mins = [m for _, m in hosts]
+        guest_mins = [m for _, m in guests]
+
+        host_mean = sum(host_mins) / len(host_mins)
+        host_min = min(host_mins)
+        host_max = max(host_mins)
+        guest_mean = sum(guest_mins) / len(guest_mins)
+        guest_min = min(guest_mins)
+        guest_max = max(guest_mins)
+
+        out.append({
+            "feed_id": b["feed_id"],
+            "feed_title": b["feed_title"],
+            "episode_id": b["episode_id"],
+            "episode_title": b["episode_title"],
+            "published_at": b["published_at"],
+            "source": b["source"],
+            "host_mean": host_mean,
+            "host_min": host_min,
+            "host_max": host_max,
+            "host_count": len(hosts),
+            "host_names": sorted({name for name, _ in hosts}),
+            "guest_mean": guest_mean,
+            "guest_min": guest_min,
+            "guest_max": guest_max,
+            "guest_count": len(guests),
+            "guest_names": sorted({name for name, _ in guests}),
+            "diff": guest_mean - host_mean,
+            "band_lo": guest_min - host_max,
+            "band_hi": guest_max - host_min,
+        })
+
+    out.sort(key=lambda r: (r["feed_title"], r["published_at"] or "", r["source"]))
+    return out
 
 
 def _timeline_monthly(db: Session, per_ep: list[dict]) -> list[dict[str, Any]]:

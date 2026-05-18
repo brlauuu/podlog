@@ -22,9 +22,11 @@ from app.services.meta_analysis_aggregations import (
     _count_tokens,
     _count_turns,
     _coverage_and_host_share,
+    _episode_speaker_diff,
     _host_speaker_label_for_episode,
     _identify_feed_host,
     _per_episode,
+    _per_episode_speaker,
     _per_feed,
     _per_speaker,
     _roll_up_feed_text_totals,
@@ -56,6 +58,8 @@ __all__ = [
     "_per_speaker",
     "_roll_up_feed_text_totals",
     "_timeline_monthly",
+    "_per_episode_speaker",
+    "_episode_speaker_diff",
 ]
 
 
@@ -116,12 +120,16 @@ def compute_snapshot(db: Session) -> dict[str, Any]:
     per_feed = _per_feed(db)
     _roll_up_feed_text_totals(per_feed, per_ep)
     coverage = _coverage_and_host_share(db, per_ep, per_feed)
+    per_episode_speaker = _per_episode_speaker(db)
+    episode_speaker_diff = _episode_speaker_diff(per_episode_speaker)
     return {
         "per_feed": per_feed,
         "per_episode": per_ep,
         "per_speaker": _per_speaker(db),
         "timeline_monthly": _timeline_monthly(db, per_ep),
         "coverage": coverage,
+        "per_episode_speaker": per_episode_speaker,
+        "episode_speaker_diff": episode_speaker_diff,
     }
 
 

@@ -45,6 +45,41 @@ export interface PerSpeaker {
   turn_count: number;
 }
 
+export interface PerEpisodeSpeaker {
+  feed_id: string;
+  feed_title: string;
+  episode_id: string;
+  episode_title: string;
+  published_at: string | null;
+  display_name: string;
+  role: "host" | "guest" | null;
+  source: "confirmed" | "inferred_high";
+  minutes: number;
+  words: number;
+}
+
+export interface EpisodeSpeakerDiff {
+  feed_id: string;
+  feed_title: string;
+  episode_id: string;
+  episode_title: string;
+  published_at: string | null;
+  source: "confirmed" | "inferred_high";
+  host_mean: number;
+  host_min: number;
+  host_max: number;
+  host_count: number;
+  host_names: string[];
+  guest_mean: number;
+  guest_min: number;
+  guest_max: number;
+  guest_count: number;
+  guest_names: string[];
+  diff: number;
+  band_lo: number;
+  band_hi: number;
+}
+
 export interface TimelineMonthly {
   month: string;           // "YYYY-MM"
   feed_id: string;
@@ -73,6 +108,8 @@ export interface MetaAnalysisSnapshot {
   per_speaker: PerSpeaker[];
   timeline_monthly: TimelineMonthly[];
   coverage: Coverage;
+  per_episode_speaker: PerEpisodeSpeaker[];
+  episode_speaker_diff: EpisodeSpeakerDiff[];
 }
 
 export interface SnapshotResponse {

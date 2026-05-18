@@ -4,4 +4,6 @@
 !.gitignore
 !examples/
 !examples/**
+!lib/
+!lib/**
 .ipynb_checkpoints/

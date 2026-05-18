@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search
 **Document:** PRD-05 — Exploratory Plots (cross-feed analytics in the explore notebook)
-**Version:** 1.0
+**Version:** 1.1
 **Status:** Active
 **Depends on:** PRD-01 v1.1 (data model), PRD-04 v1.8 (host/guest inference notion of "recurring host")
 
 **Changelog:**
+- v1.1 — Marked §6 as superseded by PRD-06 §4 (now implemented in the Meta-Analysis web page + notebook bonus).
 - v1.0 — Initial draft. Documents three custom Plotly visualizations added to `notebooks/examples/01_explore_db.ipynb` for ad-hoc exploration of the Podlog DB: (a) episode duration over time, (b) episode word count over time, (c) per-speaker minutes per episode with host vs. guest classification. Branch `698-speaker-roles`.
 
 ---
@@ -169,6 +170,8 @@ Episodes: {count}
 ---
 
 ## 6. Plot 3 — Per-speaker minutes per episode, with host/guest classification
+
+> **Superseded.** This plot is replaced by **PRD-06 §4** (Per-speaker minutes per episode) and is now implemented in the Meta-Analysis web page (`apps/web/src/app/meta-analysis/`) and the notebook via `notebooks/lib/podlog_plots.py`. The notes below are kept for historical reference; do not extend this section — extend PRD-06 instead.
 
 ### 6.1 Intent
 For each podcast, show one line per confirmed speaker giving their per-episode speaking time in minutes. Distinguish recurring hosts from one-off guests visually. Allow the viewer to switch between podcasts via dropdown buttons (one panel per podcast was too crowded; tabs are cleaner).

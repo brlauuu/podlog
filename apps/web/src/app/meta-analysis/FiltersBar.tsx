@@ -4,20 +4,11 @@ import type { FilterFeed } from "@/lib/metaAnalysisTypes";
 
 interface Props {
   feeds: FilterFeed[];
-  selectedFeedIds: string[];
-  onSelectedChange: (ids: string[]) => void;
+  selectedFeedId: string | null;       // null = All podcasts
+  onSelectionChange: (id: string | null) => void;
 }
 
-export default function FiltersBar({ feeds, selectedFeedIds, onSelectedChange }: Props) {
-  const toggle = (id: string) => {
-    if (selectedFeedIds.includes(id)) {
-      onSelectedChange(selectedFeedIds.filter((x) => x !== id));
-    } else {
-      onSelectedChange([...selectedFeedIds, id]);
-    }
-  };
-  const all = selectedFeedIds.length === 0;
-
+export default function FiltersBar({ feeds, selectedFeedId, onSelectionChange }: Props) {
   return (
     <div className="flex flex-wrap gap-2 items-center text-sm border rounded-md p-2 bg-muted/30">
       <span className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -25,23 +16,20 @@ export default function FiltersBar({ feeds, selectedFeedIds, onSelectedChange }:
       </span>
       <button
         type="button"
-        onClick={() => onSelectedChange([])}
-        className={`px-2 py-1 rounded ${all ? "bg-accent" : "hover:bg-accent"}`}
+        onClick={() => onSelectionChange(null)}
+        className={`px-2 py-1 rounded ${selectedFeedId === null ? "bg-accent text-accent-foreground" : "hover:bg-accent"}`}
       >
         All podcasts
       </button>
       {feeds.map((f) => (
-        <label
+        <button
           key={f.feed_id}
-          className="flex items-center gap-1 cursor-pointer px-2 py-1 rounded hover:bg-accent"
+          type="button"
+          onClick={() => onSelectionChange(f.feed_id)}
+          className={`px-2 py-1 rounded ${selectedFeedId === f.feed_id ? "bg-accent text-accent-foreground" : "hover:bg-accent"}`}
         >
-          <input
-            type="checkbox"
-            checked={selectedFeedIds.includes(f.feed_id)}
-            onChange={() => toggle(f.feed_id)}
-          />
           {f.title}
-        </label>
+        </button>
       ))}
     </div>
   );

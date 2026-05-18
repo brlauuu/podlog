@@ -8,47 +8,48 @@ const FEEDS = [
 ];
 
 describe("FiltersBar", () => {
-  it("renders a checkbox per podcast", () => {
+  it("renders a button per podcast plus 'All podcasts'", () => {
     render(
-      <FiltersBar feeds={FEEDS} selectedFeedIds={[]} onSelectedChange={() => {}} />
+      <FiltersBar feeds={FEEDS} selectedFeedId={null} onSelectionChange={() => {}} />
     );
-    expect(screen.getByLabelText("One")).toBeInTheDocument();
-    expect(screen.getByLabelText("Two")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "One" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Two" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All podcasts" })).toBeInTheDocument();
   });
 
-  it("calls onSelectedChange with updated array when toggled", () => {
+  it("calls onSelectionChange with the feed_id when a podcast button is clicked", () => {
     const onChange = jest.fn();
     render(
-      <FiltersBar feeds={FEEDS} selectedFeedIds={[]} onSelectedChange={onChange} />
+      <FiltersBar feeds={FEEDS} selectedFeedId={null} onSelectionChange={onChange} />
     );
-    fireEvent.click(screen.getByLabelText("One"));
-    expect(onChange).toHaveBeenCalledWith(["f1"]);
+    fireEvent.click(screen.getByRole("button", { name: "One" }));
+    expect(onChange).toHaveBeenCalledWith("f1");
   });
 
-  it("calls onSelectedChange with empty array when toggling a selected id off", () => {
+  it("calls onSelectionChange with null when 'All podcasts' is clicked", () => {
     const onChange = jest.fn();
     render(
-      <FiltersBar feeds={FEEDS} selectedFeedIds={["f1"]} onSelectedChange={onChange} />
+      <FiltersBar feeds={FEEDS} selectedFeedId="f1" onSelectionChange={onChange} />
     );
-    fireEvent.click(screen.getByLabelText("One"));
-    expect(onChange).toHaveBeenCalledWith([]);
+    fireEvent.click(screen.getByRole("button", { name: "All podcasts" }));
+    expect(onChange).toHaveBeenCalledWith(null);
   });
 
-  it("appends to existing selection on multi-toggle", () => {
-    const onChange = jest.fn();
+  it("highlights the active feed button", () => {
     render(
-      <FiltersBar feeds={FEEDS} selectedFeedIds={["f1"]} onSelectedChange={onChange} />
+      <FiltersBar feeds={FEEDS} selectedFeedId="f2" onSelectionChange={() => {}} />
     );
-    fireEvent.click(screen.getByLabelText("Two"));
-    expect(onChange).toHaveBeenCalledWith(["f1", "f2"]);
+    const active = screen.getByRole("button", { name: "Two" });
+    const inactive = screen.getByRole("button", { name: "One" });
+    expect(active.className).toMatch(/bg-accent/);
+    expect(inactive.className).not.toMatch(/bg-accent text-accent-foreground/);
   });
 
-  it("All podcasts button resets selection to []", () => {
-    const onChange = jest.fn();
+  it("highlights 'All podcasts' when selection is null", () => {
     render(
-      <FiltersBar feeds={FEEDS} selectedFeedIds={["f1", "f2"]} onSelectedChange={onChange} />
+      <FiltersBar feeds={FEEDS} selectedFeedId={null} onSelectionChange={() => {}} />
     );
-    fireEvent.click(screen.getByText("All podcasts"));
-    expect(onChange).toHaveBeenCalledWith([]);
+    const all = screen.getByRole("button", { name: "All podcasts" });
+    expect(all.className).toMatch(/bg-accent/);
   });
 });

@@ -93,7 +93,14 @@ services:
           memory: 20g
 
   web:
-    build: ./apps/web
+    build:
+      context: ./apps/web
+      args:
+        # Read APP_VERSION from the env so `docker compose build web`
+        # bakes NEXT_PUBLIC_APP_VERSION correctly. `make build` exports
+        # APP_VERSION from the VERSION file; direct compose builds work
+        # if you `export APP_VERSION=$(cat VERSION)` first.
+        APP_VERSION: ${APP_VERSION:-0.0.0}
     ports:
       - "3000:3000"
     environment:

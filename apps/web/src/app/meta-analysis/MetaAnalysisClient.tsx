@@ -2,20 +2,16 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import type { SnapshotResponse, MissingSpeakersResponse } from "@/lib/metaAnalysisTypes";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import FiltersBar from "./FiltersBar";
 import CoverageStrip from "./CoverageStrip";
 import MissingSpeakersModal from "./MissingSpeakersModal";
 import ChartCard from "./ChartCard";
-import CostPerFeed from "./charts/CostPerFeed";
-import EpisodeLengthTrend from "./charts/EpisodeLengthTrend";
-import HostGuestShare from "./charts/HostGuestShare";
-import LengthPerFeed from "./charts/LengthPerFeed";
-import ProcessingTimeDistribution from "./charts/ProcessingTimeDistribution";
-import ReleaseTimeline from "./charts/ReleaseTimeline";
-import TurnDensity from "./charts/TurnDensity";
-import WpmPerSpeaker from "./charts/WpmPerSpeaker";
-import TokensPerEpisode from "./charts/TokensPerEpisode";
+import SpeakerMinutesChart from "./charts/SpeakerMinutesChart";
+import SpeakerWordsChart from "./charts/SpeakerWordsChart";
+import HostGuestDiffChart from "./charts/HostGuestDiffChart";
 import InfoBlock from "./InfoBlock";
 import ExploreStatusPanel from "./ExploreStatusPanel";
 import { formatDateTime } from "@/lib/dateFormat";
@@ -47,17 +43,15 @@ export default function MetaAnalysisClient() {
 
   const snap = data?.snapshot ?? null;
 
-  const [selectedFeedIds, setSelectedFeedIds] = useState<string[]>([]);
+  const [selectedFeedId, setSelectedFeedId] = useState<string | null>(null);
+  const [source, setSource] = useState<"confirmed" | "inferred_high">("confirmed");
   const [missingOpen, setMissingOpen] = useState(false);
   const [missingData, setMissingData] = useState<MissingSpeakersResponse | null>(null);
 
-  const filteredFeeds = snap
-    ? (Array.isArray(snap.per_feed)
-        ? (selectedFeedIds.length === 0
-            ? snap.per_feed
-            : snap.per_feed.filter((f) => selectedFeedIds.includes(f.feed_id)))
-        : [])
-    : [];
+  const filteredSpeakerRows = (Array.isArray(snap?.per_episode_speaker) ? snap!.per_episode_speaker : [])
+    .filter((r) => selectedFeedId === null || r.feed_id === selectedFeedId);
+  const filteredDiffRows = (Array.isArray(snap?.episode_speaker_diff) ? snap!.episode_speaker_diff : [])
+    .filter((r) => selectedFeedId === null || r.feed_id === selectedFeedId);
 
   const openMissing = async () => {
     try {
@@ -71,7 +65,14 @@ export default function MetaAnalysisClient() {
     setMissingOpen(true);
   };
 
-  if (isLoading) return <p className="text-muted-foreground">Loading meta-analysis…</p>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading meta-analysis…
+      </div>
+    );
+  }
   if (isError) return <p className="text-red-500">Could not load meta-analysis.</p>;
 
   return (
@@ -112,8 +113,8 @@ export default function MetaAnalysisClient() {
           <ExploreStatusPanel />
           <FiltersBar
             feeds={Array.isArray(snap.per_feed) ? snap.per_feed.map((f) => ({ feed_id: f.feed_id, title: f.title })) : []}
-            selectedFeedIds={selectedFeedIds}
-            onSelectedChange={setSelectedFeedIds}
+            selectedFeedId={selectedFeedId}
+            onSelectionChange={setSelectedFeedId}
           />
           <CoverageStrip
             feedCount={data?.feed_count ?? 0}
@@ -128,66 +129,29 @@ export default function MetaAnalysisClient() {
             onClose={() => setMissingOpen(false)}
             data={missingData}
           />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <ChartCard title="Episode length per podcast" subtitle="Avg (min) · σ error bars">
-              <LengthPerFeed feeds={filteredFeeds} />
-            </ChartCard>
-            <ChartCard title="Episodes published per month" subtitle="Stacked by podcast">
-              <ReleaseTimeline
-                timeline={Array.isArray(snap.timeline_monthly) ? snap.timeline_monthly : []}
-                feeds={filteredFeeds}
-              />
-            </ChartCard>
-            <ChartCard title="Episode length trend" subtitle="Per podcast over time">
-              <EpisodeLengthTrend
-                episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
-                feeds={filteredFeeds}
-              />
-            </ChartCard>
-            {(() => {
-              const hostShareCoverage = snap.coverage?.host_share;
-              return (
-                <ChartCard
-                  title="Host vs guest share"
-                  subtitle="% speech · confirmed hosts only"
-                  coverage={hostShareCoverage ? {
-                    included: hostShareCoverage.included_count,
-                    total: hostShareCoverage.included_count + (Array.isArray(hostShareCoverage.excluded) ? hostShareCoverage.excluded.length : 0),
-                    onClickExcluded: openMissing,
-                  } : undefined}
-                >
-                  <HostGuestShare
-                    episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
-                    feeds={filteredFeeds}
-                  />
+          <Tabs value={source} onValueChange={(v) => setSource(v as "confirmed" | "inferred_high")}>
+            <TabsList>
+              <TabsTrigger value="confirmed">Confirmed</TabsTrigger>
+              <TabsTrigger value="inferred_high">Inferred — HIGH</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {(() => {
+            const sourceSubtitle =
+              source === "confirmed" ? "Confirmed speakers" : "Inferred — HIGH confidence";
+            return (
+              <div className="grid grid-cols-1 gap-4">
+                <ChartCard title="Per-speaker minutes per episode" subtitle={sourceSubtitle}>
+                  <SpeakerMinutesChart rows={filteredSpeakerRows} source={source} />
                 </ChartCard>
-              );
-            })()}
-            <ChartCard title="Turn density" subtitle="Episode length × speaker turns/min">
-              <TurnDensity
-                episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
-                feeds={filteredFeeds}
-              />
-            </ChartCard>
-            <ChartCard title="Words per minute per speaker"
-              subtitle="Top 20 per podcast · confirmed speakers only">
-              <WpmPerSpeaker
-                speakers={Array.isArray(snap.per_speaker) ? snap.per_speaker : []}
-                feeds={filteredFeeds}
-              />
-            </ChartCard>
-            <ChartCard title="Tokens per episode" subtitle="Segments vs chunks · estimated (cl100k_base)">
-              <TokensPerEpisode episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []} />
-            </ChartCard>
-            <ChartCard title="Total remote cost per podcast" subtitle="USD · Fireworks">
-              <CostPerFeed feeds={filteredFeeds} />
-            </ChartCard>
-            <ChartCard title="Processing time distribution" subtitle="Total (transcribe + diarize) seconds · local vs remote">
-              <ProcessingTimeDistribution
-                episodes={Array.isArray(snap.per_episode) ? snap.per_episode : []}
-              />
-            </ChartCard>
-          </div>
+                <ChartCard title="Per-speaker word count per episode" subtitle={sourceSubtitle}>
+                  <SpeakerWordsChart rows={filteredSpeakerRows} source={source} />
+                </ChartCard>
+                <ChartCard title="Host vs Guest talking time per episode" subtitle={sourceSubtitle}>
+                  <HostGuestDiffChart rows={filteredDiffRows} source={source} />
+                </ChartCard>
+              </div>
+            );
+          })()}
           <InfoBlock />
         </>
       )}
