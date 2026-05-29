@@ -9,6 +9,7 @@ function makeFeed(overrides: Partial<Feed> = {}): Feed {
     url: "https://example.com/rss.xml",
     title: "Example Feed",
     mode: "full",
+    paused: false,
     last_polled_at: null,
     episode_count: 12,
     ...overrides,
@@ -165,5 +166,66 @@ describe("<FeedCard>", () => {
   it("does not render 'Add episodes' for selective feeds when onAddMore is not supplied", () => {
     renderCard(makeFeed({ mode: "selective" }));
     expect(screen.queryByRole("button", { name: /Add episodes/ })).not.toBeInTheDocument();
+  });
+
+  // Issue #743
+  describe("pause toggle", () => {
+    it("does not render the pause button when onTogglePause is not supplied", () => {
+      renderCard(makeFeed({ mode: "full" }));
+      expect(
+        screen.queryByRole("button", { name: /Pause ingestion|Resume ingestion/ })
+      ).not.toBeInTheDocument();
+    });
+
+    it("renders a Pause button for an active full feed and invokes onTogglePause(true)", () => {
+      const onTogglePause = jest.fn();
+      render(
+        <FeedCard
+          feed={makeFeed({ mode: "full", paused: false, id: "feed-9" })}
+          pollPending={false}
+          onPromote={jest.fn()}
+          onPoll={jest.fn()}
+          onDelete={jest.fn()}
+          onTogglePause={onTogglePause}
+        />
+      );
+      const btn = screen.getByRole("button", { name: "Pause ingestion" });
+      fireEvent.click(btn);
+      expect(onTogglePause).toHaveBeenCalledWith("feed-9", true);
+    });
+
+    it("renders Resume + Paused badge for a paused feed and disables Poll", () => {
+      const onTogglePause = jest.fn();
+      render(
+        <FeedCard
+          feed={makeFeed({ mode: "full", paused: true, id: "feed-9" })}
+          pollPending={false}
+          onPromote={jest.fn()}
+          onPoll={jest.fn()}
+          onDelete={jest.fn()}
+          onTogglePause={onTogglePause}
+        />
+      );
+      expect(screen.getByText("Paused")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Unpause to poll" })).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: "Resume ingestion" }));
+      expect(onTogglePause).toHaveBeenCalledWith("feed-9", false);
+    });
+
+    it("hides the pause button for selective feeds", () => {
+      render(
+        <FeedCard
+          feed={makeFeed({ mode: "selective" })}
+          pollPending={false}
+          onPromote={jest.fn()}
+          onPoll={jest.fn()}
+          onDelete={jest.fn()}
+          onTogglePause={jest.fn()}
+        />
+      );
+      expect(
+        screen.queryByRole("button", { name: /Pause ingestion|Resume ingestion/ })
+      ).not.toBeInTheDocument();
+    });
   });
 });

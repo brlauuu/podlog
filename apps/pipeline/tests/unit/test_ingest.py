@@ -30,13 +30,20 @@ def _make_episode_meta(guid: str, title: str = "") -> EpisodeMeta:
     )
 
 
-def _make_db(feed_mode: str = "full", existing_guids: list[str] | None = None):
+def _make_db(
+    feed_mode: str = "full",
+    existing_guids: list[str] | None = None,
+    paused: bool = False,
+):
     """Return a mock SQLAlchemy session pre-configured with a feed and optional existing GUIDs."""
     db = MagicMock()
     feed = MagicMock()
     feed.id = "feed-1"
     feed.url = "https://example.com/feed.xml"
     feed.mode = feed_mode
+    # Issue #743: MagicMock defaults are truthy; pin paused explicitly so existing
+    # tests don't accidentally hit the paused-feed early-return.
+    feed.paused = paused
 
     db.query.return_value.filter.return_value.first.return_value = feed
 
@@ -269,3 +276,40 @@ class TestPreviewEndpoint:
 
         assert resp.status_code == 422
         assert "Not a feed" in resp.json()["detail"]
+
+
+class TestPausedFeed:
+    """Issue #743: paused feeds skip ingestion without touching processed episodes."""
+
+    def test_paused_feed_skips_ingest_without_fetching_rss(self):
+        db, feed = _make_db(feed_mode="full", paused=True)
+
+        with (
+            patch("app.tasks.ingest.SessionLocal", return_value=db),
+            patch("app.tasks.ingest.rss_service.fetch_feed_and_episodes") as mock_fetch,
+            patch("app.tasks.ingest.job_queue.enqueue") as mock_enqueue,
+        ):
+            result = ingest_feed("feed-1")
+
+        assert result == {"new_episodes": 0, "reason": "feed_paused"}
+        # No network and no job enqueue when the feed is paused
+        mock_fetch.assert_not_called()
+        mock_enqueue.assert_not_called()
+
+    def test_poll_all_feeds_excludes_paused(self):
+        """poll_all_feeds filters out paused feeds via the SQL query."""
+        from app.tasks.ingest import poll_all_feeds
+
+        db = MagicMock()
+        active = MagicMock(id="feed-active", paused=False, mode="full")
+        # Simulate what the filter returns — only active feeds.
+        db.query.return_value.filter.return_value.all.return_value = [active]
+
+        with (
+            patch("app.tasks.ingest.SessionLocal", return_value=db),
+            patch("app.tasks.ingest.ingest_feed") as mock_ingest,
+        ):
+            result = poll_all_feeds()
+
+        assert result == {"polled": 1}
+        mock_ingest.assert_called_once_with("feed-active")

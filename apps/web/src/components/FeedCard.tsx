@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, RefreshCw, Trash2, FlaskConical, ListChecks } from "lucide-react";
+import { Plus, RefreshCw, Trash2, FlaskConical, ListChecks, Pause, Play } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ interface FeedCardFeed {
   url: string;
   title: string | null;
   mode: string;
+  paused: boolean;
   last_polled_at: string | null;
   episode_count: number;
 }
@@ -18,19 +19,23 @@ interface FeedCardFeed {
 interface FeedCardProps {
   feed: FeedCardFeed;
   pollPending: boolean;
+  pausePending?: boolean;
   onPromote: (url: string) => void;
   onPoll: (feedId: string) => void;
   onDelete: (feedId: string) => void;
   onAddMore?: (feed: FeedCardFeed) => void;
+  onTogglePause?: (feedId: string, paused: boolean) => void;
 }
 
 export default function FeedCard({
   feed,
   pollPending,
+  pausePending = false,
   onPromote,
   onPoll,
   onDelete,
   onAddMore,
+  onTogglePause,
 }: FeedCardProps) {
   return (
     <Card className="hover:bg-accent/30 transition-colors">
@@ -48,6 +53,12 @@ export default function FeedCard({
               <Badge variant="outline" className="shrink-0 text-sky-700 border-sky-300 dark:text-sky-300 dark:border-sky-700 gap-1">
                 <ListChecks size={10} />
                 Selective
+              </Badge>
+            )}
+            {feed.paused && (
+              <Badge variant="outline" className="shrink-0 text-amber-700 border-amber-300 dark:text-amber-300 dark:border-amber-700 gap-1">
+                <Pause size={10} />
+                Paused
               </Badge>
             )}
           </div>
@@ -87,11 +98,23 @@ export default function FeedCard({
               variant="ghost"
               size="icon"
               onClick={() => onPoll(feed.id)}
-              disabled={pollPending}
-              title="Poll now"
+              disabled={pollPending || feed.paused}
+              title={feed.paused ? "Unpause to poll" : "Poll now"}
               className="h-8 w-8"
             >
               <RefreshCw size={14} className={pollPending ? "animate-spin" : ""} />
+            </Button>
+          )}
+          {feed.mode !== "selective" && onTogglePause && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onTogglePause(feed.id, !feed.paused)}
+              disabled={pausePending}
+              title={feed.paused ? "Resume ingestion" : "Pause ingestion"}
+              className="h-8 w-8"
+            >
+              {feed.paused ? <Play size={14} /> : <Pause size={14} />}
             </Button>
           )}
           <Button

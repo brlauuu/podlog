@@ -9,6 +9,7 @@ function feed(overrides: Partial<Feed> = {}): Feed {
     url: "https://ex.com/rss.xml",
     title: "F1",
     mode: "full",
+    paused: false,
     last_polled_at: null,
     episode_count: 1,
     ...overrides,

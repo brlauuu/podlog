@@ -156,6 +156,24 @@ export default function FeedsPage() {
     onError: (err: Error) => console.error("Poll feed error:", err.message),
   });
 
+  // Issue #743: pause / resume ingestion for a feed.
+  const togglePause = useMutation({
+    mutationFn: async ({ id, paused }: { id: string; paused: boolean }) => {
+      const resp = await fetch(`/api/feeds/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail ?? "Failed to update feed");
+      }
+      return resp.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feeds"] }),
+    onError: (err: Error) => console.error("Toggle pause error:", err.message),
+  });
+
   const deleteFeed = useMutation({
     mutationFn: async ({ id, deleteEpisodes }: { id: string; deleteEpisodes: boolean }) => {
       await fetch(`/api/feeds/${id}?delete_episodes=${deleteEpisodes}`, { method: "DELETE" });
@@ -339,6 +357,14 @@ export default function FeedsPage() {
           deleteFeed.mutate({ id: feedId, deleteEpisodes: deleteEps });
         }}
         onAddMore={handleAddMore}
+        pausePendingId={
+          togglePause.isPending && togglePause.variables
+            ? togglePause.variables.id
+            : null
+        }
+        onTogglePause={(feedId, paused) =>
+          togglePause.mutate({ id: feedId, paused })
+        }
       />
     </div>
   );

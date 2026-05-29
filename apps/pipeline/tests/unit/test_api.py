@@ -138,6 +138,7 @@ class TestFeedsEndpoint:
             obj.id = "test-feed-uuid"
             obj.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
             obj.last_polled_at = None
+            obj.paused = False
 
         mock_db.refresh.side_effect = _mock_refresh
 
@@ -174,6 +175,7 @@ class TestFeedsEndpoint:
                 "url": "https://example.com/rss.xml",
                 "title": "Example Feed",
                 "mode": "full",
+                "paused": False,
                 "last_polled_at": None,
                 "episode_count": 12,
             }
@@ -187,6 +189,72 @@ class TestFeedsEndpoint:
             resp = client.get("/api/feeds")
             assert resp.status_code == 200
             assert resp.json() == mock_rows
+        finally:
+            app.dependency_overrides.clear()
+
+    # Issue #743 — pause/resume ingestion per feed
+    def test_patch_feed_paused_true_persists(self):
+        from datetime import datetime, timezone
+        from app.database import get_db
+
+        feed = MagicMock()
+        feed.id = "feed-1"
+        feed.url = "https://example.com/x.xml"
+        feed.title = "X"
+        feed.description = None
+        feed.image_url = None
+        feed.website_url = None
+        feed.mode = "full"
+        feed.paused = False
+        feed.last_polled_at = None
+        feed.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+        def _refresh(obj):  # PATCH path runs db.commit then db.refresh
+            pass
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = feed
+        mock_db.refresh.side_effect = _refresh
+
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            resp = client.patch("/api/feeds/feed-1", json={"paused": True})
+            assert resp.status_code == 200
+            assert resp.json()["paused"] is True
+            assert feed.paused is True
+            mock_db.commit.assert_called()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_patch_feed_unknown_returns_404(self):
+        from app.database import get_db
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            resp = client.patch("/api/feeds/feed-missing", json={"paused": True})
+            assert resp.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_poll_paused_feed_returns_422(self):
+        from app.database import get_db
+
+        feed = MagicMock()
+        feed.id = "feed-1"
+        feed.mode = "full"
+        feed.paused = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = feed
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            with patch("app.api.feeds._ingest_feed") as mock_ingest:
+                resp = client.post("/api/feeds/feed-1/poll")
+            assert resp.status_code == 422
+            assert "paused" in resp.json()["detail"].lower()
+            mock_ingest.assert_not_called()
         finally:
             app.dependency_overrides.clear()
 

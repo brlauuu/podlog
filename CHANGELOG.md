@@ -25,6 +25,7 @@ fresh empty `Unreleased` is left at the top.
 - **Speaker analytics in the explore notebook (PRD-06 bonus):** New `notebooks/lib/podlog_plots.py` module (port of the prototype) + three new figure cells in `01_explore_db.ipynb` driven by an ipywidgets source toggle (Confirmed / Inferred-HIGH).
 
 ### Minor changes
+- **Per-feed pause toggle (#743):** Each feed on `/feeds` now has a pause/resume icon button. Paused feeds are skipped by the periodic poller and manual "Poll now" returns 422 until resumed. Already-processed episodes are untouched; on resume the next poll picks up anything published in the gap. Adds a `feeds.paused` boolean (migration 020) and a `PATCH /api/feeds/{id}` endpoint.
 - Footer shows the version of the running build and warns when a newer one is on disk. The footer reads `process.env.NEXT_PUBLIC_APP_VERSION` (baked into the image at build time) for "what's running," and fetches `/api/version` (which reads the `VERSION` file bind-mounted into the container at `/version`) for "what's on disk." When the on-disk semver is strictly greater than the built-in one, the footer renders `v0.X.Y → 0.X.Z (rebuild available)` in amber as a nudge to rebuild + restart. Silent in matched / downgrade / file-missing / fetch-failed cases.
 
 ### Fixes

@@ -7,6 +7,7 @@ export interface Feed {
   url: string;
   title: string | null;
   mode: string;
+  paused: boolean;
   last_polled_at: string | null;
   episode_count: number;
 }

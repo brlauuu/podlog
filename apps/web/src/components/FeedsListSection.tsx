@@ -7,6 +7,7 @@ interface Feed {
   url: string;
   title: string | null;
   mode: string;
+  paused: boolean;
   last_polled_at: string | null;
   episode_count: number;
 }
@@ -15,22 +16,26 @@ interface FeedsListSectionProps {
   isLoading: boolean;
   feeds: Feed[];
   pollPendingId: string | null;
+  pausePendingId?: string | null;
   onAddFirstFeed: () => void;
   onPromote: (url: string) => void;
   onPoll: (feedId: string) => void;
   onDelete: (feedId: string) => void;
   onAddMore?: (feed: Feed) => void;
+  onTogglePause?: (feedId: string, paused: boolean) => void;
 }
 
 export default function FeedsListSection({
   isLoading,
   feeds,
   pollPendingId,
+  pausePendingId = null,
   onAddFirstFeed,
   onPromote,
   onPoll,
   onDelete,
   onAddMore,
+  onTogglePause,
 }: FeedsListSectionProps) {
   if (isLoading) {
     return (
@@ -69,10 +74,12 @@ export default function FeedsListSection({
           key={feed.id}
           feed={feed}
           pollPending={pollPendingId === feed.id}
+          pausePending={pausePendingId === feed.id}
           onPromote={onPromote}
           onPoll={onPoll}
           onDelete={onDelete}
           onAddMore={onAddMore}
+          onTogglePause={onTogglePause}
         />
       ))}
     </div>
