@@ -3,7 +3,7 @@
 **Project:** Podlog — Self-hosted Podcast Transcription & Search
 **Document:** PRD-06 — Speaker analytics plots (per-speaker minutes, per-speaker words, host-vs-guest diff)
 **Version:** 1.1
-**Status:** Active
+**Status:** Shipped (PR [#745](https://github.com/brlauuu/podlog/pull/745))
 **Depends on:** PRD-01 v1.1 (data model), PRD-04 v1.8 (host/guest inference, `speaker_names.role` + `confidence`), PRD-05 v1.0 (explore-notebook plot framework — Shared Conventions §3 are inherited)
 
 **Changelog:**
