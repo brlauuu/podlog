@@ -30,6 +30,7 @@ fresh empty `Unreleased` is left at the top.
 - Footer shows the version of the running build and warns when a newer one is on disk. The footer reads `process.env.NEXT_PUBLIC_APP_VERSION` (baked into the image at build time) for "what's running," and fetches `/api/version` (which reads the `VERSION` file bind-mounted into the container at `/version`) for "what's on disk." When the on-disk semver is strictly greater than the built-in one, the footer renders `v0.X.Y → 0.X.Z (rebuild available)` in amber as a nudge to rebuild + restart. Silent in matched / downgrade / file-missing / fetch-failed cases.
 
 ### Internal
+- `notebooks/.gitignore` now excludes rendered HTML artifacts (`examples/*.html`, `examples/_*.html`) so `jupyter nbconvert --to html` output stays out of `git status`. ([#748](https://github.com/brlauuu/podlog/issues/748))
 - Jest now ignores `apps/web/.next/standalone/` so a local `npm run build` doesn't trip jest-haste-map with `duplicate manual mock found: react-markdown`. The standalone output contains copies of `__mocks__/` and `node_modules/react/` that collided with the canonical ones; six suites previously failed at collection on a freshly-built local tree. CI was unaffected because it builds fresh, but the fix is harmless there. ([#750](https://github.com/brlauuu/podlog/issues/750))
 
 ### Fixes

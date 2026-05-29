@@ -7,3 +7,9 @@
 !lib/
 !lib/**
 .ipynb_checkpoints/
+
+# Issue #748: `jupyter nbconvert --to html` writes alongside the .ipynb
+# source. Keep those build artifacts out of git status.
+examples/*.html
+examples/_*.html
+
