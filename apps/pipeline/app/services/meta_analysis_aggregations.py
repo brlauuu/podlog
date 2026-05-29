@@ -268,6 +268,76 @@ def _per_speaker(db: Session) -> list[dict[str, Any]]:
     return out
 
 
+# Issue #749: inferred-HIGH rows often include platform names (Twitter,
+# LinkedIn, …) the NER picked up from episode descriptions, and name
+# fragments ("Marko" alongside "Marko Papic" from the same feed). These
+# filters apply ONLY to source=='inferred_high' rows; confirmed-by-user
+# rows are authoritative and pass through untouched.
+_INFERRED_DENYLIST = frozenset(
+    normalize_name(n)
+    for n in (
+        "Twitter", "X", "LinkedIn", "Facebook", "Instagram", "Threads",
+        "YouTube", "TikTok", "Mastodon", "Bluesky",
+        "Apple", "Spotify", "iTunes", "Patreon", "Substack",
+    )
+)
+
+
+def _is_denylisted_inferred_name(display_name: str) -> bool:
+    """True if an inferred display_name is a platform/non-person token."""
+    if not display_name:
+        return True
+    return normalize_name(display_name) in _INFERRED_DENYLIST
+
+
+def _merge_inferred_fragments(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge first-token-prefix fragments into the longest sibling per feed.
+
+    Issue #749: NER often emits both ``Marko`` and ``Marko Papic`` for the
+    same speaker. Within (feed_id, source='inferred_high'), if a name's
+    first token matches a strictly-longer sibling's first token, fold the
+    shorter row's minutes/words into the longer one for each shared episode.
+
+    Confirmed rows and rows with no prefix sibling are returned unchanged.
+    """
+    # Group inferred display_names per feed; pick the canonical (longest)
+    # name for each first-token bucket.
+    by_feed: dict[str, dict[str, str]] = {}
+    for r in rows:
+        if r["source"] != "inferred_high":
+            continue
+        name = r["display_name"]
+        if not name:
+            continue
+        first = normalize_name(name).split(" ", 1)[0] if name else ""
+        if not first:
+            continue
+        bucket = by_feed.setdefault(r["feed_id"], {})
+        current = bucket.get(first)
+        if current is None or len(name.split()) > len(current.split()):
+            bucket[first] = name
+
+    # Canonicalize each inferred row's display_name to the longest sibling,
+    # then re-aggregate by the new key so duplicates collapse.
+    canonical: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    passthrough: list[dict[str, Any]] = []
+    for r in rows:
+        if r["source"] != "inferred_high":
+            passthrough.append(r)
+            continue
+        first = normalize_name(r["display_name"]).split(" ", 1)[0]
+        target = by_feed.get(r["feed_id"], {}).get(first, r["display_name"])
+        key = (r["feed_id"], r["episode_id"], target, r["source"])
+        if key not in canonical:
+            merged = dict(r)
+            merged["display_name"] = target
+            canonical[key] = merged
+        else:
+            canonical[key]["minutes"] += r["minutes"]
+            canonical[key]["words"] += r["words"]
+    return passthrough + list(canonical.values())
+
+
 def _per_episode_speaker(db: Session) -> list[dict[str, Any]]:
     """Per-(episode, speaker, source) aggregates for PRD-06 plots.
 
@@ -349,6 +419,17 @@ def _per_episode_speaker(db: Session) -> list[dict[str, Any]]:
         entry["words"] += len(s.text.split()) if s.text else 0
 
     out = list(agg.values())
+
+    # Issue #749: drop platform/junk tokens from inferred rows, then merge
+    # name-fragment siblings (e.g. "Marko" into "Marko Papic" within the
+    # same feed). Confirmed rows are not touched.
+    out = [
+        r for r in out
+        if r["source"] != "inferred_high"
+        or not _is_denylisted_inferred_name(r["display_name"])
+    ]
+    out = _merge_inferred_fragments(out)
+
     out.sort(key=lambda r: (
         r["feed_title"],
         r["published_at"] or "",

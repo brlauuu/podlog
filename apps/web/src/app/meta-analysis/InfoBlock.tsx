@@ -33,8 +33,10 @@ export default function InfoBlock() {
             Each chart family is shown twice — once for <strong>Confirmed</strong>{" "}
             speakers (user-validated names) and once for{" "}
             <strong>Inferred — HIGH</strong> confidence (automatic detections).
-            The inferred view includes more rows but some noise (name fragments,
-            false positives like &ldquo;Twitter&rdquo;, &ldquo;Linkedin&rdquo;).
+            The inferred view includes more rows; obvious platform tokens
+            (Twitter, LinkedIn, …) are filtered out and first-name fragments
+            (&ldquo;Marko&rdquo;) are merged into the longest sibling
+            (&ldquo;Marko Papic&rdquo;) within each feed.
           </p>
         </div>
       )}
