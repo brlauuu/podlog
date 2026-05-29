@@ -23,6 +23,21 @@ export interface ShortcutGroup {
 
 export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
+    // Issue #704 — Gmail / GitHub-style two-key chords. Press G, then
+    // within ~1s the destination key.
+    title: "Global navigation (chords)",
+    shortcuts: [
+      { keys: "G H", description: "Home" },
+      { keys: "G Q", description: "Queue" },
+      { keys: "G F", description: "Feeds" },
+      { keys: "G P", description: "Podcasts" },
+      { keys: "G A", description: "Ask" },
+      { keys: "G M", description: "Meta-analysis" },
+      { keys: "G S", description: "Settings" },
+      { keys: "G D", description: "Docs" },
+    ],
+  },
+  {
     title: "Navigation",
     shortcuts: [
       { keys: "J", description: "Previous episode in this feed (on an episode page)" },

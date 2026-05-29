@@ -9,6 +9,7 @@ import { AudioPlayerProvider } from "@/components/AudioPlayerContext";
 import QueryProvider from "@/components/QueryProvider";
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp";
 import GlobalKeyboardShortcuts from "@/components/GlobalKeyboardShortcuts";
+import GlobalChordShortcuts from "@/components/GlobalChordShortcuts";
 
 
 const inter = Inter({ subsets: ["latin"] });
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 shortcuts (J/K, Space, ←/→) live with their components. */}
             <KeyboardShortcutsHelp />
             <GlobalKeyboardShortcuts />
+            <GlobalChordShortcuts />
           </AudioPlayerProvider>
         </QueryProvider>
       </body>
