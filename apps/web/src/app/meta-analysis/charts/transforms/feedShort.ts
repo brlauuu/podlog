@@ -7,8 +7,15 @@ const FEED_SHORT: Record<string, string> = {
   "The Twenty Minute VC (20VC): Venture Capital | Startup Funding | The Pitch": "20VC",
 };
 
+// Issue #747: feeds outside the hand-curated map fall back to a length-
+// capped slice so chart titles and legend entries don't overflow.
+const MAX_LEN = 20;
+
 export function feedShort(title: string): string {
-  return FEED_SHORT[title] ?? title;
+  const mapped = FEED_SHORT[title];
+  if (mapped) return mapped;
+  if (!title) return "";
+  return title.length > MAX_LEN ? title.slice(0, MAX_LEN - 1).trimEnd() + "…" : title;
 }
 
 // Plotly qualitative palettes (mirroring plotly.colors.qualitative.{Plotly,D3,Pastel}).
