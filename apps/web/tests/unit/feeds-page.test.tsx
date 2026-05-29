@@ -24,12 +24,18 @@ jest.mock("@/components/FeedsListSection", () => ({
     onAddFirstFeed,
     onPoll,
     onDelete,
+    onPromote,
+    onTogglePause,
+    onAddMore,
   }: {
     isLoading: boolean;
-    feeds: { id: string; url: string; title: string | null }[];
+    feeds: { id: string; url: string; title: string | null; paused?: boolean }[];
     onAddFirstFeed: () => void;
     onPoll: (id: string) => void;
     onDelete: (id: string) => void;
+    onPromote?: (url: string) => void;
+    onTogglePause?: (id: string, paused: boolean) => void;
+    onAddMore?: (feed: { id: string; url: string; title: string | null }) => void;
   }) => {
     if (isLoading) return <div data-testid="feeds-loading">Loading…</div>;
     if (feeds.length === 0) {
@@ -49,6 +55,27 @@ jest.mock("@/components/FeedsListSection", () => ({
             <span>{f.title ?? f.url}</span>
             <button onClick={() => onPoll(f.id)}>Poll</button>
             <button onClick={() => onDelete(f.id)}>Delete</button>
+            {onPromote && (
+              <button onClick={() => onPromote(f.url)} data-testid={`promote-${f.id}`}>
+                Promote
+              </button>
+            )}
+            {onTogglePause && (
+              <button
+                data-testid={`pause-${f.id}`}
+                onClick={() => onTogglePause(f.id, !(f.paused ?? false))}
+              >
+                Toggle pause
+              </button>
+            )}
+            {onAddMore && (
+              <button
+                data-testid={`add-more-${f.id}`}
+                onClick={() => onAddMore(f)}
+              >
+                Add more
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -255,5 +282,249 @@ describe("FeedsPage", () => {
       expect(del!.url).toContain("/api/feeds/f-1?delete_episodes=true");
     });
     expect(confirmSpy).toHaveBeenCalled();
+  });
+
+  // Extended coverage for #765 (audit)
+  describe("selective mode", () => {
+    it("loads the preview before opening step 2 when mode=selective", async () => {
+      const calls = installFetchMock({
+        "/api/feeds": () => json([]),
+        "/api/feeds/preview": () =>
+          json({
+            title: "Sample feed",
+            episodes: [
+              { guid: "g1", title: "Ep 1", published_at: null, duration_secs: 1800, audio_url: "x" },
+            ],
+          }),
+      });
+
+      render(withQuery(<FeedsPage />));
+      await waitFor(() => expect(screen.getByText("No feeds yet")).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole("button", { name: /add feed/i }));
+      const urlInput = await screen.findByPlaceholderText(/feeds\.example\.com/i);
+      await userEvent.type(urlInput, "https://example.com/sel.xml");
+
+      // Switch to selective via the mode button labeled "Select episodes"
+      const selectiveBtn = await screen.findByRole("button", {
+        name: /Select episodes/i,
+      });
+      await userEvent.click(selectiveBtn);
+
+      // "Next" submit triggers preview fetch
+      await userEvent.click(screen.getByRole("button", { name: /next/i }));
+
+      await waitFor(() => {
+        const previewCall = calls.find((c) => c.url.includes("/api/feeds/preview"));
+        expect(previewCall).toBeDefined();
+      });
+      // Step 2 renders the episode title
+      expect(await screen.findByText("Ep 1")).toBeInTheDocument();
+    });
+
+    it("surfaces the server detail when the preview fails", async () => {
+      installFetchMock({
+        "/api/feeds": () => json([]),
+        "/api/feeds/preview": () => json({ detail: "Not a feed" }, 422),
+      });
+
+      render(withQuery(<FeedsPage />));
+      await waitFor(() => expect(screen.getByText("No feeds yet")).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole("button", { name: /add feed/i }));
+      const urlInput = await screen.findByPlaceholderText(/feeds\.example\.com/i);
+      await userEvent.type(urlInput, "https://example.com/bad.xml");
+      await userEvent.click(
+        screen.getByRole("button", { name: /Select episodes/i }),
+      );
+      await userEvent.click(screen.getByRole("button", { name: /next/i }));
+
+      expect(await screen.findByText("Not a feed")).toBeInTheDocument();
+    });
+  });
+
+  describe("pause toggle (#743)", () => {
+    it("PATCHes /api/feeds/{id} with paused=true when toggle is clicked", async () => {
+      const calls = installFetchMock({
+        "/api/feeds": () =>
+          json([
+            {
+              id: "f-9",
+              url: "https://ex.com/a.xml",
+              title: "A",
+              mode: "full",
+              paused: false,
+              last_polled_at: null,
+              episode_count: 3,
+            },
+          ]),
+        "/api/feeds/f-9": () => json({ id: "f-9", paused: true }),
+      });
+
+      render(withQuery(<FeedsPage />));
+      await waitFor(() => expect(screen.getByTestId("pause-f-9")).toBeInTheDocument());
+      await userEvent.click(screen.getByTestId("pause-f-9"));
+
+      await waitFor(() => {
+        const patch = calls.find((c) => c.init?.method === "PATCH");
+        expect(patch).toBeDefined();
+        expect(patch!.url).toContain("/api/feeds/f-9");
+        expect(JSON.parse(patch!.init!.body as string)).toEqual({ paused: true });
+      });
+    });
+  });
+
+  describe("add-more flow (#487)", () => {
+    it("loads preview + existing GUIDs when Add more is invoked from a selective feed", async () => {
+      const calls = installFetchMock({
+        "/api/feeds": () =>
+          json([
+            {
+              id: "f-sel",
+              url: "https://ex.com/sel.xml",
+              title: "Sel",
+              mode: "selective",
+              paused: false,
+              last_polled_at: null,
+              episode_count: 1,
+            },
+          ]),
+        "/api/feeds/preview": () =>
+          json({
+            title: "Sel",
+            episodes: [
+              { guid: "g1", title: "Ep 1", published_at: null, duration_secs: 100, audio_url: "x" },
+              { guid: "g2", title: "Ep 2", published_at: null, duration_secs: 200, audio_url: "y" },
+            ],
+          }),
+        "/api/feeds/f-sel/episodes/guids": () => json(["g1"]),
+      });
+
+      render(withQuery(<FeedsPage />));
+      await waitFor(() =>
+        expect(screen.getByTestId("add-more-f-sel")).toBeInTheDocument(),
+      );
+      await userEvent.click(screen.getByTestId("add-more-f-sel"));
+
+      // The preview call and the existing-GUIDs call fire in parallel.
+      await waitFor(() =>
+        expect(
+          calls.some((c) => c.url.includes("/api/feeds/preview")),
+        ).toBe(true),
+      );
+      expect(
+        calls.some((c) =>
+          c.url.includes("/api/feeds/f-sel/episodes/guids"),
+        ),
+      ).toBe(true);
+      // Step-2 episode list mounts on success.
+      expect(await screen.findByText("Ep 2")).toBeInTheDocument();
+    });
+
+    it("toggles individual episode selection through the step-2 checkboxes", async () => {
+      installFetchMock({
+        "/api/feeds": () =>
+          json([
+            {
+              id: "f-sel",
+              url: "https://ex.com/sel.xml",
+              title: "Sel",
+              mode: "selective",
+              paused: false,
+              last_polled_at: null,
+              episode_count: 0,
+            },
+          ]),
+        "/api/feeds/preview": () =>
+          json({
+            title: "Sel",
+            episodes: [
+              { guid: "g1", title: "Ep 1", published_at: null, duration_secs: 100, audio_url: "x" },
+              { guid: "g2", title: "Ep 2", published_at: null, duration_secs: 200, audio_url: "y" },
+            ],
+          }),
+        "/api/feeds/f-sel/episodes/guids": () => json([]),
+      });
+
+      render(withQuery(<FeedsPage />));
+      await waitFor(() => expect(screen.getByTestId("add-more-f-sel")).toBeInTheDocument());
+      await userEvent.click(screen.getByTestId("add-more-f-sel"));
+      await screen.findByText("Ep 1");
+
+      // Click Ep 2's checkbox — toggleGuid path.
+      const checkboxes = await screen.findAllByRole("checkbox");
+      // Both checkboxes start unselected (no existingGuids).
+      await userEvent.click(checkboxes[1]);
+      // Trigger "Select all new" → toggleAll add-more branch.
+      await userEvent.click(screen.getByRole("button", { name: /Select all new|Deselect all new/ }));
+    });
+
+    it("does not advance to step 2 when the add-more preview fetch fails", async () => {
+      installFetchMock({
+        "/api/feeds": () =>
+          json([
+            {
+              id: "f-sel",
+              url: "https://ex.com/bad.xml",
+              title: "Bad",
+              mode: "selective",
+              paused: false,
+              last_polled_at: null,
+              episode_count: 0,
+            },
+          ]),
+        "/api/feeds/preview": () => json({ detail: "Feed offline" }, 502),
+        "/api/feeds/f-sel/episodes/guids": () => json([]),
+      });
+
+      render(withQuery(<FeedsPage />));
+      await waitFor(() =>
+        expect(screen.getByTestId("add-more-f-sel")).toBeInTheDocument(),
+      );
+      await userEvent.click(screen.getByTestId("add-more-f-sel"));
+
+      // The "Loading episodes..." placeholder appears, then disappears.
+      await waitFor(() =>
+        expect(screen.queryByText(/Loading episodes/)).not.toBeInTheDocument(),
+      );
+      // We never render Step 2 (no episode list).
+      expect(screen.queryByText("Ep 1")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("promote flow", () => {
+    it("POSTs full mode when the user confirms promotion from a test feed", async () => {
+      const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+      const calls = installFetchMock({
+        "/api/feeds": (init) => {
+          if (init?.method === "POST") return json({ id: "promoted" }, 201);
+          return json([
+            {
+              id: "f-1",
+              url: "https://ex.com/test.xml",
+              title: "Test",
+              mode: "test",
+              paused: false,
+              last_polled_at: null,
+              episode_count: 0,
+            },
+          ]);
+        },
+      });
+
+      render(withQuery(<FeedsPage />));
+      await waitFor(() => expect(screen.getByTestId("promote-f-1")).toBeInTheDocument());
+      await userEvent.click(screen.getByTestId("promote-f-1"));
+
+      await waitFor(() => {
+        const post = calls.find((c) => c.init?.method === "POST");
+        expect(post).toBeDefined();
+        expect(JSON.parse(post!.init!.body as string)).toEqual({
+          url: "https://ex.com/test.xml",
+          mode: "full",
+        });
+      });
+      expect(confirmSpy).toHaveBeenCalled();
+    });
   });
 });
