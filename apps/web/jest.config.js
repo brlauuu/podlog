@@ -23,6 +23,12 @@ const config = createJestConfig({
     "^@/(.*)$": "<rootDir>/src/$1",
   },
   testMatch: ["**/tests/unit/**/*.test.{ts,tsx}"],
+  // Issue #750: a local `npm run build` populates apps/web/.next/standalone/
+  // with copies of __mocks__/ and node_modules/, which trip jest-haste-map
+  // ("duplicate manual mock found: react-markdown") and fail 6 suites at
+  // collection. Keep haste-map and watcher out of build artifacts.
+  modulePathIgnorePatterns: ["<rootDir>/.next/"],
+  watchPathIgnorePatterns: ["<rootDir>/.next/"],
 });
 
 module.exports = config;
