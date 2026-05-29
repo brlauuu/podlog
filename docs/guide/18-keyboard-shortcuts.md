@@ -4,6 +4,23 @@ Podlog supports a handful of keyboard shortcuts to keep your hands on the keyboa
 
 Press <kbd>?</kbd> from any page to bring up a quick reference overlay that lists every binding below.
 
+## Global navigation chords
+
+Two-key chords jump to top-level pages from anywhere. Press <kbd>G</kbd>, then within one second press the destination key:
+
+| Chord | Goes to |
+|---|---|
+| <kbd>G</kbd> <kbd>H</kbd> | Home (`/`) |
+| <kbd>G</kbd> <kbd>Q</kbd> | Queue (`/queue`) |
+| <kbd>G</kbd> <kbd>F</kbd> | Feeds (`/feeds`) |
+| <kbd>G</kbd> <kbd>P</kbd> | Podcasts (`/podcasts`) |
+| <kbd>G</kbd> <kbd>A</kbd> | Ask (`/ask`) |
+| <kbd>G</kbd> <kbd>M</kbd> | Meta-analysis (`/meta-analysis`) |
+| <kbd>G</kbd> <kbd>S</kbd> | Settings (`/settings`) |
+| <kbd>G</kbd> <kbd>D</kbd> | Docs (`/docs`) |
+
+If you hold a modifier key (<kbd>Ctrl</kbd>, <kbd>Cmd</kbd>, <kbd>Alt</kbd>) the chord is cancelled, so your normal browser shortcuts (<kbd>Cmd</kbd>+<kbd>G</kbd> find-next, etc.) still work.
+
 ## Navigation
 
 | Key | Action |
