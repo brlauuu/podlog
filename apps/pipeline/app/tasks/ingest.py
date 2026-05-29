@@ -35,6 +35,12 @@ def ingest_feed(feed_id: str, selected_guids: Optional[list[str]] = None) -> dic
             logger.error('"action": "ingest_feed_missing", "feed_id": "%s"', feed_id)
             return {"error": "Feed not found"}
 
+        # Issue #743: paused feeds skip ingestion entirely. Already-processed
+        # episodes are untouched; on unpause the next poll picks up the gap.
+        if feed.paused:
+            logger.info('"action": "paused_feed_skipped", "feed_id": "%s"', feed_id)
+            return {"new_episodes": 0, "reason": "feed_paused"}
+
         # Issue #84: selective feeds are never auto-polled for new episodes —
         # skip re-fetching episodes on periodic polls (selected_guids is None then)
         if feed.mode == "selective" and selected_guids is None:
@@ -140,8 +146,8 @@ def poll_all_feeds() -> dict:
     """Poll all registered feeds for new episodes. Skip test and selective feeds."""
     db = SessionLocal()
     try:
-        # Issue #23: skip test feeds; issue #84: skip selective feeds
-        feeds = db.query(Feed).filter(Feed.mode == "full").all()
+        # Issue #23: skip test feeds; #84: skip selective; #743: skip paused
+        feeds = db.query(Feed).filter(Feed.mode == "full", Feed.paused.is_(False)).all()
         results = []
         for feed in feeds:
             try:

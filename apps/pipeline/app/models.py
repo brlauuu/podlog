@@ -56,6 +56,9 @@ class Feed(Base):
     # Issue #23: test | full — test mode limits to N most-recent episodes (default 1)
     # Issue #84: selective — only user-chosen episodes are ingested; not auto-polled
     mode: Mapped[str] = mapped_column(Text, nullable=False, default="full")
+    # Issue #743: when true, the periodic poller and manual /poll endpoint
+    # skip this feed. Already-processed episodes are untouched.
+    paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
 
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 

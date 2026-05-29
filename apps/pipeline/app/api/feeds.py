@@ -42,10 +42,15 @@ class FeedResponse(BaseModel):
     image_url: Optional[str]
     website_url: Optional[str]
     mode: str
+    paused: bool
     last_polled_at: Optional[datetime]
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UpdateFeedRequest(BaseModel):
+    paused: Optional[bool] = None
 
 
 class EpisodePreview(BaseModel):
@@ -69,6 +74,7 @@ class FeedListItem(BaseModel):
     url: str
     title: Optional[str]
     mode: str
+    paused: bool
     last_polled_at: Optional[datetime]
     episode_count: int
 
@@ -82,7 +88,7 @@ def list_feeds(db: Session = Depends(get_db)) -> list[FeedListItem]:
         db.execute(
             text(
                 """
-                SELECT f.id::text AS id, f.url, f.title, f.mode, f.last_polled_at,
+                SELECT f.id::text AS id, f.url, f.title, f.mode, f.paused, f.last_polled_at,
                        COUNT(e.id)::int AS episode_count
                 FROM feeds f
                 LEFT JOIN episodes e ON e.feed_id = f.id
@@ -235,8 +241,35 @@ def poll_feed(feed_id: str, db: Session = Depends(get_db)) -> dict:
             status_code=422,
             detail="Selective feeds cannot be re-polled. Promote to full mode to ingest new episodes.",
         )
+    # Issue #743: paused feeds reject manual polls — pause means pause.
+    if feed.paused:
+        raise HTTPException(
+            status_code=422,
+            detail="Feed is paused. Unpause it before polling for new episodes.",
+        )
     _ingest_feed(feed.id)
     return {"queued": True}
+
+
+@router.patch("/feeds/{feed_id}", response_model=FeedResponse)
+def update_feed(
+    feed_id: str,
+    body: UpdateFeedRequest,
+    db: Session = Depends(get_db),
+) -> FeedResponse:
+    """Update mutable feed fields. Currently only ``paused`` (#743)."""
+    feed = db.query(Feed).filter(Feed.id == feed_id).first()
+    if not feed:
+        raise HTTPException(status_code=404, detail="Feed not found")
+    if body.paused is not None:
+        feed.paused = body.paused
+    db.commit()
+    db.refresh(feed)
+    logger.info(
+        '"action": "feed_updated", "feed_id": "%s", "paused": %s',
+        feed_id, feed.paused,
+    )
+    return FeedResponse.model_validate(feed)
 
 
 class AddEpisodesRequest(BaseModel):
