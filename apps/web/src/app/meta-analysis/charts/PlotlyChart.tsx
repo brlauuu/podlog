@@ -1,19 +1,37 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { ComponentType } from "react";
 import { Loader2 } from "lucide-react";
 import type { Data, Layout, Config } from "plotly.js";
+import type { PlotParams } from "react-plotly.js";
 import { usePlotlyTheme } from "./usePlotlyTheme";
 
-const Plot = dynamic(() => import("react-plotly.js"), {
-  ssr: false,
-  loading: () => (
-    <div className="h-[360px] flex items-center justify-center gap-2 text-sm text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      Loading chart…
-    </div>
-  ),
-});
+// Issue #746: react-plotly.js defaults to the full plotly.js bundle (~4.5MB
+// min). All PRD-06 charts only use scatter traces, so we wire the factory
+// to plotly.js-cartesian-dist-min (~1.4MB) — a 68% drop in the lazy chunk.
+type Factory = (plotly: unknown) => ComponentType<PlotParams>;
+
+const Plot = dynamic(
+  () =>
+    Promise.all([
+      import("react-plotly.js/factory"),
+      import("plotly.js-cartesian-dist-min"),
+    ]).then(([factoryMod, plotlyMod]) => {
+      const create = (factoryMod as unknown as { default: Factory }).default;
+      const plotly = (plotlyMod as unknown as { default?: unknown }).default ?? plotlyMod;
+      return { default: create(plotly) };
+    }),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[360px] flex items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading chart…
+      </div>
+    ),
+  },
+);
 
 interface Props {
   data: Data[];
