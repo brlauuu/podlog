@@ -64,6 +64,8 @@ make up-remote
 
 This uses `docker-compose.remote.yml` on top of the default compose file.
 
+For a side-by-side comparison of the local and remote options for both transcription and diarization — including a decision matrix and a list of providers we evaluated but didn't ship — see [docs/guide/19-inference-providers.md](docs/guide/19-inference-providers.md).
+
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) with [Compose V2](https://docs.docker.com/compose/install/)

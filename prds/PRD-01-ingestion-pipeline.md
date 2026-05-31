@@ -91,6 +91,8 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 
 ### 5.4 Transcription (Speech-to-Text)
 
+> See [`docs/guide/19-inference-providers.md`](../docs/guide/19-inference-providers.md) for the user-facing setup walkthrough comparing local and remote options for both transcription and diarization, plus a list of providers evaluated and rejected.
+
 - Provider modes:
   - `local` (default): WhisperX with CTranslate2 backend + wav2vec2 word-level alignment, optimized for CPU inference.
   - `fireworks` (optional): Fireworks `/v1/audio/transcriptions` API with `verbose_json` response.
