@@ -88,7 +88,7 @@ Paid hosted diarization from pyannote.ai. Optional; the default is the free loca
 Ask AI uses the model selected in the `/ask` page UI and sends it with each request. There is no `OLLAMA_MODEL` environment variable in Podlog.
 
 - For local Ask mode, `OLLAMA_URL` controls the Ollama endpoint that serves the selected model.
-- The Ask page and per-episode chat popup default to `qwen2.5:3b` unless you choose another option. The full list is `qwen2.5:3b`, `phi3:mini`, and `gemma4:e4b` — all pulled by `make ollama-pull`.
+- The Ask page and per-episode chat popup default to `qwen2.5:3b` unless you choose another option. The full list is `qwen2.5:3b`, `phi3:mini`, and `gemma3n:e4b` — all pulled by `make ollama-pull`.
 - Each model runs with a bounded `num_ctx` (8K–16K) to keep CPU prefill fast. The dropdown shows both the configured value and the model's maximum context.
 - When `RAG_PROVIDER=fireworks`, `FIREWORKS_CHAT_MODEL` provides the default Ask model for remote generation. The Ask page renders a curated dropdown of currently-deployed Fireworks chat models; the configured value is used as the default selection. (Note: this is independent of `INFERENCE_PROVIDER` — see Issue #608.)
 

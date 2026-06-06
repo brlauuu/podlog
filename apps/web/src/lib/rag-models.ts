@@ -25,8 +25,8 @@ export const RAG_MODELS: RagModel[] = [
     usedContext: 16384,
   },
   {
-    value: "gemma4:e4b",
-    label: "Gemma 4 e4b",
+    value: "gemma3n:e4b",
+    label: "Gemma 3n E4B",
     description: "Modern",
     speedHint: "new — untested on CPU",
     maxContext: 131072,
