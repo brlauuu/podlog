@@ -63,3 +63,4 @@ apps/web/test-results/
 *.swp
 .superpowers/
 .omx/
+apps/pipeline/coverage.json
