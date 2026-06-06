@@ -24,7 +24,7 @@ The system retrieves relevant transcript chunks via semantic search (pgvector), 
 - **Provider-routed generation** — local [Ollama](https://ollama.ai) by default, optional Fireworks remote mode. Configured in **Settings → Remote Inference → RAG / Ask** via the dedicated `rag_provider` flag (Issue #608).
 - **Local-first default** — no external API calls unless you explicitly flip the RAG step to remote. Enabling Fireworks for transcription does **not** silently route Ask through Fireworks.
 - **Streaming responses** — answers appear word-by-word via server-sent events.
-- **Model selection (local)** — `qwen2.5:3b` (default), `phi3:mini`, `gemma4:e4b`. Each runs with a bounded `num_ctx` (8K–16K) for fast CPU prefill.
+- **Model selection (local)** — `qwen2.5:3b` (default), `phi3:mini`, `gemma3n:e4b`. Each runs with a bounded `num_ctx` (8K–16K) for fast CPU prefill.
 - **Model selection (remote)** — curated Fireworks chat models: `Qwen2.5 7B Instruct` (fast/cheap), `Llama 3.1 70B Instruct` (balanced), `Qwen2.5 72B Instruct` (high quality). Pick one in Settings; the Ask page dropdown re-renders with the active provider's list and migrates a stale `localStorage` value automatically.
 - **Additional RAM:** ~2 GB when the local LLM is active (auto-unloaded when idle).
 

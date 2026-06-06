@@ -60,7 +60,7 @@ web:            ## Open web app in browser
 ollama-pull:    ## Pull Ollama models used by the Ask feature
 	docker compose exec ollama ollama pull qwen2.5:3b
 	docker compose exec ollama ollama pull phi3:mini
-	docker compose exec ollama ollama pull gemma4:e4b
+	docker compose exec ollama ollama pull gemma3n:e4b
 
 explore:        ## Start the Jupyter DB-exploration service (#607). URL+token printed in logs.
 	docker compose --profile explore up -d explore
