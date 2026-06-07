@@ -27,7 +27,7 @@ DEFAULT_MODEL = "qwen2.5:3b"
 MODEL_NUM_CTX = {
     "qwen2.5:3b": 8192,
     "phi3:mini": 16384,
-    "gemma4:e4b": 16384,
+    "gemma3n:e4b": 16384,
 }
 DEFAULT_NUM_CTX = 8192
 

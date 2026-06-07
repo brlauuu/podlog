@@ -104,9 +104,9 @@ describe("EpisodeChat — model selector", () => {
     );
 
     const select = screen.getByLabelText(/^model:/i) as HTMLSelectElement;
-    await user.selectOptions(select, "gemma4:e4b");
+    await user.selectOptions(select, "gemma3n:e4b");
 
-    expect(localStorage.getItem("podlog-ask-model")).toBe("gemma4:e4b");
+    expect(localStorage.getItem("podlog-ask-model")).toBe("gemma3n:e4b");
   });
 });
 
