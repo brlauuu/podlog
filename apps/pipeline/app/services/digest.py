@@ -177,7 +177,7 @@ def send_digest_if_due(now: datetime | None = None) -> None:
 
         unsent = (
             db.query(NotificationLog)
-            .filter(NotificationLog.sent == False)
+            .filter(NotificationLog.sent.is_(False))
             .order_by(NotificationLog.created_at)
             .all()
         )

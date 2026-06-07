@@ -15,6 +15,19 @@ from app.services.notification_runtime import (
 )
 from app.services.timing_labels import humanize_timing_key
 
+# Re-export the notification_runtime helpers so downstream importers
+# (digest.py, digest_formatters.py, test_notifications.py) can keep
+# importing from this module — it acts as the public notifications API.
+__all__ = [
+    "Event",
+    "EpisodeDoneEvent",
+    "EpisodeFailedEvent",
+    "compute_avg_duration",
+    "compute_avg_processing_stats",
+    "estimate_queue_status",
+    "humanize_timing_key",
+]
+
 logger = logging.getLogger(__name__)
 
 

@@ -24,7 +24,6 @@ from sqlalchemy.orm import Session
 
 from datetime import datetime, timezone
 
-from app.config import settings
 from app.database import get_db
 from app.services.backup_files import delete_audio_snapshot, delete_db_dump
 from app.services.backup_settings import get_backup_retention, save_backup_retention
