@@ -22,11 +22,16 @@ podlog/
 │   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels, prompts, backup_files, backup_settings)
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # Unit, integration, e2e tests
-│   └── web/                        # Next.js 16.2.4 (App Router)
-│       ├── src/app/                # Pages: /, /search, /ask, /podcasts, /episodes/[id], /queue, /feeds, /settings, /docs, /meta-analysis, /about (/notifications redirects to /settings)
-│       │   └── api/                # Route handlers: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll, episodes), queue, audio, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, hardware, meta-analysis (coverage, refresh, snapshot), pipeline (ask, embed, explore, health, queue/retry), backups, prompts, version
-│       ├── src/components/         # React components (Navbar, AudioPlayer, SearchResult, QueueStatus, …)
-│       └── src/lib/                # Utilities (db, search, search/* (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest, citations, normalizeName, filename, dateFormat, docs-index, docs-search, docs-slug, formatFileSize, settings-schema, metaAnalysisColors, metaAnalysisStale, metaAnalysisTypes, page-state, queueStatus, rag-models, semver, episode-link, keyboardShortcuts, useKeyboardShortcut, useChordShortcut)
+│   ├── web/                        # Next.js 16.2.4 (App Router)
+│   │   ├── src/app/                # Pages: /, /search, /ask, /podcasts, /episodes/[id], /queue, /feeds, /settings, /docs, /meta-analysis, /about (/notifications redirects to /settings)
+│   │   │   └── api/                # Route handlers: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll, episodes), queue, audio, ask/coverage, episodes (ingest, upload, retry, speakers, merge), docs, notifications, hardware, meta-analysis (coverage, refresh, snapshot), pipeline (ask, embed, explore, health, queue/retry), backups, prompts, version
+│   │   ├── src/components/         # React components (Navbar, AudioPlayer, SearchResult, QueueStatus, …)
+│   │   └── src/lib/                # Utilities (db, search, search/* (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest, citations, normalizeName, filename, dateFormat, docs-index, docs-search, docs-slug, formatFileSize, settings-schema, metaAnalysisColors, metaAnalysisStale, metaAnalysisTypes, page-state, queueStatus, rag-models, semver, episode-link, keyboardShortcuts, useKeyboardShortcut, useChordShortcut)
+│   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
+│   └── explore/                    # Jupyter DB-exploration container (opt-in via `make explore`)
+├── scripts/                        # Operational scripts (nightly audit, health check)
+├── backups/                        # Daily DB dumps + audio snapshots (gitignored)
+├── notebooks/                      # Jupyter notebooks (gitignored bind mount for the explore service)
 ├── docs/                           # User-facing documentation
 └── prds/                           # Internal design specs and risk register
 ```
