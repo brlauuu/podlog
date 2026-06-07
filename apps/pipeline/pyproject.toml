@@ -64,7 +64,7 @@ sentence-transformers = ">=2.2.0"
 numpy = ">=1.26,<3.0"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
+pytest = "^9.0.0"
 pytest-cov = "^5.0.0"
 pytest-asyncio = "^0.23.0"
 ruff = "^0.15.0"
