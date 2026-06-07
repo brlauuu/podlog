@@ -3287,14 +3287,14 @@ xml = ["lxml (>=5.3.0)"]
 
 [[package]]
 name = "pgvector"
-version = "0.3.6"
+version = "0.4.2"
 description = "pgvector support for Python"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pgvector-0.3.6-py3-none-any.whl", hash = "sha256:f6c269b3c110ccb7496bac87202148ed18f34b390a0189c783e351062400a75a"},
-    {file = "pgvector-0.3.6.tar.gz", hash = "sha256:31d01690e6ea26cea8a633cde5f0f55f5b246d9c8292d68efdef8c22ec994ade"},
+    {file = "pgvector-0.4.2-py3-none-any.whl", hash = "sha256:549d45f7a18593783d5eec609ea1684a724ba8405c4cb182a0b2b08aeff04e08"},
+    {file = "pgvector-0.4.2.tar.gz", hash = "sha256:322cac0c1dc5d41c9ecf782bd9991b7966685dee3a00bc873631391ed949513a"},
 ]
 
 [package.dependencies]
@@ -6468,4 +6468,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "fa56468e994d64f5fc16e1be5024aa8c4d06dd6671796c87a67ff20d3cb0333d"
+content-hash = "e5a3209837ca118f9cae3d8e7b178f2a8d21252cc61f248940ea648af3feacaa"
