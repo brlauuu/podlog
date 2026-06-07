@@ -339,7 +339,7 @@ claude -p "/codebase-audit" \
 
 #### Output (Claude)
 
-- Reports are written to `docs/audit/YYYY-MM-DD/claude/` (one file per check plus `summary.md`)
+- Reports are written to `docs/audit/claude/YYYY-MM-DD/` (one file per check plus `summary.md`)
 - No auto-commit or issue creation; reports are left for manual review
 - Completion state is visible in `summary.md` (`COMPLETE 7/7` or `IN PROGRESS N/7`)
 
