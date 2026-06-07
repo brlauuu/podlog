@@ -186,11 +186,11 @@ class TestOllamaStreaming:
                     pass
 
         asyncio.run(run("qwen2.5:3b"))
-        asyncio.run(run("gemma4:e4b"))
+        asyncio.run(run("gemma3n:e4b"))
         asyncio.run(run("unknown-model:foo"))
 
         assert captured_payloads[0]["options"]["num_ctx"] == MODEL_NUM_CTX["qwen2.5:3b"]
-        assert captured_payloads[1]["options"]["num_ctx"] == MODEL_NUM_CTX["gemma4:e4b"]
+        assert captured_payloads[1]["options"]["num_ctx"] == MODEL_NUM_CTX["gemma3n:e4b"]
         assert captured_payloads[2]["options"]["num_ctx"] == DEFAULT_NUM_CTX
 
     def test_stream_ollama_response_non_200_raises(self):
