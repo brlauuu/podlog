@@ -79,7 +79,7 @@ export const FIREWORKS_CHAT_MODELS: RagModel[] = [
 
 export const DEFAULT_FIREWORKS_CHAT_MODEL = FIREWORKS_CHAT_MODELS[0].value;
 
-export function formatContext(tokens: number): string {
+function formatContext(tokens: number): string {
   if (tokens >= 1024) {
     const k = tokens / 1024;
     return Number.isInteger(k) ? `${k}K` : `${k.toFixed(1)}K`;
