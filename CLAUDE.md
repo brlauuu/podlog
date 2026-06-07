@@ -56,13 +56,15 @@ podlog/
 │   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels, prompts, backup_files, backup_settings)
 │   │   ├── alembic/                # Database migrations (21 versions)
 │   │   └── tests/                  # unit, integration, e2e
-│   └── web/                        # Next.js 16 (App Router)
-│       ├── Dockerfile              # Production image (standalone output)
-│       ├── Dockerfile.test         # Test image used by docker-compose.test.yml
-│       ├── src/app/                # Pages: /, /about, /podcasts, /podcasts/[id], /episodes/[id], /queue, /feeds, /ask, /search, /search/print, /settings, /docs, /meta-analysis (and /notifications redirects to /settings); DocsClient lives in app/docs/
-│       ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll), queue, audio, ask/coverage, episodes ([id], ingest, upload, retry, speakers, speakers/merge), docs, hardware, notifications (settings, test), meta-analysis (coverage, refresh, snapshot), pipeline (ask, embed, health, queue/retry), backups, prompts, version
-│       ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, etc.
-│       └── src/lib/                # db.ts, search.ts, search/ (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, filename.ts, dateFormat.ts, docs-index.ts, docs-search.ts, docs-slug.ts, formatFileSize.ts, settings-schema.ts, metaAnalysisColors.ts, metaAnalysisStale.ts, metaAnalysisTypes.ts, normalizeName.ts, page-state.ts, queueStatus.ts, rag-models.ts, semver.ts, keyboardShortcuts.ts, useKeyboardShortcut.ts, useChordShortcut.ts
+│   ├── web/                        # Next.js 16 (App Router)
+│   │   ├── Dockerfile              # Production image (standalone output)
+│   │   ├── Dockerfile.test         # Test image used by docker-compose.test.yml
+│   │   ├── src/app/                # Pages: /, /about, /podcasts, /podcasts/[id], /episodes/[id], /queue, /feeds, /ask, /search, /search/print, /settings, /docs, /meta-analysis (and /notifications redirects to /settings); DocsClient lives in app/docs/
+│   │   ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll), queue, audio, ask/coverage, episodes ([id], ingest, upload, retry, speakers, speakers/merge), docs, hardware, notifications (settings, test), meta-analysis (coverage, refresh, snapshot), pipeline (ask, embed, health, queue/retry), backups, prompts, version
+│   │   ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, etc.
+│   │   └── src/lib/                # db.ts, search.ts, search/ (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, filename.ts, dateFormat.ts, docs-index.ts, docs-search.ts, docs-slug.ts, formatFileSize.ts, settings-schema.ts, metaAnalysisColors.ts, metaAnalysisStale.ts, metaAnalysisTypes.ts, normalizeName.ts, page-state.ts, queueStatus.ts, rag-models.ts, semver.ts, keyboardShortcuts.ts, useKeyboardShortcut.ts, useChordShortcut.ts
+│   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
+│   └── explore/                    # Jupyter DB-exploration container (Dockerfile + requirements.txt; opt-in via `make explore`)
 ├── docs/                           # User-facing documentation and guides
 ├── scripts/                        # Operational scripts (nightly audit, health check)
 └── prds/                           # Specifications and risk register
