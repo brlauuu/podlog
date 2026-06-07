@@ -42,7 +42,7 @@ podlog/
 ├── backups/                        # Daily DB dumps + rsync audio snapshots (gitignored)
 ├── notebooks/                      # Jupyter exploration notebooks (gitignored bind mount)
 ├── apps/
-│   ├── pipeline/                   # Python 3.11 — FastAPI + DB-backed job queue
+│   ├── pipeline/                   # Python 3.11–3.13 — FastAPI + DB-backed job queue
 │   │   ├── app/
 │   │   │   ├── main.py             # FastAPI app entry point
 │   │   │   ├── config.py           # pydantic-settings, all env vars
@@ -76,7 +76,7 @@ Agent-tool metadata (`.agents/`, `.superpowers/`, `.omx/`, `.claude/`, `.worktre
 
 | Layer | Technology | Notes |
 |---|---|---|
-| Pipeline API | FastAPI (Python 3.11) | Internal API consumed by web app |
+| Pipeline API | FastAPI (Python 3.11–3.13) | Internal API consumed by web app |
 | Task queue | PostgreSQL-backed job queue | Sequential processing (concurrency=1) to avoid OOM |
 | Transcription | WhisperX (CTranslate2 backend), default `large-v3-turbo` | Explicit unload before diarization — mandatory |
 | Diarization | `pyannote/speaker-diarization-community-1` local (override via `PYANNOTE_MODEL`) or pyannote.ai cloud `precision-2` (`DIARIZATION_PROVIDER=precision2`, Issue #516) | Requires HF_TOKEN for local or `PYANNOTE_API_KEY` for cloud; graceful failure path |
