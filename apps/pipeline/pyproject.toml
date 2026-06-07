@@ -32,7 +32,7 @@ ffmpeg-python = "^0.2.0"
 python-multipart = "^0.0.22"
 
 # Token counting for meta-analysis dashboard (#521)
-tiktoken = "^0.7.0"
+tiktoken = "^0.13.0"
 
 [tool.poetry.group.ml]
 optional = true
