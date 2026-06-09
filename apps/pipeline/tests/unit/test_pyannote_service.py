@@ -308,3 +308,108 @@ class TestDiarize:
 
         with pytest.raises(TypeError, match="itertracks"):
             pyannote_mod.diarize("/path/to/audio.wav")
+
+
+class TestResolveModel:
+    """Cover the runtime-vs-env model resolution path (#822).
+
+    Patches `settings.pyannote_model` as an attribute (not the whole
+    `settings` object) so `app.database`'s import-time `create_engine`
+    isn't fed a MagicMock for `database_url`.
+    """
+
+    def _patch_env(self, value):
+        from app.config import settings
+        return patch.object(settings, "pyannote_model", value)
+
+    def test_returns_runtime_override_when_present(self):
+        # Pre-import app.database before patching so the real engine is
+        # already constructed.
+        import app.database  # noqa: F401
+        with (
+            self._patch_env("env-default-model"),
+            patch("app.database.SessionLocal") as mock_sl,
+            patch(
+                "app.services.notification_settings.get_runtime_diarization_settings",
+                return_value={"pyannote_model": "runtime-override-model"},
+            ),
+        ):
+            mock_sl.return_value.__enter__.return_value = MagicMock()
+            mock_sl.return_value.__exit__.return_value = False
+            assert pyannote_mod._resolve_model() == "runtime-override-model"
+
+    def test_falls_back_to_env_when_no_override(self):
+        import app.database  # noqa: F401
+        with (
+            self._patch_env("env-default-model"),
+            patch("app.database.SessionLocal") as mock_sl,
+            patch(
+                "app.services.notification_settings.get_runtime_diarization_settings",
+                return_value={},
+            ),
+        ):
+            mock_sl.return_value.__enter__.return_value = MagicMock()
+            mock_sl.return_value.__exit__.return_value = False
+            assert pyannote_mod._resolve_model() == "env-default-model"
+
+    def test_falls_back_to_env_when_override_is_whitespace(self):
+        import app.database  # noqa: F401
+        with (
+            self._patch_env("env-default-model"),
+            patch("app.database.SessionLocal") as mock_sl,
+            patch(
+                "app.services.notification_settings.get_runtime_diarization_settings",
+                return_value={"pyannote_model": "   "},
+            ),
+        ):
+            mock_sl.return_value.__enter__.return_value = MagicMock()
+            mock_sl.return_value.__exit__.return_value = False
+            assert pyannote_mod._resolve_model() == "env-default-model"
+
+    def test_falls_back_to_env_when_override_is_not_str(self):
+        import app.database  # noqa: F401
+        with (
+            self._patch_env("env-default-model"),
+            patch("app.database.SessionLocal") as mock_sl,
+            patch(
+                "app.services.notification_settings.get_runtime_diarization_settings",
+                return_value={"pyannote_model": 42},
+            ),
+        ):
+            mock_sl.return_value.__enter__.return_value = MagicMock()
+            mock_sl.return_value.__exit__.return_value = False
+            assert pyannote_mod._resolve_model() == "env-default-model"
+
+    def test_falls_back_to_env_when_db_raises(self):
+        import app.database  # noqa: F401
+        with (
+            self._patch_env("env-default-model"),
+            patch("app.database.SessionLocal", side_effect=Exception("db down")),
+        ):
+            assert pyannote_mod._resolve_model() == "env-default-model"
+
+
+class TestEnsureWav:
+    """Cover the non-WAV conversion branch (#822)."""
+
+    def test_wav_input_returns_unchanged(self, tmp_path):
+        wav = tmp_path / "audio.wav"
+        wav.write_bytes(b"")
+        path, is_temp = pyannote_mod._ensure_wav(str(wav))
+        assert path == str(wav)
+        assert is_temp is False
+
+    def test_mp3_input_runs_ffmpeg_and_marks_temp(self, tmp_path):
+        mp3 = tmp_path / "audio.mp3"
+        mp3.write_bytes(b"")
+        with patch("subprocess.run") as mock_run:
+            path, is_temp = pyannote_mod._ensure_wav(str(mp3))
+        assert path.endswith(".diarize.wav")
+        assert is_temp is True
+        # ffmpeg was invoked with the expected mono-16kHz arguments.
+        called_args = mock_run.call_args[0][0]
+        assert called_args[0] == "ffmpeg"
+        assert "-ar" in called_args
+        assert called_args[called_args.index("-ar") + 1] == "16000"
+        assert "-ac" in called_args
+        assert called_args[called_args.index("-ac") + 1] == "1"
