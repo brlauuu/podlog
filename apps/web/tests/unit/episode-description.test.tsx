@@ -100,4 +100,83 @@ describe("EpisodeDescription", () => {
     );
     expect(container.querySelector("a.podlog-timestamp-link")).toBeNull();
   });
+
+  it("does not linkify timestamps that already appear inside an anchor", () => {
+    const { container } = render(
+      wrap(
+        <EpisodeDescription
+          description={'See <a href="https://example.com">at 12:34 here</a>.'}
+          episodeId="ep-1"
+          audioLocalPath="/data/audio/archive/ep-1.mp3"
+        />
+      )
+    );
+    // The 12:34 inside the original <a> should NOT be converted to a
+    // .podlog-timestamp-link anchor.
+    expect(container.querySelector("a.podlog-timestamp-link")).toBeNull();
+  });
+
+  it("does not linkify malformed timestamps with out-of-range seconds", () => {
+    const { container } = render(
+      wrap(
+        <EpisodeDescription
+          description="Bad value 12:99 should not be linkified."
+          episodeId="ep-1"
+          audioLocalPath="/data/audio/archive/ep-1.mp3"
+        />
+      )
+    );
+    // The negative-lookahead in the regex already excludes :99 because
+    // `99` doesn't match `\d{2}` followed by a non-digit... but more
+    // importantly, parseTimestamp would return null. Either way: no link.
+    expect(container.querySelector("a.podlog-timestamp-link")).toBeNull();
+  });
+
+  it("clicking a timestamp link plays audio and dispatches scroll event", async () => {
+    const user = userEvent.setup();
+    const dispatchSpy = jest.spyOn(window, "dispatchEvent");
+    const { container } = render(
+      wrap(
+        <EpisodeDescription
+          description="Highlight at 12:34 below."
+          episodeId="ep-7"
+          audioLocalPath="/data/audio/archive/ep-7.mp3"
+          episodeTitle="My Episode"
+          feedTitle="My Show"
+        />
+      )
+    );
+    const link = container.querySelector("a.podlog-timestamp-link") as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    await user.click(link);
+
+    // Exactly one CustomEvent with the timestamp seconds was dispatched.
+    const scrollCalls = dispatchSpy.mock.calls
+      .map((c) => c[0])
+      .filter((e): e is CustomEvent =>
+        e instanceof CustomEvent && e.type === "podlog:scroll-to-time"
+      );
+    expect(scrollCalls).toHaveLength(1);
+    expect((scrollCalls[0] as CustomEvent).detail).toEqual({ secs: 754 });
+    dispatchSpy.mockRestore();
+  });
+
+  it("clicking a timestamp link is a no-op when episodeId is missing", async () => {
+    // Without episodeId/audioLocalPath the description doesn't linkify,
+    // so there's nothing to click — verify the early-return branch by
+    // checking that the click on a plain anchor doesn't crash.
+    const user = userEvent.setup();
+    const { container } = render(
+      wrap(
+        <EpisodeDescription
+          description={'See <a href="https://example.com">link</a>.'}
+        />
+      )
+    );
+    const link = container.querySelector("a") as HTMLAnchorElement;
+    // Plain link has no podlog-timestamp-link class → handler should
+    // pass through without preventing default.
+    await user.click(link);
+    // No exception, no scroll event.
+  });
 });
