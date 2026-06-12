@@ -348,3 +348,163 @@ class TestDiarizeViaCloud:
                 model="precision-2",
                 cost_per_second_usd=0.001,
             )
+
+    def test_returns_false_on_http_error(self):
+        # httpx.HTTPError (e.g. connect timeout) → False, not exception.
+        client_cm = MagicMock()
+        client_cm.__enter__ = MagicMock(return_value=client_cm)
+        client_cm.__exit__ = MagicMock(return_value=False)
+        client_cm.get = MagicMock(side_effect=httpx.ConnectError("dns"))
+        with patch.object(cloud.httpx, "Client", return_value=client_cm):
+            assert verify_api_key("k", "https://api.pyannote.ai/v1") is False
+
+
+class TestUploadAudioErrorPaths:
+    def _audio(self, tmp_path):
+        audio = tmp_path / "test.mp3"
+        audio.write_bytes(b"fake-mp3-bytes")
+        return audio
+
+    def _declare_ok_client(self, presigned: str = "https://upload.example/presigned"):
+        """Client that returns a valid /media/input declaration."""
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.json = MagicMock(return_value={"url": presigned})
+        client_cm = MagicMock()
+        client_cm.__enter__ = MagicMock(return_value=client_cm)
+        client_cm.__exit__ = MagicMock(return_value=False)
+        client_cm.post = MagicMock(return_value=resp)
+        return client_cm
+
+    def test_happy_path_returns_media_url(self, tmp_path):
+        audio = self._audio(tmp_path)
+        declare = self._declare_ok_client()
+        put_resp = MagicMock()
+        put_resp.raise_for_status = MagicMock()
+        put_cm = MagicMock()
+        put_cm.__enter__ = MagicMock(return_value=put_cm)
+        put_cm.__exit__ = MagicMock(return_value=False)
+        put_cm.put = MagicMock(return_value=put_resp)
+        # Two Client() calls: declare then PUT.
+        with patch.object(cloud.httpx, "Client", side_effect=[declare, put_cm]):
+            result = upload_audio(
+                str(audio), api_key="k", base_url="https://api.pyannote.ai/v1",
+            )
+        assert result.startswith("media://podlog/")
+        assert result.endswith(".mp3")
+        put_cm.put.assert_called_once()
+
+    def test_declare_timeout_wraps_transient(self, tmp_path):
+        audio = self._audio(tmp_path)
+        declare = self._declare_ok_client()
+        declare.post = MagicMock(side_effect=httpx.ConnectTimeout("slow"))
+        with patch.object(cloud.httpx, "Client", return_value=declare):
+            with pytest.raises(PyannoteCloudError) as exc_info:
+                upload_audio(str(audio), api_key="k",
+                              base_url="https://api.pyannote.ai/v1")
+        assert exc_info.value.error_class == "TRANSIENT_NETWORK"
+
+    def test_declare_network_error_wraps_transient(self, tmp_path):
+        audio = self._audio(tmp_path)
+        declare = self._declare_ok_client()
+        declare.post = MagicMock(side_effect=httpx.NetworkError("nope"))
+        with patch.object(cloud.httpx, "Client", return_value=declare):
+            with pytest.raises(PyannoteCloudError) as exc_info:
+                upload_audio(str(audio), api_key="k",
+                              base_url="https://api.pyannote.ai/v1")
+        assert exc_info.value.error_class == "TRANSIENT_NETWORK"
+
+    def test_declare_http_status_error_wraps_http_access(self, tmp_path):
+        audio = self._audio(tmp_path)
+        bad_resp = MagicMock()
+        bad_resp.status_code = 401
+        http_err = httpx.HTTPStatusError("401", request=MagicMock(), response=bad_resp)
+        declare = self._declare_ok_client()
+        declare.post = MagicMock(side_effect=http_err)
+        with patch.object(cloud.httpx, "Client", return_value=declare):
+            with pytest.raises(PyannoteCloudError) as exc_info:
+                upload_audio(str(audio), api_key="k",
+                              base_url="https://api.pyannote.ai/v1")
+        assert exc_info.value.error_class == "HTTP_ACCESS"
+
+    def test_put_timeout_wraps_transient(self, tmp_path):
+        audio = self._audio(tmp_path)
+        declare = self._declare_ok_client()
+        put_cm = MagicMock()
+        put_cm.__enter__ = MagicMock(return_value=put_cm)
+        put_cm.__exit__ = MagicMock(return_value=False)
+        put_cm.put = MagicMock(side_effect=httpx.ConnectTimeout("slow"))
+        with patch.object(cloud.httpx, "Client", side_effect=[declare, put_cm]):
+            with pytest.raises(PyannoteCloudError) as exc_info:
+                upload_audio(str(audio), api_key="k",
+                              base_url="https://api.pyannote.ai/v1")
+        assert exc_info.value.error_class == "TRANSIENT_NETWORK"
+
+    def test_put_http_status_error_wraps_http_access(self, tmp_path):
+        audio = self._audio(tmp_path)
+        declare = self._declare_ok_client()
+        bad_resp = MagicMock()
+        bad_resp.status_code = 403
+        http_err = httpx.HTTPStatusError("403", request=MagicMock(), response=bad_resp)
+        put_cm = MagicMock()
+        put_cm.__enter__ = MagicMock(return_value=put_cm)
+        put_cm.__exit__ = MagicMock(return_value=False)
+        put_cm.put = MagicMock(side_effect=http_err)
+        with patch.object(cloud.httpx, "Client", side_effect=[declare, put_cm]):
+            with pytest.raises(PyannoteCloudError) as exc_info:
+                upload_audio(str(audio), api_key="k",
+                              base_url="https://api.pyannote.ai/v1")
+        assert exc_info.value.error_class == "HTTP_ACCESS"
+
+    def test_accepts_presigned_url_alias_keys(self, tmp_path):
+        # The endpoint might return "presignedUrl" or "uploadUrl" instead of "url".
+        audio = self._audio(tmp_path)
+        declare = self._declare_ok_client()
+        declare.post.return_value.json = MagicMock(
+            return_value={"presignedUrl": "https://upload.example/x"}
+        )
+        put_resp = MagicMock()
+        put_resp.raise_for_status = MagicMock()
+        put_cm = MagicMock()
+        put_cm.__enter__ = MagicMock(return_value=put_cm)
+        put_cm.__exit__ = MagicMock(return_value=False)
+        put_cm.put = MagicMock(return_value=put_resp)
+        with patch.object(cloud.httpx, "Client", side_effect=[declare, put_cm]):
+            result = upload_audio(str(audio), api_key="k",
+                                   base_url="https://api.pyannote.ai/v1")
+        assert result.startswith("media://podlog/")
+
+
+class TestDiarizeViaCloudOrchestration:
+    def test_happy_path_orchestrates_upload_submit_poll(self):
+        with (
+            patch.object(cloud, "upload_audio", return_value="media://podlog/abc.mp3"),
+            patch.object(cloud, "submit_diarization", return_value="job-123"),
+            patch.object(
+                cloud, "poll_job",
+                return_value={"output": {"diarization": [
+                    {"speaker": "speaker_0", "start": 0.0, "end": 5.0},
+                    {"speaker": "speaker_1", "start": 5.0, "end": 10.0},
+                ]}},
+            ),
+        ):
+            segments, billed, cost = diarize_via_cloud(
+                "/tmp/a.mp3",
+                api_key="real-key",
+                base_url="https://api.pyannote.ai/v1",
+                model="precision-2",
+                cost_per_second_usd=0.001,
+            )
+        assert len(segments) == 2
+        # _normalize_speaker passes "SPEAKER_0"/"SPEAKER_1" through unchanged
+        # because they already start with the "SPEAKER_" prefix.
+        assert {s["speaker"] for s in segments} == {"SPEAKER_0", "SPEAKER_1"}
+        # Span = 10s, but the minimum-billing floor is 20s → billed=20, cost=20×0.001
+        assert billed == pytest.approx(20.0)
+        assert cost == pytest.approx(0.02)
+
+
+class TestNormalizeSpeakerEdgeCases:
+    def test_non_numeric_uppercase_token_gets_speaker_prefix(self):
+        # Covers line 357 — final return branch for arbitrary uppercase tokens.
+        assert _normalize_speaker("alpha") == "SPEAKER_ALPHA"
