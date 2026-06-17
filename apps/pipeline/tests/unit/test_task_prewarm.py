@@ -127,3 +127,64 @@ class TestMain:
             main()
 
         mock_set.assert_called_once()
+
+
+class TestRuntimeInferenceProvider:
+    """Cover _runtime_inference_provider lookup branches (#822)."""
+
+    @patch("app.database.SessionLocal")
+    @patch("app.services.notification_settings.get_runtime_inference_settings",
+           return_value={"inference_provider": "fireworks"})
+    def test_returns_runtime_override_when_valid(self, _mock_settings, mock_sl):
+        db = MagicMock()
+        mock_sl.return_value = db
+        from app.tasks.prewarm import _runtime_inference_provider
+        assert _runtime_inference_provider() == "fireworks"
+
+    @patch("app.database.SessionLocal")
+    @patch("app.services.notification_settings.get_runtime_inference_settings",
+           return_value={"inference_provider": "unknown"})
+    def test_invalid_runtime_value_falls_back_to_env(self, _mock_settings, mock_sl):
+        # Avoid touching config attribute on the real settings object —
+        # rebind at the module so the fallback reads our value.
+        from app.config import settings
+        with patch.object(settings, "inference_provider", "local"):
+            db = MagicMock()
+            mock_sl.return_value = db
+            from app.tasks.prewarm import _runtime_inference_provider
+            assert _runtime_inference_provider() == "local"
+
+    @patch("app.database.SessionLocal")
+    @patch("app.services.notification_settings.get_runtime_inference_settings",
+           return_value={})
+    def test_no_override_falls_back_to_env(self, _mock_settings, mock_sl):
+        from app.config import settings
+        with patch.object(settings, "inference_provider", "fireworks"):
+            db = MagicMock()
+            mock_sl.return_value = db
+            from app.tasks.prewarm import _runtime_inference_provider
+            assert _runtime_inference_provider() == "fireworks"
+
+    def test_db_error_falls_back_to_env(self):
+        from app.config import settings
+        with (
+            patch("app.database.SessionLocal", side_effect=RuntimeError("db down")),
+            patch.object(settings, "inference_provider", "local"),
+        ):
+            from app.tasks.prewarm import _runtime_inference_provider
+            assert _runtime_inference_provider() == "local"
+
+
+class TestSetPrewarmDone:
+    """Cover _set_prewarm_done upsert (#822)."""
+
+    @patch("app.database.SessionLocal")
+    def test_upserts_via_on_conflict_do_update(self, mock_sl):
+        db = MagicMock()
+        mock_sl.return_value = db
+        from app.tasks.prewarm import _set_prewarm_done
+        _set_prewarm_done()
+        # The function should commit the statement on the session.
+        db.execute.assert_called_once()
+        db.commit.assert_called_once()
+        db.close.assert_called_once()
