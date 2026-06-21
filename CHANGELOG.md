@@ -32,6 +32,8 @@ fresh empty `Unreleased` is left at the top.
 - Footer shows the version of the running build and warns when a newer one is on disk. The footer reads `process.env.NEXT_PUBLIC_APP_VERSION` (baked into the image at build time) for "what's running," and fetches `/api/version` (which reads the `VERSION` file bind-mounted into the container at `/version`) for "what's on disk." When the on-disk semver is strictly greater than the built-in one, the footer renders `v0.X.Y → 0.X.Z (rebuild available)` in amber as a nudge to rebuild + restart. Silent in matched / downgrade / file-missing / fetch-failed cases.
 
 ### Fixes
+- The footer no longer falsely shows "→ x.y.z (rebuild available)" after a plain `docker compose build web`. The web image build now reads the repo-root `VERSION` file directly (build context moved to the repo root, guarded by a new root `.dockerignore` so the context stays small), instead of defaulting to the `0.0.0` sentinel when the caller forgot to pass `--build-arg APP_VERSION`. `make build` is unaffected.
+- The pipeline API no longer reports version `0.0.0` after a plain `docker compose build`. The live `VERSION` file is now bind-mounted into the pipeline container (`./VERSION:/app/VERSION:ro`), so `app.main._read_version()` always reads the current version at runtime instead of relying on a copy that only `make build` staged into the build context.
 - `make ollama-pull` referenced a non-existent Ollama model `gemma4:e4b`; corrected to `gemma3n:e4b` (the Gemma 3n E4B variant) in the Makefile, the Ask page model dropdown (`apps/web/src/lib/rag-models.ts`), and the two doc pages that listed the pullable model set. ([#790](https://github.com/brlauuu/podlog/issues/790))
 
 ### Internal
