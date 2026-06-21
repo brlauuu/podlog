@@ -20,17 +20,6 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
-### Major changes
-- **Meta-Analysis page rewrite (PRD-06):** Replaced the nine Recharts cards with six Plotly figures — per-speaker minutes per episode, per-speaker word count per episode, and host-vs-guest talking-time diff, each shown for both Confirmed and Inferred-HIGH speaker sources. Each chart has a per-feed dropdown, click-to-open-episode (Next.js router push to `/episodes/{id}`), unified hover with spike lines, and dark/light theme switching tied to the app's `<html class="dark">`. Existing chrome (refresh, FiltersBar, CoverageStrip, MissingSpeakersModal, ExploreStatusPanel, InfoBlock) preserved. Backed by two new snapshot arrays (`per_episode_speaker`, `episode_speaker_diff`) computed by `apps/pipeline/app/services/meta_analysis_aggregations.py`; no DB migration required (single-row JSONB snapshot table).
-- **Speaker analytics in the explore notebook (PRD-06 bonus):** New `notebooks/lib/podlog_plots.py` module (port of the prototype) + three new figure cells in `01_explore_db.ipynb` driven by an ipywidgets source toggle (Confirmed / Inferred-HIGH).
-
-### Minor changes
-- **Global navigation chords (#704):** Gmail / GitHub-style two-key chords for jumping between top-level pages. Press <kbd>G</kbd>, then within ~1 s the destination key: <kbd>H</kbd> Home, <kbd>Q</kbd> Queue, <kbd>F</kbd> Feeds, <kbd>P</kbd> Podcasts, <kbd>A</kbd> Ask, <kbd>M</kbd> Meta-analysis, <kbd>S</kbd> Settings, <kbd>D</kbd> Docs. The chord is cancelled if you hold <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> / <kbd>Alt</kbd>, so browser shortcuts still work. Listed in the <kbd>?</kbd> help overlay and the keyboard-shortcuts doc.
-- **Meta-Analysis loads ~70% faster (#746):** swapped `plotly.js-dist-min` (4.5 MB minified) for `plotly.js-cartesian-dist-min` (1.3 MB) wired through `react-plotly.js/factory`. All PRD-06 charts only use scatter traces, which the cartesian bundle fully covers. Lazy chunk shrinks correspondingly, masking the slow first paint that the spinner previously had to hide.
-- **Inferred-speaker noise filter on Meta-Analysis (#749):** the Inferred — HIGH view now drops obvious platform tokens (`Twitter`, `LinkedIn`, `Apple`, `Spotify`, `YouTube`, …) and merges first-name fragments into the longest sibling within each feed (e.g. `Marko` rolls into `Marko Papic`). Confirmed-by-user speakers are not touched. Snapshot must be recomputed (↻ Refresh) for the filter to take effect.
-- **Per-feed pause toggle (#743):** Each feed on `/feeds` now has a pause/resume icon button. Paused feeds are skipped by the periodic poller and manual "Poll now" returns 422 until resumed. Already-processed episodes are untouched; on resume the next poll picks up anything published in the gap. Adds a `feeds.paused` boolean (migration 020) and a `PATCH /api/feeds/{id}` endpoint.
-- Footer shows the version of the running build and warns when a newer one is on disk. The footer reads `process.env.NEXT_PUBLIC_APP_VERSION` (baked into the image at build time) for "what's running," and fetches `/api/version` (which reads the `VERSION` file bind-mounted into the container at `/version`) for "what's on disk." When the on-disk semver is strictly greater than the built-in one, the footer renders `v0.X.Y → 0.X.Z (rebuild available)` in amber as a nudge to rebuild + restart. Silent in matched / downgrade / file-missing / fetch-failed cases.
-
 ### Fixes
 - The footer no longer falsely shows "→ x.y.z (rebuild available)" after a plain `docker compose build web`. The web image build now reads the repo-root `VERSION` file directly (build context moved to the repo root, guarded by a new root `.dockerignore` so the context stays small), instead of defaulting to the `0.0.0` sentinel when the caller forgot to pass `--build-arg APP_VERSION`. `make build` is unaffected.
 - The pipeline API no longer reports version `0.0.0` after a plain `docker compose build`. The live `VERSION` file is now bind-mounted into the pipeline container (`./VERSION:/app/VERSION:ro`), so `app.main._read_version()` always reads the current version at runtime instead of relying on a copy that only `make build` staged into the build context.
@@ -44,14 +33,49 @@ fresh empty `Unreleased` is left at the top.
 - Lifted pipeline test coverage on `backup_settings.py` from 26% to 100% (lowest-covered file flagged by the 2026-05-29 audit). 16 new unit tests mirror the existing integration suite against a fake `Session` so the CI coverage gate (`pytest tests/unit --cov=app`) measures the real surface. ([#762](https://github.com/brlauuu/podlog/issues/762))
 - Lifted web test coverage on five files flagged by the 2026-05-29 audit as ~0% statements: `settings/page.tsx`, `queue/page.tsx`, `search/print/PrintButton.tsx`, `feeds/_lib/types.ts` (`formatDuration`), `EpisodeChatExports.ts`. 26 new tests across 5 new files; all five files now at 100% statements. ([#763](https://github.com/brlauuu/podlog/issues/763))
 - Lifted web test coverage on five Meta-Analysis chart files flagged by the 2026-05-29 audit: `HostGuestDiffChart` (13 → 100%), `SpeakerMinutesChart` (14 → 100%), `SpeakerWordsChart` (14 → 100%), `usePlotlyTheme` (8 → 92%), `PlotlyChart` (15 → 70%). 35 new tests across 5 new files using a PlotlyChart probe-mock pattern. ([#764](https://github.com/brlauuu/podlog/issues/764))
+
+## 0.5.4 — 2026-05-29
+
+### Minor changes
+- **Global navigation chords (#704):** Gmail / GitHub-style two-key chords for jumping between top-level pages. Press <kbd>G</kbd>, then within ~1 s the destination key: <kbd>H</kbd> Home, <kbd>Q</kbd> Queue, <kbd>F</kbd> Feeds, <kbd>P</kbd> Podcasts, <kbd>A</kbd> Ask, <kbd>M</kbd> Meta-analysis, <kbd>S</kbd> Settings, <kbd>D</kbd> Docs. The chord is cancelled if you hold <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> / <kbd>Alt</kbd>, so browser shortcuts still work. Listed in the <kbd>?</kbd> help overlay and the keyboard-shortcuts doc.
+
+### Internal
 - Lifted web test coverage on eight files that were flagged by the 2026-05-29 audit as <60% statements: `feeds/_lib/api.ts` (21 → 95%), `QueryProvider` (40 → 100%), `ReprocessButton` (33 → 94%), `EpisodeChatMessage` (50 → 88%), `PodcastFilter` (52 → 100%), `EpisodeSelectionStep` (17 → 100%), `feeds/page.tsx` (37 → 72%), `search/page.tsx` (51 → 80%). 69 new tests across 7 new files + 2 extended files. ([#765](https://github.com/brlauuu/podlog/issues/765))
 - Declared `@types/plotly.js` as a direct devDependency so the chart components' `import type { Data, Layout } from "plotly.js"` no longer relies on transitive resolution through `@types/react-plotly.js`. ([#759](https://github.com/brlauuu/podlog/issues/759))
 - Refreshed `CLAUDE.md` repo-structure section to match disk: added PRD-05 and PRD-06 to the documentation table; added `meta_analysis_aggregations` to the services enumeration, `semver.ts` and `useChordShortcut.ts` to the lib enumeration, and `version` to the web API enumeration. ([#766](https://github.com/brlauuu/podlog/issues/766), [#767](https://github.com/brlauuu/podlog/issues/767), [#768](https://github.com/brlauuu/podlog/issues/768), [#769](https://github.com/brlauuu/podlog/issues/769))
 - Refreshed `docs/development.md` repo-structure paragraph to match disk: API listing now includes `version` and `search/speakers`; pipeline-proxy `embed`/`explore` subroutes; lib utilities list now includes `search/*`, `searchHybrid`, `metaAnalysisColors`, `metaAnalysisStale`, `page-state`, `queueStatus`, `normalizeName`, `filename`, `semver`, `useChordShortcut`. ([#760](https://github.com/brlauuu/podlog/issues/760), [#761](https://github.com/brlauuu/podlog/issues/761))
 - PRD-06 status marked `Shipped` (PR #745). ([#775](https://github.com/brlauuu/podlog/issues/775))
+
+## 0.5.3 — 2026-05-29
+
+### Minor changes
+- **Meta-Analysis loads ~70% faster (#746):** swapped `plotly.js-dist-min` (4.5 MB minified) for `plotly.js-cartesian-dist-min` (1.3 MB) wired through `react-plotly.js/factory`. All PRD-06 charts only use scatter traces, which the cartesian bundle fully covers. Lazy chunk shrinks correspondingly, masking the slow first paint that the spinner previously had to hide.
+
+### Internal
 - Meta-Analysis chart titles and legend entries truncate unknown feed titles at 20 characters (with an ellipsis) instead of letting the full RSS title overflow. Hand-curated names in `feedShort` still pass through verbatim. ([#747](https://github.com/brlauuu/podlog/issues/747))
 - `notebooks/.gitignore` now excludes rendered HTML artifacts (`examples/*.html`, `examples/_*.html`) so `jupyter nbconvert --to html` output stays out of `git status`. ([#748](https://github.com/brlauuu/podlog/issues/748))
+
+## 0.5.2 — 2026-05-29
+
+### Minor changes
+- **Inferred-speaker noise filter on Meta-Analysis (#749):** the Inferred — HIGH view now drops obvious platform tokens (`Twitter`, `LinkedIn`, `Apple`, `Spotify`, `YouTube`, …) and merges first-name fragments into the longest sibling within each feed (e.g. `Marko` rolls into `Marko Papic`). Confirmed-by-user speakers are not touched. Snapshot must be recomputed (↻ Refresh) for the filter to take effect.
+
+### Internal
 - Jest now ignores `apps/web/.next/standalone/` so a local `npm run build` doesn't trip jest-haste-map with `duplicate manual mock found: react-markdown`. The standalone output contains copies of `__mocks__/` and `node_modules/react/` that collided with the canonical ones; six suites previously failed at collection on a freshly-built local tree. CI was unaffected because it builds fresh, but the fix is harmless there. ([#750](https://github.com/brlauuu/podlog/issues/750))
+
+## 0.5.1 — 2026-05-29
+
+### Minor changes
+- **Per-feed pause toggle (#743):** Each feed on `/feeds` now has a pause/resume icon button. Paused feeds are skipped by the periodic poller and manual "Poll now" returns 422 until resumed. Already-processed episodes are untouched; on resume the next poll picks up anything published in the gap. Adds a `feeds.paused` boolean (migration 020) and a `PATCH /api/feeds/{id}` endpoint.
+
+## 0.5.0 — 2026-05-18
+
+### Major changes
+- **Meta-Analysis page rewrite (PRD-06):** Replaced the nine Recharts cards with six Plotly figures — per-speaker minutes per episode, per-speaker word count per episode, and host-vs-guest talking-time diff, each shown for both Confirmed and Inferred-HIGH speaker sources. Each chart has a per-feed dropdown, click-to-open-episode (Next.js router push to `/episodes/{id}`), unified hover with spike lines, and dark/light theme switching tied to the app's `<html class="dark">`. Existing chrome (refresh, FiltersBar, CoverageStrip, MissingSpeakersModal, ExploreStatusPanel, InfoBlock) preserved. Backed by two new snapshot arrays (`per_episode_speaker`, `episode_speaker_diff`) computed by `apps/pipeline/app/services/meta_analysis_aggregations.py`; no DB migration required (single-row JSONB snapshot table).
+- **Speaker analytics in the explore notebook (PRD-06 bonus):** New `notebooks/lib/podlog_plots.py` module (port of the prototype) + three new figure cells in `01_explore_db.ipynb` driven by an ipywidgets source toggle (Confirmed / Inferred-HIGH).
+
+### Minor changes
+- Footer shows the version of the running build and warns when a newer one is on disk. The footer reads `process.env.NEXT_PUBLIC_APP_VERSION` (baked into the image at build time) for "what's running," and fetches `/api/version` (which reads the `VERSION` file bind-mounted into the container at `/version`) for "what's on disk." When the on-disk semver is strictly greater than the built-in one, the footer renders `v0.X.Y → 0.X.Z (rebuild available)` in amber as a nudge to rebuild + restart. Silent in matched / downgrade / file-missing / fetch-failed cases.
 
 ### Fixes
 - Speaker inference: a short pyannote run inside an otherwise-real label is now split off as Other when its nearest same-label neighbour is more than 60 s away. Catches the case where pyannote conflates a short cold-open / pre-roll voice with a real speaker's voice into one label — previously the cold-open got silently attached to the real speaker. Mid-conversation interjections (host's "yeah" between guest answers) stay with the parent speaker because their gap-to-nearest-same-label is small. Follow-up to #703. ([#703](https://github.com/brlauuu/podlog/issues/703))
