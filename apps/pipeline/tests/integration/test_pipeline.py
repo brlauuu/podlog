@@ -14,7 +14,6 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from app.models import Episode, Segment
-from app.services.fireworks_audio import FireworksTranscriptionError
 
 FIXTURE_AUDIO = Path(__file__).parent.parent / "fixtures" / "sample.mp3"
 
@@ -69,36 +68,34 @@ class TestTranscription:
         db_session.refresh(sample_episode)
         assert sample_episode.language == "en"
 
-    def test_oom_marks_episode_failed(self, db_session, sample_episode, tmp_path):
-        """MemoryError during transcription → episode.status='failed', error_class='OOM'."""
+    def test_fireworks_rerun_replaces_segments_idempotently(
+        self, db_session, sample_episode, tmp_path
+    ):
+        """A re-run of transcribe_episode replaces segments from a prior attempt
+        with a clean set instead of appending duplicates.
+
+        The transient-failure -> retry decision moved out of the task into the
+        worker (_classify_for_retry / _handle_task_exception, Issue #641/#653)
+        and is covered by tests/unit/test_worker.py. Here we only verify
+        transcribe_episode's own idempotency on re-run, which is unique to it.
+        """
         audio_dest = tmp_path / f"{sample_episode.id}.mp3"
         shutil.copy(FIXTURE_AUDIO, audio_dest)
         sample_episode.audio_local_path = str(audio_dest)
         sample_episode.status = "transcribing"
         db_session.flush()
 
-        with patch("app.tasks.transcribe._convert_to_wav"), \
-             patch("app.services.whisper.transcribe", side_effect=MemoryError("CUDA OOM")), \
-             patch("app.tasks.transcribe._unload_whisper"), \
-             patch("app.tasks.transcribe.SessionLocal", return_value=db_session):
-
-            from app.tasks.transcribe import transcribe_episode
-            transcribe_episode(sample_episode.id)
-
-        db_session.refresh(sample_episode)
-        assert sample_episode.status == "failed"
-        assert sample_episode.error_class == "OOM"
-
-    def test_fireworks_transient_failure_then_recovery_is_idempotent(
-        self, db_session, sample_episode, tmp_path
-    ):
-        """Transient Fireworks failure retries, then successful rerun writes a clean segment set."""
-        audio_dest = tmp_path / f"{sample_episode.id}.mp3"
-        shutil.copy(FIXTURE_AUDIO, audio_dest)
-        sample_episode.audio_local_path = str(audio_dest)
-        sample_episode.status = "transcribing"
-        sample_episode.retry_count = 0
-        sample_episode.retry_max = 3
+        # Stale segments left behind by a hypothetical earlier attempt.
+        for i in range(3):
+            db_session.add(
+                Segment(
+                    episode_id=sample_episode.id,
+                    start_time=float(i),
+                    end_time=float(i) + 1.0,
+                    text=f"stale {i}",
+                    speaker_label=None,
+                )
+            )
         db_session.flush()
 
         ok_segments = [
@@ -106,76 +103,62 @@ class TestTranscription:
             {"start": 2.0, "end": 4.0, "text": "Two"},
         ]
 
-        with (
-            patch(
-                "app.services.fireworks_audio.transcribe",
-                side_effect=[
-                    FireworksTranscriptionError(
-                        "Fireworks API HTTP 429",
-                        error_class="TRANSIENT_NETWORK",
-                        retryable=True,
-                        status_code=429,
-                    ),
-                    (ok_segments, "en", {"segments": ok_segments, "words": []}),
-                ],
-            ),
-            patch(
-                "app.tasks.transcribe.get_runtime_inference_settings",
-                return_value={
-                    "inference_provider": "fireworks",
-                    "fireworks_api_key": "fw_test",
-                    "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
-                    "fireworks_stt_model": "whisper-v3-large",
-                    "fireworks_stt_diarize": True,
-                    "fireworks_stt_cost_per_minute_usd": 0.006,
-                },
-            ),
-            patch("app.tasks.transcribe.SessionLocal", return_value=db_session),
-            patch("app.tasks.transcribe.settings") as mock_settings,
-            patch("app.tasks.transcribe.job_queue.enqueue") as mock_enqueue,
-        ):
-            mock_settings.retry_backoff_base = 30
-            mock_settings.retry_max = 3
-            mock_settings.transcript_dir = str(tmp_path / "transcripts")
-            mock_settings.fireworks_stt_model = "whisper-v3-large"
-            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
-            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
+        def _run_once():
+            with (
+                patch(
+                    "app.services.fireworks_audio.transcribe",
+                    return_value=(ok_segments, "en", {"segments": ok_segments, "words": []}),
+                ),
+                patch(
+                    "app.tasks.transcribe.get_runtime_inference_settings",
+                    return_value={
+                        "inference_provider": "fireworks",
+                        "fireworks_api_key": "fw_test",
+                        "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
+                        "fireworks_stt_model": "whisper-v3-large",
+                        "fireworks_stt_diarize": True,
+                        "fireworks_stt_cost_per_minute_usd": 0.006,
+                    },
+                ),
+                patch("app.tasks.transcribe.SessionLocal", return_value=db_session),
+                patch("app.tasks.transcribe.settings") as mock_settings,
+                patch("app.tasks.transcribe.job_queue.enqueue") as mock_enqueue,
+            ):
+                mock_settings.transcript_dir = str(tmp_path / "transcripts")
+                mock_settings.fireworks_stt_model = "whisper-v3-large"
+                mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
+                mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
 
-            from app.tasks.transcribe import transcribe_episode
+                from app.tasks.transcribe import transcribe_episode
 
-            # First attempt -> retry scheduled, no segments persisted.
-            transcribe_episode(sample_episode.id)
-            db_session.refresh(sample_episode)
-            assert sample_episode.status == "pending"
-            assert sample_episode.retry_count == 1
-            assert sample_episode.error_class == "TRANSIENT_NETWORK"
-            assert (
-                db_session.query(Segment)
-                .filter(Segment.episode_id == sample_episode.id)
-                .count()
-                == 0
-            )
+                transcribe_episode(sample_episode.id)
+                return mock_enqueue
 
-            # Second attempt -> success, clean final state.
-            transcribe_episode(sample_episode.id)
-            db_session.refresh(sample_episode)
-            assert sample_episode.status == "diarizing"
-            assert sample_episode.language == "en"
-            segments = (
-                db_session.query(Segment)
+        def _segment_texts():
+            return [
+                s.text
+                for s in db_session.query(Segment)
                 .filter(Segment.episode_id == sample_episode.id)
                 .order_by(Segment.start_time)
                 .all()
-            )
-            assert len(segments) == 2
-            assert [s.text for s in segments] == ["One", "Two"]
+            ]
 
-            assert mock_enqueue.call_count == 2
-            first_call = mock_enqueue.call_args_list[0]
-            second_call = mock_enqueue.call_args_list[1]
-            assert first_call.args[2] == "transcribe"
-            assert first_call.kwargs["retry_at"] is not None
-            assert second_call.args[2] == "diarize"
+        # First run: the three stale segments are replaced by the clean set,
+        # and diarization is enqueued.
+        enqueue = _run_once()
+        db_session.refresh(sample_episode)
+        assert sample_episode.status == "diarizing"
+        assert sample_episode.language == "en"
+        assert _segment_texts() == ["One", "Two"]
+        assert enqueue.call_args.args[2] == "diarize"
+
+        # Re-deliver the same task (e.g. a worker retry): reset to a runnable
+        # status and run again. Segments must be replaced, not duplicated.
+        sample_episode.status = "transcribing"
+        db_session.flush()
+        _run_once()
+        db_session.refresh(sample_episode)
+        assert _segment_texts() == ["One", "Two"]
 
 
 class TestDiarization:

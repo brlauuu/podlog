@@ -13,6 +13,8 @@ const MINIMAL_SNAPSHOT = {
     per_feed: [],
     per_episode: [],
     per_speaker: [],
+    per_episode_speaker: [],
+    episode_speaker_diff: [],
     timeline_monthly: [],
     coverage: {
       host_share: { included_count: 0, excluded: [] },
@@ -49,16 +51,13 @@ test.describe("Meta-Analysis dashboard", () => {
 
     await page.goto("/meta-analysis");
 
-    // Each chart component emits its own fallback string when its
-    // transform returns no rows. Hit a representative cross-section.
+    // The three PRD-06 Plotly charts each emit their own fallback string when
+    // their transform returns no rows. With the default "Confirmed" source:
+    // SpeakerMinutes/SpeakerWords render "No data for Confirmed source.", and
+    // HostGuestDiff renders "No episodes with both hosts and guests ...".
     for (const fallback of [
-      /No dated episodes/i,
-      /No feeds yet/i,
-      /No processing data yet/i,
-      /No remote inference spend/i,
-      /No confirmed hosts yet/i,
-      /No confirmed speakers yet/i,
-      /No episode data/i,
+      /No data for Confirmed source/i,
+      /No episodes with both hosts and guests for Confirmed source/i,
     ]) {
       await expect(page.getByText(fallback).first()).toBeVisible();
     }

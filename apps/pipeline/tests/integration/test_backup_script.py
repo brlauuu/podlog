@@ -21,8 +21,31 @@ from pathlib import Path
 import pytest
 
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
-BACKUP_SCRIPT = REPO_ROOT / "apps" / "backup" / "backup.sh"
+def _find_backup_script() -> Path | None:
+    """Locate apps/backup/backup.sh by walking up from this file.
+
+    Works regardless of repo depth, so it's correct both in a dev checkout
+    (`.../podlog/apps/pipeline/tests/integration/`) and inside the pipeline
+    test container, where the repo is copied to `/app` (a hard-coded
+    `parents[4]` raised IndexError there and aborted collection of the whole
+    integration suite). Returns None when the script isn't on disk — the
+    pipeline test image's build context is ./apps/pipeline, so it never
+    includes apps/backup/; the module is skipped in that case.
+    """
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "apps" / "backup" / "backup.sh"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+BACKUP_SCRIPT = _find_backup_script()
+
+pytestmark = pytest.mark.skipif(
+    BACKUP_SCRIPT is None,
+    reason="apps/backup/backup.sh not on disk (e.g. the pipeline test "
+    "container, whose build context excludes apps/backup/)",
+)
 
 
 @pytest.fixture
