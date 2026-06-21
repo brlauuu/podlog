@@ -1,0 +1,27 @@
+# This .dockerignore applies to image builds that use the repository root
+# as their build context. Currently that is only the production `web` image
+# (docker-compose.yml, context: .), which needs the root VERSION file so the
+# Dockerfile can stamp the app version without relying on the caller passing
+# a build arg. Keep the context small — exclude heavy/irrelevant paths.
+# backups/ alone is tens of GB; without this, the web build context explodes.
+
+# Dependencies & build output
+**/node_modules
+**/.next
+
+# Large data / generated dirs
+backups/
+notebooks/
+models/
+.pytest_cache/
+
+# VCS & local agent tooling
+.git/
+.worktrees/
+.agents/
+.superpowers/
+.omx/
+.claude/
+
+# Local secrets / env
+.env

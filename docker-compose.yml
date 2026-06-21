@@ -43,6 +43,13 @@ services:
       # filename/date with strict regexes and guard against path traversal —
       # they're the only writes the pipeline ever does under /backups.
       - ./backups:/backups
+      # app.main._read_version() reads /app/VERSION at runtime. Baking it via
+      # `COPY . .` only works when apps/pipeline/VERSION exists at build time
+      # (which only `make build` stages), so a bare `docker compose build`
+      # would otherwise stamp the 0.0.0 fallback. Mounting the live file makes
+      # the reported version correct regardless of how the image was built —
+      # mirrors web's ./VERSION:/version:ro mount.
+      - ./VERSION:/app/VERSION:ro
     depends_on:
       db:
         condition: service_healthy
@@ -94,13 +101,16 @@ services:
 
   web:
     build:
-      context: ./apps/web
+      # Context is the repo root so the Dockerfile can read the VERSION file
+      # directly (a root .dockerignore keeps the context small).
+      context: .
+      dockerfile: apps/web/Dockerfile
       args:
-        # Read APP_VERSION from the env so `docker compose build web`
-        # bakes NEXT_PUBLIC_APP_VERSION correctly. `make build` exports
-        # APP_VERSION from the VERSION file; direct compose builds work
-        # if you `export APP_VERSION=$(cat VERSION)` first.
-        APP_VERSION: ${APP_VERSION:-0.0.0}
+        # APP_VERSION is optional. `make build` and CI pass it explicitly;
+        # when omitted (e.g. a bare `docker compose build web`), the Dockerfile
+        # falls back to the repo-root VERSION file, so the baked-in version is
+        # never the 0.0.0 sentinel that made the footer cry "rebuild available".
+        APP_VERSION: ${APP_VERSION:-}
     ports:
       - "3000:3000"
     environment:

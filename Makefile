@@ -14,9 +14,8 @@ down-remote:    ## Stop remote-inference profile stack
 
 build:          ## Rebuild all images (reads version from VERSION file)
 	@cp VERSION apps/pipeline/VERSION
-	@cp VERSION apps/web/VERSION
 	docker compose build --build-arg APP_VERSION=$$(cat VERSION)
-	@rm -f apps/pipeline/VERSION apps/web/VERSION
+	@rm -f apps/pipeline/VERSION
 
 logs:           ## Follow logs for all services
 	docker compose logs -f
