@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     whisper_model: str = "large-v3-turbo"
     whisper_compute_type: str = "int8"
     whisper_batch_size: int = 16
+    # CPU threads for the CTranslate2 ASR pass. WhisperX defaults this to 4,
+    # which pins transcription to 4 cores regardless of machine size (the cause
+    # of the ~4-core / 8h-per-episode slowdown). 0 = auto-detect available cores.
+    # On hyperthreaded CPUs, setting this to the physical-core count is optimal.
+    whisper_cpu_threads: int = 0
 
     # Storage
     data_dir: str = "/data"

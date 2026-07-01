@@ -14,11 +14,12 @@ class TestLoadModel:
         """load_model() creates a WhisperX model with correct args."""
         mock_model = MagicMock()
         with patch("app.services.whisper._cuda_available", return_value=False), \
+             patch("app.services.whisper._resolve_cpu_threads", return_value=8), \
              patch("whisperx.load_model", return_value=mock_model) as mock_load:
             import app.services.whisper as ws
             ws.load_model("large-v3-turbo")
             mock_load.assert_called_once_with(
-                "large-v3-turbo", device="cpu", compute_type="int8",
+                "large-v3-turbo", device="cpu", compute_type="int8", threads=8,
             )
             assert ws._model is mock_model
 
@@ -29,6 +30,26 @@ class TestLoadModel:
             ws._model = MagicMock()  # already loaded
             ws.load_model("large-v3-turbo")
             mock_load.assert_not_called()
+
+
+class TestResolveCpuThreads:
+    def test_positive_configured_value_wins(self):
+        """A positive configured value is used verbatim."""
+        import app.services.whisper as ws
+        assert ws._resolve_cpu_threads(8) == 8
+
+    def test_zero_auto_detects_available_cores(self):
+        """0 auto-detects via sched_getaffinity."""
+        import app.services.whisper as ws
+        with patch("os.sched_getaffinity", return_value={0, 1, 2, 3}):
+            assert ws._resolve_cpu_threads(0) == 4
+
+    def test_zero_falls_back_to_cpu_count_without_affinity(self):
+        """Falls back to os.cpu_count() when sched_getaffinity is absent."""
+        import app.services.whisper as ws
+        with patch("os.sched_getaffinity", side_effect=AttributeError), \
+             patch("os.cpu_count", return_value=6):
+            assert ws._resolve_cpu_threads(0) == 6
 
 
 class TestUnloadModel:
