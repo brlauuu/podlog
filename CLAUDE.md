@@ -26,7 +26,7 @@ When making decisions, reference PRD sections (e.g. "per PRD-01 §5.4") rather t
 
 ```
 podlog/
-├── docker-compose.yml              # Production-like local stack (5 services)
+├── docker-compose.yml              # Production-like local stack (7 services; explore is opt-in via profile)
 ├── docker-compose.remote.yml       # Overlay for remote-inference (Fireworks) profile
 ├── docker-compose.test.yml         # Test stack (db_test, mock_rss, pipeline_test, web_test, test runner)
 ├── .env.example                    # All config vars documented
@@ -101,13 +101,13 @@ Agent-tool metadata (`.agents/`, `.superpowers/`, `.omx/`, `.claude/`, `.worktre
 ```bash
 cp .env.example .env   # Edit: set POSTGRES_PASSWORD and HF_TOKEN
 make build             # Build Docker images
-make up                # Start all 5 services
+make up                # Start the stack (6 services; explore is opt-in, see `make explore`)
 make logs              # Follow logs
 make test-unit         # Run pipeline unit tests + host healthcheck test (no web unit tests)
 make shell-db          # Open psql shell
 ```
 
-Services: web (:3000), pipeline API (:8000), ollama (:11434).
+`make up` starts db, pipeline, worker, ollama, web, and backup (6 services); `explore` is opt-in via the `explore` compose profile (`make explore`). Exposed ports: web (:3000), pipeline API (:8000), ollama (:11434).
 
 ## Conventions
 
