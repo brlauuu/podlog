@@ -161,4 +161,4 @@ Lessons from active development. Short rules; rationale linked to the incident o
 - CI enforces coverage thresholds: pipeline `--cov-fail-under=82` in `ci-full-unit.yml`, web `coverageThreshold` in `jest.config.js`
 
 **Not yet done:**
-- Full end-to-end pipeline smoke test in CI
+- Full end-to-end pipeline smoke test in CI. The test exists (`apps/pipeline/tests/e2e/test_full_flow.py`, `@pytest.mark.e2e`, spins up the full Docker stack and exercises ingest→archive), but no CI job runs it: `ci-slow.yml` runs only pipeline `tests/integration/` and the web Playwright suite. Wiring the `tests/e2e/` full-flow test into CI is the remaining work.
