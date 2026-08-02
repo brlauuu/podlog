@@ -1,6 +1,8 @@
 [tool.poetry]
 name = "podlog-pipeline"
-version = "0.1.0"
+# Kept in sync with the repo-root VERSION file. The runtime version is read
+# from that file by app.main._read_version(); this is packaging metadata only.
+version = "0.5.4"
 description = "Podlog ingestion pipeline — RSS fetch, Whisper transcription, pyannote diarization"
 authors = []
 license = "O'Saasy"
