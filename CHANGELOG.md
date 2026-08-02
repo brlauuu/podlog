@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+- CPU transcription now uses all available cores instead of 4. WhisperX defaults its CTranslate2 ASR pass to `threads=4`, which pinned Whisper to 4 cores regardless of machine size (a 99-minute episode was taking 8+ hours on an 8-core host). A new `WHISPER_CPU_THREADS` setting is passed through to `load_model` (`0` = auto-detect available cores; set to the physical-core count on hyperthreaded CPUs), roughly halving per-episode transcription time on multi-core hosts.
+
 ### Fixes
 - The footer no longer falsely shows "→ x.y.z (rebuild available)" after a plain `docker compose build web`. The web image build now reads the repo-root `VERSION` file directly (build context moved to the repo root, guarded by a new root `.dockerignore` so the context stays small), instead of defaulting to the `0.0.0` sentinel when the caller forgot to pass `--build-arg APP_VERSION`. `make build` is unaffected.
 - The pipeline API no longer reports version `0.0.0` after a plain `docker compose build`. The live `VERSION` file is now bind-mounted into the pipeline container (`./VERSION:/app/VERSION:ro`), so `app.main._read_version()` always reads the current version at runtime instead of relying on a copy that only `make build` staged into the build context.

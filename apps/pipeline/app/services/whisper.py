@@ -9,11 +9,27 @@ after transcription. Whisper and pyannote must never be in memory simultaneously
 """
 import gc
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
 # Module-level model cache — explicitly set to None by unload_model()
 _model = None
+
+
+def _resolve_cpu_threads(configured: int) -> int:
+    """Resolve the CTranslate2 CPU thread count for the ASR pass.
+
+    WhisperX defaults ``threads`` to 4, which caps transcription at 4 cores
+    no matter how large the host is. We instead pass an explicit value:
+    a positive ``configured`` wins; 0 means auto-detect available cores.
+    """
+    if configured > 0:
+        return configured
+    try:
+        return len(os.sched_getaffinity(0))
+    except AttributeError:  # not available on all platforms
+        return os.cpu_count() or 4
 
 
 def load_model(model_name: str = "large-v3-turbo") -> None:
@@ -28,21 +44,25 @@ def load_model(model_name: str = "large-v3-turbo") -> None:
 
     device = "cuda" if _cuda_available() else "cpu"
     compute_type = settings.whisper_compute_type
+    cpu_threads = _resolve_cpu_threads(settings.whisper_cpu_threads)
 
     logger.info(
-        '"action": "whisper_load_start", "model": "%s", "backend": "whisperx"',
-        model_name,
+        '"action": "whisper_load_start", "model": "%s", "backend": "whisperx", '
+        '"cpu_threads": %d',
+        model_name, cpu_threads,
     )
 
     _model = whisperx.load_model(
         model_name,
         device=device,
         compute_type=compute_type,
+        threads=cpu_threads,
     )
 
     logger.info(
-        '"action": "whisper_load_complete", "model": "%s", "device": "%s"',
-        model_name, device,
+        '"action": "whisper_load_complete", "model": "%s", "device": "%s", '
+        '"cpu_threads": %d',
+        model_name, device, cpu_threads,
     )
 
 
