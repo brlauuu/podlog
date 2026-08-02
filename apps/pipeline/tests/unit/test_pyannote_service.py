@@ -4,21 +4,44 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Ensure pyannote.audio, torchaudio, torch, and soundfile are mockable
-if "pyannote" not in sys.modules:
-    sys.modules["pyannote"] = MagicMock()
-    sys.modules["pyannote.audio"] = MagicMock()
-if "torchaudio" not in sys.modules:
-    sys.modules["torchaudio"] = MagicMock()
-if "torch" not in sys.modules:
-    sys.modules["torch"] = MagicMock()
-    sys.modules["torch.cuda"] = MagicMock()
-# diarize() imports soundfile at call time; always use a mock so the tests
-# don't touch the real libsndfile on environments where it's installed.
-_soundfile_mock = MagicMock()
-sys.modules["soundfile"] = _soundfile_mock
+# Ensure pyannote.audio, torchaudio, torch, and soundfile are import-stubbed so
+# the tests never touch the real ML libraries. Each submodule is guarded
+# independently: guarding only the parent `pyannote` package left
+# `pyannote.audio` unstubbed whenever the real pyannote package (or an
+# earlier-collected test) had already put `pyannote` into sys.modules, raising
+# `KeyError: 'pyannote.audio'` on later access (#864).
+def _ensure_ml_stubs() -> None:
+    if "pyannote" not in sys.modules:
+        sys.modules["pyannote"] = MagicMock()
+    if "pyannote.audio" not in sys.modules:
+        sys.modules["pyannote.audio"] = MagicMock()
+    if "torchaudio" not in sys.modules:
+        sys.modules["torchaudio"] = MagicMock()
+    if "torch" not in sys.modules:
+        sys.modules["torch"] = MagicMock()
+        sys.modules["torch.cuda"] = MagicMock()
+    # diarize() imports soundfile at call time; always use a mock so the tests
+    # don't touch the real libsndfile on environments where it's installed.
+    if not isinstance(sys.modules.get("soundfile"), MagicMock):
+        sys.modules["soundfile"] = MagicMock()
+
+
+_ensure_ml_stubs()
 
 import app.services.pyannote as pyannote_mod
+
+
+@pytest.fixture(autouse=True)
+def _ml_stubs():
+    """Re-ensure the ML import stubs before every test in this module.
+
+    A one-time module-level stub is fragile across the full suite: another test
+    using ``patch.dict(sys.modules, ...)`` (or importing the real package) can
+    remove ``pyannote.audio`` between collection and execution. Re-ensuring per
+    test makes these tests order-independent (#864).
+    """
+    _ensure_ml_stubs()
+    yield
 
 
 class TestLoadPipeline:
