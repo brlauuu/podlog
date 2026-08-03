@@ -436,3 +436,78 @@ class TestEnsureWav:
         assert called_args[called_args.index("-ar") + 1] == "16000"
         assert "-ac" in called_args
         assert called_args[called_args.index("-ac") + 1] == "1"
+
+
+class TestLoadPipelineCuda:
+    """Cover the CUDA-move branch of load_pipeline (#879)."""
+
+    def setup_method(self):
+        pyannote_mod._pipeline = None
+        pyannote_mod._pipeline_model = None
+
+    @patch("app.services.pyannote._resolve_model")
+    @patch("app.config.settings")
+    def test_moves_pipeline_to_cuda_when_available(self, mock_settings, mock_resolve):
+        mock_settings.hf_token = "test-token"
+        mock_resolve.return_value = "pyannote/speaker-diarization-community-1"
+
+        cpu_pipeline = MagicMock()
+        cuda_pipeline = MagicMock()
+        cpu_pipeline.to.return_value = cuda_pipeline
+
+        torch_mod = sys.modules["torch"]
+        torch_mod.cuda.is_available.return_value = True
+        try:
+            sys.modules["pyannote.audio"].Pipeline = MagicMock(
+                from_pretrained=MagicMock(return_value=cpu_pipeline)
+            )
+            pyannote_mod.load_pipeline()
+        finally:
+            torch_mod.cuda.is_available.return_value = False  # don't leak to other tests
+
+        cpu_pipeline.to.assert_called_once()
+        assert pyannote_mod._pipeline is cuda_pipeline
+        assert pyannote_mod._pipeline_model == "pyannote/speaker-diarization-community-1"
+
+
+class TestIsHfAuthError:
+    """Cover the ImportError fallback of _is_hf_auth_error (#879)."""
+
+    def test_returns_false_when_hfhub_errors_unimportable(self):
+        # Setting sys.modules[name] = None makes `from name import ...` raise
+        # ImportError, exercising the `except ImportError: return False` branch.
+        with patch.dict(sys.modules, {"huggingface_hub.errors": None}):
+            assert pyannote_mod._is_hf_auth_error(Exception("boom")) is False
+
+
+class TestDiarizeTempCleanup:
+    """Cover the temp-WAV cleanup branch of diarize (#879)."""
+
+    def setup_method(self):
+        pyannote_mod._pipeline = None
+
+    def _stub_pipeline(self):
+        annotation = MagicMock()
+        annotation.itertracks.return_value = []
+        pyannote_mod._pipeline = MagicMock(
+            return_value=MagicMock(speaker_diarization=annotation)
+        )
+        sys.modules["soundfile"].read = MagicMock(return_value=(MagicMock(), 16000))
+
+    @patch("app.services.pyannote.load_pipeline")
+    @patch("app.services.pyannote._ensure_wav", return_value=("/tmp/x.diarize.wav", True))
+    def test_unlinks_temp_wav(self, mock_ensure, mock_load):
+        self._stub_pipeline()
+        with patch("pathlib.Path.unlink") as mock_unlink:
+            result = pyannote_mod.diarize("/path/to/audio.mp3")
+        mock_unlink.assert_called_once()
+        assert result == []
+
+    @patch("app.services.pyannote.load_pipeline")
+    @patch("app.services.pyannote._ensure_wav", return_value=("/tmp/x.diarize.wav", True))
+    def test_temp_wav_cleanup_swallows_oserror(self, mock_ensure, mock_load):
+        self._stub_pipeline()
+        # A failing unlink must not propagate out of diarize.
+        with patch("pathlib.Path.unlink", side_effect=OSError("already gone")):
+            result = pyannote_mod.diarize("/path/to/audio.mp3")
+        assert result == []
