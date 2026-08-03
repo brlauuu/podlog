@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 import { NextRequest } from "next/server";
-import { DELETE } from "@/app/api/feeds/[id]/route";
+import { DELETE, PATCH } from "@/app/api/feeds/[id]/route";
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -56,5 +56,42 @@ describe("DELETE /api/feeds/[id]", () => {
 
     expect(resp.status).toBe(409);
     expect(await resp.json()).toEqual({ detail: "Feed has running jobs" });
+  });
+});
+
+function patch(id: string, body: unknown) {
+  const req = new NextRequest(`http://localhost/api/feeds/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return PATCH(req, { params: Promise.resolve({ id }) });
+}
+
+describe("PATCH /api/feeds/[id]", () => {
+  it("forwards the { paused } body to the pipeline and mirrors the response", async () => {
+    mockFetch.mockResolvedValue({ status: 200, json: async () => ({ id: "feed-1", paused: true }) });
+
+    const resp = await patch("feed-1", { paused: true });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://pipeline:8000/api/feeds/feed-1",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: true }),
+      })
+    );
+    expect(resp.status).toBe(200);
+    expect(await resp.json()).toEqual({ id: "feed-1", paused: true });
+  });
+
+  it("mirrors an upstream error status and body", async () => {
+    mockFetch.mockResolvedValue({ status: 404, json: async () => ({ detail: "Feed not found" }) });
+
+    const resp = await patch("missing", { paused: false });
+
+    expect(resp.status).toBe(404);
+    expect(await resp.json()).toEqual({ detail: "Feed not found" });
   });
 });
