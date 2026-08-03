@@ -431,3 +431,137 @@ describe("Email tag input", () => {
     expect(screen.getByText(/already added/i)).toBeInTheDocument();
   });
 });
+
+describe("NotificationSettings — save, test, and error paths", () => {
+  it("renders the shape-mismatch error when settings fail schema validation", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === "/api/hardware") {
+        return Promise.resolve({ ok: true, json: async () => ({ estimates: {} }) });
+      }
+      // A non-object body fails SettingsSchema.safeParse outright.
+      return Promise.resolve({ ok: true, json: async () => "bad" });
+    });
+
+    render(<NotificationSettings />);
+
+    expect(
+      await screen.findByText(/didn't match the expected schema/i)
+    ).toBeInTheDocument();
+  });
+
+  it("shows an error toast when a notification save returns an error", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (url === "/api/hardware") {
+        return Promise.resolve({ ok: true, json: async () => ({ estimates: {} }) });
+      }
+      if (opts?.method === "PUT") {
+        return Promise.resolve({ ok: false, json: async () => ({ error: "save boom" }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ ...defaultSettings }) });
+    });
+
+    render(<NotificationSettings />);
+    const token = await screen.findByLabelText(/bot token/i);
+    await user.clear(token);
+    await user.type(token, "123:ABC");
+    await user.click(screen.getAllByRole("button", { name: /save/i })[0]);
+
+    expect(await screen.findByText(/save boom/)).toBeInTheDocument();
+  });
+
+  it("shows a network-error toast when a notification save throws", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (url === "/api/hardware") {
+        return Promise.resolve({ ok: true, json: async () => ({ estimates: {} }) });
+      }
+      if (opts?.method === "PUT") return Promise.reject(new Error("offline"));
+      return Promise.resolve({ ok: true, json: async () => ({ ...defaultSettings }) });
+    });
+
+    render(<NotificationSettings />);
+    const token = await screen.findByLabelText(/bot token/i);
+    await user.clear(token);
+    await user.type(token, "123:ABC");
+    await user.click(screen.getAllByRole("button", { name: /save/i })[0]);
+
+    expect(await screen.findByText(/Network error/)).toBeInTheDocument();
+  });
+
+  it("surfaces the fireworks key warning returned by an inference save", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (url === "/api/hardware") {
+        return Promise.resolve({ ok: true, json: async () => ({ estimates: {} }) });
+      }
+      if (opts?.method === "PUT") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ ...defaultSettings, fireworks_key_warning: "key looks invalid" }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ ...defaultSettings }) });
+    });
+
+    render(<NotificationSettings />);
+    const inferenceTab = await screen.findByRole("tab", { name: "Inference" });
+    await user.click(inferenceTab);
+
+    const apiKeyInput = await screen.findByPlaceholderText("fw_...");
+    await user.type(apiKeyInput, "fw_bad");
+    await user.click(screen.getByRole("button", { name: /save/i }));
+
+    expect(await screen.findByText(/key looks invalid/)).toBeInTheDocument();
+  });
+
+  it("sends a Telegram test message and toasts success", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (url === "/api/hardware") {
+        return Promise.resolve({ ok: true, json: async () => ({ estimates: {} }) });
+      }
+      if (url === "/api/notifications/test") {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ ...defaultSettings, telegram_configured: true }),
+      });
+    });
+
+    render(<NotificationSettings />);
+    const testBtn = await screen.findByRole("button", { name: /send test message/i });
+    await waitFor(() => expect(testBtn).not.toBeDisabled());
+    await user.click(testBtn);
+
+    expect(await screen.findByText(/Test message sent/)).toBeInTheDocument();
+    const postCall = mockFetch.mock.calls.find(
+      (c: [string, RequestInit?]) => c[0] === "/api/notifications/test"
+    );
+    expect(JSON.parse(postCall![1]!.body as string)).toEqual({ channel: "telegram" });
+  });
+
+  it("toasts the error when a Telegram test fails", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockImplementation((url: string) => {
+      if (url === "/api/hardware") {
+        return Promise.resolve({ ok: true, json: async () => ({ estimates: {} }) });
+      }
+      if (url === "/api/notifications/test") {
+        return Promise.resolve({ ok: false, json: async () => ({ error: "test failed" }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ ...defaultSettings, telegram_configured: true }),
+      });
+    });
+
+    render(<NotificationSettings />);
+    const testBtn = await screen.findByRole("button", { name: /send test message/i });
+    await waitFor(() => expect(testBtn).not.toBeDisabled());
+    await user.click(testBtn);
+
+    expect(await screen.findByText(/test failed/)).toBeInTheDocument();
+  });
+});
