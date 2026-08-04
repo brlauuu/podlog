@@ -265,3 +265,151 @@ describe("SpeakerPanel", () => {
     });
   });
 });
+
+describe("SpeakerPanel — additional branches", () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  function renderOne(props: Partial<React.ComponentProps<typeof SpeakerPanel>> = {}) {
+    return render(
+      <SpeakerPanel
+        episodeId="ep-1"
+        segments={[makeSegment({ speaker_label: "SPEAKER_00", display_name: "Alice" })]}
+        onRenamed={jest.fn()}
+        onMerged={jest.fn()}
+        activeSpeaker={null}
+        onFilterSpeaker={jest.fn()}
+        {...props}
+      />
+    );
+  }
+
+  test("reverts the name when the rename request fails", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false });
+    const onRenamed = jest.fn();
+    renderOne({ onRenamed });
+
+    fireEvent.click(screen.getByRole("button", { name: /edit alice/i }));
+    const input = await screen.findByDisplayValue("Alice");
+    fireEvent.change(input, { target: { value: "Alice Cooper" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+    expect(onRenamed).not.toHaveBeenCalled();
+  });
+
+  test("reverts the name when the rename request throws", async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error("offline"));
+    const onRenamed = jest.fn();
+    renderOne({ onRenamed });
+
+    fireEvent.click(screen.getByRole("button", { name: /edit alice/i }));
+    const input = await screen.findByDisplayValue("Alice");
+    fireEvent.change(input, { target: { value: "Alice Cooper" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+    expect(onRenamed).not.toHaveBeenCalled();
+  });
+
+  test("exits edit without saving when the name is cleared", () => {
+    renderOne();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit alice/i }));
+    const input = screen.getByDisplayValue("Alice");
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test("exits edit without a request when an unchanged name is confirmed", () => {
+    renderOne();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit alice/i }));
+    const input = screen.getByDisplayValue("Alice");
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test("saves via the check button and stops row-click propagation", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+    const onRenamed = jest.fn();
+    renderOne({ onRenamed });
+
+    fireEvent.click(screen.getByRole("button", { name: /edit alice/i }));
+    const input = await screen.findByDisplayValue("Alice");
+    fireEvent.click(input); // input onClick stopPropagation
+    fireEvent.change(input, { target: { value: "Alice B" } });
+    // First button in the edit row is the green save/check control.
+    const saveBtn = input.parentElement!.querySelector("button")!;
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => expect(onRenamed).toHaveBeenCalledWith("SPEAKER_00", "Alice B"));
+  });
+
+  test("Show segments toggles the speaker filter", () => {
+    const onFilterSpeaker = jest.fn();
+    renderOne({ onFilterSpeaker });
+
+    fireEvent.click(screen.getByRole("button", { name: /show segments for alice/i }));
+
+    expect(onFilterSpeaker).toHaveBeenCalledWith("SPEAKER_00");
+  });
+
+  test("Show all clears the active speaker filter", () => {
+    const onFilterSpeaker = jest.fn();
+    renderOne({ activeSpeaker: "SPEAKER_00", onFilterSpeaker });
+
+    fireEvent.click(screen.getByRole("button", { name: /^show all$/i }));
+
+    expect(onFilterSpeaker).toHaveBeenCalledWith(null);
+  });
+
+  function renderTwoForMerge() {
+    return render(
+      <SpeakerPanel
+        episodeId="ep-1"
+        segments={[
+          makeSegment({ id: 1, speaker_label: "SPEAKER_00", display_name: "Alice" }),
+          makeSegment({ id: 2, speaker_label: "SPEAKER_01", display_name: "Bob", start_time: 6, end_time: 10 }),
+        ]}
+        onRenamed={jest.fn()}
+        onMerged={jest.fn()}
+        activeSpeaker={null}
+        onFilterSpeaker={jest.fn()}
+      />
+    );
+  }
+
+  test("shows the API error when a merge fails", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "cannot merge" }),
+    });
+    renderTwoForMerge();
+
+    fireEvent.click(screen.getByRole("button", { name: /merge speakers/i }));
+    fireEvent.click(screen.getByText("Alice"));
+    fireEvent.click(screen.getByText("Bob"));
+    fireEvent.click(screen.getByRole("button", { name: /^merge$/i }));
+
+    expect(await screen.findByText("cannot merge")).toBeInTheDocument();
+  });
+
+  test("shows a connection error when a merge throws", async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error("offline"));
+    renderTwoForMerge();
+
+    fireEvent.click(screen.getByRole("button", { name: /merge speakers/i }));
+    fireEvent.click(screen.getByText("Alice"));
+    fireEvent.click(screen.getByText("Bob"));
+    fireEvent.click(screen.getByRole("button", { name: /^merge$/i }));
+
+    expect(await screen.findByText(/Merge failed — check your connection/i)).toBeInTheDocument();
+  });
+});

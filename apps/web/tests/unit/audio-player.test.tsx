@@ -229,4 +229,61 @@ describe("AudioPlayer", () => {
     });
     expect(audio.currentTime).toBe(20);
   });
+
+  test("halts audio and shows unavailable when switching to an episode with no src", () => {
+    function Triggers() {
+      const { playEpisode } = useAudioPlayer();
+      return (
+        <>
+          <button onClick={() => playEpisode("ep-1", "episode.mp3", 5, "Ep 1", "P")} type="button">
+            Play mp3
+          </button>
+          <button onClick={() => playEpisode("ep-2", null, 0, "No Audio", "P")} type="button">
+            Play no-src
+          </button>
+        </>
+      );
+    }
+    render(
+      <AudioPlayerProvider>
+        <Triggers />
+        <AudioPlayer />
+      </AudioPlayerProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Play mp3" }));
+    (HTMLMediaElement.prototype.pause as jest.Mock).mockClear();
+
+    // Switching to a src-less episode transitions state.src non-null → null,
+    // re-running the seek effect's null-src branch (pause + clear element).
+    fireEvent.click(screen.getByRole("button", { name: "Play no-src" }));
+
+    expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+    expect(screen.getByText(/audio unavailable/i)).toBeInTheDocument();
+  });
+
+  test("clicking the progress bar seeks to the clicked fraction of duration", () => {
+    const { audio } = setupPlayer(100);
+    const bar = document.querySelector(".cursor-pointer") as HTMLElement;
+    expect(bar).not.toBeNull();
+    bar.getBoundingClientRect = () =>
+      ({ left: 0, width: 200, top: 0, right: 200, bottom: 4, height: 4, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
+
+    fireEvent.click(bar, { clientX: 100 }); // 50% of 200px → 50s of 100s duration
+
+    expect(audio.currentTime).toBe(50);
+  });
+
+  test("Space toggles playback when the player is active", () => {
+    setupPlayer(300);
+    const play = HTMLMediaElement.prototype.play as jest.Mock;
+    const before = play.mock.calls.length;
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: " " }));
+    });
+
+    // togglePlayPause resumes the paused element → play() called again.
+    expect(play.mock.calls.length).toBeGreaterThan(before);
+  });
 });
