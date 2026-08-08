@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import PromptsSection from "@/components/PromptsSection";
 
 const mockFetch = jest.fn();
@@ -18,6 +18,30 @@ function jsonResponse(body: unknown, ok = true) {
     json: async () => body,
   } as Response);
 }
+
+// Issue #895: selectors key off these rather than the position of a card in
+// the fixture, so reordering or extending samplePrompts can't silently
+// retarget a test at the wrong prompt.
+const PLAIN = "Ask page — system prompt"; // is_overridden: false
+const OVERRIDDEN = "Episode Ask — system prompt"; // is_overridden: true
+
+/**
+ * The prompt card containing `label`. Walks up from the label text to the
+ * nearest ancestor that also holds the card's textarea — structural rather
+ * than class-based, so restyling PromptsSection won't break these tests.
+ */
+function cardFor(label: string): HTMLElement {
+  let el: HTMLElement | null = screen.getByText(label);
+  while (el && !el.querySelector("textarea")) el = el.parentElement;
+  if (!el) throw new Error(`no prompt card found for "${label}"`);
+  return el;
+}
+
+const saveIn = (label: string) =>
+  within(cardFor(label)).getByRole("button", { name: /^save$/i });
+const resetIn = (label: string) =>
+  within(cardFor(label)).getByRole("button", { name: /reset to default/i });
+const textareaIn = (label: string) => within(cardFor(label)).getByRole("textbox");
 
 const samplePrompts = {
   prompts: [
@@ -58,9 +82,8 @@ describe("<PromptsSection>", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("modified")).toBeInTheDocument();
     // Reset disabled when not overridden, enabled when overridden.
-    const resetButtons = screen.getAllByText("Reset to default");
-    expect(resetButtons[0]).toBeDisabled();
-    expect(resetButtons[1]).not.toBeDisabled();
+    expect(resetIn(PLAIN)).toBeDisabled();
+    expect(resetIn(OVERRIDDEN)).not.toBeDisabled();
   });
 
   it("PUTs the new value when Save is clicked", async () => {
@@ -76,8 +99,7 @@ describe("<PromptsSection>", () => {
     )) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Edited text" } });
 
-    const saveButtons = screen.getAllByText("Save");
-    fireEvent.click(saveButtons[0]);
+    fireEvent.click(saveIn(PLAIN));
 
     await waitFor(() =>
       expect(mockFetch).toHaveBeenCalledWith(
@@ -100,8 +122,7 @@ describe("<PromptsSection>", () => {
 
     await screen.findByText("modified");
 
-    const resetButtons = screen.getAllByText("Reset to default");
-    fireEvent.click(resetButtons[1]);
+    fireEvent.click(resetIn(OVERRIDDEN));
 
     await waitFor(() =>
       expect(mockFetch).toHaveBeenCalledWith(
@@ -121,8 +142,7 @@ describe("<PromptsSection>", () => {
     )) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "   " } });
 
-    const saveButtons = screen.getAllByText("Save");
-    fireEvent.click(saveButtons[0]);
+    fireEvent.click(saveIn(PLAIN));
 
     await waitFor(() =>
       expect(screen.getByText("Prompt cannot be empty")).toBeInTheDocument(),
@@ -175,8 +195,8 @@ describe("<PromptsSection>", () => {
     render(<PromptsSection />);
     await waitFor(() => screen.getByText("Ask page — system prompt"));
 
-    fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "new value" } });
-    fireEvent.click(screen.getAllByRole("button", { name: /^save$/i })[0]);
+    fireEvent.change(textareaIn(PLAIN), { target: { value: "new value" } });
+    fireEvent.click(saveIn(PLAIN));
 
     // The write succeeded; a failed refresh must not blow the whole section
     // away and strand the user on an error screen.
@@ -192,8 +212,8 @@ describe("<PromptsSection>", () => {
     render(<PromptsSection />);
     await waitFor(() => screen.getByText("Ask page — system prompt"));
 
-    fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "new value" } });
-    fireEvent.click(screen.getAllByRole("button", { name: /^save$/i })[0]);
+    fireEvent.change(textareaIn(PLAIN), { target: { value: "new value" } });
+    fireEvent.click(saveIn(PLAIN));
 
     expect(await screen.findByText("too long")).toBeInTheDocument();
   });
@@ -205,8 +225,8 @@ describe("<PromptsSection>", () => {
     render(<PromptsSection />);
     await waitFor(() => screen.getByText("Ask page — system prompt"));
 
-    fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "new value" } });
-    fireEvent.click(screen.getAllByRole("button", { name: /^save$/i })[0]);
+    fireEvent.change(textareaIn(PLAIN), { target: { value: "new value" } });
+    fireEvent.click(saveIn(PLAIN));
 
     expect(await screen.findByText("Network error")).toBeInTheDocument();
   });
@@ -219,7 +239,7 @@ describe("<PromptsSection>", () => {
     await waitFor(() => screen.getByText("Episode Ask — system prompt"));
 
     // Second prompt is overridden → its Reset button is enabled.
-    fireEvent.click(screen.getAllByRole("button", { name: /reset to default/i })[1]);
+    fireEvent.click(resetIn(OVERRIDDEN));
 
     expect(await screen.findByText("cannot reset")).toBeInTheDocument();
   });
@@ -231,7 +251,7 @@ describe("<PromptsSection>", () => {
     render(<PromptsSection />);
     await waitFor(() => screen.getByText("Episode Ask — system prompt"));
 
-    fireEvent.click(screen.getAllByRole("button", { name: /reset to default/i })[1]);
+    fireEvent.click(resetIn(OVERRIDDEN));
 
     expect(await screen.findByText("Network error")).toBeInTheDocument();
   });

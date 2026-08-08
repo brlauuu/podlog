@@ -56,6 +56,14 @@ function streamResponse(sse: string) {
   };
 }
 
+// Issue #895: URLs the mock didn't recognise, reported in afterEach.
+// Throwing (or returning undefined) from inside the mock does NOT work as a
+// guard: the call happens inside EpisodeChat's own try/catch, which swallows
+// it into the generic "Connection failed" state — the same misdirection that
+// made the missing TextDecoder in #892 look like a mocking problem. The
+// failure has to be raised outside the component to be legible.
+let unmockedUrls: string[] = [];
+
 function mockAsk(sse: string) {
   mockFetch.mockImplementation((url: string) => {
     if (url === "/api/notifications/settings") {
@@ -64,7 +72,8 @@ function mockAsk(sse: string) {
     if (url === "/api/pipeline/ask") {
       return Promise.resolve(streamResponse(sse));
     }
-    return undefined;
+    unmockedUrls.push(url);
+    return Promise.resolve({ ok: false, status: 599, body: null });
   });
 }
 
@@ -91,7 +100,17 @@ const HAPPY_SSE =
 beforeEach(() => {
   mockFetch.mockReset();
   localStorage.clear();
+  unmockedUrls = [];
   Element.prototype.scrollIntoView = jest.fn();
+});
+
+afterEach(() => {
+  if (unmockedUrls.length > 0) {
+    throw new Error(
+      `EpisodeChat fetched URL(s) this suite does not mock: ${unmockedUrls.join(", ")}. ` +
+        "Add them to mockAsk() — otherwise the component's try/catch hides the cause.",
+    );
+  }
 });
 
 async function ask(question = "hi?") {
