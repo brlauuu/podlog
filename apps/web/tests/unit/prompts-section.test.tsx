@@ -131,15 +131,58 @@ describe("<PromptsSection>", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it("stays in the loading state without crashing when the initial load fails", async () => {
+  // Issue #893: a failed initial load used to leave the user on "Loading
+  // prompts..." forever — the catch set a toast, but the `prompts === null`
+  // early return rendered above the toast markup, so nothing was ever shown.
+  it("shows an error with a retry button when the initial load throws", async () => {
     mockFetch.mockRejectedValueOnce(new Error("offline"));
 
     render(<PromptsSection />);
 
-    // prompts stays null → the component keeps rendering the loading state
-    // (the error toast lives below that guard, so it isn't shown here).
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    expect(screen.getByText("Loading prompts...")).toBeInTheDocument();
+    expect(await screen.findByText(/failed to load prompts/i)).toBeInTheDocument();
+    expect(screen.queryByText("Loading prompts...")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+  });
+
+  it("treats a non-OK initial load as an error rather than an empty list", async () => {
+    // resp.json() resolves fine here, so only an explicit resp.ok check
+    // distinguishes this from "the server has no prompts configured".
+    mockFetch.mockReturnValueOnce(jsonResponse({ detail: "boom" }, false));
+
+    render(<PromptsSection />);
+
+    expect(await screen.findByText(/failed to load prompts/i)).toBeInTheDocument();
+  });
+
+  it("recovers when retry succeeds after a failed initial load", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("offline"));
+    mockFetch.mockReturnValueOnce(jsonResponse(samplePrompts));
+
+    render(<PromptsSection />);
+    fireEvent.click(await screen.findByRole("button", { name: /retry/i }));
+
+    expect(await screen.findByText("Ask page — system prompt")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+    // The stale error toast is cleared too, so it can't contradict the list.
+    expect(screen.queryByText(/failed to load prompts/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the loaded prompts on screen when a post-save reload fails", async () => {
+    mockFetch.mockReturnValueOnce(jsonResponse(samplePrompts));
+    mockFetch.mockReturnValueOnce(jsonResponse({ ok: true })); // the PUT
+    mockFetch.mockRejectedValueOnce(new Error("offline")); // the reload
+
+    render(<PromptsSection />);
+    await waitFor(() => screen.getByText("Ask page — system prompt"));
+
+    fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "new value" } });
+    fireEvent.click(screen.getAllByRole("button", { name: /^save$/i })[0]);
+
+    // The write succeeded; a failed refresh must not blow the whole section
+    // away and strand the user on an error screen.
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(3));
+    expect(screen.getByText("Ask page — system prompt")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
   });
 
   it("shows the API detail when a save fails", async () => {

@@ -22,14 +22,30 @@ export default function PromptsSection() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMsg | null>(null);
+  // Issue #893: loading and failed-to-load are distinct states. Conflating
+  // them (prompts === null for both) stranded the user on "Loading..."
+  // forever, because the error toast renders below the null-guard return.
+  const [loadError, setLoadError] = useState(false);
 
   async function load() {
     try {
       const resp = await fetch("/api/prompts", { cache: "no-store" });
+      // A non-OK response still parses, so without this check an error body
+      // would fall through to `data.prompts ?? []` and render as "no prompts".
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       setPrompts(data.prompts ?? []);
       setDrafts({});
+      setLoadError(false);
+      // Drop a stale "Failed to load prompts" toast so it can't hover over
+      // the list it just contradicted. Callers that toast after load()
+      // (save/reset) still set theirs afterwards.
+      setToast((t) => (t?.type === "error" ? null : t));
     } catch {
+      // Only strand the section on an error screen if we have nothing to
+      // show. A failed refresh after a successful save keeps the stale list
+      // and surfaces the failure as a toast instead.
+      setLoadError(true);
       setToast({ message: "Failed to load prompts", type: "error" });
     }
   }
@@ -93,6 +109,24 @@ export default function PromptsSection() {
   }
 
   if (prompts === null) {
+    if (loadError) {
+      return (
+        <div className="space-y-3">
+          <p className="text-sm text-destructive">
+            Failed to load prompts. The pipeline API may be unreachable.
+          </p>
+          <button
+            className="px-4 py-1.5 rounded-md border text-sm hover:bg-muted"
+            onClick={() => {
+              setLoadError(false);
+              load();
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
     return <div className="text-muted-foreground text-sm">Loading prompts...</div>;
   }
 
