@@ -130,4 +130,66 @@ describe("<PromptsSection>", () => {
     // Only the initial GET should have fired — no PUT.
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
+
+  it("stays in the loading state without crashing when the initial load fails", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("offline"));
+
+    render(<PromptsSection />);
+
+    // prompts stays null → the component keeps rendering the loading state
+    // (the error toast lives below that guard, so it isn't shown here).
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    expect(screen.getByText("Loading prompts...")).toBeInTheDocument();
+  });
+
+  it("shows the API detail when a save fails", async () => {
+    mockFetch.mockReturnValueOnce(jsonResponse(samplePrompts));
+    mockFetch.mockReturnValueOnce(jsonResponse({ detail: "too long" }, false));
+
+    render(<PromptsSection />);
+    await waitFor(() => screen.getByText("Ask page — system prompt"));
+
+    fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "new value" } });
+    fireEvent.click(screen.getAllByRole("button", { name: /^save$/i })[0]);
+
+    expect(await screen.findByText("too long")).toBeInTheDocument();
+  });
+
+  it("toasts a network error when a save throws", async () => {
+    mockFetch.mockReturnValueOnce(jsonResponse(samplePrompts));
+    mockFetch.mockRejectedValueOnce(new Error("offline"));
+
+    render(<PromptsSection />);
+    await waitFor(() => screen.getByText("Ask page — system prompt"));
+
+    fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "new value" } });
+    fireEvent.click(screen.getAllByRole("button", { name: /^save$/i })[0]);
+
+    expect(await screen.findByText("Network error")).toBeInTheDocument();
+  });
+
+  it("shows the API detail when a reset fails", async () => {
+    mockFetch.mockReturnValueOnce(jsonResponse(samplePrompts));
+    mockFetch.mockReturnValueOnce(jsonResponse({ detail: "cannot reset" }, false));
+
+    render(<PromptsSection />);
+    await waitFor(() => screen.getByText("Episode Ask — system prompt"));
+
+    // Second prompt is overridden → its Reset button is enabled.
+    fireEvent.click(screen.getAllByRole("button", { name: /reset to default/i })[1]);
+
+    expect(await screen.findByText("cannot reset")).toBeInTheDocument();
+  });
+
+  it("toasts a network error when a reset throws", async () => {
+    mockFetch.mockReturnValueOnce(jsonResponse(samplePrompts));
+    mockFetch.mockRejectedValueOnce(new Error("offline"));
+
+    render(<PromptsSection />);
+    await waitFor(() => screen.getByText("Episode Ask — system prompt"));
+
+    fireEvent.click(screen.getAllByRole("button", { name: /reset to default/i })[1]);
+
+    expect(await screen.findByText("Network error")).toBeInTheDocument();
+  });
 });
