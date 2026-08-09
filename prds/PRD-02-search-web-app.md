@@ -190,7 +190,7 @@ A global audio player bar is rendered in the root layout, fixed to the bottom of
 - The user's preference is stored in `localStorage` under the key `podlog-theme`.
 - On first load, the app checks `localStorage` first; if absent, it respects the OS-level `prefers-color-scheme` media query.
 - A toggle button (sun/moon icon) in the top navigation bar switches modes.
-- shadcn/ui components support dark mode natively via CSS variables — no additional configuration required beyond enabling the `class` strategy in `tailwind.config.ts`.
+- shadcn/ui components support dark mode natively via CSS variables — no additional configuration required beyond enabling the `class` strategy — under Tailwind 4 this is the `@custom-variant dark` declaration in `src/app/globals.css`, not a `tailwind.config.*` file.
 
 ### 5.9 Navigation
 
@@ -230,7 +230,7 @@ The Ask page lets users ask natural-language questions about their podcast trans
 |---|---|---|---|
 | `qwen2.5:3b` | Default | 8K | 32K |
 | `phi3:mini` | Quality | 16K | 128K |
-| `gemma4:e4b` | Modern (Gemma 4) | 16K | 128K |
+| `gemma3n:e4b` | Modern (Gemma 3n E4B) | 16K | 128K |
 
 Configured context (`num_ctx`) is kept well below each model's maximum to keep prefill fast on CPU. The dropdown surfaces both numbers so users see the ceiling and the value actually sent to Ollama.
 

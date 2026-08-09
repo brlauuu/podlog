@@ -301,7 +301,7 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 | GAP-02 | No RSS feed validation on add | `validate_and_parse_feed()` in `rss.py` fetches + parses before persisting; 422 on failure | v1.2 |
 | GAP-06 | No disk space pre-check before download | `shutil.disk_usage()` check against `DISK_HEADROOM_BYTES` (default 2 GB) before download | v1.2 |
 | GAP-N/A | `updated_at` missing from episodes table | Added `updated_at` to episodes model (prerequisite for GAP-01 zombie detection) | v1.2 |
-| GAP-N/A | Next.js standalone output missing | Added `output: 'standalone'` to `next.config.ts` (required for Docker build) | v1.2 |
+| GAP-N/A | Next.js standalone output missing | Added `output: 'standalone'` to `next.config.mjs` (required for Docker build) | v1.2 |
 | GAP-01 | Zombie job cleanup | Periodic task every 30 min — queries episodes stuck in non-terminal status for >2 h and marks them `failed` with `error_class=SYSTEM_ERROR` (`app/tasks/cleanup.py`) | v1.3 |
 | GAP-03 | No episode re-processing | Episode reprocessing implemented — resets status to `pending`, clears segments, re-enqueues through the pipeline | v1.3 |
 | RISK-07 | Celery Beat single point of failure | No longer applicable — Celery/Redis replaced by PostgreSQL-backed job queue with polling loop in `worker.py` | v1.3 |
