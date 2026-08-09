@@ -66,7 +66,7 @@ podlog/
 │   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
 │   └── explore/                    # Jupyter DB-exploration container (Dockerfile + requirements.txt; opt-in via `make explore`)
 ├── docs/                           # User-facing documentation and guides
-├── scripts/                        # Operational scripts (nightly audit, health check)
+├── scripts/                        # Operational scripts (health check, docs-sync + npm/node CI gates)
 └── prds/                           # Specifications and risk register
 ```
 
