@@ -66,20 +66,23 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Poetry and pip-audit
-        run: pip install poetry pip-audit
+      - name: Install Poetry, export plugin and pip-audit
+        run: pip install poetry poetry-plugin-export pip-audit
 
-      # NOTE: --without ml. The ML group (torch, whisperx, pyannote-audio,
-      # spacy, sentence-transformers) is multi-GB and is not installed in CI,
-      # so it is NOT covered here. That gap is called out in #915 and needs a
-      # separate approach (auditing the lock file directly) if we want it.
-      - name: Install pipeline dependencies (no ML extras)
-        run: |
-          poetry config virtualenvs.create false
-          poetry install --with dev --without ml --no-interaction --no-ansi --no-root
+      # Export rather than install. The first version of this job installed
+      # `--without ml` and audited the environment, which left the ML group
+      # (torch, transformers, lightning, whisperx, pyannote-audio, spacy,
+      # sentence-transformers) completely unaudited — and that turned out to
+      # be the largest CVE surface in the project (#915). Exporting the lock
+      # covers every pinned dependency, including ML, and needs no install at
+      # all, so it is both more complete and considerably faster.
+      - name: Export the full locked dependency set (including ML)
+        run: poetry export --with ml -f requirements.txt --without-hashes -o /tmp/requirements.txt
 
-      - name: Audit installed dependencies for known CVEs
-        run: pip-audit --progress-spinner off
+      # --no-deps: the export is already fully pinned, so audit exactly those
+      # versions rather than re-resolving.
+      - name: Audit locked dependencies for known CVEs
+        run: pip-audit -r /tmp/requirements.txt --no-deps --progress-spinner off
 
   web-unit-full:
     name: Web Unit Full
