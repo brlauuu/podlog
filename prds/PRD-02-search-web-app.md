@@ -166,7 +166,7 @@ Queue data is fetched by polling `GET /api/queue` every 5 seconds via React Quer
 
 Failed jobs show a collapsible error detail panel with the full traceback (toggled by a chevron in the row).
 
-**Retry action:** A "Retry" button in the Actions column calls `POST /api/queue/{task_id}/retry`. The button is disabled (greyed out with tooltip "Cannot retry — resolve the underlying issue first") for `DISK_FULL` and `OOM` errors since these require manual intervention. A Retry button is shown for `TRANSIENT_NETWORK`, `HTTP_ACCESS`, and `SYSTEM_ERROR` failures.
+**Retry action:** A "Retry" button in the Actions column calls `POST /api/queue/{episode_id}/retry` (via the web proxy at `/api/pipeline/queue/[episodeId]/retry`) — retry is keyed by episode, not by task. The button is disabled (greyed out with tooltip "Cannot retry — resolve the underlying issue first") for `DISK_FULL` and `OOM` errors since these require manual intervention. A Retry button is shown for `TRANSIENT_NETWORK`, `HTTP_ACCESS`, and `SYSTEM_ERROR` failures.
 
 **Done episodes:** Completed episodes are collapsed into an expandable "Done (N)" disclosure section at the bottom of the table. Expanding it reveals the full list sorted by completion time descending.
 
