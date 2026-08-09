@@ -251,7 +251,7 @@ volumes:
   ollama_data:
 ```
 
-**5 services:** db, pipeline, worker, ollama, web. No external broker (Redis removed) — the job queue is PostgreSQL-backed. No Celery Beat or Flower.
+**6 default services:** db, pipeline, worker, ollama, web, backup. A seventh, `explore` (Jupyter), is defined behind the `explore` Compose profile and is opt-in via `make explore`. No external broker (Redis removed) — the job queue is PostgreSQL-backed. No Celery Beat or Flower.
 
 **Key design points:**
 - `pipeline` uses `Dockerfile.control` (lightweight FastAPI server); `worker` uses `Dockerfile.worker` (includes ML dependencies).

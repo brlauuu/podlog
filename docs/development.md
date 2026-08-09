@@ -4,7 +4,7 @@
 
 ```
 podlog/
-├── docker-compose.yml              # default profile: db, pipeline, worker, ollama, web
+├── docker-compose.yml              # default profile: db, pipeline, worker, ollama, web, backup
 ├── docker-compose.remote.yml       # remote-inference override (no ollama)
 ├── .env.example                    # All config vars documented
 ├── Makefile                        # make up / down / build / test / etc.
@@ -42,7 +42,7 @@ podlog/
 
 - Python 3.11+ with [Poetry](https://python-poetry.org/) — for running the pipeline natively
 - Node.js 20.9.0+ with npm (see `.nvmrc` / `.node-version` for pinned local version) — for running the web app natively
-- Docker and Docker Compose — required for the full stack (db, pipeline, worker, ollama, web) and recommended for everyday development
+- Docker and Docker Compose — required for the full stack (db, pipeline, worker, ollama, web, backup) and recommended for everyday development
 
 ### Pipeline (Python)
 
