@@ -33,16 +33,23 @@ podlog/
 ├── Makefile                        # make up / down / build / test / etc.
 ├── AGENTS.md
 ├── README.md
+├── CHANGELOG.md                    # Rendered at the bottom of /about; see Conventions
 ├── VERSION
 ├── LICENSE
 ├── .node-version                   # Node version for local dev
 ├── .nvmrc                          # Node version for nvm users
-├── .github/                        # GitHub Actions workflows (ci, ci-full-unit, ci-slow)
+├── .github/                        # GitHub Actions workflows (ci, ci-full-unit, ci-slow, changelog)
 ├── issues/                         # Local issue drafts / notes
 ├── backups/                        # Daily DB dumps + rsync audio snapshots (gitignored)
 ├── notebooks/                      # Jupyter exploration notebooks (gitignored bind mount)
 ├── apps/
 │   ├── pipeline/                   # Python 3.11–3.13 — FastAPI + DB-backed job queue
+│   │   ├── README.md               # Package guide (layout, running, tests)
+│   │   ├── Dockerfile.control      # Lightweight FastAPI control plane
+│   │   ├── Dockerfile.worker       # Worker image (includes ML deps)
+│   │   ├── alembic.ini
+│   │   ├── VERSION                 # Packaging metadata; runtime reads repo-root VERSION
+│   │   ├── scripts/
 │   │   ├── app/
 │   │   │   ├── main.py             # FastAPI app entry point
 │   │   │   ├── config.py           # pydantic-settings, all env vars
@@ -60,9 +67,10 @@ podlog/
 │   │   ├── Dockerfile              # Production image (standalone output)
 │   │   ├── Dockerfile.test         # Test image used by docker-compose.test.yml
 │   │   ├── src/app/                # Pages: /, /about, /podcasts, /podcasts/[id], /episodes/[id], /queue, /feeds, /ask, /search, /search/print, /settings, /docs, /meta-analysis (and /notifications redirects to /settings); DocsClient lives in app/docs/
-│   │   ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, preview, poll), queue, audio, ask/coverage, episodes ([id], ingest, upload, retry, speakers, speakers/merge), docs, hardware, notifications (settings, test), meta-analysis (coverage, refresh, snapshot), pipeline (ask, embed, explore/status, health, queue/retry), backups, prompts, version
+│   │   ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, [id], [id]/poll, [id]/episodes, [id]/episodes/guids, preview), queue, audio, ask/coverage, episodes ([id], [id]/retry, [id]/speakers, [id]/speakers/merge, ingest, upload), docs/[slug], hardware, notifications (settings, test), meta-analysis (snapshot, refresh, coverage/missing-speakers), pipeline (ask, embed, explore/status, health, queue/[episodeId]/retry), backups ([tier]/[filename], audio/[date], retention), prompts ([key], [key]/reset), version
 │   │   ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, etc.
-│   │   └── src/lib/                # db.ts, search.ts, search/ (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, filename.ts, dateFormat.ts, docs-index.ts, docs-search.ts, docs-slug.ts, formatFileSize.ts, settings-schema.ts, metaAnalysisStale.ts, metaAnalysisTypes.ts, normalizeName.ts, page-state.ts, queueStatus.ts, rag-models.ts, semver.ts, keyboardShortcuts.ts, useKeyboardShortcut.ts, useChordShortcut.ts
+│   │   ├── src/lib/                # db.ts, search.ts, search/ (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, filename.ts, dateFormat.ts, docs-index.ts, docs-search.ts, docs-slug.ts, formatFileSize.ts, settings-schema.ts, metaAnalysisStale.ts, metaAnalysisTypes.ts, normalizeName.ts, page-state.ts, queueStatus.ts, rag-models.ts, semver.ts, keyboardShortcuts.ts, useKeyboardShortcut.ts, useChordShortcut.ts
+│   │   └── src/types/              # Ambient module shims (plotly-cartesian.d.ts, #746)
 │   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
 │   └── explore/                    # Jupyter DB-exploration container (Dockerfile + requirements.txt; opt-in via `make explore`)
 ├── docs/                           # User-facing documentation and guides
@@ -84,7 +92,7 @@ Agent-tool metadata (`.agents/`, `.superpowers/`, `.omx/`, `.claude/`, `.worktre
 | Database | PostgreSQL 15 (pgvector/pgvector:pg15) | FTS via `to_tsvector` + GIN index, vector HNSW index |
 | ORM | SQLAlchemy 2.0 + Alembic | Migrations auto-run on pipeline startup |
 | Web app | Next.js 16 (App Router) | `output: 'standalone'` for Docker |
-| Styling | Tailwind CSS + shadcn/ui | Dark mode via `class` strategy; shadcn/ui component set is installed |
+| Styling | Tailwind CSS + shadcn/ui | Tailwind 4 — CSS-first config, so there is **no** `tailwind.config.*`; the dark-mode `class` strategy lives as `@custom-variant dark` in `src/app/globals.css`. shadcn/ui component set is installed |
 | Data fetching | TanStack React Query + fetch/setInterval | React Query for search/coverage data; queue status uses `fetch` polling in `QueueStatus.tsx` |
 | DB client (web) | `pg` (node-postgres) raw SQL | Direct PostgreSQL queries for search |
 
