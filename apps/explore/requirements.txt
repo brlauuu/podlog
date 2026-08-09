@@ -1,9 +1,21 @@
 # Issue #607: explore service dependencies.
 # Pinned to known-working versions; bump in lockstep when upgrading.
-jupyterlab==4.3.5
-ipywidgets==8.1.5
-pandas==2.2.3
-numpy==2.2.2
-plotly==5.24.1
-sqlalchemy==2.0.36
-psycopg2-binary==2.9.10
+#
+# Bumped 2026-08-09 (#908). pandas 2->3 and plotly 5->6 are major bumps:
+# - pandas 3 makes copy-on-write the only behaviour and removes the
+#   silent-downcasting fallbacks, so notebooks that mutated a slice in place
+#   may now need .loc / .copy().
+# - plotly 6 aligns this container with the web app, which moved to
+#   plotly.js 3.x / react-plotly.js 4.x in #867. Figures authored here and
+#   rendered in the app now come from the same major.
+#
+# numpy is held at 2.4.x deliberately: the image is python:3.11-slim and
+# numpy 2.5+ publishes no wheel for 3.11. Raising it means bumping the base
+# image first. pandas 3.0.5 does support 3.11, so both major bumps still land.
+jupyterlab==4.6.2
+ipywidgets==8.1.8
+pandas==3.0.5
+numpy==2.4.6
+plotly==6.9.0
+sqlalchemy==2.0.51
+psycopg2-binary==2.9.12
