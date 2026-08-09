@@ -59,6 +59,13 @@ python-multipart = ">=0.0.31,<0.1"
 # Token counting for meta-analysis dashboard (#521)
 tiktoken = "^0.13.0"
 
+# ML group (#915). Optional and not installed by default -- only the worker
+# needs it. As of 2026-08-09 the CI dependency audit covers this group by
+# exporting the lock rather than installing it, and it is the largest CVE
+# surface in the project: torch 2.8.0 carries 8 advisories, transformers
+# 4.57.6 carries 5, lightning 2.6.5 carries 1. Upgrading is not a version
+# bump -- torch 2.9/2.10 moves whisperx and pyannote-audio with it, so it
+# needs its own scoped piece of work against a real GPU/CPU run.
 [tool.poetry.group.ml]
 optional = true
 
