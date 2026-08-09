@@ -253,6 +253,8 @@ volumes:
 
 **6 default services:** db, pipeline, worker, ollama, web, backup. A seventh, `explore` (Jupyter), is defined behind the `explore` Compose profile and is opt-in via `make explore`. No external broker (Redis removed) — the job queue is PostgreSQL-backed. No Celery Beat or Flower.
 
+> The YAML above is abridged and predates the `backup` (#630) and `explore` (#607) services — it is illustrative, not a mirror of the file. The committed `docker-compose.yml` is the source of truth for the service set.
+
 **Key design points:**
 - `pipeline` uses `Dockerfile.control` (lightweight FastAPI server); `worker` uses `Dockerfile.worker` (includes ML dependencies).
 - `pipeline` healthcheck ensures migrations complete before downstream services start.
