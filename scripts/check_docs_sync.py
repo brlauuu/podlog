@@ -64,6 +64,35 @@ LISTING_CHECKS: tuple[tuple[str, str, str, frozenset[str]], ...] = (
 # Never treated as part of a listing — package/module scaffolding.
 IGNORED_DIR_ENTRIES = frozenset({"__init__", "__pycache__"})
 
+# Env-var documentation check (#899).
+#
+# README points at docs/configuration.md as "the full list of all environment
+# variables", but 19 real settings were missing — including WHISPER_CPU_THREADS,
+# which shipped as a new feature with no doc entry at all. pydantic-settings
+# maps each Settings field to its upper-cased name, so the field list is the
+# authoritative set.
+CONFIG_MODULE = "apps/pipeline/app/config.py"
+CONFIG_DOC = "docs/configuration.md"
+CONFIG_FIELD_RE = re.compile(r"^    ([a-z][a-z0-9_]*)\s*:", re.M)
+
+# Fields that are deliberately not user-facing configuration.
+UNDOCUMENTED_CONFIG_FIELDS: frozenset[str] = frozenset()
+
+
+def check_config_documented() -> list[str]:
+    """Return Settings fields that docs/configuration.md never mentions."""
+    module = REPO_ROOT / CONFIG_MODULE
+    doc = REPO_ROOT / CONFIG_DOC
+    if not module.exists() or not doc.exists():
+        return [f"cannot check env vars: {CONFIG_MODULE} or {CONFIG_DOC} is missing"]
+    text = doc.read_text(encoding="utf-8")
+    fields = set(CONFIG_FIELD_RE.findall(module.read_text(encoding="utf-8")))
+    return [
+        f"{CONFIG_DOC} does not document {name.upper()} (from {CONFIG_MODULE})"
+        for name in sorted(fields - UNDOCUMENTED_CONFIG_FIELDS)
+        if name.upper() not in text
+    ]
+
 
 def _listed_names(line: str, ignore: frozenset[str]) -> set[str]:
     """Extract bare names from the parenthesized listing on `line`.
@@ -192,17 +221,24 @@ def main(argv: list[str]) -> int:
     # Listing checks are repo-wide rather than per-target, so only run them
     # on a default (whole-repo) invocation.
     listing_problems = [] if args.targets else check_listings()
+    config_problems = [] if args.targets else check_config_documented()
 
-    if not overall_missing and not listing_problems:
+    if not overall_missing and not listing_problems and not config_problems:
         for rel in targets:
             print(f"OK  {rel}")
         if not args.targets:
             print("OK  exhaustive listings")
+            print("OK  env vars documented")
         return 0
 
     if listing_problems:
         print(f"\n[FAIL] {len(listing_problems)} listing problem(s):")
         for p in listing_problems:
+            print(f"  - {p}")
+
+    if config_problems:
+        print(f"\n[FAIL] {len(config_problems)} undocumented env var(s):")
+        for p in config_problems:
             print(f"  - {p}")
 
     for rel, paths in overall_missing:
@@ -223,6 +259,13 @@ def main(argv: list[str]) -> int:
         print(
             "\nThese listings claim to be exhaustive. Update the doc so it names "
             "exactly what is on disk — in both directions.",
+            file=sys.stderr,
+        )
+    if config_problems:
+        print(
+            f"\nREADME points at {CONFIG_DOC} as the full list of environment "
+            "variables. Document the setting there, or add the field to "
+            "UNDOCUMENTED_CONFIG_FIELDS if it is genuinely internal.",
             file=sys.stderr,
         )
     return 1
