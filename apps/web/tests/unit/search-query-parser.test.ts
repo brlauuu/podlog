@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { buildNormalizedQuery, parseSearchQuery } from "@/lib/search/queryParser";
+import { parseSearchQuery } from "@/lib/search/queryParser";
 
 describe("parseSearchQuery", () => {
   test("keeps plain query as transcript_hybrid free text", () => {
@@ -69,17 +69,5 @@ describe("parseSearchQuery", () => {
     expect(parsed.speakerFilter).toBeNull();
     expect(parsed.freeText).toBe("title: speaker:");
     expect(parsed.mode).toBe("transcript_hybrid");
-  });
-});
-
-describe("buildNormalizedQuery", () => {
-  test("prefers freeText when present", () => {
-    const parsed = parseSearchQuery("hello speaker:jacob");
-    expect(buildNormalizedQuery(parsed)).toBe("hello");
-  });
-
-  test("falls back to scoped values when freeText is empty", () => {
-    const parsed = parseSearchQuery("title:china description:iran speaker:jacob");
-    expect(buildNormalizedQuery(parsed)).toBe("china iran jacob");
   });
 });

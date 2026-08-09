@@ -95,11 +95,3 @@ export function parseSearchQuery(raw: string): ParsedSearchQuery {
     mode,
   };
 }
-
-export function buildNormalizedQuery(parsed: ParsedSearchQuery): string {
-  if (parsed.freeText) return parsed.freeText;
-  const scopedParts = [parsed.titleFilter, parsed.descriptionFilter, parsed.speakerFilter].filter(
-    (part): part is string => Boolean(part)
-  );
-  return scopedParts.join(" ").trim();
-}
