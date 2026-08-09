@@ -26,6 +26,12 @@ cp .env.example .env
 | `FEED_POLL_INTERVAL_HOURS` | `24` | How often the worker checks RSS feeds for new episodes. |
 | `DATA_DIR` | `/data` | Base directory for audio files and transcripts inside the container. Normally no need to change this. |
 
+### CPU threads
+
+| Variable | Default | Description |
+|---|---|---|
+| `WHISPER_CPU_THREADS` | `0` | CPU threads for the WhisperX transcription pass. `0` auto-detects available cores. WhisperX otherwise defaults to 4, which pins transcription to 4 cores regardless of machine size. On hyperthreaded CPUs, set this to the physical-core count. |
+
 ## Retry and Error Handling
 
 | Variable | Default | Description |
@@ -50,6 +56,9 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 |---|---|---|
 | `INFERENCE_ENABLED` | `true` | Whether to run spaCy NER-based speaker name inference after diarization. |
 | `SPACY_MODEL` | `en_core_web_trf` | spaCy NER model. `en_core_web_trf` (~500 MB, best accuracy) is the default; override to `en_core_web_lg` (~200 MB) on memory-constrained hosts. The worker image ships both and automatically falls back to `en_core_web_lg` at runtime if `trf` is unavailable. |
+| `RECURRING_HOST_WINDOW` | `10` | How many recent episodes of a feed the `recurring_host` heuristic looks back over. |
+| `RECURRING_HOST_THRESHOLD` | `0.8` | Fraction of that window a speaker must appear in to be treated as a recurring host (0.0–1.0). |
+| `FEED_SPEAKER_CACHE_RECENCY_DAYS` | `365` | How long a user-supplied speaker rename stays eligible for reuse across episodes of the same feed. `0` disables the recency cutoff. |
 
 ## Fireworks Provider
 
@@ -142,11 +151,55 @@ The host-level health check script (`scripts/healthcheck.py`) uses these setting
 
 The script uses `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` from `.env` if present; otherwise falls back to the values configured in the web UI. Requires `postgresql-client` (`pg_isready`, `psql`) on the host.
 
+## Notifications
+
+Delivery settings for pipeline notifications. Telegram credentials are shared with the health-check script above. Most of these can also be set from the web UI (Settings → Notifications); the `.env` value wins where both are present.
+
+| Variable | Default | Description |
+|---|---|---|
+| `NOTIFICATION_FREQUENCY` | `immediate` | When to deliver. One of `immediate`, `daily`, `weekly`. The digest modes batch events instead of sending per-episode. |
+| `NOTIFICATION_EMAIL_TO` | (unset) | Recipient address for email notifications. Email delivery is off unless this is set. |
+| `NOTIFICATION_EMAIL_FROM` | `podlog@localhost` | From address on outgoing notification email. |
+
+### SMTP
+
+Only used when `NOTIFICATION_EMAIL_TO` is set.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SMTP_HOST` | `host.docker.internal` | SMTP server hostname. The default targets an MTA running on the Docker host. |
+| `SMTP_PORT` | `25` | SMTP port. Use `587` for STARTTLS submission. |
+| `SMTP_USER` | (unset) | SMTP username. Leave unset for an unauthenticated relay. |
+| `SMTP_PASSWORD` | (unset) | SMTP password. |
+| `SMTP_USE_TLS` | `false` | Use STARTTLS. Set alongside `SMTP_PORT=587` for most hosted providers. |
+
+## Backups
+
+The `backup` service runs by default (see [Backups](guide/16-backups.md) for restore procedures). Set all three retention values to `0` to opt out entirely.
+
+| Variable | Default | Description |
+|---|---|---|
+| `BACKUP_RETENTION_DAILY` | `7` | Daily DB dumps to keep. `0` disables the daily bucket. |
+| `BACKUP_RETENTION_WEEKLY` | `4` | Weekly dumps to keep. |
+| `BACKUP_RETENTION_MONTHLY` | `12` | Monthly dumps to keep. |
+| `BACKUP_CHECK_INTERVAL_SECS` | `3600` | How often the backup loop wakes to check whether today's backup has run. |
+
+## Ask AI Prompts
+
+System prompts sent to the LLM at the start of each chat. These are the build-time defaults; overrides saved from Settings → Prompts live in the database and take precedence. "Reset to default" in the UI clears the override and falls back to the value here.
+
+| Variable | Default | Description |
+|---|---|---|
+| `PROMPT_ASK_PAGE_SYSTEM` | (built-in) | System prompt for the cross-episode `/ask` page. |
+| `PROMPT_ASK_EPISODE_SYSTEM` | (built-in) | System prompt for the per-episode Ask popup. |
+| `RAG_LOCAL_MODEL` | `qwen2.5:3b` | Default Ollama model for local RAG generation. The Ask UI can override this per request. |
+
 ## Advanced / Internal
 
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | (auto-generated) | PostgreSQL connection string. Override only if using an external database. |
+| `HARDWARE_PROFILE` | (auto-detected) | Pins the hardware profile used for tuning defaults instead of detecting it at startup. Leave unset unless detection is getting it wrong. |
 
 ## Model Memory Usage
 
