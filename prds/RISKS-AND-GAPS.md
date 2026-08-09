@@ -165,7 +165,7 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 **Severity:** High  
 **Component:** PRD-02 — `/api/audio` route  
 **Description:** The original PRD-02 v1.0 audio serving route constructed a file path from user-supplied URL parameters without validation. A crafted request like `/api/audio/fake-id/../../../../etc/passwd` could potentially read arbitrary files from the container filesystem.  
-**Mitigation:** Resolved in PRD-02 v1.1 (§5.2, §11). The route now treats the filename parameter as a basename only (path separators stripped), resolves the full path, and verifies it starts with `/data/audio/archive/` before serving.  
+**Mitigation:** Resolved in PRD-02 v1.1 (§5.2, §11). The route now treats the filename parameter as a basename only (path separators stripped), resolves the full path, and verifies it stays within the allowed audio directories before serving. Those are both `/data/audio/archive/` and `/data/audio/raw/` (`AUDIO_DIRS` in the route), not archive alone — raw is needed to serve episodes that have not been archived yet.  
 **Status:** Mitigated in v1.1.
 
 ---

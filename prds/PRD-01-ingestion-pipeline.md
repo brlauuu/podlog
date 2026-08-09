@@ -426,11 +426,11 @@ GET    /api/explore/status                 Jupyter explore container status (opt
 - Zombie job detection
 - pyannote.ai Precision-2 cloud diarization as an alternative to local pyannote, selected via `DIARIZATION_PROVIDER=precision2` (Issue #516; see RISKS-AND-GAPS RISK-11)
 - Fireworks AI remote-inference profile (`make up-remote`) for users who prefer remote Whisper/LLM over a local Ollama container
+- Feed pause/resume — stop polling without deleting, via `PATCH /api/feeds/{feed_id}` with `paused` (migration `020_add_feed_paused_column.py`); paused feeds also reject manual polls (Issue #743)
 
 ### Future
 - GPU support via Docker NVIDIA runtime flag
 - Episode chapter detection
-- Feed pause/resume (stop polling without deleting)
 
 ---
 

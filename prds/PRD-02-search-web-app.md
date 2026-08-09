@@ -546,7 +546,7 @@ const { playEpisode } = useAudioPlayer();
 ### V1 (Phase 2)
 - Search result grouping by episode (top N segments per episode, avoid one long episode dominating)
 - Keyboard navigation of search results
-- Export transcript as `.txt` or `.srt` from episode page
+- Export transcript as `.txt` from episode page (`.srt` is **not** implemented — exports are Markdown/plain text only)
 - "Copy timestamp link" button
 - Meta-Analysis dashboard (`/meta-analysis`) aggregating cross-feed metrics — coverage, episode length, WPM, turn density, host/guest share, tokens, processing time, and cost per feed (Issue #521; see §5.11)
 

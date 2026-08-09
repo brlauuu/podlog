@@ -34,7 +34,7 @@ pending → download → transcribe → diarize → chunk → embed → infer �
 
 **What it does:**
 - Converts audio to 16kHz mono WAV via ffmpeg
-- Runs Whisper large-v3 (or configured model)
+- Runs Whisper `large-v3-turbo` (the `WHISPER_MODEL` default, or the configured model)
 - Writes segments to database
 - Saves word-level alignment data to `{episode_id}.whisperx.json` if available
 - **Explicitly unloads Whisper from memory** (mandatory — Whisper + pyannote must never coexist)
