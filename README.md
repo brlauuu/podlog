@@ -108,9 +108,15 @@ For a side-by-side comparison of the local and remote options for both transcrip
   Ollama API :11434 ──> │  ollama (local LLM)                          │
                         │    RAG-based Ask AI feature                  │
                         └──────────────────────────────────────────────┘
+
+                        ┌──────────────────────────────────────────────┐
+                        │  backup (cron-style loop)                    │
+                        │    Nightly DB dump + audio archive snapshot  │
+                        │    Writes to ./backups/ on the host          │
+                        └──────────────────────────────────────────────┘
 ```
 
-Default profile: 5 containers (`db`, `pipeline`, `worker`, `ollama`, `web`). Remote-inference profile: 4 containers (Ollama is disabled unless you opt in with the `local-ask` Compose profile). No Redis, no Celery — the job queue is PostgreSQL-backed using `FOR UPDATE SKIP LOCKED`.
+Default profile: 6 containers (`db`, `pipeline`, `worker`, `ollama`, `web`, `backup`). Remote-inference profile: 5 containers (Ollama is disabled unless you opt in with the `local-ask` Compose profile). A seventh service, `explore` (Jupyter), is opt-in via `make explore`. No Redis, no Celery — the job queue is PostgreSQL-backed using `FOR UPDATE SKIP LOCKED`.
 
 ## Configuration
 

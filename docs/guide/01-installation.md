@@ -84,8 +84,9 @@ Podlog starts these containers by profile:
 
 | Profile | Services |
 |---|---|
-| **Local-first (`make up`)** | `web`, `pipeline`, `worker`, `db`, `ollama` |
-| **Remote-inference (`make up-remote`)** | `web`, `pipeline`, `worker`, `db` (no `ollama`) |
+| **Local-first (`make up`)** | `web`, `pipeline`, `worker`, `db`, `ollama`, `backup` |
+| **Remote-inference (`make up-remote`)** | `web`, `pipeline`, `worker`, `db`, `backup` (no `ollama`) |
+| **Explore (opt-in, `make explore`)** | adds `explore` (Jupyter) to whichever profile is running |
 
 Service details:
 
@@ -96,6 +97,7 @@ Service details:
 | **worker** | — | Processes episodes: download, transcribe, diarize, chunk, embed, infer, archive |
 | **db** | 5432 | PostgreSQL 15 with pgvector for FTS + semantic search |
 | **ollama** | 11434 | Local Ask AI generation provider (local-first profile) |
+| **backup** | — | Nightly DB dump + audio archive snapshot into `./backups/` (see [Backups](16-backups.md)) |
 
 No Redis, no Celery — the job queue is PostgreSQL-backed.
 
