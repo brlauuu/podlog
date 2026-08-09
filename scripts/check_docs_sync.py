@@ -44,6 +44,80 @@ PATH_RE = re.compile(
 
 DEFAULT_TARGETS = ("CLAUDE.md", "docs/development.md")
 
+# Bare-name listing checks (#898).
+#
+# The PATH_RE scan above only matches slash-bearing paths, so it silently
+# passed a listing that still named a deleted module: docs/development.md
+# kept `metaAnalysisColors` in its `src/lib/` listing for the whole of #870.
+# These listings claim to be exhaustive, so compare them against the real
+# directory in BOTH directions — a name that no longer exists is a stale
+# doc, and a file missing from the list is an incomplete one.
+#
+# Each entry: (doc, line marker, directory, names to ignore).
+LISTING_CHECKS: tuple[tuple[str, str, str, frozenset[str]], ...] = (
+    ("docs/development.md", "src/lib/", "apps/web/src/lib", frozenset({"search/*"})),
+    ("CLAUDE.md", "├── api/", "apps/pipeline/app/api", frozenset()),
+    ("CLAUDE.md", "├── tasks/", "apps/pipeline/app/tasks", frozenset()),
+    ("CLAUDE.md", "└── services/", "apps/pipeline/app/services", frozenset()),
+)
+
+# Never treated as part of a listing — package/module scaffolding.
+IGNORED_DIR_ENTRIES = frozenset({"__init__", "__pycache__"})
+
+
+def _listed_names(line: str, ignore: frozenset[str]) -> set[str]:
+    """Extract bare names from the parenthesized listing on `line`.
+
+    Nested groups such as `search/* (coverage, embedding, ...)` are collapsed
+    to the parent name first, so the inner members aren't mistaken for
+    siblings of the outer list.
+    """
+    inner = re.sub(r"/\*\s*\([^)]*\)", "/*", line)
+    match = re.search(r"\(([^()]*)\)\s*$", inner.rstrip())
+    if not match:
+        return set()
+    names = {n.strip() for n in match.group(1).split(",")}
+    return {n for n in names if n and n not in ignore}
+
+
+def _dir_names(directory: Path) -> set[str]:
+    out: set[str] = set()
+    for entry in directory.iterdir():
+        stem = entry.stem if entry.is_file() else entry.name
+        if stem in IGNORED_DIR_ENTRIES:
+            continue
+        out.add(stem)
+    return out
+
+
+def check_listings() -> list[str]:
+    """Return human-readable problems with the exhaustive listings."""
+    problems: list[str] = []
+    for doc, marker, dirname, ignore in LISTING_CHECKS:
+        doc_path = REPO_ROOT / doc
+        directory = REPO_ROOT / dirname
+        if not doc_path.exists() or not directory.is_dir():
+            problems.append(f"{doc}: cannot check {dirname} listing (missing doc or directory)")
+            continue
+        text = doc_path.read_text(encoding="utf-8")
+        lines = [line for line in text.splitlines() if marker in line]
+        if len(lines) != 1:
+            problems.append(
+                f"{doc}: expected exactly 1 line containing {marker!r} for the "
+                f"{dirname} listing, found {len(lines)}"
+            )
+            continue
+        listed = _listed_names(lines[0], ignore)
+        if not listed:
+            problems.append(f"{doc}: could not parse a listing from the {marker!r} line")
+            continue
+        actual = _dir_names(directory)
+        for name in sorted(listed - actual):
+            problems.append(f"{doc}: {dirname} listing names {name!r}, which is not on disk")
+        for name in sorted(actual - listed):
+            problems.append(f"{doc}: {dirname}/{name} exists but is missing from the listing")
+    return problems
+
 
 def _strip_trailing_punct(token: str) -> str:
     while token and token[-1] in ".,;:)]}>\"'`":
@@ -115,20 +189,42 @@ def main(argv: list[str]) -> int:
         if missing:
             overall_missing.append((str(rel), missing))
 
-    if not overall_missing:
+    # Listing checks are repo-wide rather than per-target, so only run them
+    # on a default (whole-repo) invocation.
+    listing_problems = [] if args.targets else check_listings()
+
+    if not overall_missing and not listing_problems:
         for rel in targets:
             print(f"OK  {rel}")
+        if not args.targets:
+            print("OK  exhaustive listings")
         return 0
+
+    if listing_problems:
+        print(f"\n[FAIL] {len(listing_problems)} listing problem(s):")
+        for p in listing_problems:
+            print(f"  - {p}")
 
     for rel, paths in overall_missing:
         print(f"\n[FAIL] {rel} references {len(paths)} missing path(s):")
         for p in paths:
             print(f"  - {p}")
-    print(
-        "\nThese references are present in the doc but not on disk. "
-        "Either update the doc to reflect the real layout, or add the missing files.",
-        file=sys.stderr,
-    )
+
+    # Keep the two remedies distinct — a listing problem is not necessarily a
+    # missing path, and telling the reader to "add the missing files" when a
+    # doc merely forgot to name an existing one sends them the wrong way.
+    if overall_missing:
+        print(
+            "\nThese references are present in the doc but not on disk. "
+            "Either update the doc to reflect the real layout, or add the missing files.",
+            file=sys.stderr,
+        )
+    if listing_problems:
+        print(
+            "\nThese listings claim to be exhaustive. Update the doc so it names "
+            "exactly what is on disk — in both directions.",
+            file=sys.stderr,
+        )
     return 1
 
 
