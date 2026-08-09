@@ -40,6 +40,47 @@ jobs:
       - name: Run all pipeline unit tests with coverage
         run: pytest tests/unit -q --cov=app --cov-fail-under=82
 
+  pipeline-dep-audit:
+    # Issue #915: the Python side had no CVE gate comparable to `npm audit`,
+    # so a vulnerability in fastapi/starlette — which sit directly in the
+    # request path — would have been invisible. See also #906, where the
+    # fastapi pin is held deliberately; this job is what makes that risk
+    # observable rather than assumed.
+    #
+    # Advisory-only for now (continue-on-error): findings show up in the
+    # job log without blocking unrelated PRs on a fresh upstream CVE.
+    # Flip `continue-on-error` to false to make it a hard gate.
+    name: Pipeline Dependency Audit
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: apps/pipeline
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry and pip-audit
+        run: pip install poetry pip-audit
+
+      # NOTE: --without ml. The ML group (torch, whisperx, pyannote-audio,
+      # spacy, sentence-transformers) is multi-GB and is not installed in CI,
+      # so it is NOT covered here. That gap is called out in #915 and needs a
+      # separate approach (auditing the lock file directly) if we want it.
+      - name: Install pipeline dependencies (no ML extras)
+        run: |
+          poetry config virtualenvs.create false
+          poetry install --with dev --without ml --no-interaction --no-ansi --no-root
+
+      - name: Audit installed dependencies for known CVEs
+        run: pip-audit --progress-spinner off
+
   web-unit-full:
     name: Web Unit Full
     runs-on: ubuntu-latest
