@@ -41,7 +41,7 @@ podlog/
 │   │   ├── poetry.lock
 │   │   ├── alembic/
 │   │   │   ├── env.py
-│   │   │   └── versions/           # 12 migrations
+│   │   │   └── versions/           # 21 migrations
 │   │   ├── app/
 │   │   │   ├── main.py
 │   │   │   ├── config.py
@@ -89,8 +89,9 @@ podlog/
 │       ├── Dockerfile.test         # Built by docker-compose.test.yml for the web_test runner
 │       ├── package.json
 │       ├── package-lock.json
-│       ├── next.config.ts
-│       ├── tailwind.config.ts      # dark mode: 'class' strategy
+│       ├── next.config.mjs
+│       ├── postcss.config.js       # Tailwind 4 (no tailwind.config.*; dark mode
+│       │                           # via @custom-variant in src/app/globals.css)
 │       ├── src/
 │       │   ├── app/
 │       │   │   ├── layout.tsx      # Root layout with AudioPlayerContext + global player
@@ -466,7 +467,36 @@ web:              ## Open web app in browser
 ollama-pull:      ## Pull Ollama models used by the Ask feature
 	docker compose exec ollama ollama pull qwen2.5:3b
 	docker compose exec ollama ollama pull phi3:mini
-	docker compose exec ollama ollama pull gemma4:e4b
+	docker compose exec ollama ollama pull gemma3n:e4b
+
+test-integration: ## Run integration tests (requires HF_TOKEN for pyannote)
+	docker compose -f docker-compose.test.yml run --rm test pytest tests/integration/ -v
+
+explore:          ## Start the Jupyter DB-exploration service (#607). URL+token printed in logs.
+	docker compose --profile explore up -d explore
+	# ...then prints where to find the access token
+
+explore-down:     ## Stop the explore service
+	docker compose --profile explore down explore
+
+explore-logs:     ## Follow the explore service logs (look for the token URL)
+	docker compose --profile explore logs -f explore
+
+backup-now:       ## Force a backup run right now (bypasses the daily flag).
+	docker compose exec backup rm -f /backups/.last_run
+	docker compose restart backup
+
+backup-list:      ## List available DB dumps and audio snapshots.
+	# lists /backups/db/{daily,weekly,monthly} and /backups/audio via the backup container
+
+restore-db:       ## DESTRUCTIVE: restore the DB from a dated dump. Usage: make restore-db DATE=YYYY-MM-DD
+	# prompts for a typed 'yes', stops pipeline/worker/web, then:
+	docker compose exec backup /usr/local/bin/restore-db.sh $(DATE)
+	# ...and always restarts the stack, preserving the script's exit status
+
+restore-audio:    ## DESTRUCTIVE: restore audio archive from a dated snapshot. Usage: make restore-audio DATE=YYYY-MM-DD
+	# prompts for a typed 'yes', then:
+	docker compose exec backup /usr/local/bin/restore-audio.sh $(DATE)
 
 health-check:     ## Run health check once (requires python3, pg_isready, docker)
 	python3 scripts/healthcheck.py
