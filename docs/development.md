@@ -29,7 +29,7 @@ podlog/
 │   │   └── src/lib/                # Utilities (db, search, search/* (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest, citations, normalizeName, filename, dateFormat, docs-index, docs-search, docs-slug, formatFileSize, settings-schema, metaAnalysisStale, metaAnalysisTypes, page-state, queueStatus, rag-models, semver, episode-link, keyboardShortcuts, useKeyboardShortcut, useChordShortcut)
 │   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
 │   └── explore/                    # Jupyter DB-exploration container (opt-in via `make explore`)
-├── scripts/                        # Operational scripts (nightly audit, health check)
+├── scripts/                        # Operational scripts (health check, docs-sync + npm/node CI gates)
 ├── backups/                        # Daily DB dumps + audio snapshots (gitignored)
 ├── notebooks/                      # Jupyter notebooks (gitignored bind mount for the explore service)
 ├── docs/                           # User-facing documentation
