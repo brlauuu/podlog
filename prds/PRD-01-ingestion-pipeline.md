@@ -340,19 +340,63 @@ CREATE TABLE speaker_names (
 
 ## 10. Internal API Endpoints
 
+All routers are mounted under the `/api` prefix (`apps/pipeline/app/main.py:57-69`).
+
+Note the web app does **not** proxy every one of these — it reads PostgreSQL directly for search and episode detail, which is why there is no `GET /api/episodes` here.
+
 ```
-POST   /api/feeds                    Add a new RSS feed
-GET    /api/feeds                    List all feeds
-DELETE /api/feeds/{id}               Remove a feed (and optionally its episodes)
+Feeds
+POST   /api/feeds                          Add a new RSS feed
+GET    /api/feeds                          List all feeds
+PATCH  /api/feeds/{feed_id}                Update a feed (e.g. pause/resume polling)
+DELETE /api/feeds/{feed_id}                Remove a feed (and optionally its episodes)
+GET    /api/feeds/preview                  Preview an RSS URL before adding it
+POST   /api/feeds/{feed_id}/poll           Force a poll now (rejected if the feed is paused)
+POST   /api/feeds/{feed_id}/episodes       Enqueue specific episodes from a feed
+GET    /api/feeds/{feed_id}/episodes/guids Known episode GUIDs, for dedupe
 
-POST   /api/episodes/ingest          Manually ingest a single audio URL
-GET    /api/episodes                 List episodes (filterable by feed, status)
-GET    /api/episodes/{id}            Get episode detail + segments
+Episodes
+POST   /api/episodes/ingest                Manually ingest a single audio URL
+POST   /api/episodes/upload                Upload a local audio file
+DELETE /api/episodes/{episode_id}          Delete an episode and its artifacts
 
-GET    /api/queue                    Get current queue state (pending/active/failed counts, worker status)
-POST   /api/queue/{task_id}/retry    Retry a failed job (only valid for non-system failures)
+Queue and health
+GET    /api/queue                          Queue state (pending/active/failed counts, worker status)
+POST   /api/queue/{episode_id}/retry       Retry a failed episode (keyed by episode, not task)
+GET    /api/health                         Health check — includes worker warm-up state
+GET    /api/hardware                       Detected hardware profile and tuning defaults
 
-GET    /api/health                   Health check — includes worker warm-up state
+Ask AI and embeddings
+POST   /api/ask                            RAG query (SSE stream)
+POST   /api/embed                          Embed a query string for vector search
+POST   /api/backfill/chunks                Backfill chunks/embeddings for existing episodes
+GET    /api/backfill/status                Backfill progress
+
+Prompts
+GET    /api/prompts                        List system prompts and their overrides
+PUT    /api/prompts/{key}                  Save a prompt override
+POST   /api/prompts/{key}/reset            Clear an override, fall back to the env default
+
+Notifications
+GET    /api/notifications/settings         Read notification settings
+PUT    /api/notifications/settings         Update notification settings
+POST   /api/notifications/test             Send a test notification
+
+Meta-analysis
+GET    /api/meta-analysis/snapshot         Cached cross-feed metrics
+POST   /api/meta-analysis/refresh          Recompute the snapshot
+GET    /api/meta-analysis/coverage/missing-speakers
+                                           Episodes still missing speaker names
+
+Backups
+GET    /api/backups                        List DB dumps and audio snapshots
+GET    /api/backups/retention              Read retention policy
+PUT    /api/backups/retention              Update retention policy
+DELETE /api/backups/db/{tier}/{filename}   Delete a specific DB dump
+DELETE /api/backups/audio/{date}           Delete an audio snapshot
+
+Explore
+GET    /api/explore/status                 Jupyter explore container status (opt-in profile)
 ```
 
 ---
