@@ -100,7 +100,16 @@ def _wrap_http_error(action: str, exc: httpx.HTTPStatusError) -> PyannoteCloudEr
 
 
 def verify_api_key(api_key: str, base_url: str) -> bool:
-    """Ping GET /test to verify the API key. Returns True on 2xx, False on 401/403."""
+    """Ping GET /test to verify the API key. Returns True on 2xx, False on 401/403.
+
+    Currently only exercised by tests — deliberately kept, not dead code (#913).
+    It is the missing half of a "Test key" button for the pyannote-cloud API
+    key in Remote Inference settings: the field exists, the check does not, and
+    docs/guide/13-pyannote-cloud.md works around it by telling users to run the
+    equivalent `curl` against `GET /v1/test` by hand. Wiring it up mirrors the
+    existing `POST /notifications/test` pattern. Tracked in #933; do not
+    delete this on a dead-code sweep without closing that issue first.
+    """
     if not api_key:
         return False
     url = f"{_base(base_url)}/test"
