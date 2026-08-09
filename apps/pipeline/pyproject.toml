@@ -58,6 +58,10 @@ optional = true
 # WhisperX (CTranslate2 backend + wav2vec2 alignment)
 whisperx = "^3.8.0"
 torch = "^2.2.0"
+# torchaudio is a transitive requirement of whisperx/pyannote-audio and is
+# never imported directly (#915). Declared explicitly so the version is
+# pinned by us rather than resolved incidentally — same reasoning as the
+# soundfile pin above.
 torchaudio = "^2.2.0"
 # Audio I/O backend for reading the pre-ffmpeg'd WAV into pyannote.
 # torchaudio 2.8 registers no default backend, so without soundfile we get
