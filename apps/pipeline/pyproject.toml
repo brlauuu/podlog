@@ -46,7 +46,15 @@ feedparser = "^6.0.11"
 
 # Audio processing
 ffmpeg-python = "^0.2.0"
-python-multipart = "^0.0.22"
+
+# python-multipart parses UploadFile bodies for POST /api/episodes/upload, so
+# it sits on an untrusted-input path. 0.0.22 carried five advisories
+# (PYSEC-2026-3036/3037/3038/3039/3040), fixed across 0.0.26-0.0.31 (#930).
+#
+# Note the range form: a caret on a 0.0.x resolves to <0.0.23, i.e. an exact
+# pin that `poetry update` cannot move. `>=0.0.31,<0.1` keeps patch fixes
+# flowing without needing a manifest edit each time.
+python-multipart = ">=0.0.31,<0.1"
 
 # Token counting for meta-analysis dashboard (#521)
 tiktoken = "^0.13.0"
