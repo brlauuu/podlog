@@ -73,10 +73,29 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `FIREWORKS_CHAT_MODEL` | `accounts/fireworks/models/gpt-oss-20b` | Fireworks chat model used when `RAG_PROVIDER=fireworks` for Ask generation. The Settings UI exposes a curated dropdown of currently-deployed models; this env var supplies the default. |
 | `RAG_PROVIDER` | `local` | Issue #608: dedicated provider for the Ask / RAG step. Decoupled from `INFERENCE_PROVIDER` (transcription) so enabling Fireworks for transcription does not silently send retrieved transcript chunks to Fireworks for answer generation. Set to `fireworks` to opt in. |
 | `FIREWORKS_STT_COST_PER_MINUTE_USD` | `0.006` | Cost estimate assumption used for per-episode observability (`estimated_cost_usd = billed_minutes * rate`). |
-| `EMBEDDING_PROVIDER` | `local` | Runtime provider for query + segment/chunk embeddings (`local` or `fireworks`). |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local sentence-transformers model used when `EMBEDDING_PROVIDER=local`. |
-| `FIREWORKS_EMBEDDING_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks embeddings API. |
-| `FIREWORKS_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Fireworks embedding model used when `EMBEDDING_PROVIDER=fireworks`. |
+| `EMBEDDING_PROVIDER` | `local` | Runtime provider for query + segment/chunk embeddings. **`fireworks` is non-functional** — see the note below. |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local sentence-transformers model used when `EMBEDDING_PROVIDER=local`. Must match the model your existing embeddings were built with — see the warning below. |
+| `FIREWORKS_EMBEDDING_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks embeddings API. Retained for when/if Fireworks restores the endpoint. |
+| `FIREWORKS_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Fireworks embedding model. Currently unreachable — the model was retired upstream. |
+
+> **Remote embedding is unavailable (issue #944).** Fireworks retired its
+> serverless embeddings API: every model on `/inference/v1/embeddings` returns
+> `503 no healthy upstream`, including model names that do not exist, so the
+> request never reaches model resolution. The only embedding model Fireworks
+> still serves is 4096-dimensional, and the `segments.embedding` column is
+> `vector(384)`, so it is not a drop-in replacement. Embeddings run locally
+> even under the remote-inference profile; the model is small and CPU-only, so
+> this costs little. The setting is still accepted so existing configurations
+> do not fail validation, but selecting it will fail every embed job.
+
+> **Changing `EMBEDDING_MODEL` on an existing install silently corrupts search.**
+> `all-MiniLM-L6-v2` and `BAAI/bge-small-en-v1.5` are both 384-dimensional but
+> live in different vector spaces, so the dimension check passes, the write
+> succeeds, and nothing warns — while similarity between old and new rows
+> becomes meaningless. If your embeddings were previously generated through
+> Fireworks, set `EMBEDDING_MODEL=BAAI/bge-small-en-v1.5` to keep using them;
+> running that model locally reproduces the same vectors exactly. Otherwise
+> leave the default. Changing it deliberately means re-embedding the corpus.
 
 ## pyannote Cloud Provider (Issue #516)
 
@@ -107,7 +126,7 @@ Ask AI uses the model selected in the `/ask` page UI and sends it with each requ
   - Starts `db`, `pipeline`, `worker`, `web`, and `ollama`.
 - Remote-inference profile: `docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d` or `make up-remote`
   - Starts `db`, `pipeline`, `worker`, and `web`.
-  - Applies `INFERENCE_PROVIDER=fireworks` and `EMBEDDING_PROVIDER=fireworks` to pipeline + worker.
+  - Applies `INFERENCE_PROVIDER=fireworks` to pipeline + worker. It deliberately does **not** set `EMBEDDING_PROVIDER`: remote embedding is unavailable (see above), so embeddings run locally even in this profile.
   - Does not start `ollama` unless explicitly requested with profile `local-ask`.
 
 Health behavior:

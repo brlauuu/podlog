@@ -111,17 +111,30 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     title: "Embedding",
     description:
       "Generates vector embeddings for transcript chunks, enabling semantic search and the Ask AI feature.",
-    remoteAvailable: true,
+    // Issue #944: Fireworks retired serverless embeddings — every model on
+    // /inference/v1/embeddings returns 503 "no healthy upstream". The only
+    // model it still serves is 4096-dimensional against our vector(384)
+    // column, so remote embedding has no working option to offer.
+    remoteAvailable: false,
+    disabledReason:
+      "Remote embedding is unavailable: Fireworks retired its serverless embeddings API. " +
+      "Embeddings run locally — the model is small and CPU-only, so this costs little even in remote mode.",
     providerField: "embedding_provider",
-    localModels: [{ value: "all-MiniLM-L6-v2", label: "all-MiniLM-L6-v2" }],
-    remoteModels: [
+    localModels: [
+      { value: "all-MiniLM-L6-v2", label: "all-MiniLM-L6-v2 (default)" },
+      // Kept selectable because installs that previously ran embeddings
+      // through Fireworks have a bge-small corpus. Running the same model
+      // locally reproduces those vectors exactly, so no re-embedding is
+      // needed — but picking the wrong one silently corrupts the vector
+      // space, since both are 384-dimensional (#945).
       {
         value: "BAAI/bge-small-en-v1.5",
-        label: "Fireworks BGE small-en-v1.5",
+        label: "BAAI/bge-small-en-v1.5 (match a corpus embedded via Fireworks)",
       },
     ],
+    remoteModels: [],
     modelField: "embedding_model",
-    remoteModelField: "fireworks_embedding_model",
+    remoteModelField: null,
   },
   {
     // Issue #608: dedicated rag_provider toggle. Independent of
