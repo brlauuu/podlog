@@ -133,10 +133,41 @@ def _embed_texts_fireworks(texts: list[str], runtime: dict[str, Any] | None = No
     return vectors
 
 
-def embed_texts(texts: list[str], runtime: dict[str, Any] | None = None) -> list[list[float]]:
-    """Embed a batch of texts. Returns list of 384-dim float vectors."""
+def _check_provenance(runtime: dict[str, Any] | None, db: Any = None) -> None:
+    """Refuse to embed with a model other than the one that built the corpus (#945).
+
+    The session is opened here rather than threaded through every caller. There
+    are five call sites across tasks, the API and RAG, and an opt-in ``db``
+    argument would make the guard something a sixth caller could forget — which
+    is the whole failure mode this protects against.
+    """
+    from app.services.embed_provenance import assert_matches
+
+    if db is not None:
+        assert_matches(db, EMBEDDING_DIM, runtime)
+        return
+
+    from app.database import SessionLocal
+
+    own = SessionLocal()
+    try:
+        assert_matches(own, EMBEDDING_DIM, runtime)
+    finally:
+        own.close()
+
+
+def embed_texts(
+    texts: list[str], runtime: dict[str, Any] | None = None, db: Any = None
+) -> list[list[float]]:
+    """Embed a batch of texts. Returns list of 384-dim float vectors.
+
+    ``db`` is an optional session injection for tests; production callers let
+    the provenance check open its own.
+    """
     if not texts:
         return []
+
+    _check_provenance(runtime, db)
 
     provider = _runtime_value(runtime, "embedding_provider", settings.embedding_provider)
     if provider == "fireworks":
@@ -150,7 +181,7 @@ def embed_texts(texts: list[str], runtime: dict[str, Any] | None = None) -> list
     return vectors
 
 
-def embed_query(text: str, runtime: dict[str, Any] | None = None) -> list[float]:
+def embed_query(text: str, runtime: dict[str, Any] | None = None, db: Any = None) -> list[float]:
     """Embed a single search query. Returns a 384-dim float vector."""
-    vectors = embed_texts([text], runtime=runtime)
+    vectors = embed_texts([text], runtime=runtime, db=db)
     return vectors[0]

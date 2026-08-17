@@ -88,14 +88,33 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 > this costs little. The setting is still accepted so existing configurations
 > do not fail validation, but selecting it will fail every embed job.
 
-> **Changing `EMBEDDING_MODEL` on an existing install silently corrupts search.**
+> **Changing `EMBEDDING_MODEL` on an existing install is blocked (issue #945).**
 > `all-MiniLM-L6-v2` and `BAAI/bge-small-en-v1.5` are both 384-dimensional but
 > live in different vector spaces, so the dimension check passes, the write
 > succeeds, and nothing warns — while similarity between old and new rows
-> becomes meaningless. If your embeddings were previously generated through
-> Fireworks, set `EMBEDDING_MODEL=BAAI/bge-small-en-v1.5` to keep using them;
-> running that model locally reproduces the same vectors exactly. Otherwise
-> leave the default. Changing it deliberately means re-embedding the corpus.
+> becomes meaningless. The model that produced the corpus is now recorded on
+> first embed, and a later mismatch is refused rather than written. If your
+> embeddings were previously generated through Fireworks, set
+> `EMBEDDING_MODEL=BAAI/bge-small-en-v1.5` to keep using them; running that
+> model locally reproduces the same vectors exactly. Changing the model
+> deliberately means re-embedding the corpus.
+
+#### Inspecting and verifying embedding provenance
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/embed/model-state` | Which model built the corpus, which is configured, whether they agree, and how many segments are embedded. Also shown under the Embedding card in Settings. |
+| `POST /api/embed/verify` | Re-embeds a sample of stored segments with the configured model and reports the mean cosine against their stored vectors. `1.0` means the configured model reproduces the corpus; a low value (~0.3) means a different vector space. |
+
+The record is a claim about the past; `verify` is the only thing that checks it
+against reality. Run it after any deliberate model change, and if you are ever
+unsure which model built an existing corpus — that is exactly how it was
+identified when this was first diagnosed.
+
+Behaviour on mismatch: writes (the `embed` pipeline stage, chunk backfill) fail
+with an explanatory error, and query embedding returns non-200, which the web
+app degrades into keyword-only search rather than returning meaningless
+semantic results.
 
 ## pyannote Cloud Provider (Issue #516)
 
