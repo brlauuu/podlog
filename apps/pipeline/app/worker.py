@@ -229,7 +229,7 @@ def _warn_if_embedding_provider_retired() -> None:
             provider = get_runtime_embedding_settings(db).get("embedding_provider")
         finally:
             db.close()
-    except Exception:  # pragma: no cover - never block worker startup on a warning
+    except Exception:  # a warning must never be able to block worker startup
         logger.warning('"action": "embedding_provider_check_failed"')
         return
 
