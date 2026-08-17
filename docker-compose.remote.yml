@@ -1,13 +1,21 @@
 services:
+  # Issue #944: EMBEDDING_PROVIDER is deliberately NOT set to fireworks here.
+  # Fireworks retired its serverless embeddings — every model on
+  # /inference/v1/embeddings returns 503 "no healthy upstream", including
+  # names that do not exist, so the request never reaches model resolution.
+  # The one embedding model Fireworks still serves (qwen3-embedding-8b) is
+  # 4096-dimensional against our vector(384) column, so it is not a swap-in.
+  #
+  # Embeddings therefore run locally even in the remote profile. That costs
+  # nothing extra: sentence-transformers runs in-process on CPU with a small
+  # model and needs no Ollama, so the same set of containers still starts.
   pipeline:
     environment:
       INFERENCE_PROVIDER: fireworks
-      EMBEDDING_PROVIDER: fireworks
 
   worker:
     environment:
       INFERENCE_PROVIDER: fireworks
-      EMBEDDING_PROVIDER: fireworks
 
   # Disable local Ollama by default in remote profile.
   # You can still start it explicitly with:

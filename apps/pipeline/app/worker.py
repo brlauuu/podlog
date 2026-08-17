@@ -210,6 +210,39 @@ def run_idle_hook(db) -> None:
         logger.exception('"action": "meta_analysis_idle_hook_failed"')
 
 
+def _warn_if_embedding_provider_retired() -> None:
+    """Warn at startup when the stored embedding provider can no longer work (#944).
+
+    Removing ``EMBEDDING_PROVIDER: fireworks`` from the remote compose overlay
+    only fixes fresh installs. An existing deployment that selected Fireworks
+    in Settings has the value in the ``notification_settings`` blob, which
+    overrides env — so it stays broken and only finds out one failed embed job
+    at a time. Nothing is changed automatically: the correct ``embedding_model``
+    depends on which model built the existing corpus, and guessing wrong
+    corrupts the vector space silently (#945).
+    """
+    try:
+        from app.services.notification_settings import get_runtime_embedding_settings
+
+        db = SessionLocal()
+        try:
+            provider = get_runtime_embedding_settings(db).get("embedding_provider")
+        finally:
+            db.close()
+    except Exception:  # pragma: no cover - never block worker startup on a warning
+        logger.warning('"action": "embedding_provider_check_failed"')
+        return
+
+    if provider == "fireworks":
+        logger.warning(
+            '"action": "embedding_provider_retired", "provider": "fireworks", '
+            '"detail": "Fireworks retired its serverless embeddings API; embed jobs '
+            "will fail. Set embedding_provider to 'local' in Settings, and set "
+            "embedding_model to the model your existing embeddings were built with "
+            "('BAAI/bge-small-en-v1.5' if they came from Fireworks). See issue #944.\""
+        )
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -225,6 +258,7 @@ def main() -> None:
     from app.services.digest import register_notification_handlers
     register_notification_handlers(bus)
     validate_wiring()
+    _warn_if_embedding_provider_retired()
 
     last_periodic_run: dict[str, datetime] = {}
 

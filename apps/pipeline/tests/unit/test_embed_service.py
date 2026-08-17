@@ -158,10 +158,20 @@ class TestEmbedTextsFireworks:
 
     def _ok_response(self, vectors):
         resp = MagicMock()
+        # status_code must be a real int: the provider inspects it before
+        # raise_for_status so a 5xx can be turned into an actionable message
+        # (#944). A bare MagicMock here raises TypeError on the comparison.
+        resp.status_code = 200
         resp.raise_for_status = MagicMock()
         resp.json = MagicMock(
             return_value={"data": [{"embedding": v} for v in vectors]}
         )
+        return resp
+
+    def _error_response(self, status_code, text=""):
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.text = text
         return resp
 
     def _client_cm(self, post_return):
@@ -228,6 +238,7 @@ class TestEmbedTextsFireworks:
     def test_raises_when_embedding_is_not_list(self):
         # Malformed response — embedding is a string instead of a list.
         resp = MagicMock()
+        resp.status_code = 200
         resp.raise_for_status = MagicMock()
         resp.json = MagicMock(
             return_value={"data": [{"embedding": "not-a-list"}]}
@@ -262,3 +273,53 @@ class TestEmbedTextsFireworks:
             result = embed_mod._embed_texts_fireworks(["t"] * 257)
         assert len(result) == 257
         assert client_cm.post.call_count == 2
+
+    # --- Issue #944: Fireworks retired serverless embeddings ---------------
+    # Every model on /inference/v1/embeddings answers 503 "no healthy
+    # upstream", including names that do not exist, so the request never
+    # reaches model resolution. Unhandled, that surfaced as a bare httpx
+    # traceback on each embed job, reading like a transient outage.
+
+    def test_5xx_raises_actionable_error_naming_the_fix(self):
+        client_cm = self._client_cm(self._error_response(503, "no healthy upstream"))
+        with (
+            patch.object(embed_mod.settings, "fireworks_api_key", "k"),
+            patch.object(embed_mod.settings, "fireworks_embedding_model", "BAAI/bge-small-en-v1.5"),
+            patch.object(embed_mod.httpx, "Client", return_value=client_cm),
+        ):
+            with pytest.raises(RuntimeError) as exc:
+                embed_mod._embed_texts_fireworks(["hello"])
+
+        msg = str(exc.value)
+        # The operator needs the status, the upstream body, the model, and
+        # above all the two settings to change -- including the warning that
+        # picking the wrong local model corrupts the space silently (#945).
+        assert "503" in msg
+        assert "no healthy upstream" in msg
+        assert "BAAI/bge-small-en-v1.5" in msg
+        assert "embedding_provider" in msg and "local" in msg
+        assert "embedding_model" in msg
+        assert "#944" in msg
+
+    def test_5xx_message_survives_an_empty_upstream_body(self):
+        client_cm = self._client_cm(self._error_response(500, ""))
+        with (
+            patch.object(embed_mod.settings, "fireworks_api_key", "k"),
+            patch.object(embed_mod.httpx, "Client", return_value=client_cm),
+        ):
+            with pytest.raises(RuntimeError, match="500"):
+                embed_mod._embed_texts_fireworks(["hello"])
+
+    def test_4xx_still_goes_through_raise_for_status(self):
+        # A 401/404 is a different problem (bad key, bad model name) and must
+        # not be reported as "the provider is retired".
+        resp = self._error_response(401, "unauthorized")
+        resp.raise_for_status = MagicMock(side_effect=RuntimeError("http 401"))
+        client_cm = self._client_cm(resp)
+        with (
+            patch.object(embed_mod.settings, "fireworks_api_key", "k"),
+            patch.object(embed_mod.httpx, "Client", return_value=client_cm),
+        ):
+            with pytest.raises(RuntimeError, match="http 401"):
+                embed_mod._embed_texts_fireworks(["hello"])
+        resp.raise_for_status.assert_called_once()

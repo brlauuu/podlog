@@ -62,6 +62,34 @@ def _validate_vectors_dim(vectors: list[list[float]], expected_count: int) -> No
 _FIREWORKS_EMBED_BATCH_SIZE = 256  # Fireworks API limit
 
 
+def _retired_provider_message(model: str, resp: httpx.Response) -> str:
+    """Explain a 5xx from the Fireworks embeddings API in actionable terms (#944).
+
+    Fireworks retired its serverless embeddings: every model on
+    /inference/v1/embeddings answers 503 "no healthy upstream", including
+    model names that do not exist, so the request never reaches model
+    resolution. Left unhandled this surfaced as a bare httpx traceback on
+    every embed job, which reads like a transient outage and is not.
+
+    The 5xx is not narrowed to 503/"no healthy upstream" on purpose: a
+    genuine transient Fireworks outage produces the same class of failure
+    and wants the same first question from the operator ("is this provider
+    still viable?"). The wording below covers both readings.
+    """
+    body = (resp.text or "").strip()[:200]
+    return (
+        f"Fireworks embeddings returned {resp.status_code} for model '{model}'"
+        f"{f' ({body})' if body else ''}. Fireworks has retired its serverless "
+        "embeddings API, so this provider cannot currently produce vectors; the "
+        "only model it still serves is 4096-dimensional and does not fit this "
+        f"schema's vector({EMBEDDING_DIM}) column. Switch embedding_provider to "
+        "'local' in Settings. Set embedding_model to the model your existing "
+        "embeddings were built with -- 'BAAI/bge-small-en-v1.5' if they came "
+        "from Fireworks -- because a different model of the same dimension "
+        "will be accepted silently and corrupt the vector space. See issue #944."
+    )
+
+
 def _embed_texts_fireworks(texts: list[str], runtime: dict[str, Any] | None = None) -> list[list[float]]:
     api_key = _runtime_value(runtime, "fireworks_api_key", settings.fireworks_api_key)
     if not api_key:
@@ -84,6 +112,8 @@ def _embed_texts_fireworks(texts: list[str], runtime: dict[str, Any] | None = No
             batch = texts[i : i + _FIREWORKS_EMBED_BATCH_SIZE]
             payload = {"model": model, "input": batch}
             resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code >= 500:
+                raise RuntimeError(_retired_provider_message(model, resp))
             resp.raise_for_status()
             data = resp.json()
             items = data.get("data", []) or []

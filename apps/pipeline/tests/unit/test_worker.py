@@ -548,3 +548,70 @@ class TestHandleTaskException:
         mock_fail.assert_not_called()
         mock_jq.enqueue.assert_not_called()
         mock_jq.fail.assert_called_once_with(db, job, "orphaned")
+
+
+class TestWarnIfEmbeddingProviderRetired:
+    """Issue #944: warn at startup when the stored provider cannot work.
+
+    Removing EMBEDDING_PROVIDER from the remote compose overlay only helps
+    fresh installs. An existing deployment that picked Fireworks in Settings
+    has the value in the DB, which overrides env, so it stays broken and
+    discovers it one failed embed job at a time.
+    """
+
+    def _patch_settings(self, provider):
+        return patch(
+            "app.services.notification_settings.get_runtime_embedding_settings",
+            return_value={"embedding_provider": provider},
+        )
+
+    @patch("app.worker.SessionLocal")
+    def test_warns_when_provider_is_fireworks(self, mock_session):
+        import app.worker as worker_mod
+
+        with self._patch_settings("fireworks"):
+            with patch.object(worker_mod.logger, "warning") as mock_warn:
+                worker_mod._warn_if_embedding_provider_retired()
+
+        assert mock_warn.call_count == 1
+        msg = mock_warn.call_args[0][0]
+        # Must name both settings to change, not just the broken one --
+        # flipping the provider alone silently corrupts the space (#945).
+        assert "embedding_provider" in msg
+        assert "embedding_model" in msg
+        assert "BAAI/bge-small-en-v1.5" in msg
+        assert "#944" in msg
+
+    @patch("app.worker.SessionLocal")
+    def test_silent_when_provider_is_local(self, mock_session):
+        import app.worker as worker_mod
+
+        with self._patch_settings("local"):
+            with patch.object(worker_mod.logger, "warning") as mock_warn:
+                worker_mod._warn_if_embedding_provider_retired()
+
+        mock_warn.assert_not_called()
+
+    @patch("app.worker.SessionLocal")
+    def test_never_blocks_startup_when_the_lookup_fails(self, mock_session):
+        # A warning must not be able to take the worker down -- a DB that is
+        # not up yet is the normal case at boot.
+        import app.worker as worker_mod
+
+        mock_session.side_effect = RuntimeError("db not ready")
+        with patch.object(worker_mod.logger, "warning") as mock_warn:
+            worker_mod._warn_if_embedding_provider_retired()
+
+        assert mock_warn.call_count == 1
+        assert "embedding_provider_check_failed" in mock_warn.call_args[0][0]
+
+    @patch("app.worker.SessionLocal")
+    def test_closes_the_session_it_opens(self, mock_session):
+        import app.worker as worker_mod
+
+        db = MagicMock()
+        mock_session.return_value = db
+        with self._patch_settings("local"):
+            worker_mod._warn_if_embedding_provider_retired()
+
+        db.close.assert_called_once()
