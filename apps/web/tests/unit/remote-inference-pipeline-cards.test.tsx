@@ -46,6 +46,39 @@ function makeSettings(overrides: Record<string, unknown> = {}): Settings {
   } as unknown as Settings;
 }
 
+// The embedding card renders EmbeddingCorpusModel (#945), which fetches the
+// provenance record on mount. jsdom has no fetch, so without this the cards
+// throw on render. Unrecognised URLs are recorded and reported in afterEach
+// rather than thrown from inside the mock, following the #895 pattern —
+// throwing here would be swallowed by the component's own catch and surface
+// as a silent "unavailable" instead of naming the missing URL.
+const unmockedUrls: string[] = [];
+
+beforeEach(() => {
+  unmockedUrls.length = 0;
+  global.fetch = jest.fn((url: string) => {
+    if (url === "/api/pipeline/embed-model-state") {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          recorded_model: "all-MiniLM-L6-v2",
+          configured_model: "all-MiniLM-L6-v2",
+          matches: true,
+          embedded_segments: 100,
+        }),
+      });
+    }
+    unmockedUrls.push(url);
+    return Promise.resolve({ ok: false, json: async () => ({}) });
+  }) as unknown as typeof fetch;
+});
+
+afterEach(() => {
+  if (unmockedUrls.length > 0) {
+    throw new Error(`fetch mock did not recognise: ${unmockedUrls.join(", ")}`);
+  }
+});
+
 // Step render order: [transcription, diarization, speaker-inference, embedding, rag]
 
 describe("PipelineStepCards — handleToggle", () => {

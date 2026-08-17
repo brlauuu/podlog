@@ -1,4 +1,5 @@
 """Unit tests for app.services.embed — sentence embedding service."""
+import json
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -9,6 +10,24 @@ if "sentence_transformers" not in sys.modules:
     sys.modules["sentence_transformers"] = MagicMock()
 
 import app.services.embed as embed_mod
+
+
+def fake_db(recorded_model=None):
+    """Session stub for the #945 provenance guard.
+
+    embed_texts now checks the recorded corpus model before embedding, and
+    opens its own session when none is passed. Unit tests inject this instead
+    so the guard runs for real against a known record rather than being
+    patched out -- an unbypassable guard that tests bypass is not a guard.
+    """
+    db = MagicMock()
+    row = None
+    if recorded_model is not None:
+        row = MagicMock()
+        row.value = json.dumps({"model": recorded_model, "dim": 384})
+    db.query.return_value.filter.return_value.one_or_none.return_value = row
+    return db
+
 
 
 class TestLoadModel:
@@ -68,7 +87,7 @@ class TestEmbedTexts:
         embed_mod._model = mock_model
         embed_mod._model_name = "all-MiniLM-L6-v2"
 
-        result = embed_mod.embed_texts(["hello", "world"])
+        result = embed_mod.embed_texts(["hello", "world"], db=fake_db("all-MiniLM-L6-v2"))
 
         assert len(result) == 2
         mock_model.encode.assert_called_once_with(
@@ -77,7 +96,11 @@ class TestEmbedTexts:
 
     @patch("app.services.embed._embed_texts_fireworks", return_value=[[0.1] * 384])
     def test_routes_to_fireworks_provider(self, mock_fireworks):
-        result = embed_mod.embed_texts(["hello"], runtime={"embedding_provider": "fireworks"})
+        result = embed_mod.embed_texts(
+            ["hello"],
+            runtime={"embedding_provider": "fireworks"},
+            db=fake_db("BAAI/bge-small-en-v1.5"),
+        )
         assert len(result) == 1
         mock_fireworks.assert_called_once()
 
@@ -89,6 +112,7 @@ class TestEmbedTexts:
                     "embedding_provider": "fireworks",
                     "fireworks_api_key": None,
                 },
+                db=fake_db("BAAI/bge-small-en-v1.5"),
             )
 
     def test_fails_when_local_embedding_dim_mismatches_schema(self):
@@ -101,7 +125,7 @@ class TestEmbedTexts:
         embed_mod._model_name = "all-MiniLM-L6-v2"
 
         with pytest.raises(RuntimeError, match=r"Unexpected embedding dimension 768 \(expected 384\)"):
-            embed_mod.embed_texts(["hello"])
+            embed_mod.embed_texts(["hello"], db=fake_db("all-MiniLM-L6-v2"))
 
 
 class TestEmbedQuery:
@@ -118,7 +142,7 @@ class TestEmbedQuery:
         embed_mod._model = mock_model
         embed_mod._model_name = "all-MiniLM-L6-v2"
 
-        result = embed_mod.embed_query("search query")
+        result = embed_mod.embed_query("search query", db=fake_db("all-MiniLM-L6-v2"))
 
         assert len(result) == 384
         mock_model.encode.assert_called_once_with(

@@ -7,6 +7,7 @@
  * explainer, and the "API key required" warning dialog. Re-exported
  * from RemoteInferenceSectionParts for back-compat.
  */
+import { EmbeddingCorpusModel } from "@/components/EmbeddingCorpusModel";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -104,6 +105,7 @@ function StepHelpContent({
           {step.disabledReason}
         </p>
       )}
+      {step.key === "embedding" && <EmbeddingCorpusModel />}
     </div>
   );
 }
