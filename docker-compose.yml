@@ -116,6 +116,10 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/podlog
       PIPELINE_API_URL: http://pipeline:8000
+      # Bounds the query-embedding call and the post-failure cooldown (#928).
+      # Empty means "use the built-in defaults" (2000ms / 30000ms).
+      EMBED_TIMEOUT_MS: ${EMBED_TIMEOUT_MS:-}
+      EMBED_COOLDOWN_MS: ${EMBED_COOLDOWN_MS:-}
     volumes:
       - audio_data:/data/audio:ro
       - ./docs/guide:/docs/guide:ro

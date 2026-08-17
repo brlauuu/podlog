@@ -1,4 +1,5 @@
 import pool from "@/lib/db";
+import { allHandled } from "@/lib/search/allHandled";
 import { buildFeedFilter } from "@/lib/search/feedFilter";
 import {
   appendFilterSql,
@@ -90,7 +91,7 @@ async function searchGroupedMetadata(
         params
       );
 
-  const [rowsResult, countResult, coverageResult] = await Promise.all([
+  const [rowsResult, countResult, coverageResult] = await allHandled([
     rowsPromise,
     countPromise,
     buildCoverage(skipCount),
@@ -172,7 +173,7 @@ async function searchGroupedFts(
         countParams
       );
 
-  const [rowsResult, countResult, coverageResult] = await Promise.all([
+  const [rowsResult, countResult, coverageResult] = await allHandled([
     rowsPromise,
     countPromise,
     buildCoverage(skipCount),

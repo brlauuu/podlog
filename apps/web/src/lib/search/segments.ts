@@ -1,4 +1,5 @@
 import pool from "@/lib/db";
+import { allHandled } from "@/lib/search/allHandled";
 import { buildFeedFilter } from "@/lib/search/feedFilter";
 import {
   appendFilterSql,
@@ -99,7 +100,7 @@ async function searchSegmentsMetadata(
         params
       );
 
-  const [rowsResult, countResult, coverageResult] = await Promise.all([
+  const [rowsResult, countResult, coverageResult] = await allHandled([
     rowsPromise,
     countPromise,
     buildCoverage(skipCount),
@@ -179,14 +180,22 @@ async function searchSegmentsHybrid(
     [...ftsParams, FETCH_LIMIT]
   );
 
-  // Vector query
-  const embedding = await getQueryEmbedding(baseQuery);
+  // Vector query. Chained rather than awaited so it runs alongside the FTS and
+  // count queries instead of serialising behind the embedding round-trip.
   const vecFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
   const vecFilters = buildSegmentFilters(filterOpts, vecFeedFilter.nextIdx);
-  const vecParams = [`[${embedding?.join(",")}]`, ...vecFeedFilter.params, ...vecFilters.params];
 
-  const vecPromise = embedding
-    ? pool.query(
+  type VecRows = { rows: Array<Record<string, unknown>> };
+
+  const vecPromise: Promise<VecRows> = getQueryEmbedding(baseQuery).then(
+    (embedding): VecRows | Promise<VecRows> => {
+      // A null embedding means the pipeline is unreachable or slow; serve
+      // FTS-only rather than failing the whole search (#928).
+      if (!embedding) return { rows: [] };
+
+      const vecParams = [`[${embedding.join(",")}]`, ...vecFeedFilter.params, ...vecFilters.params];
+
+      return pool.query(
         `SELECT
           s.id,
           s.start_time,
@@ -216,8 +225,9 @@ async function searchSegmentsHybrid(
         ORDER BY s.embedding <=> $1::vector
         LIMIT $${vecFilters.nextIdx}`,
         [...vecParams, FETCH_LIMIT]
-      )
-    : Promise.resolve({ rows: [] });
+      );
+    }
+  );
 
   // Count query
   const countFeedFilter = buildFeedFilter(feedIds, includeManualUploads, 2);
@@ -241,7 +251,7 @@ async function searchSegmentsHybrid(
         countParams
       );
 
-  const [ftsResult, vecResult, countResult, coverageResult] = await Promise.all([
+  const [ftsResult, vecResult, countResult, coverageResult] = await allHandled([
     ftsPromise,
     vecPromise,
     countPromise,
