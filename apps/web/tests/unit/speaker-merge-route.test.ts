@@ -152,6 +152,69 @@ describe("POST /api/episodes/[id]/speakers/merge", () => {
     expect(mockSetStale).toHaveBeenCalledTimes(1);
   });
 
+  // #942: merging changes segments.speaker_label, which moves turn
+  // boundaries -- two adjacent speakers becoming one label collapse into a
+  // single turn. Without a rebuild the materialized turns silently disagree
+  // with the segments they derive from, and search shows the old split.
+  it("rebuilds speaker turns inside the transaction, before COMMIT", async () => {
+    mockClientQuery.mockImplementation((sql: string) => {
+      if (/^BEGIN/.test(sql)) return Promise.resolve({});
+      if (/SELECT DISTINCT speaker_label/.test(sql)) {
+        return Promise.resolve({
+          rows: [
+            { speaker_label: "SPEAKER_00" },
+            { speaker_label: "SPEAKER_01" },
+          ],
+        });
+      }
+      if (/^UPDATE segments/.test(sql)) return Promise.resolve({ rowCount: 3 });
+      if (/^DELETE FROM speaker_names/.test(sql)) return Promise.resolve({});
+      if (/rebuild_speaker_turns/.test(sql)) return Promise.resolve({ rows: [] });
+      if (/^COMMIT/.test(sql)) return Promise.resolve({});
+      return Promise.resolve({});
+    });
+
+    const resp = await call(
+      "ep-1",
+      JSON.stringify({ source_labels: ["SPEAKER_01"], target_label: "SPEAKER_00" })
+    );
+    expect(resp.status).toBe(200);
+
+    const sqlStatements = mockClientQuery.mock.calls.map((c) => c[0]);
+    const rebuildIdx = sqlStatements.findIndex((s) =>
+      /rebuild_speaker_turns/.test(s)
+    );
+    const updateIdx = sqlStatements.findIndex((s) => /^UPDATE segments/.test(s));
+    const commitIdx = sqlStatements.findIndex((s) => /^COMMIT/.test(s));
+
+    expect(rebuildIdx).toBeGreaterThan(-1);
+    // Ordering is the point: after the label change, before the commit, so
+    // turns can never be visible in a state that disagrees with segments.
+    expect(rebuildIdx).toBeGreaterThan(updateIdx);
+    expect(rebuildIdx).toBeLessThan(commitIdx);
+
+    const rebuildCall = mockClientQuery.mock.calls[rebuildIdx];
+    expect(rebuildCall[1]).toEqual(["ep-1"]);
+  });
+
+  it("does not rebuild turns when the merge rolls back", async () => {
+    mockClientQuery.mockImplementation((sql: string) => {
+      if (/^BEGIN/.test(sql)) return Promise.resolve({});
+      if (/SELECT DISTINCT speaker_label/.test(sql)) {
+        return Promise.resolve({ rows: [{ speaker_label: "SPEAKER_00" }] });
+      }
+      return Promise.resolve({});
+    });
+
+    await call(
+      "ep-1",
+      JSON.stringify({ source_labels: ["SPEAKER_09"], target_label: "SPEAKER_00" })
+    );
+
+    const sqlStatements = mockClientQuery.mock.calls.map((c) => c[0]);
+    expect(sqlStatements.some((s) => /rebuild_speaker_turns/.test(s))).toBe(false);
+  });
+
   it("rolls back and returns 400 when a label is missing from episode", async () => {
     mockClientQuery.mockImplementation((sql: string) => {
       if (/^BEGIN/.test(sql)) return Promise.resolve({});

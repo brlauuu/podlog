@@ -294,3 +294,32 @@ class TestRecoverStrandedEpisodes:
 
         db.rollback.assert_called_once()
         db.close.assert_called_once()
+
+
+class TestReconcileSpeakerTurns:
+    """#942: periodic safety net for a writer that forgets to rebuild."""
+
+    @patch("app.services.speaker_turns.rebuild_missing_speaker_turns")
+    @patch("app.database.SessionLocal")
+    def test_reports_how_many_episodes_it_rebuilt(self, mock_session_cls, mock_rebuild):
+        from app.tasks.cleanup import reconcile_speaker_turns
+
+        db = MagicMock()
+        mock_session_cls.return_value = db
+        mock_rebuild.return_value = 4
+
+        assert reconcile_speaker_turns() == {"episodes_rebuilt": 4}
+        mock_rebuild.assert_called_once_with(db)
+
+    @patch("app.services.speaker_turns.rebuild_missing_speaker_turns")
+    @patch("app.database.SessionLocal")
+    def test_closes_the_session_even_on_failure(self, mock_session_cls, mock_rebuild):
+        from app.tasks.cleanup import reconcile_speaker_turns
+
+        db = MagicMock()
+        mock_session_cls.return_value = db
+        mock_rebuild.side_effect = RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            reconcile_speaker_turns()
+        db.close.assert_called_once()

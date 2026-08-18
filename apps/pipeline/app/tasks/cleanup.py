@@ -268,3 +268,25 @@ def prune_superseded_failed_jobs() -> dict:
         raise
     finally:
         db.close()
+
+
+def reconcile_speaker_turns() -> dict:
+    """Rebuild materialized speaker turns for episodes that are missing them (#942).
+
+    Turns are derived from ``segments`` and rebuilt explicitly at the two
+    points where segments reach their final state: the chunk task, and the
+    speaker-merge route. A future third writer that forgets to rebuild would
+    otherwise leave an episode silently absent from search.
+
+    This is the same class of safety net as ``recover_stranded_episodes``:
+    cheap, idempotent, and it converts a silent gap into a self-healing one.
+    """
+    from app.database import SessionLocal
+    from app.services.speaker_turns import rebuild_missing_speaker_turns
+
+    db = SessionLocal()
+    try:
+        rebuilt = rebuild_missing_speaker_turns(db)
+        return {"episodes_rebuilt": rebuilt}
+    finally:
+        db.close()

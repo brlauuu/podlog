@@ -165,6 +165,31 @@ class Segment(Base):
     episode: Mapped["Episode"] = relationship("Episode", back_populates="segments")
 
 
+class SpeakerTurn(Base):
+    """Consecutive same-speaker segments, materialized (#942).
+
+    Derived entirely from ``segments``; never edited directly. Rebuilt per
+    episode by the ``rebuild_speaker_turns(uuid)`` SQL function, which owns
+    the turn-boundary logic so the pipeline and the web app cannot drift.
+
+    ``fts`` is a stored generated column (see migration 021) and has no
+    mapped attribute here — SQLAlchemy must never try to write it.
+    """
+
+    __tablename__ = "speaker_turns"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    episode_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("episodes.id", ondelete="CASCADE"), nullable=False
+    )
+    speaker_label: Mapped[str | None] = mapped_column(Text)
+    turn_num: Mapped[int] = mapped_column(nullable=False)
+    min_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    start_time: Mapped[float] = mapped_column(Float, nullable=False)
+    end_time: Mapped[float] = mapped_column(Float, nullable=False)
+    full_text: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class Chunk(Base):
     """Merged speaker-turn segments for RAG retrieval.
 
