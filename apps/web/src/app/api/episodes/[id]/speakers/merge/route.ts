@@ -58,6 +58,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       [episodeId, source_labels]
     );
 
+    // Rebuild materialized speaker turns (#942). Merging changes
+    // segments.speaker_label, which moves turn boundaries: two adjacent
+    // speakers becoming one label collapses into a single turn. Inside the
+    // transaction so turns can never disagree with the segments they derive
+    // from. The boundary logic lives in the SQL function rather than being
+    // reimplemented here, so this and the pipeline cannot drift.
+    await client.query(
+      `SELECT rebuild_speaker_turns(CAST($1 AS uuid))`,
+      [episodeId]
+    );
+
     await client.query("COMMIT");
     mergedSegments = update.rowCount ?? 0;
   } catch (err) {

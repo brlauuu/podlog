@@ -22,6 +22,13 @@ def chunk_episode(episode_id: str) -> str:
     try:
         update_episode(db, episode_id, status="chunking")
 
+        # Materialize speaker turns (#942). This runs after transcribe and
+        # diarize, so segments are final, and it re-runs on retry — which is
+        # why it belongs here rather than in either upstream task.
+        from app.services.speaker_turns import rebuild_speaker_turns
+
+        rebuild_speaker_turns(db, episode_id)
+
         segments = (
             db.query(Segment)
             .filter(Segment.episode_id == episode_id)
