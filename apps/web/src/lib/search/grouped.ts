@@ -11,7 +11,6 @@ import { buildCoverage, toCoverage } from "@/lib/search/coverage";
 import { type FilterOpts } from "@/lib/search/filterOpts";
 import { groupRowsByFeed } from "@/lib/search/grouping";
 import { parseSearchQuery } from "@/lib/search/queryParser";
-import { SPEAKER_TURNS_CTE } from "@/lib/search/speakerTurns";
 import type { GroupedSearchResult } from "@/lib/search/types";
 
 export async function searchGrouped(
@@ -121,8 +120,7 @@ async function searchGroupedFts(
   const rowsParams = [baseQuery, ...feedFilter.params, ...rowsFilters.params];
 
   const rowsPromise = pool.query(
-    `WITH ${SPEAKER_TURNS_CTE}
-    SELECT
+    `SELECT
       f.id AS feed_id,
       COALESCE(f.title, 'Manual episode') AS feed_title,
       COALESCE(f.mode, 'full') AS feed_mode,
@@ -132,13 +130,13 @@ async function searchGroupedFts(
       e.audio_local_path,
       e.episode_url,
       COUNT(*)::int AS mention_count,
-      MAX(ts_rank(to_tsvector('english', t.full_text), query)) AS best_rank
+      MAX(ts_rank(t.fts, query)) AS best_rank
     FROM speaker_turns t
     JOIN episodes e ON t.episode_id = e.id
     LEFT JOIN feeds f ON e.feed_id = f.id
     LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = t.speaker_label,
       websearch_to_tsquery('english', $1) AS query
-    WHERE to_tsvector('english', t.full_text) @@ query
+    WHERE t.fts @@ query
       AND e.status = 'done'
       AND ${feedFilter.clause}
       ${appendFilterSql(rowsFilters.clauses)}
@@ -155,8 +153,7 @@ async function searchGroupedFts(
   const countPromise = skipCount
     ? Promise.resolve(null)
     : pool.query(
-        `WITH ${SPEAKER_TURNS_CTE}
-        SELECT
+        `SELECT
           COUNT(DISTINCT e.id)::int AS total_episodes,
           COUNT(DISTINCT f.id)::int AS total_feeds,
           COUNT(*)::int AS total_mentions,
@@ -166,7 +163,7 @@ async function searchGroupedFts(
         LEFT JOIN feeds f ON e.feed_id = f.id
         LEFT JOIN speaker_names sn ON sn.episode_id = e.id AND sn.speaker_label = t.speaker_label,
           websearch_to_tsquery('english', $1) AS query
-        WHERE to_tsvector('english', t.full_text) @@ query
+        WHERE t.fts @@ query
           AND e.status = 'done'
           AND ${countFeedFilter.clause}
           ${appendFilterSql(countFilters.clauses)}`,

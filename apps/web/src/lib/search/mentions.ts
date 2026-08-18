@@ -1,7 +1,6 @@
 import pool from "@/lib/db";
 import { buildLikePattern } from "@/lib/search/filters";
 import { parseSearchQuery } from "@/lib/search/queryParser";
-import { SPEAKER_TURNS_CTE } from "@/lib/search/speakerTurns";
 import type { ContextSegment, EpisodeMentions, Mention } from "@/lib/search/types";
 
 export async function searchMentions(
@@ -24,20 +23,19 @@ export async function searchMentions(
   }
 
   const result = await pool.query(
-    `WITH ${SPEAKER_TURNS_CTE}
-    SELECT
+    `SELECT
       t.min_id AS id,
       t.start_time,
       t.end_time,
       t.speaker_label,
       COALESCE(sn.display_name, t.speaker_label) AS speaker_display,
       t.full_text,
-      CASE WHEN to_tsvector('english', t.full_text) @@ query ${speakerMatchSql} THEN true ELSE false END AS is_match,
-      CASE WHEN to_tsvector('english', t.full_text) @@ query ${speakerMatchSql}
+      CASE WHEN t.fts @@ query ${speakerMatchSql} THEN true ELSE false END AS is_match,
+      CASE WHEN t.fts @@ query ${speakerMatchSql}
         THEN ts_headline('english', t.full_text, query, 'MaxFragments=0, HighlightAll=true')
         ELSE '' END AS snippet,
-      CASE WHEN to_tsvector('english', t.full_text) @@ query ${speakerMatchSql}
-        THEN ts_rank(to_tsvector('english', t.full_text), query)
+      CASE WHEN t.fts @@ query ${speakerMatchSql}
+        THEN ts_rank(t.fts, query)
         ELSE 0 END AS rank
     FROM speaker_turns t
     LEFT JOIN speaker_names sn ON sn.episode_id = t.episode_id AND sn.speaker_label = t.speaker_label,
