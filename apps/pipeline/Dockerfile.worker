@@ -11,6 +11,10 @@ WORKDIR /app
 ARG INSTALL_DEV=false
 
 COPY pyproject.toml poetry.lock* ./
+# `--no-cache-dir` applies only to pip installing poetry itself. Poetry caches
+# every dependency wheel in /root/.cache/pypoetry, which this same RUN layer
+# then bakes into the image -- 8.0 GB of it (#939). Cleared at the end of the
+# layer, not in a later one, or the bytes stay in the image.
 RUN pip install --no-cache-dir poetry \
     && poetry config virtualenvs.create false \
     && if [ "$INSTALL_DEV" = "true" ]; then \
@@ -19,7 +23,8 @@ RUN pip install --no-cache-dir poetry \
          poetry install --with ml --without dev --no-root --no-interaction --no-ansi; \
        fi \
     && python -m spacy download en_core_web_trf \
-    && python -m spacy download en_core_web_lg
+    && python -m spacy download en_core_web_lg \
+    && rm -rf /root/.cache/pypoetry
 
 # Pre-download tiktoken encoder so the worker idle hook (#521) has no network dep
 RUN python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
