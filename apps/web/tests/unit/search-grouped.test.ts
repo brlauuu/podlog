@@ -90,7 +90,7 @@ describe("searchGrouped — metadata_only path", () => {
 });
 
 describe("searchGrouped — FTS path", () => {
-  it("uses the speaker_turns CTE when query has free text", async () => {
+  it("reads the speaker_turns table and uses its stored tsvector", async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [row({ mention_count: 3, best_rank: 0.9 })] })
       .mockResolvedValueOnce({
@@ -100,7 +100,14 @@ describe("searchGrouped — FTS path", () => {
     const result = await searchGrouped("climate", null, true, 1, 20);
 
     const [rowsSql, rowsParams] = mockQuery.mock.calls[0];
-    expect(rowsSql).toMatch(/WITH.*speaker_turns/s);
+    // #942: speaker_turns is a materialized table, not a CTE computed per
+    // query. Asserting both halves matters: reading the table but calling
+    // to_tsvector(full_text) again would leave the GIN index unusable and
+    // put the 15.8s query straight back.
+    expect(rowsSql).toMatch(/FROM speaker_turns/);
+    expect(rowsSql).not.toMatch(/WITH\s+lagged/);
+    expect(rowsSql).toMatch(/t\.fts/);
+    expect(rowsSql).not.toMatch(/to_tsvector\('english', t\.full_text\)/);
     expect(rowsParams[0]).toBe("climate");
     expect(result.feeds[0].episodes[0].mentionCount).toBe(3);
   });
