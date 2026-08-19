@@ -13,21 +13,16 @@ python = ">=3.11,<3.14"
 
 # Web / API
 #
-# fastapi is deliberately held on the 0.111 line (#906, previously #770).
-# A caret on a 0.x pins >=0.111.0,<0.112.0, so this is effectively a pin —
-# `poetry update` cannot move it, only editing this constraint can.
+# fastapi was held on the 0.111 line for a long time (#770, #906). That was
+# reversed once the pip-audit gate added in #915 ran for the first time and
+# showed starlette 0.37.2 carrying 7 advisories, five of which are only
+# fixed in the 1.x line. starlette sits directly in the request path, so
+# "no benefit today" stopped being true.
 #
-# Why not bump: the work is not fastapi, it is starlette 0.37 -> 1.6, a real
-# major with breaking changes in middleware and background tasks. We are not
-# hitting any bug fixed upstream, so the bump is cost without benefit today.
-#
-# When to revisit: if a CVE lands in fastapi/starlette (they sit directly in
-# the request path), or when something else forces the upgrade. Adding
-# pip-audit to CI (#915) is the higher-value move — it makes that risk
-# visible, which is the actual gap here rather than the version number.
-#
-# Audits keep re-filing this; please update this note rather than deleting it.
-fastapi = "^0.111.0"
+# Note fastapi declares `starlette>=0.46.0` with no upper bound, so the
+# fastapi constraint is what governs which starlette gets resolved -- the
+# two cannot be moved independently.
+fastapi = "^0.141.0"
 uvicorn = {extras = ["standard"], version = "^0.48.0"}
 httpx = "^0.28.0"
 
