@@ -9,9 +9,15 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY pyproject.toml poetry.lock* ./
+# `--no-cache-dir` above applies only to pip installing poetry itself. Poetry
+# then downloads every dependency wheel into /root/.cache/pypoetry, and because
+# that happens in this same RUN layer it is baked into the image permanently --
+# 8.0 GB of it, measured on 2026-08-19 (#939). Clearing it in the same layer is
+# what makes the saving real; a later RM would only add another layer.
 RUN pip install --no-cache-dir poetry \
     && poetry config virtualenvs.create false \
-    && poetry install --with ml --without dev --no-root --no-interaction --no-ansi
+    && poetry install --with ml --without dev --no-root --no-interaction --no-ansi \
+    && rm -rf /root/.cache/pypoetry
 
 COPY . .
 
