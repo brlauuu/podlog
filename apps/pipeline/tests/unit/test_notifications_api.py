@@ -199,3 +199,120 @@ def test_send_test_email_tls_and_login(mock_smtp):
     smtp_inst.starttls.assert_called_once()
     smtp_inst.login.assert_called_once_with("user", "pass")
     smtp_inst.send_message.assert_called_once()
+
+
+class TestPyannoteKeyTestEndpoint:
+    """POST /api/pyannote/test — the "Test key" button (#933).
+
+    Without it an invalid key fails silently at save and only surfaces as a
+    401 once diarization runs, after the episode has been downloaded and
+    transcribed.
+    """
+
+    def _settings(self, **over):
+        base = {
+            "pyannote_api_key": None,
+            "pyannote_cloud_base_url": "https://api.pyannote.ai/v1",
+        }
+        base.update(over)
+        return base
+
+    def test_400_when_no_key_typed_and_none_saved(self):
+        with patch(
+            "app.api.notifications.get_notification_settings",
+            return_value=self._settings(),
+        ):
+            resp = client.post("/api/pyannote/test", json={})
+        assert resp.status_code == 400
+        assert "No pyannote API key" in resp.json()["error"]
+
+    def test_verifies_the_typed_key(self):
+        with (
+            patch(
+                "app.api.notifications.get_notification_settings",
+                return_value=self._settings(pyannote_api_key="saved-key"),
+            ),
+            patch("app.services.pyannote_cloud.verify_api_key", return_value=True) as mock_v,
+        ):
+            resp = client.post("/api/pyannote/test", json={"api_key": "typed-key"})
+
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True}
+        # The typed value wins over the saved one -- that is the point of
+        # testing before saving.
+        assert mock_v.call_args[0][0] == "typed-key"
+
+    def test_masked_value_falls_back_to_the_saved_key(self):
+        # The UI masks a stored key on read (abc***xyz). An untouched field
+        # submits that mask, and testing it would fail confusingly while the
+        # real stored key is fine.
+        with (
+            patch(
+                "app.api.notifications.get_notification_settings",
+                return_value=self._settings(pyannote_api_key="the-real-key"),
+            ),
+            patch("app.services.pyannote_cloud.verify_api_key", return_value=True) as mock_v,
+        ):
+            resp = client.post("/api/pyannote/test", json={"api_key": "the***key"})
+
+        assert resp.status_code == 200
+        assert mock_v.call_args[0][0] == "the-real-key"
+
+    def test_empty_string_falls_back_to_the_saved_key(self):
+        with (
+            patch(
+                "app.api.notifications.get_notification_settings",
+                return_value=self._settings(pyannote_api_key="the-real-key"),
+            ),
+            patch("app.services.pyannote_cloud.verify_api_key", return_value=True) as mock_v,
+        ):
+            resp = client.post("/api/pyannote/test", json={"api_key": "   "})
+
+        assert resp.status_code == 200
+        assert mock_v.call_args[0][0] == "the-real-key"
+
+    def test_502_with_an_actionable_message_when_rejected(self):
+        with (
+            patch(
+                "app.api.notifications.get_notification_settings",
+                return_value=self._settings(),
+            ),
+            patch("app.services.pyannote_cloud.verify_api_key", return_value=False),
+        ):
+            resp = client.post("/api/pyannote/test", json={"api_key": "bad-key"})
+
+        assert resp.status_code == 502
+        assert "dashboard.pyannote.ai" in resp.json()["error"]
+
+    def test_base_url_comes_from_settings_never_from_the_request(self):
+        # The request carries a secret. Taking the destination from the caller
+        # would let the key be sent to an arbitrary host.
+        with (
+            patch(
+                "app.api.notifications.get_notification_settings",
+                return_value=self._settings(pyannote_cloud_base_url="https://configured.example/v1"),
+            ),
+            patch("app.services.pyannote_cloud.verify_api_key", return_value=True) as mock_v,
+        ):
+            resp = client.post(
+                "/api/pyannote/test",
+                json={"api_key": "k", "base_url": "https://attacker.example"},
+            )
+
+        assert resp.status_code == 200
+        assert mock_v.call_args[0][1] == "https://configured.example/v1"
+
+    def test_key_is_not_written_to_the_log(self, caplog):
+        import logging
+
+        with (
+            patch(
+                "app.api.notifications.get_notification_settings",
+                return_value=self._settings(),
+            ),
+            patch("app.services.pyannote_cloud.verify_api_key", return_value=True),
+            caplog.at_level(logging.INFO),
+        ):
+            client.post("/api/pyannote/test", json={"api_key": "super-secret-key"})
+
+        assert "super-secret-key" not in caplog.text

@@ -86,7 +86,7 @@ After diarization runs, episode cards and the episode detail page show a **pyann
 
 ## Troubleshooting
 
-- **401 Unauthorized when a job runs** — the API key is invalid, revoked, or wasn't saved in Settings. Verify at `GET /v1/test` via `curl -H 'Authorization: Bearer <key>' https://api.pyannote.ai/v1/test`, or re-paste the key in Settings.
+- **401 Unauthorized when a job runs** — the API key is invalid, revoked, or wasn't saved in Settings. Use the **Test key** button under the API-key field in Settings → Remote Inference to check it. You can test a key before saving it: paste it in and press Test key. If the field still shows the masked form of a previously saved key (`abc***xyz`), the button checks the saved key instead.
 - **Jobs time out after 30 minutes** — extremely long episodes (multi-hour) can hit the poll-timeout guard. If this is a regular pattern, file an issue — we may need to make the timeout configurable.
 - **`Cost estimate unavailable` on every episode** — set `pyannote_cloud_cost_per_second_usd` to a non-zero number in Settings. Get the rate from your pyannote.ai dashboard.
 - **Diarization toggle is disabled** — save an API key first. Without a key, flipping the toggle pops a dialog requesting it.

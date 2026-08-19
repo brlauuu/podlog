@@ -59,6 +59,12 @@ export function PyannoteCloudIntro() {
   );
 }
 
+type TestState =
+  | { status: "idle" }
+  | { status: "testing" }
+  | { status: "ok" }
+  | { status: "error"; message: string };
+
 export function PyannoteApiKeyField({
   value,
   onChange,
@@ -67,6 +73,34 @@ export function PyannoteApiKeyField({
   onChange: (value: string) => void;
 }) {
   const [showApiKey, setShowApiKey] = useState(false);
+  const [test, setTest] = useState<TestState>({ status: "idle" });
+
+  // #933: the check itself already existed (verify_api_key) but nothing called
+  // it, so docs told users to curl GET /v1/test by hand. An unverified key
+  // otherwise fails silently at save and only surfaces as a 401 once
+  // diarization runs -- after the episode has been downloaded and transcribed.
+  //
+  // The typed value is sent so a key can be checked before saving. When the
+  // field is untouched it holds the masked form (abc***xyz); the server treats
+  // that as "unchanged" and tests the stored key instead.
+  async function handleTest() {
+    setTest({ status: "testing" });
+    try {
+      const resp = await fetch("/api/pyannote/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: value ?? "" }),
+      });
+      if (resp.ok) {
+        setTest({ status: "ok" });
+        return;
+      }
+      const err = await resp.json().catch(() => ({}));
+      setTest({ status: "error", message: err.error || "Test failed" });
+    } catch {
+      setTest({ status: "error", message: "Network error" });
+    }
+  }
 
   return (
     <div className="mb-4">
@@ -102,6 +136,24 @@ export function PyannoteApiKeyField({
         >
           {showApiKey ? "Hide" : "Show"}
         </button>
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleTest}
+          disabled={test.status === "testing"}
+          className="px-3 py-1.5 rounded-md border border-border text-xs font-medium hover:bg-muted disabled:opacity-50"
+        >
+          {test.status === "testing" ? "Testing..." : "Test key"}
+        </button>
+        {test.status === "ok" && (
+          <span className="text-xs text-green-600 dark:text-green-500">
+            Key is valid.
+          </span>
+        )}
+        {test.status === "error" && (
+          <span className="text-xs text-destructive">{test.message}</span>
+        )}
       </div>
     </div>
   );
