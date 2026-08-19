@@ -176,6 +176,24 @@ def transcribe_episode(episode_id: str) -> str:
             )
 
         # Step 3: persist segments
+        #
+        # #955: an empty result is a content condition, not a fault. Catching it
+        # here rather than letting it surface at archival means the message names
+        # the stage that actually determined it, and no downstream stage runs on
+        # an episode that has nothing to process.
+        if not segments_data:
+            from app.tasks.helpers import mark_no_speech
+
+            db.query(Segment).filter(Segment.episode_id == episode_id).delete()
+            mark_no_speech(
+                db,
+                episode_id,
+                "Transcription produced no speech segments -- the audio appears to "
+                "contain no speech. Nothing to index.",
+            )
+            queued_next = True  # terminal on purpose: no follow-up stage to queue
+            return episode_id
+
         db.query(Segment).filter(Segment.episode_id == episode_id).delete()
         for seg in segments_data:
             db.add(

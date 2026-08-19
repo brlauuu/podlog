@@ -93,13 +93,19 @@ class Episode(Base):
     transcript_path: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str | None] = mapped_column(Text)
 
-    # Job state machine: pending → downloading → transcribing → diarizing → chunking → embedding → inferring → archiving → done / failed
+    # Job state machine: pending → downloading → transcribing → diarizing → chunking → embedding → inferring → archiving → done / failed / no_speech
+    #
+    # no_speech (#955) is terminal and NOT a failure: transcription produced
+    # zero segments because the audio contains no speech. See
+    # tasks/helpers.py::TERMINAL_STATUSES -- anything not listed there is
+    # treated as mid-pipeline and will be re-enqueued by stranded recovery.
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
 
     # Error tracking
     error_message: Mapped[str | None] = mapped_column(Text)
     error_class: Mapped[str | None] = mapped_column(Text)
-    # Valid values: TRANSIENT_NETWORK | HTTP_ACCESS | DISK_FULL | OOM | SYSTEM_ERROR
+    # Valid values: TRANSIENT_NETWORK | HTTP_ACCESS | DISK_FULL | OOM |
+    #               SYSTEM_ERROR | MANUAL_UPLOAD_FILE_MISSING | NO_SPEECH
 
     # Retry tracking
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

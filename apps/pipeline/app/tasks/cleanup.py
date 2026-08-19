@@ -172,7 +172,7 @@ def _resolve_stranded_task(status: str) -> str | None:
 def recover_stranded_episodes() -> dict:
     """Re-enqueue episodes stuck in mid-pipeline statuses with no active job.
 
-    "Stranded" = ``status NOT IN ('done','failed','pending')`` AND no row
+    "Stranded" = ``status NOT IN (TERMINAL_STATUSES, 'pending')`` AND no row
     in ``job_queue`` for that episode in ``status IN ('pending','picked')``.
 
     This is a safety net layered behind the worker-loop transient retry
@@ -184,12 +184,13 @@ def recover_stranded_episodes() -> dict:
     from app import job_queue
     from app.database import SessionLocal
     from app.models import Episode, Job
+    from app.tasks.helpers import TERMINAL_STATUSES
 
     db = SessionLocal()
     try:
         stranded = (
             db.query(Episode)
-            .filter(~Episode.status.in_(["done", "failed", "pending"]))
+            .filter(~Episode.status.in_([*TERMINAL_STATUSES, "pending"]))
             .filter(
                 ~db.query(Job)
                 .filter(Job.episode_id == Episode.id)

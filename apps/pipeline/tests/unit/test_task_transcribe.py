@@ -335,3 +335,119 @@ class TestTranscribeEpisode:
         assert obs_kwargs["fireworks_stt_cost_per_minute_usd"] == 0.0
         assert obs_kwargs["fireworks_stt_cost_usd"] == 0.0
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "diarize")
+
+
+
+class TestNoSpeechTermination:
+    """#955: an empty transcription is a content condition, not a fault.
+
+    Zero segments previously propagated to the archive task, which failed with
+    SYSTEM_ERROR -- implying a broken pipeline when download, transcription and
+    diarization had all worked correctly and simply found no speech.
+    """
+
+    @patch("app.tasks.transcribe.job_queue")
+    @patch("app.tasks.transcribe.update_episode")
+    @patch("app.tasks.transcribe._unload_whisper")
+    @patch("app.tasks.transcribe._convert_to_wav")
+    @patch("app.tasks.transcribe.SessionLocal")
+    def test_zero_segments_terminates_as_no_speech(
+        self, mock_session_cls, mock_convert, mock_unload, mock_update, mock_jq
+    ):
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        db.query.return_value.filter.return_value.delete.return_value = 0
+        mock_session_cls.return_value = db
+
+        with (
+            patch("app.services.whisper.transcribe", return_value=([], "en", {"segments": []})),
+            patch("app.tasks.transcribe.settings") as mock_settings,
+            patch("app.tasks.helpers.mark_no_speech") as mock_no_speech,
+            patch("builtins.open", MagicMock()),
+            patch("app.tasks.transcribe_helpers.json"),
+        ):
+            mock_settings.whisper_model = "large-v3-turbo"
+            mock_settings.transcript_dir = "/data/transcripts"
+
+            from app.tasks.transcribe import transcribe_episode
+
+            result = transcribe_episode("ep1")
+
+        assert result == "ep1"
+        mock_no_speech.assert_called_once()
+        # The message must name transcription, not archival -- naming the wrong
+        # stage sends whoever debugs it to the wrong file.
+        assert "no speech" in mock_no_speech.call_args[0][2].lower()
+
+    @patch("app.tasks.transcribe.job_queue")
+    @patch("app.tasks.transcribe.update_episode")
+    @patch("app.tasks.transcribe._unload_whisper")
+    @patch("app.tasks.transcribe._convert_to_wav")
+    @patch("app.tasks.transcribe.SessionLocal")
+    def test_zero_segments_does_not_queue_diarize(
+        self, mock_session_cls, mock_convert, mock_unload, mock_update, mock_jq
+    ):
+        # No downstream stage should run on an episode with nothing to process.
+        ep = _make_episode()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = ep
+        db.query.return_value.filter.return_value.delete.return_value = 0
+        mock_session_cls.return_value = db
+
+        with (
+            patch("app.services.whisper.transcribe", return_value=([], "en", {"segments": []})),
+            patch("app.tasks.transcribe.settings") as mock_settings,
+            patch("app.tasks.helpers.mark_no_speech"),
+            patch("builtins.open", MagicMock()),
+            patch("app.tasks.transcribe_helpers.json"),
+        ):
+            mock_settings.whisper_model = "large-v3-turbo"
+            mock_settings.transcript_dir = "/data/transcripts"
+
+            from app.tasks.transcribe import transcribe_episode
+
+            transcribe_episode("ep1")
+
+        mock_jq.enqueue.assert_not_called()
+
+
+class TestTerminalStatuses:
+    """#955: the constant that keeps a finished episode from looking stranded."""
+
+    def test_no_speech_is_terminal(self):
+        from app.tasks.helpers import TERMINAL_STATUSES
+
+        # If this drops out, recover_stranded_episodes re-enqueues every
+        # no-speech episode on every run, forever.
+        assert "no_speech" in TERMINAL_STATUSES
+        assert {"done", "failed"} <= TERMINAL_STATUSES
+
+    def test_stranded_recovery_ignores_terminal_statuses(self):
+        import inspect
+        from app.tasks import cleanup
+
+        src = inspect.getsource(cleanup.recover_stranded_episodes)
+        # Guards against someone reintroducing the literal list, which is how
+        # the hazard would come back.
+        assert "TERMINAL_STATUSES" in src
+        assert '"done", "failed", "pending"' not in src
+
+
+class TestNoSpeechIsNotAFailure:
+    def test_mark_no_speech_does_not_emit_a_failure_notification(self):
+        from unittest.mock import patch as p
+
+        with (
+            p("app.tasks.helpers.update_episode") as mock_update,
+            p("app.tasks.helpers.emit_episode_failed_event") as mock_emit,
+        ):
+            from app.tasks.helpers import mark_no_speech
+
+            mark_no_speech(MagicMock(), "ep1", "no speech")
+
+        mock_update.assert_called_once()
+        assert mock_update.call_args[1]["status"] == "no_speech"
+        assert mock_update.call_args[1]["error_class"] == "NO_SPEECH"
+        # Nothing malfunctioned -- paging the operator would be wrong.
+        mock_emit.assert_not_called()
