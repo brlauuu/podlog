@@ -54,13 +54,64 @@ python-multipart = ">=0.0.31,<0.1"
 # Token counting for meta-analysis dashboard (#521)
 tiktoken = "^0.13.0"
 
-# ML group (#915). Optional and not installed by default -- only the worker
-# needs it. As of 2026-08-09 the CI dependency audit covers this group by
-# exporting the lock rather than installing it, and it is the largest CVE
-# surface in the project: torch 2.8.0 carries 8 advisories, transformers
-# 4.57.6 carries 5, lightning 2.6.5 carries 1. Upgrading is not a version
-# bump -- torch 2.9/2.10 moves whisperx and pyannote-audio with it, so it
-# needs its own scoped piece of work against a real GPU/CPU run.
+# ML group (#915). Optional and not installed by default -- the worker needs
+# all of it, the control plane needs sentence-transformers for /api/embed.
+# Since 2026-08-09 the CI dependency audit covers this group by exporting the
+# lock, which is what made its advisories visible for the first time.
+#
+# ---------------------------------------------------------------------------
+# CVE triage, 2026-08-19 (#951). The audit reports 14 findings here. NONE can
+# be resolved by a version bump today, and the reason is a single package.
+#
+# whisperx 3.8.6 (the latest release; 3.8.7rc1 is identical here) declares:
+#     torch~=2.8.0            -> forbids torch 2.9.0 / 2.10.0
+#     huggingface-hub<1.0.0   -> forbids hub 1.x
+#                             -> forbids transformers 5.x (it needs hub>=1.3.0)
+#
+# So whisperx blocks every advisory that has an upstream fix. Note our own
+# `huggingface-hub = ">=0.28.1,<1.0"` pin below is NOT the binding constraint
+# -- whisperx enforces the same bound independently, so relaxing ours would
+# change nothing.
+#
+# Per-finding status:
+#
+#   NOT APPLICABLE (3) -- affected versions are 2.6.0 only; we run 2.8.0.
+#     torch PYSEC-2025-194   last_affected "2.6.0-NA", an unparseable version
+#     torch CVE-2025-2999    range is a git commit pip-audit cannot resolve
+#     torch CVE-2025-3001    same
+#   These are pip-audit matching conservatively, not real exposure.
+#
+#   REAL, BLOCKED BY whisperx (8)
+#     torch        PYSEC-2025-203/204/206   fixed in 2.9.0
+#     torch        PYSEC-2026-2286          fixed in 2.10.0
+#     transformers PYSEC-2025-217           fixed in 5.0.0
+#     transformers PYSEC-2026-2288          fixed in 5.0.0
+#     transformers PYSEC-2026-2289          fixed in 5.3.0
+#     transformers PYSEC-2026-2290          fixed after 5.2.0
+#
+#   NO FIX IN ANY RELEASE (2)
+#     torch     PYSEC-2026-139   affects everything <=2.10.0; local-only attack
+#     lightning PYSEC-2026-3624  fixed only in an unreleased commit (d710d68).
+#                                The advisory's "fix version 2022.6.15" is bad
+#                                metadata, not a real target -- do not act on it.
+#
+# Reachability. Every real finding requires loading an attacker-controlled
+# model or checkpoint: torch's weights_only unpickler, lightning's
+# load_from_checkpoint, transformers' Trainer, X-CLIP conversion, LightGlue
+# loading, or a crafted config.json. Two are unreachable on independent
+# grounds -- Podlog never trains (Trainer is unused, and that advisory needs
+# torch<2.6 anyway), and X-CLIP/LightGlue models are never loaded.
+#
+# The rest reduce to one question: can anything other than the operator choose
+# which model gets loaded? Until #951 the answer was yes -- `embedding_model`
+# accepted an arbitrary string and reached SentenceTransformer(), which
+# resolves it as a Hub repo id. That is now allowlisted in
+# services/notification_settings.py, which is the one part of this that WAS
+# fixable. See #952 for the broader unauthenticated-API question.
+#
+# Re-check when whisperx relaxes either pin. That is the trigger; nothing
+# else here moves until then.
+# ---------------------------------------------------------------------------
 [tool.poetry.group.ml]
 optional = true
 

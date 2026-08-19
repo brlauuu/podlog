@@ -80,6 +80,22 @@ _VALID_PYANNOTE_LOCAL_MODELS = {
     "pyannote/speaker-diarization-community-1",
     "pyannote/speaker-diarization-3.1",
 }
+# Curated list of local embedding models (#951). Same rationale as the
+# pyannote allowlist above, plus a security one: the value is passed
+# straight to SentenceTransformer(), which resolves it as a HuggingFace Hub
+# repo id and downloads whatever is there. transformers PYSEC-2026-2289 --
+# unfixable while whisperx pins huggingface-hub<1.0 -- executes attacker
+# code from a crafted config.json during that load, so an unvalidated model
+# name is a remote code execution path, not just a typo risk.
+#
+# Both entries are 384-dimensional, matching the segments.embedding column.
+# Adding a model of a different dimension here would be rejected later by
+# _validate_vectors_dim, and switching between these two is refused by the
+# provenance guard (#945) unless the corpus is re-embedded.
+_VALID_EMBEDDING_MODELS = {
+    "all-MiniLM-L6-v2",
+    "BAAI/bge-small-en-v1.5",
+}
 _VALID_RAG_PROVIDERS = {"local", "fireworks"}
 _INFERENCE_FIELDS = {
     "inference_provider",
@@ -199,6 +215,12 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
             raise ValueError(
                 f"diarization_provider must be one of {_VALID_DIARIZATION_PROVIDERS}, "
                 f"got '{updates['diarization_provider']}'"
+            )
+    if "embedding_model" in updates:
+        if updates["embedding_model"] not in _VALID_EMBEDDING_MODELS:
+            raise ValueError(
+                f"embedding_model must be one of {sorted(_VALID_EMBEDDING_MODELS)}, "
+                f"got '{updates['embedding_model']}'"
             )
     if "pyannote_model" in updates:
         if updates["pyannote_model"] not in _VALID_PYANNOTE_LOCAL_MODELS:
