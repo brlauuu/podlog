@@ -50,6 +50,19 @@ jobs:
     # Advisory-only for now (continue-on-error): findings show up in the
     # job log without blocking unrelated PRs on a fresh upstream CVE.
     # Flip `continue-on-error` to false to make it a hard gate.
+    #
+    # EXPECTED TO BE RED as of 2026-08-19 (#951). The non-ML dependencies
+    # audit clean since #906; every remaining finding is in the optional ml
+    # group and none can be fixed today -- whisperx pins torch~=2.8.0 and
+    # huggingface-hub<1.0.0, which blocks every advisory that has an
+    # upstream fix. The per-advisory triage, including which findings do not
+    # apply at all, is recorded in apps/pipeline/pyproject.toml above the ml
+    # group. Read that before investigating a red run here.
+    #
+    # The count is the signal: 14 findings across torch, transformers and
+    # lightning. If that number CHANGES, something new has landed and is
+    # worth looking at. Upstream trigger to watch: whisperX PR #1417 or a
+    # whisperx 3.9 release relaxing either pin.
     name: Pipeline Dependency Audit
     runs-on: ubuntu-latest
     continue-on-error: true
