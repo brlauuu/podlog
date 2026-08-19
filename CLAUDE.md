@@ -115,7 +115,7 @@ make test-unit         # Run pipeline unit tests + host healthcheck test (no web
 make shell-db          # Open psql shell
 ```
 
-`make up` starts db, pipeline, worker, ollama, web, and backup (6 services); `explore` is opt-in via the `explore` compose profile (`make explore`). Exposed ports: web (:3000), pipeline API (:8000), ollama (:11434).
+`make up` starts db, pipeline, worker, ollama, web, and backup (6 services); `explore` is opt-in via the `explore` compose profile (`make explore`). Exposed ports: web on `0.0.0.0:3000` (reachable from the LAN, deliberately); db (:5432), pipeline API (:8000) and ollama (:11434) are bound to `127.0.0.1` only (#952), as `explore` (:8888) already was. Host tooling keeps working — `scripts/healthcheck.py`, `make backfill` and the guides all use `localhost` — and containers reach each other by service name over the compose network, not through these mappings.
 
 ## Conventions
 

@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Major changes
+- The database, pipeline API and Ollama are no longer reachable from your local network. They were published on all interfaces, so any device that could route to the machine running Podlog could connect to PostgreSQL directly, or call the pipeline API — which has no authentication and whose settings endpoint holds your Fireworks and pyannote keys. All three are now bound to the machine itself, matching how the optional Jupyter service was already configured. The web interface is deliberately left reachable, so you can still open Podlog from a phone or another computer. Nothing else changes: the containers talk to each other over their private network, and the health check, `make` targets and documented `curl` commands all run on the same machine. ([#952](https://github.com/brlauuu/podlog/issues/952))
+
 ## 0.6.0 — 2026-08-19
 
 ### Major changes
