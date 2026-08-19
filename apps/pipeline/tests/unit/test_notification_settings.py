@@ -6,6 +6,7 @@ import pytest
 
 from app.models import SystemState
 from app.services.notification_settings import (
+    _FIELDS,
     get_notification_settings,
     get_runtime_diarization_settings,
     get_runtime_embedding_settings,
@@ -173,6 +174,46 @@ class TestSaveNotificationSettings:
         db = _mock_db(stored_json=None)
         with pytest.raises(ValueError, match="rag_provider"):
             save_notification_settings(db, {"rag_provider": "openai"})
+
+    @pytest.mark.parametrize(
+        "model", ["all-MiniLM-L6-v2", "BAAI/bge-small-en-v1.5"]
+    )
+    def test_accepts_both_allowlisted_embedding_models(self, model):
+        """#951: the allowlist must not break the #944 recovery path.
+
+        Installs whose corpus was embedded through Fireworks have to be able
+        to set BAAI/bge-small-en-v1.5 to keep their existing vectors. If the
+        allowlist rejected it, the only route back would be re-embedding.
+        """
+        db = _mock_db(stored_json=None)
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            for field in _FIELDS:
+                setattr(mock_settings, field, None)
+            mock_settings.smtp_port = 25
+            mock_settings.notification_frequency = "immediate"
+            result = save_notification_settings(db, {"embedding_model": model})
+        assert result["embedding_model"] == model
+
+    def test_rejects_arbitrary_embedding_model(self):
+        """#951: embedding_model is a remote code execution path if unvalidated.
+
+        The value is passed straight to SentenceTransformer(), which resolves
+        it as a HuggingFace Hub repo id and downloads it. transformers
+        PYSEC-2026-2289 -- which cannot be fixed while whisperx pins
+        huggingface-hub<1.0 -- executes attacker code from a crafted
+        config.json during exactly that load. So this allowlist is the
+        mitigation for an advisory we cannot patch.
+        """
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="embedding_model"):
+            save_notification_settings(db, {"embedding_model": "attacker/malicious-repo"})
+
+    def test_rejects_embedding_model_that_merely_looks_plausible(self):
+        # A near-miss on a real model name must fail too -- the check is an
+        # allowlist, not a heuristic.
+        db = _mock_db(stored_json=None)
+        with pytest.raises(ValueError, match="embedding_model"):
+            save_notification_settings(db, {"embedding_model": "BAAI/bge-small-en-v1.6"})
 
     def test_rejects_invalid_pyannote_model(self):
         """#681: only the curated set of HF model IDs is allowed."""
