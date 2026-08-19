@@ -22,7 +22,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Error classes that cannot be auto-retried -- user must resolve the root cause first
-NON_RETRYABLE = {"DISK_FULL", "OOM", "MANUAL_UPLOAD_FILE_MISSING"}
+# Error classes where the Retry button is suppressed server-side: retrying
+# cannot change the outcome. Mirrored in the web app's
+# apps/web/src/lib/queueStatus.ts::NON_RETRYABLE, which hides the button; a
+# parity test asserts the two match. Note this is a DIFFERENT set from
+# tasks/helpers.py::_NON_RETRYABLE, which governs *automatic* retry.
+NON_RETRYABLE = {"DISK_FULL", "OOM", "MANUAL_UPLOAD_FILE_MISSING", "NO_SPEECH"}
 
 # Terminal or known-idle statuses that are always safe to retry
 _RETRYABLE_STATUSES = {"done", "failed", "pending"}
@@ -91,7 +96,7 @@ def get_queue(db: Session = Depends(get_db)) -> dict:
         JOIN episodes e ON e.id = jq.episode_id
         LEFT JOIN feeds f ON f.id = e.feed_id
         WHERE jq.status = 'pending'
-          AND e.status NOT IN ('done', 'failed')
+          AND e.status NOT IN ('done', 'failed', 'no_speech')
           AND NOT EXISTS (
             SELECT 1 FROM job_queue jq2
             WHERE jq2.episode_id = e.id AND jq2.status = 'picked'
@@ -156,7 +161,7 @@ def get_queue(db: Session = Depends(get_db)) -> dict:
           f.title     AS feed_title
         FROM episodes e
         LEFT JOIN feeds f ON f.id = e.feed_id
-        WHERE e.status NOT IN ('done', 'failed')
+        WHERE e.status NOT IN ('done', 'failed', 'no_speech')
           AND NOT EXISTS (
             SELECT 1 FROM job_queue jq
             WHERE jq.episode_id = e.id AND jq.status IN ('pending', 'picked')

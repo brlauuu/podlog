@@ -15,7 +15,7 @@ from app.database import SessionLocal
 from app.models import Episode, Segment, SpeakerName
 from app.services.meta_analysis import set_stale
 from app.services.notification_runtime import emit_episode_done_event
-from app.tasks.helpers import mark_failed, update_episode
+from app.tasks.helpers import mark_no_speech, mark_failed, update_episode
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +61,13 @@ def archive_episode(episode_id: str) -> str:
         name_map = {sn.speaker_label: sn for sn in speaker_names}
 
         if not segments:
-            mark_failed(
+            # Backstop only (#955). Transcription now terminates a no-speech
+            # episode itself, so reaching here means segments disappeared after
+            # transcription -- still not a system fault, so it gets the same
+            # terminal outcome rather than SYSTEM_ERROR.
+            mark_no_speech(
                 db, episode_id,
-                error_class="SYSTEM_ERROR",
-                error_message="No transcript segments found at archival -- cannot mark done.",
+                "No transcript segments remained at archival. Nothing to index.",
             )
             return episode_id
 

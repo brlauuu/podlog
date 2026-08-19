@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  MicOff,
   XCircle,
 } from "lucide-react";
 import { formatTimestamp } from "@/lib/timestamp";
@@ -82,16 +83,32 @@ function ProviderTag({ provider }: { provider: string | null }) {
 
 function StatusTag({ status }: { status: string }) {
   const isFailed = status === "failed";
-  const label = isFailed ? "Failed" : status.charAt(0).toUpperCase() + status.slice(1);
+  // #955: no_speech is terminal, not in-flight. Without this branch it would
+  // render as "No_speech" next to a spinning loader, implying work still in
+  // progress on an episode that has already finished.
+  const isNoSpeech = status === "no_speech";
+  const label = isFailed
+    ? "Failed"
+    : isNoSpeech
+      ? "No speech"
+      : status.charAt(0).toUpperCase() + status.slice(1);
   return (
     <span
       className={`${CHIP_BASE_CLASS} gap-1 border ${
         isFailed
           ? "text-red-700 border-red-300 dark:text-red-300 dark:border-red-700"
-          : "text-blue-700 border-blue-300 dark:text-blue-300 dark:border-blue-700"
+          : isNoSpeech
+            ? "text-muted-foreground border-border"
+            : "text-blue-700 border-blue-300 dark:text-blue-300 dark:border-blue-700"
       }`}
     >
-      {isFailed ? <XCircle size={10} /> : <Loader2 size={10} className="animate-spin" />}
+      {isFailed ? (
+        <XCircle size={10} />
+      ) : isNoSpeech ? (
+        <MicOff size={10} />
+      ) : (
+        <Loader2 size={10} className="animate-spin" />
+      )}
       {label}
     </span>
   );

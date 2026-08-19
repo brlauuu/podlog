@@ -40,12 +40,28 @@ export const ACTIVE_STATUSES = new Set([
   "downloading", "transcribing", "diarizing", "embedding", "inferring", "archiving",
 ]);
 
+/**
+ * Statuses an episode can rest in permanently. Mirrors
+ * apps/pipeline/app/tasks/helpers.py::TERMINAL_STATUSES -- a parity test
+ * asserts the two match, because anything missing here is treated as
+ * mid-pipeline and shows as an active job forever (#955).
+ */
+export const TERMINAL_STATUSES = new Set(["done", "failed", "no_speech"]);
+
+/**
+ * Error classes where the Retry button is hidden: retrying cannot change the
+ * outcome. Mirrors apps/pipeline/app/api/queue.py::NON_RETRYABLE, which also
+ * rejects the request server-side.
+ */
 export const NON_RETRYABLE = new Set([
   "DISK_FULL",
   "OOM",
   // #650: clicking Retry on a manual upload whose file is gone would
   // just re-issue the same terminal failure. Suppress the button.
   "MANUAL_UPLOAD_FILE_MISSING",
+  // #955: the audio contains no speech. Re-running the pipeline re-downloads
+  // and re-transcribes to reach the identical result.
+  "NO_SPEECH",
 ]);
 
 export const ERROR_LABELS: Record<string, string> = {
@@ -55,6 +71,7 @@ export const ERROR_LABELS: Record<string, string> = {
   OOM: "Out of memory — check hardware requirements",
   SYSTEM_ERROR: "Unexpected error",
   MANUAL_UPLOAD_FILE_MISSING: "Manual upload file missing — re-upload and retry",
+  NO_SPEECH: "No speech detected — nothing to index",
 };
 
 export function sortByUpdated(jobs: Job[]): Job[] {

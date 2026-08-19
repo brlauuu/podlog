@@ -79,10 +79,19 @@ class TestArchiveEpisode:
         mock_update.assert_any_call(db, "ep1", status="archiving")
         mock_emit_done.assert_called_once_with(db, ep)
 
+    @patch("app.tasks.archive.mark_no_speech")
     @patch("app.tasks.archive.mark_failed")
     @patch("app.tasks.archive.update_episode")
     @patch("app.tasks.archive.SessionLocal")
-    def test_no_segments_fails(self, mock_session_cls, mock_update, mock_mark_failed):
+    def test_no_segments_is_terminal_no_speech_not_a_system_error(
+        self, mock_session_cls, mock_update, mock_mark_failed, mock_no_speech
+    ):
+        """#955: reaching archival with no segments is not a system fault.
+
+        Transcription now terminates a no-speech episode itself, so this path
+        is a backstop for segments disappearing afterwards. Either way the
+        outcome is "nothing to index", not a broken pipeline.
+        """
         ep = _make_episode()
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = ep
@@ -101,10 +110,9 @@ class TestArchiveEpisode:
             result = archive_episode("ep1")
 
         assert result == "ep1"
-        mock_mark_failed.assert_called_once_with(
-            db, "ep1", error_class="SYSTEM_ERROR",
-            error_message="No transcript segments found at archival -- cannot mark done.",
-        )
+        mock_mark_failed.assert_not_called()
+        mock_no_speech.assert_called_once()
+        assert "Nothing to index" in mock_no_speech.call_args[0][2]
 
     @patch("app.tasks.archive.mark_failed")
     @patch("app.tasks.archive.update_episode")
