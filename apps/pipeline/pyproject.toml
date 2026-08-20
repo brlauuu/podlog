@@ -1,8 +1,14 @@
 [tool.poetry]
 name = "podlog-pipeline"
-# Kept in sync with the repo-root VERSION file. The runtime version is read
-# from that file by app.main._read_version(); this is packaging metadata only.
-version = "0.6.0"
+# Deliberately pinned to the 0.0.0 sentinel (#936). The single source of
+# truth for the version is the repo-root /VERSION file, read at runtime by
+# app.main._read_version(). Poetry requires this key and accepts 0.0.0.
+#
+# It used to mirror /VERSION and had to be bumped by hand, which is exactly
+# how apps/web/package.json drifted five minor versions behind without
+# anything noticing. Verified before changing: nothing reads this value at
+# runtime -- _read_version() reads the file, not the package metadata.
+version = "0.0.0"
 description = "Podlog ingestion pipeline — RSS fetch, Whisper transcription, pyannote diarization"
 authors = []
 license = "O'Saasy"

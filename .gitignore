@@ -28,9 +28,10 @@ next-env.d.ts
 apps/web/.next/
 apps/web/node_modules/
 
-# Build artifacts — VERSION copies placed by `make build`
+# Build artifact — the VERSION copy `make build` used to place here.
+# apps/web/VERSION was dropped in #936: nothing has written it since the web
+# Dockerfile moved to a repo-root build context reading /VERSION directly.
 apps/pipeline/VERSION
-apps/web/VERSION
 
 # Docker volumes (local bind mounts during dev)
 data/

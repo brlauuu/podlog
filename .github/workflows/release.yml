@@ -1,0 +1,58 @@
+name: Release
+
+# Publishes a GitHub Release when a vX.Y.Z tag is pushed (#936).
+#
+# The tag is the trigger, not the source of truth. After #936 exactly two
+# things carry a version -- the repo-root VERSION file and the git tag -- and
+# scripts/release_notes.py asserts they agree before anything is published.
+# It also refuses to publish when `## Unreleased` still holds entries, which
+# would otherwise produce a release whose notes belong to the previous
+# version.
+#
+# #937 later hangs image publishing off this same trigger.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the tagged commit
+        uses: actions/checkout@v4
+        with:
+          # The tag, not the branch head -- VERSION is asserted against the
+          # tagged commit's contents, which is the whole point of the check.
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate and extract release notes
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Releasing $VERSION (tag $GITHUB_REF_NAME)"
+          {
+            echo "body<<RELEASE_NOTES_EOF"
+            python3 scripts/release_notes.py "$VERSION"
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "${{ steps.notes.outputs.body }}" \
+            --verify-tag
