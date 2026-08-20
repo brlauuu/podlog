@@ -37,16 +37,21 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Notes go to a FILE, never through a step output into a shell string.
+      # The first run of this workflow (v0.7.0) failed because the previous
+      # version interpolated `${{ steps.notes.outputs.body }}` straight into
+      # the `gh release create` command line: the changelog contains backticks
+      # (`make up`, `0.0.0`), and the shell executed them as command
+      # substitution. It actually ran `make up` on the runner. Any workflow
+      # that interpolates repository content into a `run:` block has the same
+      # defect -- the content is attacker-controllable in a fork PR.
       - name: Validate and extract release notes
-        id: notes
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           echo "Releasing $VERSION (tag $GITHUB_REF_NAME)"
-          {
-            echo "body<<RELEASE_NOTES_EOF"
-            python3 scripts/release_notes.py "$VERSION"
-            echo "RELEASE_NOTES_EOF"
-          } >> "$GITHUB_OUTPUT"
+          python3 scripts/release_notes.py "$VERSION" > "$RUNNER_TEMP/notes.md"
+          echo "--- notes ($(wc -l < "$RUNNER_TEMP/notes.md") lines) ---"
+          cat "$RUNNER_TEMP/notes.md"
 
       - name: Create the release
         env:
@@ -54,5 +59,5 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
-            --notes "${{ steps.notes.outputs.body }}" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             --verify-tag
