@@ -38,7 +38,7 @@ podlog/
 ├── LICENSE
 ├── .node-version                   # Node version for local dev
 ├── .nvmrc                          # Node version for nvm users
-├── .github/                        # GitHub Actions workflows (ci, ci-full-unit, ci-slow, changelog, release)
+├── .github/                        # GitHub Actions workflows (ci, ci-full-unit, ci-slow, changelog, release, publish-images)
 ├── issues/                         # Local issue drafts / notes
 ├── backups/                        # Daily DB dumps + rsync audio snapshots (gitignored)
 ├── notebooks/                      # Jupyter exploration notebooks (gitignored bind mount)
@@ -74,7 +74,7 @@ podlog/
 │   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
 │   └── explore/                    # Jupyter DB-exploration container (Dockerfile + requirements.txt; opt-in via `make explore`)
 ├── docs/                           # User-facing documentation and guides
-├── scripts/                        # Operational scripts (health check, docs-sync + npm/node CI gates, release-notes extractor)
+├── scripts/                        # Operational scripts (health check, docs-sync + npm/node CI gates, release-notes extractor, workflow-injection check)
 └── prds/                           # Specifications and risk register
 ```
 

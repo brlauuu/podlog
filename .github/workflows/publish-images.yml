@@ -1,0 +1,141 @@
+name: Publish Images
+
+# Phase 1 of #937: publish the four runtime images to GHCR so a user can run
+# a released version without building multi-GB ML dependencies locally.
+#
+# WHY ONE JOB PER IMAGE
+#
+# The worker image is 16.9 GB and pipeline is 13.4 GB (measured 2026-08-20,
+# after #939 removed 17 GB of baked poetry cache from each). A GitHub-hosted
+# ubuntu-latest runner has roughly 14 GB free by default, so neither ML image
+# can be built there without first reclaiming space, and the two together
+# cannot coexist on one runner at all.
+#
+# So: a matrix with one image per job, and a reclaim step before the heavy
+# ones. #937 asked for this to be measured before Phase 1 rather than
+# discovered during it.
+#
+# GHCR storage is free here because the repository is public.
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  publish:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      # One image per job so the two multi-GB ML images never share a runner.
+      # fail-fast off: a failure publishing one image should not cancel the
+      # others, or a release ends up half-published with no way to see how
+      # much of it worked.
+      fail-fast: false
+      matrix:
+        include:
+          - image: podlog-pipeline
+            context: ./apps/pipeline
+            dockerfile: apps/pipeline/Dockerfile.control
+            heavy: true
+          - image: podlog-worker
+            context: ./apps/pipeline
+            dockerfile: apps/pipeline/Dockerfile.worker
+            heavy: true
+          - image: podlog-web
+            context: .
+            dockerfile: apps/web/Dockerfile
+            heavy: false
+          - image: podlog-backup
+            context: ./apps/backup
+            dockerfile: apps/backup/Dockerfile
+            heavy: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Only for the ML images. Stripping the preinstalled Android SDK, .NET
+      # and friends reclaims roughly 30 GB, which is the difference between
+      # "no space left on device" and a working build.
+      - name: Reclaim runner disk
+        if: matrix.heavy
+        run: |
+          echo "Before:"; df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          sudo docker image prune -af || true
+          echo "After:"; df -h / | tail -1
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A version tag publishes X.Y.Z, X.Y, X and moves `stable`.
+      # A push to main publishes `edge`.
+      #
+      # `stable` starts from v0.7.0 (decided 2026-08-20). The four earlier
+      # tags were created retroactively and point at commits whose VERSION
+      # file disagrees with the tag, so an image built from them would not
+      # match its own label. v0.7.0 is the first tag cut through the release
+      # workflow with those invariants asserted.
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
+
+      # The web image bakes the version at build time (#644) -- without this
+      # the footer falls back to the 0.0.0 sentinel and reports a stale build.
+      - name: Read VERSION
+        id: version
+        run: echo "value=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          # amd64 only, per #937's non-goals: multi-arch would mean emulating
+          # a multi-GB ML install in CI, slow and flaky for no current user.
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Only apps/web/Dockerfile declares ARG APP_VERSION (#644) -- it
+          # bakes the footer version at build time. Passing it to the others
+          # would emit an unused-build-arg warning on every build.
+          build-args: ${{ matrix.image == 'podlog-web' && format('APP_VERSION={0}', steps.version.outputs.value) || '' }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      # Via env, never interpolated into the script. Same defect that broke
+      # the release workflow on its first run (#965): `${{ }}` is substituted
+      # as text before the shell parses it, so any backtick or $() in the
+      # value gets executed.
+      - name: Report
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          echo "Published:"
+          printf '%s\n' "$TAGS"
+          df -h / | tail -1

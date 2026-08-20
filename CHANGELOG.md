@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Internal
+- Runtime images are now published to the GitHub container registry on each release, so a future update can pull a known-good version instead of rebuilding several gigabytes of machine-learning dependencies locally. Nothing consumes them yet — wiring them into the compose setup and adding an update command come next. Each image builds in its own CI job, because the two largest are 13 GB and 17 GB and a standard runner has about 14 GB of disk; the heavy jobs reclaim space first. Also adds a check that fails the build if any workflow pastes a value into a shell command, after that mistake shipped once and was very nearly repeated. ([#937](https://github.com/brlauuu/podlog/issues/937))
+
 ## 0.7.0 — 2026-08-20
 
 ### Fixes

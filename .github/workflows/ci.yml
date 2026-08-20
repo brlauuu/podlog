@@ -28,6 +28,13 @@ jobs:
       - name: Verify CLAUDE.md / docs/development.md reference real paths
         run: python scripts/check_docs_sync.py
 
+      # #937/#965: a ${{ }} expression inside a `run:` block is substituted as
+      # text before the shell parses it, so backticks in the value execute.
+      # This shipped once and was then written a second time the same day, so
+      # it gets a check rather than a code-review habit.
+      - name: Verify no workflow interpolates into a shell command
+        run: python scripts/check_workflow_injection.py
+
   pipeline-unit-fast:
     name: Pipeline Unit Fast
     runs-on: ubuntu-latest
