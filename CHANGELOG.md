@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+- The installation guide now has a **Security model** section describing what is reachable from your network and what is not. Podlog assumes it runs on one machine you trust: the web interface is reachable from your network so you can browse from a phone, while the database, the pipeline API and Ollama are reachable only from the machine Podlog runs on. It also spells out the two changes that would break that assumption — re-publishing those ports, or moving the web container to a different host — and says to add authentication first if you need either. ([#960](https://github.com/brlauuu/podlog/issues/960))
+
 ### Major changes
 - Ask can now be scoped to a single speaker across every podcast and episode. Asking "what did X say about Y" used to retrieve whatever was most similar to Y regardless of who said it, because the stored embeddings carry no speaker information — the answer would then attribute those words to the person you asked about. A speaker dropdown on the Ask page, populated from the names you have confirmed, restricts retrieval to passages that person actually spoke. It works across episodes and feeds: diarization labels a given person differently in every episode, and the filter resolves through your renames rather than those raw labels. Verified on a real library — the same question returned passages from seven different people unscoped, and only the chosen speaker's, spanning four episodes, when scoped. ([#696](https://github.com/brlauuu/podlog/issues/696))
 

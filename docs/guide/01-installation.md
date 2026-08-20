@@ -90,16 +90,33 @@ Podlog starts these containers by profile:
 
 Service details:
 
-| Service | Port | Role |
-|---|---|---|
-| **web** | 3000 | Next.js frontend — home, search, episodes, queue, Ask |
-| **pipeline** | 8000 | FastAPI control plane — feed management, health |
-| **worker** | — | Processes episodes: download, transcribe, diarize, chunk, embed, infer, archive |
-| **db** | 5432 | PostgreSQL 15 with pgvector for FTS + semantic search |
-| **ollama** | 11434 | Local Ask AI generation provider (local-first profile) |
-| **backup** | — | Nightly DB dump + audio archive snapshot into `./backups/` (see [Backups](16-backups.md)) |
+| Service | Port | Reachable from | Role |
+|---|---|---|---|
+| **web** | 3000 | your network | Next.js frontend — home, search, episodes, queue, Ask |
+| **pipeline** | 8000 | this machine only | FastAPI control plane — feed management, health |
+| **worker** | — | — | Processes episodes: download, transcribe, diarize, chunk, embed, infer, archive |
+| **db** | 5432 | this machine only | PostgreSQL 15 with pgvector for FTS + semantic search |
+| **ollama** | 11434 | this machine only | Local Ask AI generation provider (local-first profile) |
+| **backup** | — | — | Nightly DB dump + audio archive snapshot into `./backups/` (see [Backups](16-backups.md)) |
 
 No Redis, no Celery — the job queue is PostgreSQL-backed.
+
+## Security model
+
+Podlog assumes it runs on **one machine that you trust**. Read this before changing how it is deployed.
+
+**The web interface is the only thing exposed to your network.** You can open Podlog from a phone or another computer. The database, the pipeline API and Ollama are bound to `127.0.0.1` and are reachable only from the machine Podlog runs on.
+
+**The pipeline API has no authentication.** Anything able to reach port 8000 can change settings, add and delete feeds, upload episodes, trigger re-processing, and read configuration. Today that means processes on the Podlog host itself — which is an acceptable boundary, because anything with a shell there can read your `.env` anyway.
+
+That boundary is doing real work, so two changes would break it:
+
+- **Do not re-publish port 8000, 5432 or 11434 to `0.0.0.0`.** The `ports:` entries in `docker-compose.yml` are deliberately `127.0.0.1:`-prefixed. Removing that prefix puts an unauthenticated write API, or your database, on your local network.
+- **Do not move the `web` container to a different host** without putting authentication in front of the pipeline API first. `web` reaches it over the private Docker network; splitting them means exposing it.
+
+If you need either, treat adding authentication as a prerequisite rather than a follow-up. See [issue #960](https://github.com/brlauuu/podlog/issues/960) for the options that were considered.
+
+**Your API keys live in `.env`** — Fireworks, pyannote, Telegram, SMTP. It is gitignored. The settings API masks them on read, but anyone who can read the file has them outright.
 
 ## Common Commands
 
