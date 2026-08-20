@@ -5,8 +5,13 @@ services:
       POSTGRES_DB: podlog
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Bound to loopback (#952). Postgres holds everything and was reachable
+    # from the whole LAN; password auth is the only thing that stood between
+    # the network and the data. Host tooling is unaffected -- `make shell-db`
+    # goes through `docker compose exec`, and every container reaches the DB
+    # as `db:5432` over the compose network, not via this mapping.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -30,8 +35,15 @@ services:
       BACKUP_RETENTION_DAILY: ${BACKUP_RETENTION_DAILY:-7}
       BACKUP_RETENTION_WEEKLY: ${BACKUP_RETENTION_WEEKLY:-4}
       BACKUP_RETENTION_MONTHLY: ${BACKUP_RETENTION_MONTHLY:-12}
+    # Bound to loopback (#952). The pipeline API has no authentication, and
+    # every write endpoint -- settings (which holds the Fireworks and pyannote
+    # keys), backfill, retry, upload, feed CRUD -- was open to anything that
+    # could route here. Removing the mapping entirely was considered and
+    # rejected: scripts/healthcheck.py, `make backfill` and two user guides all
+    # call http://localhost:8000. Loopback keeps those working while dropping
+    # LAN reachability. The web container uses http://pipeline:8000.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -84,8 +96,10 @@ services:
 
   ollama:
     image: ollama/ollama:latest
+    # Bound to loopback (#952). Ollama's API is unauthenticated and will run
+    # arbitrary prompts against local models for anyone who can reach it.
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
@@ -111,6 +125,11 @@ services:
         # falls back to the repo-root VERSION file, so the baked-in version is
         # never the 0.0.0 sentinel that made the footer cry "rebuild available".
         APP_VERSION: ${APP_VERSION:-}
+    # Deliberately NOT loopback-bound (#952), unlike db/pipeline/ollama above.
+    # This is the user-facing UI and being able to open Podlog from a phone or
+    # another machine on the LAN is a reasonable thing to want. It is read-
+    # mostly and does not expose the API keys the settings endpoint holds.
+    # Change this to 127.0.0.1:3000:3000 if you only ever browse from this host.
     ports:
       - "3000:3000"
     environment:

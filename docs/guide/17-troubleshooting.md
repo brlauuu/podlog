@@ -96,6 +96,14 @@ make logs                         # tail logs for all services
 curl -s http://localhost:8000/api/health | python3 -m json.tool
 ```
 
+> **This only works from the machine running Podlog.** The database, pipeline
+> API and Ollama are bound to `127.0.0.1` so they are not reachable from other
+> devices on your network — the pipeline API has no authentication and its
+> settings endpoint holds your Fireworks and pyannote keys. The web UI on port
+> 3000 *is* reachable from the LAN, so you can still browse Podlog from a phone
+> or another computer. To change either, edit the `ports:` entries in
+> `docker-compose.yml`.
+
 The host-level health check (`make health-install`) runs the same probes every 15 minutes and can send Telegram alerts on state transitions — see [Notifications](09-notifications.md#health-monitoring).
 
 ## Stuck or zombie episodes
