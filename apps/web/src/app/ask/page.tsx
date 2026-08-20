@@ -12,6 +12,7 @@ import SearchInput from "@/components/SearchInput";
 import HelpPopover from "@/components/HelpPopover";
 import SearchSpinner from "@/components/SearchSpinner";
 import PodcastFilter from "@/components/PodcastFilter";
+import SpeakerFilter from "@/components/SpeakerFilter";
 import {
   RAG_MODELS,
   DEFAULT_RAG_MODEL,
@@ -72,6 +73,13 @@ export default function AskPage() {
   );
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [feedsLoading, setFeedsLoading] = useState(true);
+  // #696: scope retrieval to one speaker across every feed and episode.
+  // Before this, asking "what did X say about Y" retrieved whatever was most
+  // similar to Y regardless of who said it -- chunk embeddings carry no
+  // speaker signal.
+  const [selectedSpeaker, setSelectedSpeaker] = useState<string | null>(
+    initialSnapshot?.selectedSpeaker ?? null
+  );
   const [selectedFeedIds, setSelectedFeedIds] = useState<Set<string>>(
     new Set(initialSnapshot?.selectedFeedIds || [])
   );
@@ -161,9 +169,10 @@ export default function AskPage() {
       errorMsg,
       model,
       selectedFeedIds: Array.from(selectedFeedIds),
+      selectedSpeaker,
       helpCoverageSnapshot,
     });
-  }, [question, answer, sources, status, errorMsg, model, selectedFeedIds, helpCoverageSnapshot]);
+  }, [question, answer, sources, status, errorMsg, model, selectedFeedIds, selectedSpeaker, helpCoverageSnapshot]);
 
   // Fetch feeds and coverage stats
   useEffect(() => {
@@ -207,6 +216,7 @@ export default function AskPage() {
         const body: Record<string, unknown> = { question: q, model };
         if (selectedFeedIds.size > 0)
           body.feed_ids = Array.from(selectedFeedIds);
+        if (selectedSpeaker) body.speaker_display = selectedSpeaker;
 
         const resp = await fetch("/api/pipeline/ask", {
           method: "POST",
@@ -270,7 +280,7 @@ export default function AskPage() {
         );
       }
     },
-    [question, model, selectedFeedIds]
+    [question, model, selectedFeedIds, selectedSpeaker]
   );
 
   function handleClear() {
@@ -383,6 +393,15 @@ export default function AskPage() {
               onSelectionChange={setSelectedFeedIds}
               hasManualUploads={hasManualUploads}
               loading={feedsLoading && feeds.length === 0 && !hasManualUploads}
+            />
+
+            {/* Speaker filter (#696) — same component the search page uses,
+                populated from confirmed renames across the selected feeds. */}
+            <SpeakerFilter
+              feedIds={Array.from(selectedFeedIds)}
+              includeManualUploads={selectedFeedIds.has("__uploads__")}
+              selectedSpeaker={selectedSpeaker}
+              onSelectionChange={setSelectedSpeaker}
             />
           </div>
 

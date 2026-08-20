@@ -198,3 +198,37 @@ class TestAskHistory:
             },
         )
         assert resp.status_code == 422
+
+
+
+class TestAskSpeakerScope:
+    """#696: the /ask endpoint passes the chosen speaker through to retrieval."""
+
+    def _run(self, payload):
+        """Drive the endpoint with everything downstream of retrieval stubbed."""
+        with (
+            patch("app.api.ask.check_model_available", new_callable=AsyncMock, return_value=True),
+            patch("app.api.ask.get_runtime_inference_settings", return_value={"inference_provider": "local"}),
+            patch("app.api.ask.retrieve_chunks", return_value=[]) as mock_retrieve,
+            patch("app.api.ask.get_prompt", return_value="SYSTEM"),
+            patch("app.api.ask.build_prompt", return_value=[{"role": "user", "content": "t"}]),
+            patch("app.api.ask.chunks_to_sources", return_value=[]),
+            patch("app.api.ask.stream_response") as mock_stream,
+        ):
+            async def fake_stream(*args, **kwargs):
+                yield "ok"
+
+            mock_stream.side_effect = fake_stream
+            resp = client.post("/api/ask", json=payload)
+            resp.read()  # drain, so the generator body actually executes
+        return mock_retrieve
+
+    def test_speaker_display_reaches_retrieve_chunks(self):
+        mock_retrieve = self._run(
+            {"question": "what about pricing?", "speaker_display": "Jacob Shapiro"}
+        )
+        assert mock_retrieve.call_args.kwargs["speaker_display"] == "Jacob Shapiro"
+
+    def test_omitting_it_leaves_retrieval_unscoped(self):
+        mock_retrieve = self._run({"question": "what about pricing?"})
+        assert mock_retrieve.call_args.kwargs["speaker_display"] is None

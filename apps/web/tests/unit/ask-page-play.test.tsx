@@ -95,7 +95,17 @@ describe("Ask page source card actions", () => {
       "Episode 42"
     );
     expect(openSpy).not.toHaveBeenCalled();
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+    // The point of this assertion is that playback is embedded -- it must not
+    // navigate or re-ask. Asserting an exact total fetch count made it a
+    // tripwire for any unrelated mount-time request (it broke when the
+    // speaker picker was added in #696), so assert the thing it cares about.
+    await waitFor(() =>
+      expect(
+        (global.fetch as jest.Mock).mock.calls.filter(
+          ([url]) => url === "/api/pipeline/ask"
+        )
+      ).toHaveLength(0)
+    );
 
     openSpy.mockRestore();
   });
