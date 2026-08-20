@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Internal
+- The version number now lives in exactly one file. `apps/pipeline/pyproject.toml` and `apps/web/package.json` used to carry their own copies that had to be updated by hand, which is how the web one drifted five minor versions behind without anything noticing — nothing reads either at runtime. Both are now pinned to a `0.0.0` placeholder, leaving `/VERSION` and the git tag as the only two places a version appears. A new release workflow publishes the GitHub release automatically when a version tag is pushed, and refuses to do so if the tag disagrees with `/VERSION` or if the changelog still has unreleased entries that were never filed under the version being released. ([#936](https://github.com/brlauuu/podlog/issues/936))
+
 ### Major changes
 - The database, pipeline API and Ollama are no longer reachable from your local network. They were published on all interfaces, so any device that could route to the machine running Podlog could connect to PostgreSQL directly, or call the pipeline API — which has no authentication and whose settings endpoint holds your Fireworks and pyannote keys. All three are now bound to the machine itself, matching how the optional Jupyter service was already configured. The web interface is deliberately left reachable, so you can still open Podlog from a phone or another computer. Nothing else changes: the containers talk to each other over their private network, and the health check, `make` targets and documented `curl` commands all run on the same machine. ([#952](https://github.com/brlauuu/podlog/issues/952))
 

@@ -38,7 +38,7 @@ podlog/
 ├── LICENSE
 ├── .node-version                   # Node version for local dev
 ├── .nvmrc                          # Node version for nvm users
-├── .github/                        # GitHub Actions workflows (ci, ci-full-unit, ci-slow, changelog)
+├── .github/                        # GitHub Actions workflows (ci, ci-full-unit, ci-slow, changelog, release)
 ├── issues/                         # Local issue drafts / notes
 ├── backups/                        # Daily DB dumps + rsync audio snapshots (gitignored)
 ├── notebooks/                      # Jupyter exploration notebooks (gitignored bind mount)
@@ -74,7 +74,7 @@ podlog/
 │   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
 │   └── explore/                    # Jupyter DB-exploration container (Dockerfile + requirements.txt; opt-in via `make explore`)
 ├── docs/                           # User-facing documentation and guides
-├── scripts/                        # Operational scripts (health check, docs-sync + npm/node CI gates)
+├── scripts/                        # Operational scripts (health check, docs-sync + npm/node CI gates, release-notes extractor)
 └── prds/                           # Specifications and risk register
 ```
 
@@ -126,6 +126,9 @@ make shell-db          # Open psql shell
   - Pipeline: `pytest` — unit tests mock DB/models, integration tests use a real test DB.
   - Web: `jest` + `@testing-library/react` for unit, `playwright` for e2e.
 - **PRD references:** When implementing a feature, cite the PRD section (e.g. "per PRD-02 §5.6") in code comments only where the requirement is non-obvious.
+- **Versioning (#936):** `/VERSION` at the repo root is the **only file containing a version**. The git tag is the only other place a version appears, and `scripts/release_notes.py` asserts the two agree before a release publishes. `apps/pipeline/pyproject.toml` and `apps/web/package.json` are both pinned to the `0.0.0` sentinel on purpose — neither is read at runtime, and keeping them "in sync by hand" is exactly how `package.json` drifted five minor versions behind without anything noticing. Do not reintroduce a version number anywhere else.
+- **Semver policy:** **Major** — a change the operator must act on: a removed or renamed env var, a migration that cannot be rolled back by restoring the previous dump, a new external service requirement (e.g. a newly mandatory API key), or a breaking change to the pipeline API the web app consumes. **Minor** — new user-visible capability, additive env vars with working defaults, additive migrations. **Patch** — fixes, dependency refreshes, docs, internal work.
+- **Releasing:** bump `/VERSION`, graduate `## Unreleased` into a dated section, merge, then push a `vX.Y.Z` annotated tag. `.github/workflows/release.yml` validates and publishes. It refuses to publish if the tag disagrees with `VERSION`, or if `## Unreleased` still holds entries. No fixed calendar — cut a release when `Unreleased` has accumulated user-visible entries and CI is green.
 - **When modifying the design:** Update the relevant PRD and RISKS-AND-GAPS.md. Bump the version number.
 - **Changelog:** PRs that ship user-visible behavior add a one-line entry to `CHANGELOG.md` under `## Unreleased`, grouped as Major / Minor / Fixes (or Internal where appropriate). Version headings are bare semver (`## 0.3.0 — 2026-04-24`), not the keepachangelog reference-link form (`## [0.3.0]`) — the latter breaks the About-page anchor lookup (#644). The same file is rendered at the bottom of `/about` in the web app, so write entries for a human reading them there.
 

@@ -12,10 +12,12 @@ down:           ## Stop all services
 down-remote:    ## Stop remote-inference profile stack
 	docker compose -f docker-compose.yml -f docker-compose.remote.yml down
 
+# Does not copy VERSION into apps/pipeline/ any more (#936): the pipeline gets
+# it at runtime from the ./VERSION:/app/VERSION:ro bind mount, web bakes it
+# from the repo-root build context, and the worker never reads it. The old
+# cp/rm dance also left a stray file behind whenever a build failed.
 build:          ## Rebuild all images (reads version from VERSION file)
-	@cp VERSION apps/pipeline/VERSION
 	docker compose build --build-arg APP_VERSION=$$(cat VERSION)
-	@rm -f apps/pipeline/VERSION
 
 logs:           ## Follow logs for all services
 	docker compose logs -f
