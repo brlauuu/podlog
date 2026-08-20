@@ -77,6 +77,10 @@ function mockRoutes(ask: () => unknown) {
       } as Response);
     if (url === "/api/notifications/settings")
       return Promise.resolve({ json: async () => ({ rag_provider: "local" }) } as Response);
+    // #696: the page now renders a speaker picker, which fetches the
+    // confirmed-rename list on mount.
+    if (url.startsWith("/api/search/speakers"))
+      return Promise.resolve({ ok: true, json: async () => [] } as Response);
     if (url === "/api/pipeline/ask") return ask();
     throw new Error(`unmocked fetch in ask-page test: ${url}`);
   });
@@ -93,6 +97,52 @@ beforeEach(() => {
   mockFetch.mockReset();
   sessionStorage.clear();
   localStorage.clear();
+});
+
+describe("/ask — speaker scoping (#696)", () => {
+  test("asks unscoped when no speaker is picked", async () => {
+    mockRoutes(() => Promise.resolve(streamResponse(HAPPY_SSE)));
+
+    await askQuestion("what about pricing?");
+
+    const askCall = mockFetch.mock.calls.find(
+      ([url]) => url === "/api/pipeline/ask"
+    );
+    const body = JSON.parse(askCall![1].body);
+    expect(body.question).toBe("what about pricing?");
+    // Absent, not null -- the pipeline treats a missing key as "no scope".
+    expect("speaker_display" in body).toBe(false);
+  });
+
+  test("never sends the pre-#696 speaker_label key", async () => {
+    // The pipeline renamed the field. Sending the old one would be dropped
+    // silently by pydantic and scope nothing, which looks like the filter
+    // simply not working.
+    mockRoutes(() => Promise.resolve(streamResponse(HAPPY_SSE)));
+
+    await askQuestion("what about pricing?");
+
+    const askCall = mockFetch.mock.calls.find(
+      ([url]) => url === "/api/pipeline/ask"
+    );
+    expect("speaker_label" in JSON.parse(askCall![1].body)).toBe(false);
+  });
+
+  test("renders the speaker picker", async () => {
+    mockRoutes(() => Promise.resolve(streamResponse(HAPPY_SSE)));
+
+    render(<AskPage />);
+
+    // Populated from /api/search/speakers -- the same endpoint the search
+    // page uses, so confirmed renames across feeds show up here too.
+    await waitFor(() =>
+      expect(
+        mockFetch.mock.calls.some(([url]) =>
+          String(url).startsWith("/api/search/speakers")
+        )
+      ).toBe(true)
+    );
+  });
 });
 
 describe("/ask — SSE streaming", () => {

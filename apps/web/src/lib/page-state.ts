@@ -24,6 +24,10 @@ interface AskPageSnapshot {
   errorMsg: string;
   model: string;
   selectedFeedIds: string[];
+  // #696. Optional so snapshots written before the speaker filter existed
+  // still parse -- a returning user's restored session simply has no
+  // speaker scope rather than failing to restore at all.
+  selectedSpeaker?: string | null;
   helpCoverageSnapshot?: { processed: number; total: number } | null;
 }
 

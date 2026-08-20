@@ -69,7 +69,7 @@ def retrieve_chunks(
     top_k: int = TOP_K,
     feed_ids: list[str] | None = None,
     episode_id: str | None = None,
-    speaker_label: str | None = None,
+    speaker_display: str | None = None,
 ) -> list[ChunkResult]:
     """Retrieve top-K chunks by cosine similarity to the question embedding."""
     runtime = get_runtime_embedding_settings(db)
@@ -83,9 +83,25 @@ def retrieve_chunks(
     if episode_id:
         episode_filter = "AND c.episode_id = :episode_id"
         params["episode_id"] = episode_id
-    if speaker_label:
-        speaker_filter = "AND c.speaker_label = :speaker_label"
-        params["speaker_label"] = speaker_label
+    if speaker_display:
+        # #696: match the *resolved* speaker, not the raw diarization label.
+        #
+        # The old filter compared c.speaker_label, which is SPEAKER_00 and only
+        # means anything within one episode -- the same person is SPEAKER_00 in
+        # one episode and SPEAKER_03 in the next. So "what did Jacob say about
+        # pricing across my feeds" could not be expressed at all.
+        #
+        # This reuses the exact three-level fallback the SELECT already applies
+        # (speaker_names -> feed_speaker_cache -> raw label, added in #695), so
+        # the filter can never disagree with the name shown to the user. #696
+        # proposed materializing the (episode_id, speaker_label) pairs in
+        # Python instead; doing it declaratively avoids that set going stale
+        # against the display expression.
+        speaker_filter = (
+            "AND COALESCE(sn.display_name, fsc.display_name, c.speaker_label) "
+            "= :speaker_display"
+        )
+        params["speaker_display"] = speaker_display
     if feed_ids:
         # Build feed filter supporting both feed IDs and "uploads" (feed_id IS NULL)
         has_uploads = "__uploads__" in feed_ids

@@ -140,3 +140,72 @@ class TestRetrieveChunks:
         results = retrieve_chunks(mock_db, "what is this about?", episode_id="ep-42")
         assert len(results) == 1
         assert results[0].similarity == 0.1
+
+
+class TestSpeakerAwareRetrieval:
+    """#696: scope retrieval to a speaker across every feed and episode.
+
+    Chunk embeddings carry no speaker signal (chunking.py builds them from
+    segment text alone), so "what did X say about Y" previously retrieved
+    whatever was most similar to Y regardless of who said it. The LLM then
+    labelled those chunks with the right speaker while potentially
+    attributing the wrong words.
+    """
+
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_filters_on_the_resolved_name_not_the_raw_label(self, mock_embed):
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = []
+
+        from app.services.rag import retrieve_chunks
+        retrieve_chunks(mock_db, "q", speaker_display="Jacob Shapiro")
+
+        query_str = str(mock_db.execute.call_args[0][0])
+        params = mock_db.execute.call_args[0][1]
+
+        # The filter must use the same three-level fallback as the SELECT, or
+        # it can disagree with the name shown to the user.
+        assert "COALESCE(sn.display_name, fsc.display_name, c.speaker_label)" in query_str
+        assert params["speaker_display"] == "Jacob Shapiro"
+
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_does_not_compare_the_raw_diarization_label(self, mock_embed):
+        # The old filter was `c.speaker_label = :speaker_label`, which only
+        # means anything inside one episode -- the same person is SPEAKER_00
+        # in one and SPEAKER_03 in the next. Guard against a revert.
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = []
+
+        from app.services.rag import retrieve_chunks
+        retrieve_chunks(mock_db, "q", speaker_display="Jacob Shapiro")
+
+        query_str = str(mock_db.execute.call_args[0][0])
+        assert "AND c.speaker_label = :" not in query_str
+
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_no_speaker_filter_when_none_given(self, mock_embed):
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = []
+
+        from app.services.rag import retrieve_chunks
+        retrieve_chunks(mock_db, "q")
+
+        params = mock_db.execute.call_args[0][1]
+        assert "speaker_display" not in params
+
+    @patch("app.services.rag.embed_query", return_value=[0.1, 0.2, 0.3])
+    def test_combines_with_feed_scope(self, mock_embed):
+        # Speaker and feed filters are independent; asking about one person
+        # within a subset of feeds must apply both.
+        mock_db = MagicMock()
+        mock_db.execute.return_value.fetchall.return_value = []
+
+        from app.services.rag import retrieve_chunks
+        retrieve_chunks(mock_db, "q", feed_ids=["feed-1"], speaker_display="Marko Papic")
+
+        query_str = str(mock_db.execute.call_args[0][0])
+        params = mock_db.execute.call_args[0][1]
+        assert "e.feed_id IN" in query_str
+        assert "COALESCE(sn.display_name" in query_str
+        assert params["fid_0"] == "feed-1"
+        assert params["speaker_display"] == "Marko Papic"

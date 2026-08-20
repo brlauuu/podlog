@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Major changes
+- Ask can now be scoped to a single speaker across every podcast and episode. Asking "what did X say about Y" used to retrieve whatever was most similar to Y regardless of who said it, because the stored embeddings carry no speaker information — the answer would then attribute those words to the person you asked about. A speaker dropdown on the Ask page, populated from the names you have confirmed, restricts retrieval to passages that person actually spoke. It works across episodes and feeds: diarization labels a given person differently in every episode, and the filter resolves through your renames rather than those raw labels. Verified on a real library — the same question returned passages from seven different people unscoped, and only the chosen speaker's, spanning four episodes, when scoped. ([#696](https://github.com/brlauuu/podlog/issues/696))
+
 ### Internal
 - The version number now lives in exactly one file. `apps/pipeline/pyproject.toml` and `apps/web/package.json` used to carry their own copies that had to be updated by hand, which is how the web one drifted five minor versions behind without anything noticing — nothing reads either at runtime. Both are now pinned to a `0.0.0` placeholder, leaving `/VERSION` and the git tag as the only two places a version appears. A new release workflow publishes the GitHub release automatically when a version tag is pushed, and refuses to do so if the tag disagrees with `/VERSION` or if the changelog still has unreleased entries that were never filed under the version being released. ([#936](https://github.com/brlauuu/podlog/issues/936))
 

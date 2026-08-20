@@ -51,7 +51,10 @@ class AskRequest(BaseModel):
     feed_id: str | None = None
     feed_ids: list[str] | None = None
     episode_id: str | None = None
-    speaker_label: str | None = None
+    # #696: a resolved display name ("Jacob Shapiro"), not a raw SPEAKER_00
+    # label. Scopes retrieval to chunks that speaker actually spoke, across
+    # every feed and episode.
+    speaker_display: str | None = None
     # Issue #699: prior turns of the conversation for follow-up awareness.
     history: list[ChatMessage] | None = None
 
@@ -66,7 +69,7 @@ async def _stream_ask(
     model: str | None,
     feed_ids: list[str] | None,
     episode_id: str | None = None,
-    speaker_label: str | None = None,
+    speaker_display: str | None = None,
     history: list[dict] | None = None,
 ):
     db = SessionLocal()
@@ -107,7 +110,10 @@ async def _stream_ask(
             return
 
         # 1. Retrieve relevant chunks
-        chunks = retrieve_chunks(db, question, feed_ids=feed_ids, episode_id=episode_id, speaker_label=speaker_label)
+        chunks = retrieve_chunks(
+            db, question, feed_ids=feed_ids, episode_id=episode_id,
+            speaker_display=speaker_display,
+        )
 
         if not chunks:
             yield _sse_event("error", {"message": "No relevant transcript excerpts found for your question."})
@@ -167,7 +173,7 @@ async def ask_endpoint(req: AskRequest):
             req.model,
             feed_ids,
             episode_id=req.episode_id,
-            speaker_label=req.speaker_label,
+            speaker_display=req.speaker_display,
             history=history,
         ),
         media_type="text/event-stream",
