@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+- Fixed the release workflow, which failed on its first real use. Release notes were being pasted into a shell command, so the backticks that appear throughout the changelog were run as commands instead of printed — the failed run went as far as executing a build command on the CI machine. Notes are now handed over as a file, which cannot be interpreted as code. ([#936](https://github.com/brlauuu/podlog/issues/936))
+
 ## 0.7.0 — 2026-08-20
 
 ### Major changes
