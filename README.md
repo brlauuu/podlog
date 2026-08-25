@@ -28,7 +28,7 @@
 - **Ask AI (RAG)** — ask natural-language questions and get streamed, citation-backed answers drawn from your transcript library (local Ollama by default, Fireworks optional).
 - **Export** — download search results or full transcripts as Markdown or plain text, or open a print-friendly view (`/search/print`) for the browser's print-to-PDF flow.
 - **Queue dashboard** — per-stage status, error classification, auto-retry for transient failures, manual retry for the rest.
-- **Meta-Analysis dashboard** — cross-feed metrics (episode counts, durations, WPM, turn density, host/guest share, processing time, token and cost totals) with drill-down charts at `/meta-analysis`.
+- **Meta-Analysis dashboard** — speaker analytics across every feed at `/meta-analysis`: per-speaker minutes and word counts episode by episode, and a host-vs-guest talking-time delta, drawn from either confirmed names or high-confidence inferred ones.
 - **Notifications** — Telegram and email alerts when episodes finish or fail, with optional daily/weekly digest.
 - **Local-first** — no accounts, no cloud, no telemetry; optional Fireworks AI profile for users who prefer remote inference.
 
