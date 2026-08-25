@@ -156,7 +156,7 @@ Health behavior:
 When Fireworks mode is enabled, Podlog applies automatic retries for transient transcription failures:
 
 - Retryable: network/connect/timeouts, HTTP `429`, and HTTP `5xx`
-- HTTP access errors: HTTP `4xx` map to `HTTP_ACCESS` and follow retry policy
+- HTTP access errors: HTTP `4xx` from Fireworks map to `HTTP_ACCESS` and are retried, because Fireworks returns 4xx for conditions that clear. This differs from a 4xx on a podcast audio URL, which is terminal.
 - Backoff: `RETRY_BACKOFF_BASE * 2^(attempt-1)` (for example `30s`, `60s`, `120s` with defaults)
 - Attempts: capped by `RETRY_MAX`
 

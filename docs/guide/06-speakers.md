@@ -10,15 +10,19 @@ A speaker's slot number is meaningful: `SPEAKER_00` is the first real speaker to
 
 ## AI-Inferred Names
 
-If `INFERENCE_ENABLED=true` (the default), Podlog reads the episode's RSS metadata (title, description, `<itunes:author>`, `<podcast:person>` tags) and the first few minutes of the transcript, runs spaCy named-entity recognition over that text, and guesses host and guest names. Inferred names show an "AI" badge to distinguish them from user-confirmed names — they're a starting point, override them if they're wrong.
+If `INFERENCE_ENABLED=true` (the default), Podlog reads the episode's RSS metadata (title, description, `<itunes:author>`, `<podcast:person>` tags) and the first few minutes of the transcript, runs spaCy named-entity recognition over that text, and guesses host and guest names. A guessed name carries a violet **Inferred** badge until you accept it — they're a starting point, override them if they're wrong.
 
-A speaker can also be tagged with one of three roles using the buttons on each speaker card: **Host**, **Guest**, or **Other**. Roles drive how the speaker is sorted in the panel (hosts first, then guests, then others, then unassigned) and how their text is treated by features like the Meta-Analysis "host share" chart.
+Each inferred name has a **Confirm** button next to it. Click it to accept the name as-is without retyping; the badge flips to a green **✓ Confirmed**. That is the fastest path when inference got it right, which on shows with good RSS metadata is most of the time.
+
+A speaker can also be tagged with one of three roles using the buttons on each speaker card: **host**, **guest**, or **other**. Click a role to set it, click the same role again to clear it. Roles drive how the speaker is sorted in the panel (hosts first, then guests, then others, then unassigned) and how their text is treated by the Meta-Analysis host-vs-guest chart.
 
 ## Renaming a Speaker
 
-1. On the episode detail page, click any speaker name.
+1. On the episode detail page, click any speaker name — or use the **Edit** button on the speaker card.
 2. Type the correct name.
 3. The name is saved immediately and marked as user-confirmed.
+
+If the inferred name is already right, use **Confirm** instead of retyping it.
 
 User-confirmed names take priority over AI-inferred names and won't be overwritten by future inference runs.
 

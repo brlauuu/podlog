@@ -4,15 +4,15 @@ Podlog organizes content by RSS feed. Each feed represents one podcast.
 
 ## Feed Modes
 
-When adding a feed, you choose how many episodes to ingest:
+When adding a feed, you choose how many episodes to ingest — and, as a consequence, whether Podlog keeps watching the feed for new ones:
 
 | Mode | Episodes Ingested | Auto-Poll | Use Case |
 |---|---|---|---|
-| **Test** | 1 (latest only) | Yes | Try a feed before committing to the full back-catalog |
-| **Selective** | You pick which ones | Yes | Large back-catalogs where you only want specific episodes |
+| **Test** | 1 (the most recent) | No | Try a feed before committing to the full back-catalog |
+| **Selective** | You pick which ones | No | Large back-catalogs where you only want specific episodes |
 | **Full** | All episodes | Yes | Normal subscription — ingest everything and keep up to date |
 
-All modes auto-poll for new episodes (default: every 24 hours, configurable via `FEED_POLL_INTERVAL_HOURS`).
+**Only Full-mode feeds are polled automatically.** Test and Selective feeds are ingested once and then left alone: a Test feed exists to try one episode, and a Selective feed contains exactly the episodes you chose, so pulling in new ones behind your back would defeat the point of both. Promote a feed to Full when you want it kept current.
 
 ## Adding a Feed
 
@@ -23,21 +23,33 @@ All modes auto-poll for new episodes (default: every 24 hours, configurable via 
    - **Selective** — click Next to see a list of all episodes, check the ones you want, then Add
    - **Full** — click Add, all episodes are queued
 
+Feed cards carry a **Test** or **Selective** badge so you can tell at a glance which feeds are being kept current and which are not. Full-mode feeds are unbadged. Each card also shows its episode count and when it was last polled.
+
 ## Promoting a Feed
 
 You can upgrade a feed's mode at any time:
 
-- **Test → Full**: click **Promote to Full** on the feed card. All remaining episodes are queued for processing.
+- **Test → Full**: click **Promote to Full** on the feed card, and confirm. All remaining episodes are queued for processing.
 - **Selective → Full**: same button. Episodes you didn't select initially are now queued.
 
-Promotion never re-processes episodes that are already done.
+Promotion never re-processes episodes that are already done. It is also what switches a feed on for automatic polling.
+
+## Adding More Selective Episodes
+
+Selective feeds get an extra **Add episodes** button. It reopens the episode picker with everything you haven't ingested yet, so you can pull in a few more without promoting the whole back-catalog.
 
 ## Polling for New Episodes
 
-- **Automatic:** The worker checks all feeds every 24 hours (configurable). New episodes are queued automatically.
-- **Manual:** Click the refresh icon on any feed card to poll immediately.
+- **Automatic:** The worker checks every Full-mode, unpaused feed on a fixed interval (default 24 hours, configurable via `FEED_POLL_INTERVAL_HOURS`). New episodes are queued automatically.
+- **Manual:** Click the refresh icon on a Test or Full feed card to poll immediately. Selective feeds have no refresh icon — use **Add episodes** instead.
 
-Manual polling is useful when you know a new episode just dropped and don't want to wait for the next automatic poll.
+Manual polling is useful when you know a new episode just dropped and don't want to wait for the next automatic poll. Note that polling a Test feed will not pull anything new: Test mode is capped at one episode, so once it has that episode the poll updates the "last polled" timestamp and stops.
+
+## Pausing a Feed
+
+The pause button on a feed card stops ingestion without deleting anything. A paused feed shows a **Paused** badge, is skipped by automatic polling, and has its refresh icon disabled — the tooltip reads *"Unpause to poll"*. Everything already ingested stays searchable.
+
+Use this when a show goes on hiatus, or when you want to stop a chatty feed from filling the queue for a while. Click the same button again to resume. Selective feeds have no pause button, since they are never auto-polled in the first place.
 
 ## Deleting a Feed
 

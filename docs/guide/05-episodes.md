@@ -18,9 +18,13 @@ The transcript is displayed as a series of speaker-labeled sections. Each sectio
 - **Timestamp** — the start time of that segment, clickable to play audio
 - **Text** — the transcribed speech
 
-Speaker badges indicate the name source:
-- No badge: user-confirmed name
-- "AI" badge: name inferred by spaCy NER (see [Speaker Management](06-speakers.md))
+In the speaker panel, badges next to each name indicate where it came from:
+
+- **Inferred** (violet) — the name was proposed by spaCy NER and you haven't confirmed it yet. A **Confirm** button sits alongside so you can accept it in one click.
+- **✓ Confirmed** (green) — you confirmed or typed this name yourself.
+- Neither badge — the speaker still has its raw `SPEAKER_NN` label and no name has been proposed.
+
+See [Speaker Management](06-speakers.md) for the full workflow.
 
 ## Clickable Timestamps
 
@@ -40,8 +44,9 @@ This deletes the existing transcript and segments, then re-downloads, re-transcr
 
 You may see banners at the top of an episode page:
 
-- **"Diarization failed"** — pyannote couldn't label speakers (noisy audio, etc.), but the transcript is still usable. Speaker labels will be missing.
-- **"Speaker inference unavailable"** — spaCy NER couldn't extract speaker names. You can still rename speakers manually.
+- **"Speaker labels unavailable — diarization failed"** — pyannote couldn't label speakers (noisy audio, etc.), but the transcript is still usable. The reason is appended when pyannote reported one. Episode cards show the same condition as a **No labels** tag.
+- **"Speaker name inference was unavailable for this episode."** — spaCy NER couldn't extract any speaker names. You can still rename speakers manually. This banner is suppressed if inference managed to name at least one speaker.
+- **"Processing failed"** — shown for a failed episode, with the error class in brackets and the error message underneath. See [Queue Dashboard](08-queue.md) for what each class means.
 
 ---
 

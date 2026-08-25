@@ -101,7 +101,7 @@ Agent-tool metadata (`.agents/`, `.superpowers/`, `.omx/`, `.claude/`, `.worktre
 - **Whisper and pyannote never in memory simultaneously.** Whisper is explicitly unloaded (+ `gc.collect()`) before pyannote loads. This is mandatory on CPU-only machines. See PRD-01 §5.4.
 - **Web app reads DB directly for search** but proxies to the pipeline API for feed management, queue retries, and health checks.
 - **Audio serving has path traversal protection.** The `/api/audio/[episodeId]/[filename]` route strips path separators and validates the resolved path stays within allowed audio directories (`/data/audio/archive/` and `/data/audio/raw/`).
-- **Error classification drives retry logic.** `TRANSIENT_NETWORK` and `HTTP_ACCESS` auto-retry (up to 3x with exponential backoff). `DISK_FULL` and `OOM` fail immediately.
+- **Error classification drives retry logic.** Auto-retry is decided by the `transient` flag from `worker.py::_classify_for_retry`, not by the class name: `TRANSIENT_NETWORK` retries (up to 3x with exponential backoff); `DISK_FULL`, `OOM` and `SYSTEM_ERROR` fail immediately. `HTTP_ACCESS` is terminal from the generic classifier (a 4xx on a podcast audio URL will not resolve on retry) but retryable when raised by the Fireworks or pyannote-cloud services, whose typed errors set `retryable=True` and win at step 1.
 - **Diarization failure is non-fatal.** If pyannote fails, the transcript is still written with `speaker_label = NULL` and `has_diarization = false`.
 
 ## How to Run
