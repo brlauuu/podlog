@@ -67,14 +67,14 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `INFERENCE_PROVIDER` | `local` | Runtime provider for transcription/diarization stages. `local` keeps current behavior. `fireworks` uses remote Fireworks audio inference. |
 | `FIREWORKS_API_KEY` | (unset) | Required when `INFERENCE_PROVIDER=fireworks`. |
 | `FIREWORKS_AUDIO_BASE_URL` | `https://audio-turbo.api.fireworks.ai` | Base URL for Fireworks audio API. |
-| `FIREWORKS_STT_MODEL` | `whisper-v3-large` | Fireworks speech-to-text model ID. |
+| `FIREWORKS_STT_MODEL` | `whisper-v3-turbo` | Fireworks speech-to-text model ID. Matches the single option in the Settings → Inference transcription dropdown. |
 | `FIREWORKS_STT_DIARIZE` | `true` | Request speaker diarization metadata from Fireworks transcription API. |
 | `FIREWORKS_CHAT_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks OpenAI-compatible chat completions used by Ask generation. |
 | `FIREWORKS_CHAT_MODEL` | `accounts/fireworks/models/gpt-oss-20b` | Fireworks chat model used when `RAG_PROVIDER=fireworks` for Ask generation. The Settings UI exposes a curated dropdown of currently-deployed models; this env var supplies the default. |
 | `RAG_PROVIDER` | `local` | Issue #608: dedicated provider for the Ask / RAG step. Decoupled from `INFERENCE_PROVIDER` (transcription) so enabling Fireworks for transcription does not silently send retrieved transcript chunks to Fireworks for answer generation. Set to `fireworks` to opt in. |
 | `FIREWORKS_STT_COST_PER_MINUTE_USD` | `0.006` | Cost estimate assumption used for per-episode observability (`estimated_cost_usd = billed_minutes * rate`). |
 | `EMBEDDING_PROVIDER` | `local` | Runtime provider for query + segment/chunk embeddings. **`fireworks` is non-functional** — see the note below. |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local sentence-transformers model used when `EMBEDDING_PROVIDER=local`. Must match the model your existing embeddings were built with — see the warning below. |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local sentence-transformers model used when `EMBEDDING_PROVIDER=local`. Restricted to two tested values, `all-MiniLM-L6-v2` and `BAAI/bge-small-en-v1.5` — the field used to be free text and was passed straight to the model loader, which downloads whatever HuggingFace repo you name (#951). Must match the model your existing embeddings were built with — see the warning below. |
 | `FIREWORKS_EMBEDDING_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks embeddings API. Retained for when/if Fireworks restores the endpoint. |
 | `FIREWORKS_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Fireworks embedding model. Currently unreachable — the model was retired upstream. |
 
@@ -142,9 +142,9 @@ Ask AI uses the model selected in the `/ask` page UI and sends it with each requ
 ### Deployment profiles
 
 - Local-first profile (default): `docker compose up -d` or `make up`
-  - Starts `db`, `pipeline`, `worker`, `web`, and `ollama`.
+  - Starts `db`, `pipeline`, `worker`, `web`, `ollama` and `backup` — six services.
 - Remote-inference profile: `docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d` or `make up-remote`
-  - Starts `db`, `pipeline`, `worker`, and `web`.
+  - Starts `db`, `pipeline`, `worker`, `web` and `backup` — five services.
   - Applies `INFERENCE_PROVIDER=fireworks` to pipeline + worker. It deliberately does **not** set `EMBEDDING_PROVIDER`: remote embedding is unavailable (see above), so embeddings run locally even in this profile.
   - Does not start `ollama` unless explicitly requested with profile `local-ask`.
 
@@ -231,6 +231,17 @@ System prompts sent to the LLM at the start of each chat. These are the build-ti
 | `PROMPT_ASK_PAGE_SYSTEM` | (built-in) | System prompt for the cross-episode `/ask` page. |
 | `PROMPT_ASK_EPISODE_SYSTEM` | (built-in) | System prompt for the per-episode Ask popup. |
 | `RAG_LOCAL_MODEL` | `qwen2.5:3b` | Default Ollama model for local RAG generation. The Ask UI can override this per request. |
+
+## Search: query-embedding resilience
+
+Read by the **web** app, not the pipeline. Hybrid search asks the pipeline for a query embedding; if that call fails or times out, search degrades to keyword-only rather than erroring, because keyword search reads Postgres directly and never needed the pipeline.
+
+| Variable | Default | Description |
+|---|---|---|
+| `EMBED_TIMEOUT_MS` | `2000` | Bounds the query-embedding call. Without a bound, an unresolvable `pipeline` host sits in DNS retry for ~24s — long enough for requests to pile up and exhaust the connection pool behind them (#928). |
+| `EMBED_COOLDOWN_MS` | `30000` | After a failure, skip the call entirely for this long, so a down pipeline does not make every request pay the timeout. |
+
+The pipeline lazy-loads the embedding model on the first `/api/embed` call, so the first search after a pipeline restart usually exceeds the 2s default and returns keyword-only results for one cooldown window. It self-heals; raise `EMBED_TIMEOUT_MS` if you would rather pay the cold start.
 
 ## Advanced / Internal
 

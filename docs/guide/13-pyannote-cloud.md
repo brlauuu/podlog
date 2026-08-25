@@ -15,7 +15,7 @@ Cloud (`precision-2`) is worth turning on when:
 
 - Your local machine doesn't have the ~2 GB of RAM pyannote needs, or diarization is the bottleneck in your processing time.
 - You're running long, multi-speaker conversations where speaker accuracy matters more than cost.
-- You want to offload CPU work so transcription and diarization can run in parallel.
+- You want the diarization stage off your CPU entirely, freeing that time and memory for transcription of the next episode.
 
 Keep **local** (free) when:
 
@@ -37,11 +37,11 @@ In the pyannote.ai dashboard, create a new API key. Copy it — you'll paste it 
 
 ### 3. Configure Podlog
 
-Open Podlog at **http://localhost:3000/settings** and click the **Remote Inference** tab.
+Open Podlog at **http://localhost:3000/settings** and click the **Inference** tab.
 
 1. Paste your API key into **pyannote cloud API key**.
 2. (Optional) Expand **What is pyannote cloud (Precision-2)?** for the inline summary.
-3. (Optional) Set your per-second rate in the settings DB so the episode cost chip shows an estimate. The rate lives under `pyannote_cloud_cost_per_second_usd` — since the dashboard page varies by tier and is not publicly documented, Podlog cannot guess. If you leave it at the default `0`, the feature still works but the cost chip shows `$—` (see *Cost display* below).
+3. (Optional) Set your per-second rate so the episode cost chip shows an estimate. **There is currently no field for this in Settings** — set `PYANNOTE_CLOUD_COST_PER_SECOND_USD` in `.env` and restart the worker. Podlog cannot guess the number: the rate varies by tier and pyannote.ai does not publish it. If you leave it at the default `0`, everything still works but the cost chip shows `$—` (see *Cost display* below). Tracked in [issue #969](https://github.com/brlauuu/podlog/issues/969).
 4. Scroll to the **Pipeline Steps** section and flip the **Diarization** toggle from **Local** to **Remote**. Confirm the dropdown now shows `pyannote precision-2 (paid, hosted)`.
 5. Click **Save**.
 
@@ -76,7 +76,7 @@ This is a **local estimate**, not reconciled billing. The authoritative amount i
 After diarization runs, episode cards and the episode detail page show a **pyannote cloud** chip:
 
 - **`pyannote cloud: $0.03`** — rate is configured and we computed an estimate.
-- **`pyannote cloud: $—`** — rate is set to `0` (or unset). The hover tooltip explains: *"Cost estimate unavailable — set your per-second rate in Settings > Remote Inference to show an estimate here. Actual billing is on your pyannote.ai dashboard."* This does **not** mean "no charge"; pyannote did bill you — Podlog just can't estimate the amount without your tier's rate.
+- **`pyannote cloud: $—`** — rate is set to `0` (or unset). The hover tooltip points you at Settings, but the field it names does not exist yet ([#969](https://github.com/brlauuu/podlog/issues/969)) — use `.env` as described above. This does **not** mean "no charge"; pyannote did bill you — Podlog just can't estimate the amount without your tier's rate.
 
 ## Data retention and privacy
 
@@ -86,9 +86,9 @@ After diarization runs, episode cards and the episode detail page show a **pyann
 
 ## Troubleshooting
 
-- **401 Unauthorized when a job runs** — the API key is invalid, revoked, or wasn't saved in Settings. Use the **Test key** button under the API-key field in Settings → Remote Inference to check it. You can test a key before saving it: paste it in and press Test key. If the field still shows the masked form of a previously saved key (`abc***xyz`), the button checks the saved key instead.
+- **401 Unauthorized when a job runs** — the API key is invalid, revoked, or wasn't saved in Settings. Use the **Test key** button under the API-key field in Settings → Inference to check it. You can test a key before saving it: paste it in and press Test key. If the field still shows the masked form of a previously saved key (`abc***xyz`), the button checks the saved key instead.
 - **Jobs time out after 30 minutes** — extremely long episodes (multi-hour) can hit the poll-timeout guard. If this is a regular pattern, file an issue — we may need to make the timeout configurable.
-- **`Cost estimate unavailable` on every episode** — set `pyannote_cloud_cost_per_second_usd` to a non-zero number in Settings. Get the rate from your pyannote.ai dashboard.
+- **`Cost estimate unavailable` on every episode** — set `PYANNOTE_CLOUD_COST_PER_SECOND_USD` to a non-zero number in `.env` and restart the worker. Get the rate from your pyannote.ai dashboard. There is no Settings field for it yet ([#969](https://github.com/brlauuu/podlog/issues/969)).
 - **Diarization toggle is disabled** — save an API key first. Without a key, flipping the toggle pops a dialog requesting it.
 - **Cloud works, local doesn't** (or vice versa) — the two providers are independent. Swapping between them in Settings is instant; no restart needed.
 
