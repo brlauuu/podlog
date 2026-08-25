@@ -18,7 +18,7 @@ The two stages are independent — you can mix and match (e.g. local Whisper + c
 | Provider | Model | Runs on | Cost | Setup |
 |---|---|---|---|---|
 | **Local (default)** | WhisperX `large-v3-turbo` | Your machine | Free | Built in; configurable via `WHISPER_MODEL` |
-| **Fireworks AI** | Whisper-v3 (hosted) | Fireworks servers | Paid, ~$0.0015/min | `INFERENCE_PROVIDER=fireworks` + `FIREWORKS_API_KEY` |
+| **Fireworks AI** | `whisper-v3-turbo` (hosted) | Fireworks servers | Paid, ~$0.006/min by default estimate | `INFERENCE_PROVIDER=fireworks` + `FIREWORKS_API_KEY` |
 
 ### Local transcription (WhisperX)
 
@@ -32,9 +32,10 @@ Set in `.env`:
 
 ```bash
 INFERENCE_PROVIDER=fireworks
-FIREWORKS_API_KEY=fk_...
-FIREWORKS_AUDIO_BASE_URL=https://audio-prod.us-virginia-1.direct.fireworks.ai
+FIREWORKS_API_KEY=fw_...
 ```
+
+`FIREWORKS_AUDIO_BASE_URL` and `FIREWORKS_STT_MODEL` default to `https://audio-turbo.api.fireworks.ai` and `whisper-v3-turbo`; you only need to set them if Fireworks moves the endpoint or you want a different model.
 
 Then `make up-remote` instead of `make up` to use the remote-inference Compose profile (no local Ollama container, since Ask AI also routes to Fireworks).
 
@@ -65,7 +66,7 @@ pyannote.ai's hosted `precision-2` model — they describe it as "~28% more accu
 | Have a slow/small machine and want faster turnaround | Remote transcription (Fireworks) |
 | Care about speaker-label accuracy on long multi-speaker shows | Remote diarization (precision-2) |
 | Process mostly English | Local Whisper is fine |
-| Process under-represented languages where Whisper struggles | Remote (Fireworks Whisper-v3 is the same model, but for non-English you might also evaluate alternatives — see *Considered and rejected* below) |
+| Process under-represented languages where Whisper struggles | Remote (Fireworks runs the same Whisper family, so for non-English you might also evaluate alternatives — see *Considered and rejected* below) |
 | Have a regulated or sensitive corpus | Stay local |
 
 ## A note on memory: Whisper and pyannote never coexist
@@ -87,3 +88,7 @@ To save future maintainers from re-litigating decisions that have already been m
 **Why not now.** The pipeline today is structured around two distinct stages — `transcribe` then `diarize` — each with its own task, its own provider seam (`INFERENCE_PROVIDER`, `DIARIZATION_PROVIDER`), its own cost-tracking columns, and its own error-classification path. A single-call provider doesn't fit cleanly behind either seam: shipping it well would mean restructuring the task graph so one provider can satisfy both stages, plus a new set of env vars, a new service module, new cost columns, an Alembic migration, UI changes in Settings, and tests on both sides. Substantial work, and the existing Fireworks + precision-2 combination is meeting the project's needs.
 
 Revisit if (a) Fireworks or pyannote.ai cost becomes a real problem, (b) we need materially better non-English WER, or (c) the two-stage memory dance becomes the bottleneck again. The full evaluation and an implementation plan on paper live on [#757](https://github.com/brlauuu/podlog/issues/757).
+
+---
+
+**Back:** [Keyboard Shortcuts](18-keyboard-shortcuts.md) | **Home:** [Guide](README.md)
