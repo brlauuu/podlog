@@ -87,7 +87,7 @@ export default function ExploreStatusPanel() {
         </button>
         {!isRunning && (
           <Link
-            href="/docs?page=16-explore"
+            href="/docs?page=15-explore"
             className="text-link hover:underline"
           >
             Docs →
@@ -123,7 +123,7 @@ make explore-logs`}
             Once it&apos;s running, this panel will show a green dot and an
             &ldquo;Open Jupyter&rdquo; link. See the{" "}
             <Link
-              href="/docs?page=16-explore"
+              href="/docs?page=15-explore"
               className="text-link hover:underline"
             >
               explore guide

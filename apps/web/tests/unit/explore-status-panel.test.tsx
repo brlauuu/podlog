@@ -72,7 +72,7 @@ describe("<ExploreStatusPanel> (#607 PR 2)", () => {
       await screen.findByText(/Explore notebook is not running/i),
     ).toBeInTheDocument();
     const docsLink = screen.getByRole("link", { name: /^Docs/i });
-    expect(docsLink).toHaveAttribute("href", "/docs?page=16-explore");
+    expect(docsLink).toHaveAttribute("href", "/docs?page=15-explore");
 
     // CLI commands hidden by default.
     expect(screen.queryByText(/^make explore$/m)).toBeNull();

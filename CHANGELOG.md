@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+- The Meta-Analysis guide page described a dashboard that does not exist. It listed nine charts — release timeline, turn density, tokens and cost per feed, and six others — none of which are on the page; the real page has three speaker charts. It also promised a click-to-expand modal with a raw data table (there is none), and a filter bar with date and episode-length filters (it filters by podcast only). The page has been rewritten against the actual dashboard, and the matching feature bullet in the README corrected. Also fixes the "learn more" links in the Jupyter panel on that page, which pointed at a guide page number that does not exist and silently redirected to the guide index. ([#412](https://github.com/brlauuu/podlog/issues/412))
+
 ### Internal
 - Runtime images are now published to the GitHub container registry on each release, so a future update can pull a known-good version instead of rebuilding several gigabytes of machine-learning dependencies locally. Nothing consumes them yet — wiring them into the compose setup and adding an update command come next. Each image builds in its own CI job, because the two largest are 13 GB and 17 GB and a standard runner has about 14 GB of disk; the heavy jobs reclaim space first. Also adds a check that fails the build if any workflow pastes a value into a shell command, after that mistake shipped once and was very nearly repeated. ([#937](https://github.com/brlauuu/podlog/issues/937))
 
