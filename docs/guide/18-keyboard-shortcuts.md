@@ -2,7 +2,7 @@
 
 Podlog supports a handful of keyboard shortcuts to keep your hands on the keyboard while browsing transcripts, navigating between episodes, and controlling playback.
 
-Press <kbd>?</kbd> from any page to bring up a quick reference overlay that lists every binding below.
+Press <kbd>?</kbd> from any page to bring up a quick reference overlay that lists every binding below. Like every other shortcut, it is ignored while your cursor is in a text field.
 
 ## Global navigation chords
 
@@ -55,7 +55,7 @@ Shortcuts are deliberately skipped while you are typing in:
 - Any `<input>`, `<textarea>`, or `<select>` element
 - Any element with `contenteditable="true"`
 
-This means you can type a `?` into the search bar or paste text without accidentally toggling an overlay or seeking the player. The one exception is the help overlay's own <kbd>?</kbd> binding, which is always live so you can pull it up from anywhere.
+This means you can type a `?` into the search bar or paste text without accidentally toggling an overlay or seeking the player. There is no exception — the help overlay's own <kbd>?</kbd> binding is skipped inside inputs too, so click out of the field before pressing it.
 
 ## Why some keys are not bound
 
@@ -66,3 +66,7 @@ A few keys you might expect have intentionally been left alone:
 - <kbd>Enter</kbd> belongs to whatever form you are in (search, settings, Ask).
 
 If you have suggestions for additional bindings, open an issue on the repository.
+
+---
+
+**Next:** [Inference Providers](19-inference-providers.md) | **Back:** [Troubleshooting](17-troubleshooting.md) | **Home:** [Guide](README.md)

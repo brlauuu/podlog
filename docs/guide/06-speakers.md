@@ -49,7 +49,9 @@ If pyannote can't process the audio (too noisy, unsupported language, etc.), the
 
 ## Under the hood: how speaker inference works
 
-This section walks through the actual code that produces the inferred names you see in the speaker panel. It's pinned to the codebase as of commit `9237a61` — if a function gets renamed or moved, the links here will need to be updated alongside.
+This section walks through the actual code that produces the inferred names you see in the speaker panel. Source links are pinned to commit `9237a61` so they keep resolving as the code moves.
+
+> **Note on the pin.** The prose describes current behaviour, which has moved ahead of the pinned commit in one place: the isolated-short-run carve-out and `DEFAULT_ISOLATION_GAP_SECONDS` were added after `9237a61`, so you will not find them by following the `assign_speaker_slots` link below. Read that part against `main`.
 
 ### The pipeline
 
@@ -145,7 +147,7 @@ Settings in [`apps/pipeline/app/config.py`](https://github.com/brlauuu/podlog/bl
 | `RECURRING_HOST_THRESHOLD` | `0.8` | How much of that window has to agree on the same name before it fires. |
 | `FEED_SPEAKER_CACHE_RECENCY_DAYS` | `365` | Cache entries older than this many days are ignored. Set `0` to disable the cutoff. |
 
-The run-analysis defaults (`DEFAULT_SHORT_RUN_SECONDS`, `DEFAULT_SHORT_RUN_SEGMENTS`, `DEFAULT_RUN_GAP_SECONDS`, `DEFAULT_TRANSCRIPT_NER_MAX_SECONDS`, `DEFAULT_TRANSCRIPT_NER_MAX_SEGMENTS`) are module constants today, not environment variables. They're tuned for typical podcast episodes; if you have a show with unusual structure (very short episodes, fast-paced multi-host shows, etc.) and need to override them, file an issue.
+The run-analysis defaults (`DEFAULT_SHORT_RUN_SECONDS`, `DEFAULT_SHORT_RUN_SEGMENTS`, `DEFAULT_RUN_GAP_SECONDS` and `DEFAULT_ISOLATION_GAP_SECONDS` in `inference.py`; `DEFAULT_TRANSCRIPT_NER_MAX_SECONDS` and `DEFAULT_TRANSCRIPT_NER_MAX_SEGMENTS` in `inference_ner.py`) are module constants today, not environment variables. They're tuned for typical podcast episodes; if you have a show with unusual structure (very short episodes, fast-paced multi-host shows, etc.) and need to override them, file an issue.
 
 ### Known tradeoffs
 

@@ -1,6 +1,8 @@
 # Podlog User Guide
 
-Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all your transcripts. Everything runs locally in Docker — no cloud dependencies, no external API calls, all data stays on your machine.
+Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all your transcripts.
+
+Everything runs in Docker on your own machine. **In the default configuration nothing leaves it** except RSS polling and one-time model downloads — no account, no telemetry, no per-request API calls. Remote inference is available if your hardware is the bottleneck: transcription via Fireworks AI, diarization via pyannote.ai, and Ask AI generation via Fireworks. All three are opt-in, off by default, and independent of each other — see [Inference Providers](19-inference-providers.md).
 
 ## Contents
 

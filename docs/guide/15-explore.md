@@ -45,6 +45,7 @@ make explore-down
 
 - **`/workspace`** — mounted from the repo's `notebooks/` directory. Anything you save here persists on the host.
   - `examples/01_explore_db.ipynb` — checked-in starter notebook (do not edit; copy if you want to modify).
+  - `lib/podlog_plots.py` — checked-in plotting helpers you can import from your own notebooks.
   - Anything else you create — local-only, gitignored.
 - **`DATABASE_URL`** env var — already set to the Podlog Postgres instance. The example notebook reads it via `os.environ["DATABASE_URL"]`.
 
