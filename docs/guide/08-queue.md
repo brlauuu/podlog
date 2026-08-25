@@ -22,23 +22,35 @@ Episodes are processed sequentially (one at a time) to avoid running out of memo
 
 ## The Stage Bar
 
-The colored bar at the top of the queue page shows counts for each stage. Click any stage to filter the list to just those episodes.
+The colored bar at the top of the queue page shows counts per stage, and clicking a segment filters the list to just those episodes.
+
+The bar does **not** have segments for Chunking or Embedding. Episodes in those two stages are still processing normally — they just aren't counted in the bar, and their status badge renders grey rather than colour-coded. In practice an episode drops out of the bar after Diarizing and reappears at Inferring. This is tracked in [issue #968](https://github.com/brlauuu/podlog/issues/968).
 
 ## Error Classification
 
-When an episode fails, the error is classified to determine whether it can be retried:
+When an episode fails, the error is classified. The class determines what the queue offers you:
 
-| Error Class | Retryable | What Happened |
+| Error Class | Retry | What Happened |
 |---|---|---|
-| `TRANSIENT_NETWORK` | Yes (auto) | Network timeout or DNS failure during download |
-| `HTTP_ACCESS` | Yes (auto) | HTTP 403/404 on the audio URL |
-| `SYSTEM_ERROR` | Yes (manual) | Unexpected error or zombie timeout |
-| `DISK_FULL` | No | Not enough free disk space — free space first |
-| `OOM` | No | Out of memory — reduce model size or add RAM |
+| `TRANSIENT_NETWORK` | Automatic | Network timeout, DNS failure, or a 429/5xx from a provider |
+| `HTTP_ACCESS` | Depends — see below | An HTTP 4xx response |
+| `SYSTEM_ERROR` | Manual | Unexpected error, or a job killed by the zombie detector |
+| `DISK_FULL` | None | Not enough free disk space — free space first |
+| `OOM` | None | Out of memory — reduce model size or add RAM |
+| `MANUAL_UPLOAD_FILE_MISSING` | None | An uploaded file is no longer on disk — re-upload it |
+| `NO_SPEECH` | None | Transcription produced nothing because the audio contains no speech |
 
-**Auto-retry:** Transient errors retry automatically up to 3 times with exponential backoff (30s, 60s, 120s).
+**Auto-retry** is decided by whether the failure is judged transient, not by the class name alone. Transient failures retry up to 3 times with exponential backoff (30s, 60s, 120s), configurable via `RETRY_MAX` and `RETRY_BACKOFF_BASE`.
 
-**Manual retry:** Click the **Retry** button on a failed episode to re-queue it. Non-retryable errors (DISK_FULL, OOM) show a message explaining what to fix first.
+`HTTP_ACCESS` sits on both sides of that line. A 403 or 404 on a podcast's audio URL is treated as terminal — the file isn't going to appear on the fourth attempt, so failing fast saves bandwidth and tells you something real about the feed. The same class raised by Fireworks or pyannote.ai *is* retried, because those services return 4xx for conditions that do clear.
+
+**Manual retry:** click the **Retry** button on a failed episode to re-queue it. The button is hidden for `DISK_FULL`, `OOM`, `MANUAL_UPLOAD_FILE_MISSING` and `NO_SPEECH` — retrying any of those reaches the identical outcome — and the pipeline rejects the request server-side too.
+
+## Episodes With No Speech
+
+If transcription finds no speech at all, the episode ends in its own terminal state rather than being reported as a failure. Nothing malfunctioned: the download, transcription and diarization all worked and correctly reported silence. No failure notification is sent and no retry is offered.
+
+These episodes are currently visible on their own episode page, tagged **No speech** — they do not appear anywhere on the queue dashboard. Also [issue #968](https://github.com/brlauuu/podlog/issues/968).
 
 ## Stuck Episodes
 
@@ -47,7 +59,7 @@ An episode may appear as **Stuck** if it's not in a done/failed state but has no
 - A job was interrupted by a container restart
 - The worker hit an unhandled error
 
-Stuck episodes are visible in the queue UI under the "Stuck" filter. They can be reprocessed from the episode detail page.
+Stuck episodes are visible in the queue UI under the "Stuck" filter. They can be reprocessed from the episode detail page. The worker also sweeps for stranded episodes periodically and re-enqueues them.
 
 ## Zombie Detection
 
