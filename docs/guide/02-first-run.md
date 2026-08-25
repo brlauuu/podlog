@@ -22,7 +22,7 @@ Once models are downloaded, all services should be healthy:
 curl -s http://localhost:8000/api/health | python3 -m json.tool
 ```
 
-You should see `"status": "OK"` for Database, Worker, and Pipeline API.
+You should see `"status": "OK"` for Database, Worker, Pipeline API and Ollama. Worker reports `WARMING_UP` until model downloads finish, and Ollama reports `DEGRADED` if its container is not reachable — in the local-first profile that is usually what holds the overall status below `OK`.
 
 In the browser, the queue page at `/queue` will show stage counts and be ready to accept work.
 

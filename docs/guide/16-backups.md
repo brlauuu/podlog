@@ -7,7 +7,7 @@ Podlog ships with a daily backup service that runs automatically as part of the 
 | Volume | What it holds | Backed up? | Why |
 |---|---|---|---|
 | `podlog_postgres_data` | All transcripts, segments, chunks, embeddings, queue state, speaker name confirmations | **Yes** — daily `pg_dump` | Manually-confirmed speaker names + embeddings are expensive/impossible to regenerate |
-| `podlog_audio_data` (`/data/audio/archive`) | Compressed archived episodes | **Yes** — daily incremental rsync | RSS feeds drop old episodes; original audio can't be re-downloaded |
+| `podlog_audio_data` (`/data/audio/archive`) | Compressed archived episodes (~29 MB per audio-hour) | **Yes** — daily incremental rsync | RSS feeds drop old episodes; original audio can't be re-downloaded |
 | `podlog_audio_data` (`/data/audio/raw`) | Raw downloads, deleted after archive | No | Intermediate; archive contains the same content compressed |
 | `podlog_transcript_data` | Intermediate WhisperX/Fireworks artifacts | No | Cleaned up after each episode finishes; reproducible |
 | `podlog_model_cache`, `podlog_ollama_data` | Downloaded ML models | No | Re-downloadable from HuggingFace / Ollama |
@@ -105,13 +105,13 @@ To remove the service entirely from your stack, comment out the `backup:` block 
 
 ## Disk-cost estimate
 
-For a steady-state Podlog with ~1k transcribed episodes:
+For a steady-state Podlog with ~1,000 transcribed episodes:
 
-- DB dump: ~200–500 MB compressed per snapshot. With default retention (7 + 4 + 12 = 23 buckets, hardlinked): ~7 MB × 23 = **~160 MB total** if you ignore changes between snapshots, in practice ~1–2 GB.
-- Audio snapshot: same size as the live `audio_data` volume (~50 GB for 1k episodes at 64 kbps mono). With incremental rsync: ~live size + tiny delta per day = **~50 GB total**.
-- Grand total: ~50 GB after a few months of operation.
+**Audio snapshots dominate, and they cost about one extra copy.** The first snapshot is the same size as the live archive — roughly 29 GB for 1,000 one-hour episodes at 64 kbps. Every snapshot after that is hardlinked with `--link-dest`, so unchanged files cost nothing and each additional day only pays for newly archived episodes. Seven daily snapshots of a library that grew by one episode a day cost ~29 GB plus a few hundred MB, not 7 × 29 GB.
 
-If `audio_data` itself is ~50 GB, the backup costs roughly the same again — keep that in mind when allocating disk.
+**Database dumps are small by comparison.** A `pg_dump --format=custom` of a ~4.6 GB database compresses to a few hundred MB. The weekly and monthly tiers are hardlinks to a daily dump rather than fresh copies, so they add nothing on the day they are promoted — you pay only for daily dumps that have since been pruned from `daily/` but are still held by `weekly/` or `monthly/`. Budget on the order of 1–2 GB for all 23 retention slots.
+
+**Rule of thumb: backups roughly double your audio footprint, and add a couple of GB for the database.** Allocate accordingly, especially if `./backups/` lives on the same disk as the live volumes — which defeats most of the point, so prefer a separate disk.
 
 ## Caveats
 

@@ -6,14 +6,16 @@ Podlog is configured via environment variables in `.env`. Only two are required 
 
 The `WHISPER_MODEL` setting has the biggest impact on transcription quality, speed, and memory usage:
 
-| Model | RAM Needed | Speed | Quality | Best For |
+| Model | Peak RAM (Whisper) | Recommended system RAM | Speed | Quality |
 |---|---|---|---|---|
-| `large-v3-turbo` | 12 GB+ | Fast | Near-best | **Most users (default)** |
-| `medium` | 12 GB | Moderate | Good | 8 GB machines |
-| `small` | 8 GB | Fast | Medium | 4 GB machines |
-| `tiny` | 4 GB | Very fast | Low | Keyword search only |
+| `large-v3-turbo` | ~6 GB | 12 GB+ | Fast | Near-best — **default, most users** |
+| `medium` | ~5 GB | 12 GB | Moderate | Good |
+| `small` | ~2 GB | 8 GB | Fast | Medium |
+| `tiny` | ~1 GB | 4 GB | Very fast | Low — keyword search only |
 
-The "RAM Needed" column is the recommended total system RAM, not just what Whisper uses. The system needs headroom for PostgreSQL, Next.js, and the OS.
+Two columns, because they answer different questions. **Peak RAM** is what the Whisper model itself occupies. **Recommended system RAM** is what the machine should have in total, leaving headroom for PostgreSQL, Next.js, pyannote's ~2 GB during diarization, and the OS.
+
+So on an 8 GB machine, `small` is the comfortable choice and `medium` will be tight; on 12 GB, `large-v3-turbo` is fine.
 
 **To change models:** Edit `WHISPER_MODEL` in `.env`, then:
 ```bash

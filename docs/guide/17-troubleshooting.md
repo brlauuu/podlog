@@ -116,4 +116,4 @@ The host-level health check (`make health-install`) runs the same probes every 1
 
 ---
 
-**Back:** [Backups](16-backups.md) | **Home:** [Guide](README.md)
+**Next:** [Keyboard Shortcuts](18-keyboard-shortcuts.md) | **Back:** [Backups](16-backups.md) | **Home:** [Guide](README.md)

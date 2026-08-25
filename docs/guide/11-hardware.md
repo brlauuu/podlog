@@ -7,8 +7,8 @@ Podlog runs entirely on CPU. Here's what to expect for processing times and stor
 **Rules of thumb with `large-v3-turbo` (default):**
 
 - Transcription: ~0.6x realtime (a 1-hour episode takes ~36 minutes)
-- Diarization: ~0.9x realtime (a 1-hour episode takes ~54 minutes)
-- Total per 1-hour episode: ~90 minutes on a modern 8-core CPU
+- Diarization: ~1.0x realtime (a 1-hour episode takes ~60 minutes)
+- Total per 1-hour episode: ~95 minutes on a modern 8-core CPU, plus a couple of minutes for chunking, speaker inference and archiving
 
 | Machine Class | 1-Hour Episode | 3-Hour Episode |
 |---|---|---|
@@ -20,16 +20,20 @@ Episodes are processed sequentially (one at a time). A backlog of 100 one-hour e
 
 ## How Much Disk Space Do I Need?
 
-Base overhead: ~15 GB for Docker images and model cache.
+More than you might expect. **Budget ~45 GB before ingesting a single episode**: the worker and pipeline images carry the full machine-learning stack and measure 16.1 GB and 12.5 GB on disk, Ollama adds 8.4 GB, and the model cache another ~5.7 GB once Whisper, pyannote, spaCy and the embedding model have downloaded.
 
-| Library Size | Audio Archive | Database | Total (incl. base) |
+After that, measured on a real 985-episode library: **~29 MB per hour of audio** archived at 64 kbps, and **~3.6 MB per hour** in the database.
+
+| Library Size | Audio Archive | Database | Total (incl. ~45 GB base) |
 |---|---|---|---|
-| 100 episodes (1hr avg) | ~0.4 GB | ~200 MB | ~16 GB |
-| 500 episodes | ~2 GB | ~1 GB | ~18 GB |
-| 1,000 episodes | ~3.5 GB | ~2 GB | ~21 GB |
-| 5,000 episodes | ~17 GB | ~10 GB | ~42 GB |
+| 100 episodes (1hr avg) | ~2.9 GB | ~0.4 GB | ~48 GB |
+| 500 episodes | ~15 GB | ~1.8 GB | ~62 GB |
+| 1,000 episodes | ~29 GB | ~3.6 GB | ~78 GB |
+| 5,000 episodes | ~147 GB | ~18 GB | ~210 GB |
 
-To save disk, set `ARCHIVE_AUDIO=false` — transcripts remain searchable but audio playback is unavailable.
+To save disk, set `ARCHIVE_AUDIO=false` — transcripts remain searchable but audio playback is unavailable. That removes the largest column entirely.
+
+Ask AI models are extra and pulled on demand: `qwen2.5:3b` is 1.9 GB, `phi3:mini` 2.2 GB, `gemma3n:e4b` larger again.
 
 ## Model Size vs Quality
 
@@ -37,9 +41,9 @@ Smaller models trade accuracy for speed and lower memory:
 
 | Model | Speed vs Default | Quality | Notes |
 |---|---|---|---|
-| `large-v3-turbo` | 1x (baseline) | Near-best | **Recommended default** |
-| `medium` | ~1.3x faster | Good | Best choice for 8 GB machines |
-| `small` | ~2.5x faster | Medium | Quick results, lower accuracy |
+| `large-v3-turbo` | 1x (baseline) | Near-best | **Recommended default**; wants 12 GB system RAM |
+| `medium` | ~1.3x faster | Good | Tight on 8 GB once pyannote and PostgreSQL are accounted for |
+| `small` | ~2.5x faster | Medium | The comfortable choice on 8 GB |
 | `tiny` | ~6x faster | Low | Only useful for keyword search |
 
 ## Full Benchmarks

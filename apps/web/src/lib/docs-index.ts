@@ -18,6 +18,10 @@ import type { DocSection } from "./docs-search";
 import { makeUniqueSlugger } from "./docs-slug";
 
 function filenameToTitle(filename: string): string {
+  // Keep in step with the same helper in @/app/docs/page.tsx -- search hits
+  // label their source document with this, so a mismatch would show the
+  // index under a different name in search results than in the sidebar.
+  if (filename === "README") return "Overview";
   return filename
     .replace(/^\d+-/, "")
     .replace(/-/g, " ")
