@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Major changes
+- The Meta-Analysis page now shows how fast each inference provider actually processes your audio, so "is remote inference worth it on my hardware?" is answerable without opening a database console. It reports transcription and diarization time per second of audio, split by provider, with the median alongside the mean and the date range each figure was measured over. Two things it deliberately does not do: it never shows diarization on its own, because on the remote path the speaker labels arrive inside the transcription result and a separate figure would suggest cloud diarization is thousands of times faster than it is; and it compares time per second of audio rather than per episode, because episodes handled by different providers are rarely the same length. Episodes missing timings are excluded and counted rather than quietly dropped. ([#976](https://github.com/brlauuu/podlog/issues/976))
+
 ### Internal
 - Added `make ci-local`, which runs every blocking CI check on your machine using the same commands CI does — including the two coverage gates that are easy to miss when running the test suites by hand. Useful before pushing, and useful when GitHub Actions is slow or down. It also fails if a new job appears in a workflow that the script does not cover, so it cannot quietly stop being an equivalent and report a pass it has not earned.
 
