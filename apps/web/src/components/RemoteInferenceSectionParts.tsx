@@ -20,4 +20,5 @@ export {
 export {
   PyannoteApiKeyField,
   PyannoteCloudIntro,
+  PyannoteCostRateField,
 } from "./RemoteInferencePyannoteParts";

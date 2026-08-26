@@ -59,6 +59,103 @@ export function PyannoteCloudIntro() {
   );
 }
 
+/**
+ * Per-second billing rate for pyannote cloud (#969).
+ *
+ * The setting existed everywhere except here: it is in settings-schema.ts,
+ * in the Inference tab's dirty-field set, validated server-side as a finite
+ * non-negative number, and read by tasks/diarize.py -- but nothing rendered
+ * an input, so the only way to set it was `.env` or a direct DB write. The
+ * episode cost chip told users to set it "in Settings", pointing at a control
+ * that did not exist.
+ *
+ * pyannote.ai does not publish the rate (it varies by tier), so Podlog cannot
+ * derive it; 0 means "no estimate" rather than "free".
+ */
+export function PyannoteCostRateField({
+  value,
+  onChange,
+}: {
+  value: number | null;
+  onChange: (value: number) => void;
+}) {
+  // Kept as a string so the field can be cleared mid-edit without the value
+  // snapping back to 0 on every keystroke.
+  const [draft, setDraft] = useState<string>(
+    value == null ? "" : String(value)
+  );
+
+  // Re-sync when the saved value changes underneath us (e.g. a save
+  // round-trip returning the persisted number). Adjusted during render
+  // rather than in an effect -- React's documented pattern for deriving
+  // state from a changed prop, and it avoids the extra render an effect
+  // would cause.
+  const [lastValue, setLastValue] = useState<number | null>(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setDraft(value == null ? "" : String(value));
+  }
+
+  function commit(next: string) {
+    setDraft(next);
+    const parsed = Number(next);
+    // Empty or unparseable means "no estimate" -- send 0 rather than NaN,
+    // which the server rejects outright.
+    if (next.trim() === "" || !Number.isFinite(parsed) || parsed < 0) {
+      onChange(0);
+      return;
+    }
+    onChange(parsed);
+  }
+
+  const parsed = Number(draft);
+  const invalid =
+    draft.trim() !== "" && (!Number.isFinite(parsed) || parsed < 0);
+
+  return (
+    <div className="mb-4">
+      <label
+        htmlFor="pyannote-cost-rate"
+        className="block text-sm font-medium mb-1"
+      >
+        pyannote cloud rate (USD per second)
+      </label>
+      <p className="text-xs text-muted-foreground mb-1.5">
+        Optional. Used only to estimate the cost shown on each episode. Check
+        your tier&apos;s rate at{" "}
+        <a
+          href="https://dashboard.pyannote.ai"
+          target="_blank"
+          rel="noreferrer"
+          className="underline"
+        >
+          dashboard.pyannote.ai
+        </a>
+        {" "}— Podlog cannot look it up. Leave at 0 to skip estimates; billing
+        still happens, the chip just shows{" "}
+        <span className="font-mono">$—</span>.
+      </p>
+      <input
+        id="pyannote-cost-rate"
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step="0.0001"
+        className={inputClass}
+        placeholder="0.0"
+        value={draft}
+        aria-invalid={invalid || undefined}
+        onChange={(e) => commit(e.target.value)}
+      />
+      {invalid && (
+        <p className="mt-1 text-xs text-destructive">
+          Enter a non-negative number.
+        </p>
+      )}
+    </div>
+  );
+}
+
 type TestState =
   | { status: "idle" }
   | { status: "testing" }

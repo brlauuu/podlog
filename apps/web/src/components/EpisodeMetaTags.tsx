@@ -135,8 +135,8 @@ function PyannoteCloudCostTag({ costUsd }: { costUsd: number }) {
           ) : (
             <div>
               Cost estimate unavailable — set your per-second rate in
-              Settings &gt; Remote Inference to show an estimate here. Actual
-              billing is on your pyannote.ai dashboard.
+              Settings &gt; Inference to show an estimate here. Actual billing
+              is on your pyannote.ai dashboard.
             </div>
           )}
           <div className="mt-1 text-muted-foreground">
