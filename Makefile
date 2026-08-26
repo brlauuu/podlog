@@ -2,9 +2,11 @@
 
 up:             ## Start full stack
 	docker compose up -d
+	@bash scripts/print-access.sh
 
 up-remote:      ## Start remote-inference profile (Fireworks providers, no Ollama)
 	docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d
+	@bash scripts/print-access.sh
 
 down:           ## Stop all services
 	docker compose down
