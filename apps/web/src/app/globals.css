@@ -33,6 +33,16 @@
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
 
+  /* #993: shadcn primitives style floating surfaces with bg-popover /
+     text-popover-foreground. The tokens were never defined here, so those
+     classes generated nothing and the Export dropdown painted only its
+     border and text -- the page showed straight through it. Fixed once in
+     #428 by swapping to bg-background, then reintroduced in #848 when
+     dropdown-menu.tsx was re-copied from upstream. Defining the token means
+     an upstream re-copy is harmless instead of a regression. */
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -94,6 +104,8 @@
     --foreground: 0 0% 20%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 20%;
     --primary: 0 0% 20%;
     --primary-foreground: 0 0% 100%;
     --action: 0 0% 20%;
@@ -119,6 +131,10 @@
     --foreground: 0 0% 83%;
     --card: 0 0% 10%;
     --card-foreground: 0 0% 83%;
+    /* Slightly lifted off the page so a floating menu reads as a separate
+       surface against the #1a1a1a base rather than blending into it. */
+    --popover: 0 0% 14%;
+    --popover-foreground: 0 0% 83%;
     --primary: 0 0% 83%;
     --primary-foreground: 0 0% 10%;
     --action: 0 0% 83%;

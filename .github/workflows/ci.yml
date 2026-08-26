@@ -35,6 +35,12 @@ jobs:
       - name: Verify no workflow interpolates into a shell command
         run: python scripts/check_workflow_injection.py
 
+      # #993: Tailwind emits nothing for a colour token the theme never
+      # defines, so `bg-popover` with no `--color-popover` renders as a
+      # transparent panel rather than an error. That shipped twice.
+      - name: Verify UI primitives only use defined colour tokens
+        run: python scripts/check_ui_tokens.py
+
   pipeline-unit-fast:
     name: Pipeline Unit Fast
     runs-on: ubuntu-latest

@@ -56,6 +56,7 @@ fi
 step "Docs sync"
 python3 scripts/check_docs_sync.py >/dev/null 2>&1;        res $? "check_docs_sync.py"
 python3 scripts/check_workflow_injection.py >/dev/null 2>&1; res $? "check_workflow_injection.py"
+python3 scripts/check_ui_tokens.py >/dev/null 2>&1;          res $? "check_ui_tokens.py"
 
 # --- Changelog -------------------------------------------------------------
 # Mirrors changelog.yml, which diffs the PR against its merge-base. Compares
