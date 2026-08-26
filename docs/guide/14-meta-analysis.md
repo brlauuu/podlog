@@ -30,8 +30,19 @@ If nothing has been computed yet you'll see *"No analysis yet — hit ↻ Refres
 | **Per-speaker minutes per episode** | Each host's airtime across the podcast's run, episode by episode. Guests are collapsed into a single dashed trace per feed — hover to see who they were. |
 | **Per-speaker word count per episode** | The same shape, measured in words instead of minutes. Reading the two together separates "talked longer" from "talked faster". |
 | **Host vs Guest talking time per episode** | One signed value per episode: guest average minus host average. Above zero, guests dominated; below zero, the hosts did. The shaded band shows the widest delta the individual speaker variation allows. |
+| **Processing speed by provider** | How long transcription and diarization take per second of audio, split by the provider that ran them. A table rather than a chart — with providers often orders of magnitude apart, the numbers matter more than the shape. |
 
 The page has a collapsible **What do these charts show?** panel at the bottom repeating this in the app itself.
+
+### Reading the processing-speed table
+
+Two details make the difference between a useful number and a misleading one.
+
+**Transcription and diarization are combined, never separated.** If you run Fireworks, its diarization step takes a fraction of a second — but that is not a fast diarizer. The speaker labels arrive inside the transcription result, so the diarize step is only reading them back. Showing it on its own would suggest cloud diarization is thousands of times faster than local, when the work is simply being paid for in the transcription step.
+
+**Times are per second of audio, not per episode.** Episodes processed by different providers are rarely the same length, so raw minutes would flatter whichever provider happened to get the shorter ones. A figure of `1.87×` means processing took 1.87 seconds for every second of audio.
+
+The median is the headline because the spread is wide — the slowest local episode can take many times the fastest. The mean and the average wall-clock time sit beside it for context, and each row shows the date range it was measured over, since the numbers reflect the hardware you were running at the time. Episodes missing timings are excluded and shown as a count in brackets rather than quietly dropped.
 
 ## Refreshing the snapshot
 

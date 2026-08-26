@@ -12,6 +12,7 @@ import ChartCard from "./ChartCard";
 import SpeakerMinutesChart from "./charts/SpeakerMinutesChart";
 import SpeakerWordsChart from "./charts/SpeakerWordsChart";
 import HostGuestDiffChart from "./charts/HostGuestDiffChart";
+import ProviderTimingChart from "./charts/ProviderTimingChart";
 import InfoBlock from "./InfoBlock";
 import ExploreStatusPanel from "./ExploreStatusPanel";
 import { formatDateTime } from "@/lib/dateFormat";
@@ -177,6 +178,17 @@ export default function MetaAnalysisClient() {
                 </ChartCard>
                 <ChartCard title="Host vs Guest talking time per episode" subtitle={sourceSubtitle}>
                   <HostGuestDiffChart rows={filteredDiffRows} source={source} />
+                </ChartCard>
+                {/*
+                  #976: not affected by the Confirmed / Inferred switch --
+                  this is about processing cost, not speaker attribution --
+                  so it reads the unfiltered per-episode rows.
+                */}
+                <ChartCard
+                  title="Processing speed by provider"
+                  subtitle="Transcription + diarization per second of audio"
+                >
+                  <ProviderTimingChart rows={snap.per_episode ?? []} />
                 </ChartCard>
               </div>
             );
