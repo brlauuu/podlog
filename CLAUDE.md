@@ -139,6 +139,14 @@ Lessons from active development. Short rules; rationale linked to the incident o
 
 - **Test images bake test files at build time.** Both `apps/pipeline/Dockerfile.worker` (used by `test`) and `apps/web/Dockerfile.test` do `COPY . .`, so editing a test file and re-running `docker compose -f docker-compose.test.yml run --rm test/web_test` executes the OLD copy. Rebuild the test image (`docker compose -f docker-compose.test.yml build test web_test`) after any test edit. Symptom: test count stays the same after adding cases.
 
+- **Never pass `--remove-orphans` to `docker-compose.test.yml`.** Neither compose file sets a `name:`, so both derive the same project name (`podlog`) from the directory, while their service names are disjoint (`db_test` / `mock_rss` / `test` / `pipeline_test` / `web_test` vs `db` / `pipeline` / `worker` / `ollama` / `web` / `backup`). From the test file's point of view **every production service is an orphan**, so `docker compose -f docker-compose.test.yml down --remove-orphans` tears down the live stack — including a worker mid-job. Plain `down` is the same trap for the same reason. Clean up test containers by explicit service name instead:
+
+```bash
+docker compose -f docker-compose.test.yml rm -sf db_test mock_rss pipeline_test web_test test
+```
+
+Data volumes survive (`-v` only drops volumes declared in the file it was given), but in-flight jobs do not — one was killed this way and came back as `SYSTEM_ERROR` via the zombie sweep.
+
 - **Use `gen_random_uuid()` without `::text` cast in raw SQL.** All `id` / `feed_id` / `last_seen_episode_id` columns are PostgreSQL `uuid` (declared via `sa.dialects.postgresql.UUID(as_uuid=False)`). Casting to text and inserting into a uuid column raises `DatatypeMismatch` and halts pipeline boot at `alembic upgrade head`. Match the pattern from `001_initial_schema.py`: `server_default = sa.text("gen_random_uuid()")`. This bit us in migration 014 — caught only on first prod restart, not in unit tests.
 
 - **Worker is non-interruptible; verify queue is drained before restart.** `concurrency=1` and in-flight jobs can take minutes. Before `docker compose up -d worker`, run `docker compose exec -T db psql -U postgres podlog -c "SELECT task, status, COUNT(*) FROM job_queue WHERE status IN ('pending','running') GROUP BY task, status;"` and confirm 0 rows. For idle periods this is fast; otherwise wait or use `docker compose stop -t 60 worker` for graceful shutdown.
