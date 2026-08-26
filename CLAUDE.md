@@ -45,8 +45,8 @@ podlog/
 ├── apps/
 │   ├── pipeline/                   # Python 3.11–3.13 — FastAPI + DB-backed job queue
 │   │   ├── README.md               # Package guide (layout, running, tests)
-│   │   ├── Dockerfile.control      # Lightweight FastAPI control plane
-│   │   ├── Dockerfile.worker       # Worker image (includes ML deps)
+│   │   ├── Dockerfile.control      # FastAPI control plane (poetry `--with embed`)
+│   │   ├── Dockerfile.worker       # Worker image (poetry `--with ml,embed`)
 │   │   ├── alembic.ini
 │   │   ├── VERSION                 # Packaging metadata; runtime reads repo-root VERSION
 │   │   ├── scripts/
@@ -150,6 +150,8 @@ Lessons from active development. Short rules; rationale linked to the incident o
 - **Cross-runtime helpers (TS + Python) must stay in lockstep.** When a normalization / canonicalization rule is duplicated across `apps/pipeline/` and `apps/web/`, give each copy a test suite that enumerates the same cases, and cross-reference the files in comments. `apps/web/src/lib/normalizeName.ts` ↔ `apps/pipeline/app/services/inference_helpers.py::normalize_name` is the pattern. Silent divergence corrupts shared DB keys (e.g. `normalized_name` cache column).
 
 - **Self-reinforcement analysis is a design concern for any feature that queries its own prior output.** Two patterns we've used (PRD-04): (a) emit at MEDIUM confidence so the rule's output rows can't satisfy the HIGH filter on the next cycle (`recurring_host`); (b) sever the data source so inference never writes to the table the heuristic reads (`feed_speaker_cache` is populated only from user renames). The `METADATA_SOURCES` frozenset is the mechanism that lets pre-classified candidates bypass heuristic reclassification.
+
+- **Keep torch on the CPU wheel index, and keep the control plane off the `ml` group.** Both images install torch from the explicit `pytorch-cpu` source declared in `apps/pipeline/pyproject.toml`; the default PyPI wheel bundles 4.2 GB of CUDA runtime that no container can use, because nothing in `docker-compose.yml` grants a GPU (#977). Two traps if you touch this: (a) **anything linking against torch must come from the same index** — a PyPI `torchvision` paired with `torch+cpu` resolves fine and then dies at import with *"partially initialized module 'torchvision' has no attribute 'extension'"*, which is why it is pinned explicitly despite being transitive; (b) `Dockerfile.control` installs `--with embed`, not `--with ml` — the control plane never runs a pipeline stage, and `sentence-transformers` is the only heavy thing any endpoint reaches. Verify with `docker run --rm --entrypoint python podlog-pipeline:latest -c "import sys, app.main; print('whisperx' in sys.modules)"` — everything heavy is lazily imported and should report False. `triton` (540 MB) stays in the worker: it is a direct dependency of whisperx, not of torch.
 
 - **Split large issues into sequential PRs, not one bundle.** Issue #523 was shipped as 5 PRs (#525, #526, #527, #529, #531 + hotfix #532). Each PR had its own review / merge / prod-smoke loop. The hotfix pattern (#532 as a 2-line follow-up to #531) is cheaper than reverting or force-pushing over a merged PR.
 

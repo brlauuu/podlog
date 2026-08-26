@@ -118,18 +118,74 @@ tiktoken = "^0.13.0"
 # Re-check when whisperx relaxes either pin. That is the trigger; nothing
 # else here moves until then.
 # ---------------------------------------------------------------------------
+# CPU-only torch wheels (#977).
+#
+# The default PyPI torch wheel bundles the CUDA runtime: 4.2 GB of `nvidia`
+# packages plus 540 MB of `triton`, measured in both images. Nothing in
+# docker-compose.yml grants a container a GPU -- no `deploy.resources.
+# reservations.devices`, no `runtime: nvidia` -- so torch.cuda.is_available()
+# is always False and none of it can execute. docs/hardware.md says the same:
+# "Podlog runs entirely on CPU. GPU acceleration is not configured."
+#
+# `priority = "explicit"` means this source is used ONLY by packages that name
+# it below. Everything else still resolves from PyPI.
+#
+# Verified before switching: CPU and CUDA wheels of the same torch version
+# produce bit-identical embeddings (max abs diff 0.0, cosine 1.0 over a
+# 3-sentence sample). That mattered because a change in the vector space would
+# silently invalidate the corpus -- see the EMBEDDING_MODEL note in #945.
+# There is no re-embedding and no provenance change.
+#
+# To restore GPU support you need compose device reservations anyway; at that
+# point add a build arg selecting the CUDA index rather than reverting this.
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
+
+# Embedding group (#977). What the CONTROL PLANE needs and nothing more.
+#
+# pyproject already documented the split -- "the worker needs all of it, the
+# control plane needs sentence-transformers for /api/embed" -- but
+# Dockerfile.control installed `--with ml` anyway, so the control plane
+# carried whisperx, pyannote-audio and spacy it never imports. Verified by
+# importing app.main inside the image: whisperx, pyannote, spacy, torch,
+# transformers, sentence_transformers and ctranslate2 all report
+# `loaded=False`. Everything heavy is lazily imported -- task_registry._resolve
+# for pipeline stages, and a function-local import inside services/embed.py.
+#
+# The worker installs `--with ml,embed`; the control plane installs
+# `--with embed` alone.
+[tool.poetry.group.embed]
+optional = true
+
+[tool.poetry.group.embed.dependencies]
+# Sentence embeddings for semantic search (Level 3). Reached by /api/embed,
+# /api/embed/verify, /api/ask and /api/backfill/chunks.
+sentence-transformers = ">=2.2.0"
+numpy = ">=1.26,<3.0"
+torch = {version = "^2.2.0", source = "pytorch-cpu"}
+
 [tool.poetry.group.ml]
 optional = true
 
 [tool.poetry.group.ml.dependencies]
 # WhisperX (CTranslate2 backend + wav2vec2 alignment)
 whisperx = "^3.8.0"
-torch = "^2.2.0"
+torch = {version = "^2.2.0", source = "pytorch-cpu"}
 # torchaudio is a transitive requirement of whisperx/pyannote-audio and is
 # never imported directly (#915). Declared explicitly so the version is
 # pinned by us rather than resolved incidentally — same reasoning as the
 # soundfile pin above.
-torchaudio = "^2.2.0"
+torchaudio = {version = "^2.2.0", source = "pytorch-cpu"}
+# torchvision is transitive (pyannote-audio -> lightning -> torchmetrics), but
+# it MUST come from the same index as torch (#977). A PyPI torchvision links
+# against the CUDA torch build; paired with torch 2.8.0+cpu its compiled ops
+# fail to load and importing pyannote.audio dies with
+# "partially initialized module 'torchvision' has no attribute 'extension'".
+# Caught by building the worker and importing pyannote.audio -- the resolver
+# is perfectly happy with the mismatch.
+torchvision = {version = "^0.23.0", source = "pytorch-cpu"}
 # Audio I/O backend for reading the pre-ffmpeg'd WAV into pyannote.
 # torchaudio 2.8 registers no default backend, so without soundfile we get
 # "Couldn't find appropriate backend ... format None".
@@ -147,7 +203,8 @@ huggingface-hub = ">=0.28.1,<1.0"
 # spaCy NER for host/guest inference (PRD-04)
 spacy = "^3.7"
 
-# Sentence embeddings for semantic search (Level 3)
+# Sentence embeddings for semantic search (Level 3). Also declared in the
+# `embed` group above, which is the control plane's only ML dependency.
 sentence-transformers = ">=2.2.0"
 numpy = ">=1.26,<3.0"
 
