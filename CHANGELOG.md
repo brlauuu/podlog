@@ -21,6 +21,9 @@ fresh empty `Unreleased` is left at the top.
 ## Unreleased
 
 ### Internal
+- Wrote the implementation plan for the documentation Ask bubble, following the design spec agreed in #990. Five tasks, each ending in something testable. Still no implementation. ([#990](https://github.com/brlauuu/podlog/issues/990))
+
+### Internal
 - Wrote a design spec for a documentation Ask bubble — a conversational box on the Docs pages that answers questions about Podlog itself rather than about podcast content. No implementation yet; the spec records the four decisions that shape it and, for each, what was rejected and why. ([#990](https://github.com/brlauuu/podlog/issues/990))
 
 ### Internal
