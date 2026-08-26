@@ -9,6 +9,7 @@ import {
   PipelineStepCards,
   PyannoteApiKeyField,
   PyannoteCloudIntro,
+  PyannoteCostRateField,
   RemoteProviderIntro,
 } from "./RemoteInferenceSectionParts";
 import { Settings } from "./NotificationSettingsSections";
@@ -45,6 +46,12 @@ export default function RemoteInferenceSection({
       <PyannoteApiKeyField
         value={settings.pyannote_api_key}
         onChange={(value) => onChange("pyannote_api_key", value)}
+      />
+      <PyannoteCostRateField
+        value={settings.pyannote_cloud_cost_per_second_usd}
+        onChange={(value) =>
+          onChange("pyannote_cloud_cost_per_second_usd", value)
+        }
       />
       <PipelineStepCards
         settings={settings}
