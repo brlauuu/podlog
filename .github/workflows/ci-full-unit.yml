@@ -97,37 +97,44 @@ jobs:
       - name: Export the full locked dependency set (including ML)
         run: poetry export --with ml,embed -f requirements.txt --without-hashes -o /tmp/requirements.txt
 
-      # Strip the `+cpu` local version identifier before auditing (#977).
+      # Make the export auditable against PyPI advisories (#977).
       #
-      # torch, torchaudio and torchvision are installed from the PyTorch CPU
-      # index and are pinned as e.g. `torch==2.8.0+cpu`. That exact string does
-      # not exist on PyPI, so pip-audit cannot resolve it and prints
+      # Two things in a poetry export defeat pip-audit once torch comes from
+      # the PyTorch CPU index:
+      #
+      #  1. Line 1 is `--extra-index-url https://download.pytorch.org/whl/cpu`.
+      #     pip-audit honours it, and under PEP 440 the specifier `==2.8.0`
+      #     also matches `2.8.0+cpu`, so it re-resolves to the CPU wheel.
+      #  2. The pins themselves read `torch==2.8.0+cpu`.
+      #
+      # Either way pip-audit ends up holding a version PyPI has no advisory
+      # data for, prints
       #     Dependency not found on PyPI and could not be audited: torch (2.8.0+cpu)
-      # then carries on. The effect is that torch silently stops being audited
-      # -- the finding count dropped from 14 to 6 with no failure to notice.
-      # That is the same class of gap as #915, arrived at from the other side.
+      # and moves on. torch, torchaudio and torchvision then stop being
+      # audited: the finding count silently fell from 14 in 3 packages to 6
+      # in 2, which reads like an improvement. It was not -- the advisories
+      # still apply. Same class of gap as #915, reached from the other side.
       #
       # A local version identifier denotes a build variant, not different
-      # source: 2.8.0+cpu is the 2.8.0 codebase compiled without CUDA kernels,
-      # so PyPI's advisories for 2.8.0 apply unchanged. Stripping the suffix
-      # audits the version that is actually running.
-      - name: Make CPU-wheel pins auditable against PyPI advisories
+      # source: 2.8.0+cpu is the 2.8.0 codebase compiled without CUDA
+      # kernels, so PyPI's advisories for 2.8.0 apply unchanged.
+      - name: Make the export auditable against PyPI advisories
         run: |
-          echo "--- pins carrying a local version, before ---"
-          grep -nE '^[A-Za-z0-9._-]+==[^ ;]*\+' /tmp/requirements.txt || echo "(none)"
-          # Strip any local version identifier, not just +cpu, so a future
-          # variant (+rocm, +cu128) cannot silently reintroduce the gap.
+          echo "--- index directives and local-version pins, before ---"
+          grep -nE '^--(extra-)?index-url|^[A-Za-z0-9._-]+==[^ ;]*\+' /tmp/requirements.txt || echo "(none)"
+          sed -i -E '/^--(extra-)?index-url/d' /tmp/requirements.txt
           sed -i -E 's/^([A-Za-z0-9._-]+==[0-9][^ ;+]*)\+[A-Za-z0-9.]+/\1/' /tmp/requirements.txt
-          echo "--- the same lines, after ---"
-          grep -nE '^(torch|torchaudio|torchvision)==' /tmp/requirements.txt || echo "(no torch pins found -- unexpected)"
+          echo "--- torch pins, after ---"
+          grep -nE '^torch(audio|vision)?==' /tmp/requirements.txt || echo "(no torch pins -- unexpected)"
 
-      # Fail loudly if the strip above ever stops matching -- silently
-      # reverting to an unaudited torch is the failure mode this guards.
-      - name: Verify no dependency carries an unauditable local version
+      # Fail loudly if either rewrite ever stops matching. Reverting to a
+      # silently unaudited torch is the failure mode this exists to prevent.
+      - name: Verify nothing in the export can be skipped by pip-audit
         run: |
-          if grep -qE '^[A-Za-z0-9._-]+==[^ ;]*\+' /tmp/requirements.txt; then
-            echo "::error::Local version identifiers remain; pip-audit will skip these packages:"
-            grep -E '^[A-Za-z0-9._-]+==[^ ;]*\+' /tmp/requirements.txt
+          bad=$(grep -nE '^--(extra-)?index-url|^[A-Za-z0-9._-]+==[^ ;]*\+' /tmp/requirements.txt || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Export still contains directives or pins that make pip-audit skip packages:"
+            echo "$bad"
             exit 1
           fi
 
