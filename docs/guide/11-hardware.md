@@ -20,16 +20,16 @@ Episodes are processed sequentially (one at a time). A backlog of 100 one-hour e
 
 ## How Much Disk Space Do I Need?
 
-More than you might expect. **Budget ~45 GB before ingesting a single episode**: the worker and pipeline images carry the full machine-learning stack and measure 16.1 GB and 12.5 GB on disk, Ollama adds 8.4 GB, and the model cache another ~5.7 GB once Whisper, pyannote, spaCy and the embedding model have downloaded.
+More than you might expect. **Budget ~25 GB before ingesting a single episode**: Ollama is 8.4 GB, the worker image carries the full machine-learning stack at 7.1 GB, the rest of the images add ~3.5 GB, and the model cache another ~5.7 GB once Whisper, pyannote, spaCy and the embedding model have downloaded.
 
 After that, measured on a real 985-episode library: **~29 MB per hour of audio** archived at 64 kbps, and **~3.6 MB per hour** in the database.
 
-| Library Size | Audio Archive | Database | Total (incl. ~45 GB base) |
+| Library Size | Audio Archive | Database | Total (incl. ~25 GB base) |
 |---|---|---|---|
-| 100 episodes (1hr avg) | ~2.9 GB | ~0.4 GB | ~48 GB |
-| 500 episodes | ~15 GB | ~1.8 GB | ~62 GB |
-| 1,000 episodes | ~29 GB | ~3.6 GB | ~78 GB |
-| 5,000 episodes | ~147 GB | ~18 GB | ~210 GB |
+| 100 episodes (1hr avg) | ~2.9 GB | ~0.4 GB | ~28 GB |
+| 500 episodes | ~15 GB | ~1.8 GB | ~42 GB |
+| 1,000 episodes | ~29 GB | ~3.6 GB | ~58 GB |
+| 5,000 episodes | ~147 GB | ~18 GB | ~190 GB |
 
 To save disk, set `ARCHIVE_AUDIO=false` — transcripts remain searchable but audio playback is unavailable. That removes the largest column entirely.
 

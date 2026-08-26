@@ -89,8 +89,13 @@ jobs:
       # be the largest CVE surface in the project (#915). Exporting the lock
       # covers every pinned dependency, including ML, and needs no install at
       # all, so it is both more complete and considerably faster.
+      #
+      # Both optional groups are named (#977). `embed` holds what the control
+      # plane installs; naming it explicitly keeps the audit complete even if
+      # a package later exists only there. Missing a group here is precisely
+      # the failure #915 was about.
       - name: Export the full locked dependency set (including ML)
-        run: poetry export --with ml -f requirements.txt --without-hashes -o /tmp/requirements.txt
+        run: poetry export --with ml,embed -f requirements.txt --without-hashes -o /tmp/requirements.txt
 
       # --no-deps: the export is already fully pinned, so audit exactly those
       # versions rather than re-resolving.

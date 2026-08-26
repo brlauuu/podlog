@@ -14,9 +14,16 @@ COPY pyproject.toml poetry.lock* ./
 # that happens in this same RUN layer it is baked into the image permanently --
 # 8.0 GB of it, measured on 2026-08-19 (#939). Clearing it in the same layer is
 # what makes the saving real; a later RM would only add another layer.
+#
+# `--with embed`, not `--with ml` (#977). The control plane serves the API; it
+# never runs a pipeline stage. The only heavy dependency any endpoint reaches
+# is sentence-transformers, via /api/embed, /api/embed/verify, /api/ask and
+# /api/backfill/chunks. Installing the full ml group put whisperx,
+# pyannote-audio and spacy in here for nothing -- 13.4 GB of image, of which
+# importing app.main loads none. See the group comment in pyproject.toml.
 RUN pip install --no-cache-dir poetry \
     && poetry config virtualenvs.create false \
-    && poetry install --with ml --without dev --no-root --no-interaction --no-ansi \
+    && poetry install --with embed --without dev --no-root --no-interaction --no-ansi \
     && rm -rf /root/.cache/pypoetry
 
 COPY . .

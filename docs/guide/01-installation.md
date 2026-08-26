@@ -8,12 +8,12 @@ Get Podlog running on your machine in about 5 minutes.
 |---|---|---|
 | CPU | 4-core x86-64 | 8-core or more |
 | RAM | 8 GB | 16 GB+ |
-| Disk | 50 GB free | 100 GB+ |
+| Disk | 30 GB free | 80 GB+ |
 | GPU | Not required | Not required |
 
 Podlog runs entirely on CPU.
 
-**The disk figure is not a typo.** The worker and pipeline images carry the full machine-learning stack — 16.1 GB and 12.5 GB on disk — and with Ollama, PostgreSQL and the downloaded models you are ~45 GB deep before ingesting a single episode. Archived audio then costs about 29 MB per hour at the default bitrate. For measured numbers and storage by library size, see [Hardware & Performance](11-hardware.md).
+**The disk figure is mostly machine-learning weight, not your audio.** Ollama is 8.4 GB, the worker image carries the full ML stack at 7.1 GB, and the downloaded models add ~5.7 GB — about 25 GB before you ingest a single episode. Archived audio then costs roughly 29 MB per hour at the default bitrate, so a 1,000-hour library lands near 58 GB all in. For measured numbers and storage by library size, see [Hardware & Performance](11-hardware.md).
 
 ## Prerequisites
 

@@ -6,7 +6,7 @@
 |---|---|---|
 | CPU | 4-core x86-64 | 8-core or more |
 | RAM | 8 GB | 16 GB+ |
-| Storage (base) | 45 GB (Docker images + model cache) | 60 GB+ |
+| Storage (base) | 25 GB (Docker images + model cache) | 40 GB+ |
 | Storage (per 1000 1-hour episodes) | ~33 GB (audio archive at 64 kbps + database) | — |
 | GPU | Not required | Not required |
 
@@ -72,10 +72,10 @@ Projected to 1-hour episodes:
 
 | Episodes (1hr avg) | Audio Archive | Database | Total (incl. base) |
 |---|---|---|---|
-| 100 | ~2.9 GB | ~0.4 GB | ~48 GB |
-| 500 | ~15 GB | ~1.8 GB | ~62 GB |
-| 1,000 | ~29 GB | ~3.6 GB | ~78 GB |
-| 5,000 | ~147 GB | ~18 GB | ~210 GB |
+| 100 | ~2.9 GB | ~0.4 GB | ~28 GB |
+| 500 | ~15 GB | ~1.8 GB | ~42 GB |
+| 1,000 | ~29 GB | ~3.6 GB | ~58 GB |
+| 5,000 | ~147 GB | ~18 GB | ~190 GB |
 
 The `embedding vector(384)` column adds ~1.5 KB per segment (~18 MB for 12,000 segments) — real, but small next to audio.
 
@@ -83,24 +83,24 @@ To drop the audio column entirely, set `ARCHIVE_AUDIO=false`. Transcripts stay f
 
 ### Base overhead
 
-**Budget ~45 GB before you ingest anything.** Measured on the reference machine, unique layer sizes for the six default-profile images:
+**Budget ~25 GB before you ingest anything.** Measured on the reference machine, unique layer sizes for the six default-profile images:
 
 | Image | On-disk |
 |---|---|
-| `podlog-worker` | 16.1 GB |
-| `podlog-pipeline` | 12.5 GB |
 | `ollama/ollama` | 8.4 GB |
+| `podlog-worker` | 7.1 GB |
+| `podlog-pipeline` | 1.8 GB |
 | `pgvector/pgvector:pg15` | 0.5 GB |
 | `podlog-web` | 0.3 GB |
 | `podlog-backup` | 0.1 GB |
 | shared layers (counted once) | 0.9 GB |
-| **Total images** | **~39 GB** |
+| **Total images** | **~19 GB** |
 
 Plus the `podlog_model_cache` volume — Whisper, pyannote, spaCy and the embedding model — at **~5.7 GB** once everything has been downloaded.
 
 Ask AI models are pulled separately and on top: `qwen2.5:3b` is 1.9 GB and `phi3:mini` is 2.2 GB; `gemma3n:e4b` is larger again. `make ollama-pull` fetches all three.
 
-The worker and pipeline images are large because they carry the full machine-learning stack. Issue [#937](https://github.com/brlauuu/podlog/issues/937) hit the same numbers from the other direction: the release workflow builds each image in its own CI job because a standard runner has about 14 GB of disk and these two do not fit alongside each other.
+The worker is the largest Podlog image because it carries the full machine-learning stack — WhisperX, pyannote, spaCy and both spaCy models. It used to be 16.9 GB and the pipeline 13.4 GB; both shrank when the CUDA-bundling torch wheel was replaced with the CPU-only one and the control plane stopped installing dependencies it never imports ([#977](https://github.com/brlauuu/podlog/issues/977)). Ollama, which is not ours, is now the single biggest image in the stack.
 
 ## Whisper Model Comparison
 

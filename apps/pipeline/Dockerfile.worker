@@ -11,6 +11,13 @@ WORKDIR /app
 ARG INSTALL_DEV=false
 
 COPY pyproject.toml poetry.lock* ./
+# The worker runs every pipeline stage, so it installs the full ml group plus
+# `embed` (#977) -- the latter holds sentence-transformers, which moved into
+# its own group so the control plane can install it without whisperx,
+# pyannote-audio and spacy. torch here comes from the CPU wheel index; see the
+# pytorch-cpu source in pyproject.toml for why, and for the check that CPU and
+# CUDA wheels embed identically.
+#
 # `--no-cache-dir` applies only to pip installing poetry itself. Poetry caches
 # every dependency wheel in /root/.cache/pypoetry, which this same RUN layer
 # then bakes into the image -- 8.0 GB of it (#939). Cleared at the end of the
@@ -18,9 +25,9 @@ COPY pyproject.toml poetry.lock* ./
 RUN pip install --no-cache-dir poetry \
     && poetry config virtualenvs.create false \
     && if [ "$INSTALL_DEV" = "true" ]; then \
-         poetry install --with ml,dev --no-root --no-interaction --no-ansi; \
+         poetry install --with ml,embed,dev --no-root --no-interaction --no-ansi; \
        else \
-         poetry install --with ml --without dev --no-root --no-interaction --no-ansi; \
+         poetry install --with ml,embed --without dev --no-root --no-interaction --no-ansi; \
        fi \
     && python -m spacy download en_core_web_trf \
     && python -m spacy download en_core_web_lg \
