@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+- The Export dropdown on episode pages is no longer see-through. It was not a low opacity setting — the menu had no background colour at all, so the page showed straight through the items. The stylesheet never defined the colour that shadcn's menus ask for, and an undefined colour in Tailwind produces nothing rather than an error, so it failed silently. The colour is now defined for both light and dark themes, which also fixes the same missing definition in the popover and select menus, and a new check fails the build if any interface component ever again references a colour the theme does not define. This exact bug had already been reported and fixed once before, then reintroduced when the component was updated from upstream. ([#993](https://github.com/brlauuu/podlog/issues/993))
+
 ### Minor changes
 - The episode picker for selective feeds now has a filter box. Choosing two specific episodes out of a 357-episode back-catalogue previously meant scrolling and reading titles one at a time. Type part of a title to narrow the list; the filter only changes what you can see, so anything already ticked stays ticked and is still added even while it is hidden. With a filter active, **Select all** applies to just the episodes on screen and says so, which makes "filter to one guest, take all of them" a single click — and in the add-more flow it still refuses to touch episodes the feed already has. ([#982](https://github.com/brlauuu/podlog/issues/982))
 
