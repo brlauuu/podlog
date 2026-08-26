@@ -68,7 +68,19 @@ make build    # Build Docker images (first time takes a few minutes)
 make up       # Start all services in the background
 ```
 
+`make up` prints where to reach Podlog when it finishes:
+
+```
+Podlog is running.
+  This machine:  http://localhost:3000
+  Same network:  http://192.168.1.190:3000
+```
+
 Open **http://localhost:3000** — you should see the Podlog home page with quick links to Search and Ask. The search page itself is at `/search`.
+
+The "same network" address is the one to use from a phone or another computer. Read the [Security model](#security-model) below before you use it: anyone who can reach that address has full control, with no login. If no LAN address is shown, either your machine has no network route or you have bound the web service to loopback — either way Podlog is reachable from this machine only.
+
+The address comes from DHCP and can change when your router or machine restarts. Reserve it in your router if you want it stable.
 
 ### Optional: Remote-Inference Profile
 
@@ -105,13 +117,32 @@ No Redis, no Celery — the job queue is PostgreSQL-backed.
 
 ## Security model
 
-Podlog assumes it runs on **one machine that you trust**. Read this before changing how it is deployed.
+Podlog assumes it runs on **one machine, and one network, that you trust**. Read this before changing how it is deployed.
 
 **The web interface is the only thing exposed to your network.** You can open Podlog from a phone or another computer. The database, the pipeline API and Ollama are bound to `127.0.0.1` and are reachable only from the machine Podlog runs on.
 
-**The pipeline API has no authentication.** Anything able to reach port 8000 can change settings, add and delete feeds, upload episodes, trigger re-processing, and read configuration. Today that means processes on the Podlog host itself — which is an acceptable boundary, because anything with a shell there can read your `.env` anyway.
+**But that web interface is not a read-only viewer.** There is no login, and it forwards writes to the pipeline API on your behalf. Anyone who can open port 3000 — every device on your Wi-Fi, guests included — has **full control of Podlog**. They can:
 
-That boundary is doing real work, so two changes would break it:
+- add, edit and delete feeds
+- delete episodes and their transcripts
+- **delete your backups**, both database dumps and audio snapshots
+- upload audio, trigger re-processing, and change every setting
+
+Your API keys are masked when read back, so those are not handed out directly. Everything else is fair game.
+
+**The pipeline API has no authentication.** Anything able to reach port 8000 can do all of the above directly. Port 8000 itself is bound to the host — but because the web app proxies to it without authenticating, the effective trust boundary is your **network**, not just the machine.
+
+**If you are on a shared, office or guest network,** treat that as the deciding fact. To opt out of LAN access entirely, bind the web service to loopback in `docker-compose.yml`:
+
+```yaml
+  web:
+    ports:
+      - "127.0.0.1:3000:3000"   # this machine only
+```
+
+Podlog then behaves like the other services: reachable over an SSH tunnel or from the host, and from nowhere else.
+
+The remaining boundary is doing real work, so two changes would break it:
 
 - **Do not re-publish port 8000, 5432 or 11434 to `0.0.0.0`.** The `ports:` entries in `docker-compose.yml` are deliberately `127.0.0.1:`-prefixed. Removing that prefix puts an unauthenticated write API, or your database, on your local network.
 - **Do not move the `web` container to a different host** without putting authentication in front of the pipeline API first. `web` reaches it over the private Docker network; splitting them means exposing it.

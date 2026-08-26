@@ -20,6 +20,12 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Major changes
+- `make up` now tells you where Podlog is running, including the address to use from a phone or another computer on the same network — previously you had to work that out yourself, and the obvious way of doing so also lists Docker's internal addresses, which do not work. It prints only the address that actually reaches Podlog, says nothing if there isn't one, and respects the setting if you have restricted access to the local machine.
+
+### Fixes
+- The installation guide understated what network access to Podlog means. It said the web interface is "exposed to your network" alongside a note that the unauthenticated pipeline API is only reachable from the machine itself — which reads as "people on your Wi-Fi get a viewer". They do not. The web interface has no login and passes changes through to that API, so anyone who can open it can add and delete feeds, delete episodes and transcripts, delete your backups, upload audio and change every setting. The guide now says so plainly, reframes the assumption as one trusted machine *and one trusted network*, and shows the one-line change that restricts access to the local machine if that is what you want. The startup message carries the same warning, since that is where you first learn network access exists. ([#988](https://github.com/brlauuu/podlog/issues/988))
+
 ### Fixes
 - The Export dropdown on episode pages is no longer see-through. It was not a low opacity setting — the menu had no background colour at all, so the page showed straight through the items. The stylesheet never defined the colour that shadcn's menus ask for, and an undefined colour in Tailwind produces nothing rather than an error, so it failed silently. The colour is now defined for both light and dark themes, which also fixes the same missing definition in the popover and select menus, and a new check fails the build if any interface component ever again references a colour the theme does not define. This exact bug had already been reported and fixed once before, then reintroduced when the component was updated from upstream. ([#993](https://github.com/brlauuu/podlog/issues/993))
 
