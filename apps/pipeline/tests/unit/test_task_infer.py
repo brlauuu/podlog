@@ -133,6 +133,114 @@ class TestInferSpeakers:
     @patch("app.tasks.infer.job_queue")
     @patch("app.tasks.infer.update_episode")
     @patch("app.tasks.infer.SessionLocal")
+    def test_success_clears_a_previous_inference_error(
+        self, mock_session_cls, mock_update, mock_jq
+    ):
+        """#983: the column was write-only.
+
+        It is set in the except branch and was never reset, so an episode that
+        failed once and later succeeded kept the stale error forever. That is
+        what made `SELECT count(*) FROM episodes WHERE inference_error IS NOT
+        NULL` useless as a health signal -- and it is the signal that would
+        have surfaced #972 long before it reached 39 episodes.
+
+        diarize.py already gets this right (diarization_error=None on
+        success); inference was the outlier.
+        """
+        ep = _make_episode()
+        ep.inference_error = "(psycopg2.errors.UniqueViolation) previous failure"
+        ep.inference_skipped = True
+        feed = _make_feed()
+        segs = [_make_segment(1, "SPEAKER_00"), _make_segment(2, "SPEAKER_01", start=5.0, end=10.0)]
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.side_effect = [ep, feed]
+        db.query.return_value.filter.return_value.order_by.return_value.all.return_value = segs
+        mock_session_cls.return_value = db
+
+        label_map = {"SPEAKER_00": "SPEAKER_00", "SPEAKER_01": "SPEAKER_01"}
+        # Real CandidateName objects, and metadata extraction stubbed out.
+        # Passing dicts (as the older tests do) makes merge_candidates raise
+        # `'dict' object has no attribute 'name'`, which sends the run down the
+        # except branch -- so the "success" never happens and the assertion
+        # below could never pass no matter what the code does.
+        from app.services.inference_types import CandidateName, InferenceResult
+
+        host = CandidateName(name="Host Person", source="feed_title",
+                             role="host", confidence="HIGH")
+        guest = CandidateName(name="Jane Smith", source="episode_description",
+                              role="guest", confidence="HIGH")
+
+        with (
+            patch("app.tasks.infer.settings") as mock_settings,
+            patch("app.services.inference.load_spacy_model", return_value=MagicMock()),
+            patch("app.services.inference.unload_spacy_model"),
+            patch("app.services.inference.extract_metadata_candidates", return_value=[]),
+            patch("app.services.inference.extract_candidates", return_value=[host, guest]),
+            patch("app.services.inference.classify_candidates",
+                  return_value=InferenceResult(host=host, guests=[guest])),
+            patch("app.services.inference.assign_speaker_slots",
+                  return_value=_assignment_from_label_map(label_map)),
+            patch("app.services.inference.write_speaker_names"),
+            patch("app.services.inference.get_feed_speaker_cache_priors", return_value=[]),
+            patch("app.services.inference.get_recurring_host_name", return_value=None),
+            patch("app.tasks.infer._apply_segment_remap"),
+            patch("app.tasks.infer._write_other_rows"),
+        ):
+            mock_settings.inference_enabled = True
+            from app.tasks.infer import infer_speakers
+
+            infer_speakers("ep1")
+
+        # Guard: if the run fell into the except branch this test would be
+        # asserting against a failure, not a success.
+        assert not any(
+            "inference_error" in c.kwargs and c.kwargs["inference_error"]
+            for c in mock_update.call_args_list
+        ), "run did not reach the success path"
+
+        mock_update.assert_any_call(
+            db, "ep1", inference_error=None, inference_skipped=False
+        )
+
+    @patch("app.tasks.infer.job_queue")
+    @patch("app.tasks.infer.update_episode")
+    @patch("app.tasks.infer.SessionLocal")
+    def test_failure_still_records_the_error(self, mock_session_cls, mock_update, mock_jq):
+        """The clear must not swallow a genuine failure."""
+        ep = _make_episode()
+        feed = _make_feed()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.side_effect = [ep, feed]
+        db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            _make_segment()
+        ]
+        mock_session_cls.return_value = db
+
+        with (
+            patch("app.tasks.infer.settings") as mock_settings,
+            patch("app.services.inference.load_spacy_model", return_value=MagicMock()),
+            patch("app.services.inference.unload_spacy_model"),
+            patch("app.services.inference.extract_candidates",
+                  side_effect=RuntimeError("boom")),
+        ):
+            mock_settings.inference_enabled = True
+            from app.tasks.infer import infer_speakers
+
+            infer_speakers("ep1")
+
+        # `.get()` is not enough here: it returns None both for "key absent"
+        # and "explicitly set to None", which would match the status update.
+        set_calls = [
+            c for c in mock_update.call_args_list if "inference_error" in c.kwargs
+        ]
+        assert set_calls, "a failed run must still populate inference_error"
+        assert "boom" in (set_calls[-1].kwargs["inference_error"] or "")
+        # ...and must never also claim the run was clean.
+        assert not any(c.kwargs["inference_error"] is None for c in set_calls)
+
+    @patch("app.tasks.infer.job_queue")
+    @patch("app.tasks.infer.update_episode")
+    @patch("app.tasks.infer.SessionLocal")
     def test_no_candidates_still_remaps(self, mock_session_cls, mock_update, mock_jq):
         ep = _make_episode()
         feed = _make_feed()
