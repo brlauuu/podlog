@@ -60,10 +60,31 @@ export const BAR_STAGES = STAGES.filter(
   (s) => !("inBar" in s && s.inBar === false)
 );
 
-export const ACTIVE_STATUSES = new Set([
+export const ACTIVE_STATUSES = new Set<string>([
   "downloading", "transcribing", "diarizing", "chunking", "embedding",
   "inferring", "archiving",
 ]);
+
+/**
+ * The in-flight stages, in pipeline order, for the step chain on episode
+ * cards.
+ *
+ * Derived rather than listed (#968). EpisodeCard used to keep its own
+ * hardcoded copy — `["downloading", "transcribing", "diarizing",
+ * "archiving"]` — which omitted chunking, embedding *and* inferring. Because
+ * ProcessingProgress bails on `indexOf(status) === -1`, an episode in any of
+ * those three rendered no progress chain at all, and `isProcessing` was false
+ * so the card did not read as in-flight either. Deriving it from STAGES means
+ * there is no third copy left to drift.
+ */
+export const PROCESSING_STEPS: string[] = STAGES.filter((s) =>
+  ACTIVE_STATUSES.has(s.key)
+).map((s) => s.key);
+
+/** Human label for a status, falling back to the raw key. */
+export function stageLabel(status: string): string {
+  return STAGES.find((s) => s.key === status)?.label ?? status;
+}
 
 /**
  * Statuses an episode can rest in permanently. Mirrors

@@ -14,7 +14,13 @@
  */
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
-import { STAGES, BAR_STAGES, ACTIVE_STATUSES, TERMINAL_STATUSES } from "@/lib/queueStatus";
+import {
+  STAGES,
+  BAR_STAGES,
+  ACTIVE_STATUSES,
+  TERMINAL_STATUSES,
+  PROCESSING_STEPS,
+} from "@/lib/queueStatus";
 
 const TASKS_DIR = join(__dirname, "../../../pipeline/app/tasks");
 const QUEUE_API = join(__dirname, "../../../pipeline/app/api/queue.py");
@@ -80,6 +86,32 @@ describe("queue stage parity between the pipeline and the dashboard (#968)", () 
     for (const key of ["chunking", "embedding"]) {
       expect(stageKeys.has(key)).toBe(true);
       expect(BAR_STAGES.some((s) => s.key === key)).toBe(true);
+    }
+  });
+
+  it("the episode-card step chain covers every in-flight stage", () => {
+    // EpisodeCard kept its own hardcoded copy omitting chunking, embedding
+    // and inferring. ProcessingProgress bails on indexOf(status) === -1, so
+    // an episode in any of those rendered no progress chain at all, and
+    // isProcessing was false so the card did not read as in-flight either.
+    expect([...PROCESSING_STEPS].sort()).toEqual([...ACTIVE_STATUSES].sort());
+  });
+
+  it("the step chain is in pipeline order, not alphabetical", () => {
+    // Order is what makes the chain meaningful -- it drives which steps show
+    // as done vs pending relative to the current one.
+    const order = STAGES.map((s) => s.key as string);
+    const positions = PROCESSING_STEPS.map((s) => order.indexOf(s));
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(PROCESSING_STEPS[0]).toBe("downloading");
+    expect(PROCESSING_STEPS[PROCESSING_STEPS.length - 1]).toBe("archiving");
+  });
+
+  it("every step in the chain has a human label", () => {
+    for (const step of PROCESSING_STEPS) {
+      const stage = STAGES.find((s) => s.key === step);
+      expect(stage?.label).toBeTruthy();
+      expect(stage?.label).not.toMatch(/_/);
     }
   });
 
