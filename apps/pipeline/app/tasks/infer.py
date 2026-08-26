@@ -184,6 +184,20 @@ def infer_speakers(episode_id: str) -> str:
                     _write_other_rows(episode_id, assignment, db)
                 db.commit()
 
+            # #983: clear the failure markers now that a run has succeeded.
+            # The column was previously write-only -- set in the except branch
+            # below and never reset -- so an episode that failed once and was
+            # later re-inferred kept the stale error forever. That made
+            # `WHERE inference_error IS NOT NULL` over-report and useless as a
+            # health signal, which is why #972 sat unnoticed across 39
+            # episodes. diarize.py already does this (diarization_error=None
+            # on success); inference was the outlier.
+            #
+            # inference_skipped is reset for the same reason: an episode
+            # skipped for want of diarization stays flagged after a reprocess
+            # that produced it.
+            update_episode(db, episode_id, inference_error=None, inference_skipped=False)
+
             logger.info(
                 '"action": "inference_complete", "episode_id": "%s", "candidates": %d',
                 episode_id,
