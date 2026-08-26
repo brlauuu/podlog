@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Internal
+- Added `make ci-local`, which runs every blocking CI check on your machine using the same commands CI does — including the two coverage gates that are easy to miss when running the test suites by hand. Useful before pushing, and useful when GitHub Actions is slow or down. It also fails if a new job appears in a workflow that the script does not cover, so it cannot quietly stop being an equivalent and report a pass it has not earned.
+
 ### Fixes
 - The Meta-Analysis coverage line had a "queued/failed" control that always read zero and did nothing when clicked, styled to look exactly like the working link beside it. It now shows how many episodes are still in flight, queued, failed or stuck, and clicking it opens the queue — so you can tell at a glance whether the charts cover your whole library or only the part that has finished processing. It hides itself when nothing is outstanding, and also when the queue cannot be reached, rather than showing a zero that would wrongly imply everything is done. ([#970](https://github.com/brlauuu/podlog/issues/970))
 - An episode that failed speaker inference once and later succeeded kept the old error recorded against it forever, because the record was only ever written on failure and never cleared on success. Nothing user-facing showed it — the episode page already hides the warning once names exist — but it meant the count of episodes with inference problems was permanently overstated, which is exactly why the fault behind those failures went unnoticed across 39 episodes. Both the error and the "skipped" marker are now cleared when a run succeeds, matching what diarization already did. ([#983](https://github.com/brlauuu/podlog/issues/983))
