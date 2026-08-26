@@ -21,6 +21,9 @@ fresh empty `Unreleased` is left at the top.
 ## Unreleased
 
 ### Internal
+- Wrote a design spec for a documentation Ask bubble — a conversational box on the Docs pages that answers questions about Podlog itself rather than about podcast content. No implementation yet; the spec records the four decisions that shape it and, for each, what was rejected and why. ([#990](https://github.com/brlauuu/podlog/issues/990))
+
+### Internal
 - Documentation accuracy is now part of the routine for every change, written into the agent-context file alongside the existing changelog and design-doc obligations, with a table mapping each area of the code to the pages that describe it. The gap it closes is that a code change could land, get its changelog line, pass CI, and leave the user manual quietly describing the old behaviour — which is exactly what the recent documentation audit found across a third of the guide. Deliberately a convention rather than a build gate: a check that cannot judge whether prose is *true* would only verify that some documentation file was touched, which manufactures confidence instead of providing it. The existing path check has also been widened from 2 files to 26, so the whole user manual now gets the broken-link checking that only the agent-context files had. ([#991](https://github.com/brlauuu/podlog/issues/991))
 
 ### Major changes
