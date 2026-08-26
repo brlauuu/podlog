@@ -23,6 +23,8 @@ When adding a feed, you choose how many episodes to ingest — and, as a consequ
    - **Selective** — click Next to see a list of all episodes, check the ones you want, then Add
    - **Full** — click Add, all episodes are queued
 
+On the Selective episode list there is a **filter box** above the episodes. Type part of a title to narrow the list — useful on a back-catalogue of several hundred, where scrolling to find two specific episodes is painful. The filter only changes what you can see: anything you have already ticked stays ticked and is still added, even while hidden. While a filter is active, **Select all** applies to just the episodes on screen and says so ("Select all 12 shown"), so you can filter to a year or a guest and take the lot in one click.
+
 Feed cards carry a **Test** or **Selective** badge so you can tell at a glance which feeds are being kept current and which are not. Full-mode feeds are unbadged. Each card also shows its episode count and when it was last polled.
 
 ## Promoting a Feed
@@ -36,7 +38,7 @@ Promotion never re-processes episodes that are already done. It is also what swi
 
 ## Adding More Selective Episodes
 
-Selective feeds get an extra **Add episodes** button. It reopens the episode picker with everything you haven't ingested yet, so you can pull in a few more without promoting the whole back-catalog.
+Selective feeds get an extra **Add episodes** button. It reopens the episode picker with everything you haven't ingested yet, so you can pull in a few more without promoting the whole back-catalog. The same filter box is available here, and episodes already in the feed stay greyed out and untouched — including when you use **Select all** on a filtered view.
 
 ## Polling for New Episodes
 

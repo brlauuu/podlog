@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+- The episode picker for selective feeds now has a filter box. Choosing two specific episodes out of a 357-episode back-catalogue previously meant scrolling and reading titles one at a time. Type part of a title to narrow the list; the filter only changes what you can see, so anything already ticked stays ticked and is still added even while it is hidden. With a filter active, **Select all** applies to just the episodes on screen and says so, which makes "filter to one guest, take all of them" a single click — and in the add-more flow it still refuses to touch episodes the feed already has. ([#982](https://github.com/brlauuu/podlog/issues/982))
+
 ### Major changes
 - The Meta-Analysis page now shows how fast each inference provider actually processes your audio, so "is remote inference worth it on my hardware?" is answerable without opening a database console. It reports transcription and diarization time per second of audio, split by provider, with the median alongside the mean and the date range each figure was measured over. Two things it deliberately does not do: it never shows diarization on its own, because on the remote path the speaker labels arrive inside the transcription result and a separate figure would suggest cloud diarization is thousands of times faster than it is; and it compares time per second of audio rather than per episode, because episodes handled by different providers are rarely the same length. Episodes missing timings are excluded and counted rather than quietly dropped. ([#976](https://github.com/brlauuu/podlog/issues/976))
 

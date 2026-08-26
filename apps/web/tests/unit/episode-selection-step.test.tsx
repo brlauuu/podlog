@@ -231,3 +231,138 @@ describe("<EpisodeSelectionStep>", () => {
     });
   });
 });
+
+describe("episode filter (#982)", () => {
+  // Two titles start with "The" on purpose, so a "the" query matches exactly
+  // two of the four and the scoped select-all assertions are unambiguous.
+  const many = [
+    ep({ guid: "g1", title: "Sam Altman on building OpenAI" }),
+    ep({ guid: "g2", title: "The King of Israel" }),
+    ep({ guid: "g3", title: "Scotty Doesn't Know" }),
+    ep({ guid: "g4", title: "The Books That Shaped Us" }),
+  ];
+
+  function filterInput() {
+    return screen.getByPlaceholderText(/filter episodes/i);
+  }
+
+  it("narrows the rendered list as you type", () => {
+    renderStep({ preview: preview(many) });
+    fireEvent.change(filterInput(), { target: { value: "king" } });
+
+    expect(screen.getByText("The King of Israel")).toBeInTheDocument();
+    expect(screen.queryByText("Sam Altman on building OpenAI")).toBeNull();
+  });
+
+  it("matches case-insensitively", () => {
+    renderStep({ preview: preview(many) });
+    fireEvent.change(filterInput(), { target: { value: "SCOTTY" } });
+    expect(screen.getByText("Scotty Doesn't Know")).toBeInTheDocument();
+  });
+
+  it("falls back to the guid for episodes with no title", () => {
+    renderStep({ preview: preview([ep({ guid: "abc-123", title: null })]) });
+    fireEvent.change(filterInput(), { target: { value: "abc" } });
+    expect(screen.getByText("abc-123")).toBeInTheDocument();
+  });
+
+  it("shows how much of the feed is visible while filtering", () => {
+    renderStep({ preview: preview(many) });
+    expect(screen.getByText(/4 episodes found/)).toBeInTheDocument();
+
+    fireEvent.change(filterInput(), { target: { value: "the" } });
+    expect(screen.getByText(/2 of 4 episodes/)).toBeInTheDocument();
+  });
+
+  it("keeps a checked episode checked after it is filtered out of view", () => {
+    // The core rule: the filter narrows the *view*, never the selection.
+    const { rerender } = renderStep({
+      preview: preview(many),
+      selectedGuids: new Set(["g1"]),
+    });
+    fireEvent.change(filterInput(), { target: { value: "king" } });
+    expect(screen.queryByText("Sam Altman on building OpenAI")).toBeNull();
+
+    // Clearing the filter brings it back, still checked.
+    fireEvent.change(filterInput(), { target: { value: "" } });
+    const box = screen.getByText("Sam Altman on building OpenAI")
+      .closest("label")!
+      .querySelector("input")!;
+    expect(box).toBeChecked();
+    expect(rerender).toBeDefined();
+  });
+
+  it("still submits a selection made before filtering", () => {
+    const { onSubmit, container } = renderStep({
+      preview: preview(many),
+      selectedGuids: new Set(["g1"]),
+    });
+    fireEvent.change(filterInput(), { target: { value: "king" } });
+    fireEvent.submit(container.querySelector("form")!);
+
+    // Submission reads selectedGuids, which the filter never touches.
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /Add \(1\)/ })).toBeEnabled();
+  });
+
+  it("scopes select-all to the visible episodes and says so", () => {
+    const { onToggleAll } = renderStep({ preview: preview(many) });
+    fireEvent.change(filterInput(), { target: { value: "the" } });
+
+    const link = screen.getByText(/Select all 2 shown/);
+    fireEvent.click(link);
+    expect(onToggleAll).toHaveBeenCalledWith(["g2", "g4"]);
+  });
+
+  it("passes the whole feed to select-all when no filter is active", () => {
+    const { onToggleAll } = renderStep({ preview: preview(many) });
+    fireEvent.click(screen.getByText("Select all"));
+    expect(onToggleAll).toHaveBeenCalledWith(["g1", "g2", "g3", "g4"]);
+  });
+
+  it("never offers already-added episodes to a filtered select-all", () => {
+    // addMoreMode's "don't touch already-added" rule has to survive filtering.
+    const { onToggleAll } = renderStep({
+      preview: preview(many),
+      addMoreMode: true,
+      existingGuids: new Set(["g2"]),
+    });
+    fireEvent.change(filterInput(), { target: { value: "the" } });
+
+    fireEvent.click(screen.getByText(/Select all 1 new shown/));
+    expect(onToggleAll).toHaveBeenCalledWith(["g4"]);
+  });
+
+  it("keeps already-added rows disabled while filtering", () => {
+    renderStep({
+      preview: preview(many),
+      addMoreMode: true,
+      existingGuids: new Set(["g2"]),
+    });
+    fireEvent.change(filterInput(), { target: { value: "king" } });
+
+    const box = screen.getByText("The King of Israel")
+      .closest("label")!
+      .querySelector("input")!;
+    expect(box).toBeDisabled();
+  });
+
+  it("shows an empty state when nothing matches", () => {
+    renderStep({ preview: preview(many) });
+    fireEvent.change(filterInput(), { target: { value: "zzzz" } });
+
+    expect(screen.getByText(/No episodes match/i)).toBeInTheDocument();
+    expect(screen.queryByText("The King of Israel")).toBeNull();
+  });
+
+  it("behaves exactly as before with an empty query", () => {
+    renderStep({ preview: preview(many) });
+    fireEvent.change(filterInput(), { target: { value: "x" } });
+    fireEvent.change(filterInput(), { target: { value: "" } });
+
+    expect(screen.getByText(/4 episodes found/)).toBeInTheDocument();
+    for (const e of many) {
+      expect(screen.getByText(e.title!)).toBeInTheDocument();
+    }
+  });
+});

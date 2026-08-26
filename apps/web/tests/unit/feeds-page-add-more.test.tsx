@@ -57,7 +57,7 @@ jest.mock("@/app/feeds/_components/EpisodeSelectionStep", () => ({
     addMoreMode: boolean;
     error: string | null;
     onToggleGuid: (g: string) => void;
-    onToggleAll: () => void;
+    onToggleAll: (visibleGuids: string[]) => void;
     onSubmit: (e: React.FormEvent) => void;
     onBackOrCancel: () => void;
   }) => (
@@ -71,7 +71,13 @@ jest.mock("@/app/feeds/_components/EpisodeSelectionStep", () => ({
           {ep.title}
         </button>
       ))}
-      <button type="button" data-testid="toggle-all" onClick={onToggleAll}>
+      {/* #982: the real component passes the visible guids. Wiring this
+          straight to onClick would hand toggleAll a MouseEvent instead. */}
+      <button
+        type="button"
+        data-testid="toggle-all"
+        onClick={() => onToggleAll(preview.episodes.map((e) => e.guid))}
+      >
         All
       </button>
       <button type="submit" data-testid="submit">
