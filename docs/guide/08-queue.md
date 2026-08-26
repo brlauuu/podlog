@@ -22,9 +22,7 @@ Episodes are processed sequentially (one at a time) to avoid running out of memo
 
 ## The Stage Bar
 
-The colored bar at the top of the queue page shows counts per stage, and clicking a segment filters the list to just those episodes.
-
-The bar does **not** have segments for Chunking or Embedding. Episodes in those two stages are still processing normally — they just aren't counted in the bar, and their status badge renders grey rather than colour-coded. In practice an episode drops out of the bar after Diarizing and reappears at Inferring. This is tracked in [issue #968](https://github.com/brlauuu/podlog/issues/968).
+The colored bar at the top of the queue page shows counts per stage, and clicking a segment filters the list to just those episodes. Every stage in the table above has its own segment, so you can watch an episode move across the bar from Pending through to Done.
 
 ## Error Classification
 
@@ -50,7 +48,7 @@ When an episode fails, the error is classified. The class determines what the qu
 
 If transcription finds no speech at all, the episode ends in its own terminal state rather than being reported as a failure. Nothing malfunctioned: the download, transcription and diarization all worked and correctly reported silence. No failure notification is sent and no retry is offered.
 
-These episodes are currently visible on their own episode page, tagged **No speech** — they do not appear anywhere on the queue dashboard. Also [issue #968](https://github.com/brlauuu/podlog/issues/968).
+They are listed with completed episodes under **Done**, badged **NO SPEECH** in amber so you can tell them apart at a glance, and they carry the same tag on their own episode page. They count towards the Done total, because as far as the pipeline is concerned they are finished — there was simply nothing to index.
 
 ## Stuck Episodes
 

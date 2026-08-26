@@ -291,15 +291,94 @@ class TestGetQueue:
         assert payload["done_jobs"][0]["episode_id"] == "ep-d"
 
 
+class TestNoSpeechInDoneBucket:
+    """#968: no_speech episodes were invisible on the dashboard.
+
+    Every bucket in get_queue() excluded the status, so an episode that
+    terminated as no_speech (#955) appeared in none of them -- not done, not
+    failed, not stuck, not pending. It now rides in the done bucket, carrying
+    its own status so the UI can badge it differently.
+    """
+
+    def test_done_query_includes_no_speech(self):
+        db = MagicMock()
+        db.execute.side_effect = _mock_execute({}, done_count=0)
+
+        get_queue(db=db)
+
+        done_sql = [
+            str(c.args[0]) for c in db.execute.call_args_list
+            if "LIMIT 50" in str(c.args[0])
+        ]
+        assert done_sql, "done bucket query was not issued"
+        assert "IN ('done', 'no_speech')" in done_sql[0]
+
+    def test_done_count_includes_no_speech(self):
+        db = MagicMock()
+        db.execute.side_effect = _mock_execute({}, done_count=0)
+
+        get_queue(db=db)
+
+        count_sql = [
+            str(c.args[0]) for c in db.execute.call_args_list
+            if "COUNT(*) AS count" in str(c.args[0])
+        ]
+        assert count_sql, "done count query was not issued"
+        assert "IN ('done', 'no_speech')" in count_sql[0]
+
+    def test_no_speech_row_passes_through_with_its_status(self):
+        # The UI tells done and no_speech apart by this field, so it must
+        # survive the round trip rather than being normalised to "done".
+        db = MagicMock()
+        db.execute.side_effect = _mock_execute(
+            {
+                "done": [
+                    {"episode_id": "ep-ok", "status": "done", "title": "Has speech"},
+                    {"episode_id": "ep-ns", "status": "no_speech", "title": "Silence"},
+                ]
+            },
+            done_count=2,
+        )
+
+        payload = get_queue(db=db)
+
+        statuses = {j["episode_id"]: j["status"] for j in payload["done_jobs"]}
+        assert statuses == {"ep-ok": "done", "ep-ns": "no_speech"}
+        assert payload["done_count"] == 2
+
+    def test_no_speech_is_still_rejected_for_retry(self):
+        # Folding it into the done bucket must not make it look retryable:
+        # NO_SPEECH stays in NON_RETRYABLE, which the retry endpoint enforces.
+        assert "NO_SPEECH" in NON_RETRYABLE
+
+
 class TestTaskToStatusMap:
-    def test_covers_every_pipeline_task(self):
-        # If a new task stage is added to job_queue, this guard reminds us to
-        # teach the dashboard how to display it.
-        assert TASK_TO_STATUS == {
-            "download": "downloading",
-            "transcribe": "transcribing",
-            "diarize": "diarizing",
-            "embed": "embedding",
-            "infer": "inferring",
-            "archive": "archiving",
-        }
+    """#968: this guard used to assert a hardcoded copy of the map.
+
+    That restated the map instead of checking it, so when `chunk` was missing
+    from both the map and the expected dict the test passed and the dashboard
+    reported status "chunk" -- a value no episode row ever holds. Derive the
+    expected keys from TASK_REGISTRY so adding a task fails here until the
+    dashboard is taught to display it.
+    """
+
+    def test_covers_every_registered_pipeline_task(self):
+        from app.task_registry import TASK_REGISTRY
+
+        assert set(TASK_TO_STATUS) == set(TASK_REGISTRY), (
+            "TASK_TO_STATUS must map every task in TASK_REGISTRY; "
+            f"missing={set(TASK_REGISTRY) - set(TASK_TO_STATUS)}, "
+            f"unknown={set(TASK_TO_STATUS) - set(TASK_REGISTRY)}"
+        )
+
+    def test_chunk_maps_to_the_status_the_task_actually_writes(self):
+        # tasks/chunk.py sets episodes.status = "chunking". Mapping the task
+        # to anything else makes the API and the database disagree about the
+        # name of the same state.
+        assert TASK_TO_STATUS["chunk"] == "chunking"
+
+    def test_every_mapped_status_is_a_present_participle(self):
+        # Cheap shape check: the display statuses are all in-progress forms,
+        # so a raw task name leaking through (e.g. "chunk") stands out.
+        for task, status in TASK_TO_STATUS.items():
+            assert status.endswith("ing"), f"{task} -> {status}"

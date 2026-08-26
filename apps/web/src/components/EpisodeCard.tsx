@@ -6,6 +6,7 @@ import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import ReprocessButton from "./ReprocessButton";
 import { formatDate } from "@/lib/dateFormat";
 import { formatFileSize } from "@/lib/formatFileSize";
+import { PROCESSING_STEPS, stageLabel } from "@/lib/queueStatus";
 
 export interface SpeakerNameTag {
   display_name: string;
@@ -38,7 +39,9 @@ export interface EnrichedEpisode {
   speaker_name_tags: SpeakerNameTag[];
 }
 
-export const PROCESSING_STEPS = ["downloading", "transcribing", "diarizing", "archiving"];
+// #968: re-exported from lib/queueStatus, where it is derived from STAGES.
+// This used to be a hardcoded list missing chunking, embedding and inferring.
+export { PROCESSING_STEPS };
 
 // ISO 639-1 → flag emoji
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -178,7 +181,7 @@ function ProcessingProgress({ status }: { status: string }) {
   if (currentIdx === -1) return null;
 
   return (
-    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+    <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground mt-1">
       {PROCESSING_STEPS.map((step, i) => (
         <div key={step} className="flex items-center gap-1">
           {i > 0 && <span className="text-muted-foreground/50">→</span>}
@@ -192,7 +195,7 @@ function ProcessingProgress({ status }: { status: string }) {
             }
           >
             {i < currentIdx ? "✓" : i === currentIdx ? "◉" : "○"}{" "}
-            {step.charAt(0).toUpperCase() + step.slice(1)}
+            {stageLabel(step)}
           </span>
         </div>
       ))}

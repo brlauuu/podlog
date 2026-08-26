@@ -8,6 +8,7 @@ import {
   ERROR_LABELS,
   NON_RETRYABLE,
   STAGES,
+  BAR_STAGES,
   type Job,
   type QueueState,
 } from "@/lib/queueStatus";
@@ -49,7 +50,7 @@ function StageBar({
 }) {
   return (
     <div className="flex gap-0.5 rounded-lg overflow-hidden">
-      {STAGES.map((s) => {
+      {BAR_STAGES.map((s) => {
         const count = counts[s.key] || 0;
         const dimmed = count === 0 && activeFilter !== s.key;
         const isActive = activeFilter === s.key;
@@ -87,6 +88,10 @@ function StageBar({
 function StatusBadge({ status }: { status: string }) {
   const stage = STAGES.find((s) => s.key === status);
   const color = stage?.color ?? "#888";
+  // Prefer the catalogued label so `no_speech` reads "NO SPEECH" rather than
+  // the raw enum (#968). Identical to the old behaviour for every other
+  // status, whose label is just the capitalised key.
+  const text = (stage?.label ?? status).toUpperCase();
   const isActive = ACTIVE_STATUSES.has(status);
   return (
     <span
@@ -95,7 +100,7 @@ function StatusBadge({ status }: { status: string }) {
       }`}
       style={{ backgroundColor: color }}
     >
-      {status.toUpperCase()}
+      {text}
     </span>
   );
 }

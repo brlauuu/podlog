@@ -32,11 +32,20 @@ NON_RETRYABLE = {"DISK_FULL", "OOM", "MANUAL_UPLOAD_FILE_MISSING", "NO_SPEECH"}
 # Terminal or known-idle statuses that are always safe to retry
 _RETRYABLE_STATUSES = {"done", "failed", "pending"}
 
-# Map job_queue.task → UI display status for active jobs.
+# Map job_queue.task -> UI display status for active jobs.
+#
+# Must cover every key in task_registry.TASK_REGISTRY. An unmapped task falls
+# through to the raw task name below, which is not a status any episode row
+# ever holds -- `chunk` was missing here and surfaced as status "chunk" while
+# the DB stored "chunking", so the API and the database disagreed about the
+# name of the same state (#968). Guarded by
+# tests/unit/test_queue_api.py::TestTaskToStatusMap, which derives the
+# expected key set from TASK_REGISTRY rather than restating it.
 TASK_TO_STATUS: dict[str, str] = {
     "download": "downloading",
     "transcribe": "transcribing",
     "diarize": "diarizing",
+    "chunk": "chunking",
     "embed": "embedding",
     "infer": "inferring",
     "archive": "archiving",
@@ -124,6 +133,11 @@ def get_queue(db: Session = Depends(get_db)) -> dict:
         ORDER BY e.updated_at DESC
         """,
     )
+    # #968: no_speech rides in the done bucket. It is terminal and not a
+    # failure -- nothing malfunctioned, the audio simply had no speech (#955)
+    # -- but every bucket here excluded it, so those episodes were invisible
+    # on the dashboard entirely. Rows carry e.status, so the UI distinguishes
+    # them by badge without needing a separate bucket.
     done_rows = _rows(
         db,
         """
@@ -140,7 +154,7 @@ def get_queue(db: Session = Depends(get_db)) -> dict:
           f.title     AS feed_title
         FROM episodes e
         LEFT JOIN feeds f ON f.id = e.feed_id
-        WHERE e.status = 'done'
+        WHERE e.status IN ('done', 'no_speech')
         ORDER BY e.updated_at DESC
         LIMIT 50
         """,
@@ -170,7 +184,7 @@ def get_queue(db: Session = Depends(get_db)) -> dict:
         """,
     )
     done_count = db.execute(
-        text("SELECT COUNT(*) AS count FROM episodes WHERE status = 'done'")
+        text("SELECT COUNT(*) AS count FROM episodes WHERE status IN ('done', 'no_speech')")
     ).scalar_one()
 
     for row in active_rows:
