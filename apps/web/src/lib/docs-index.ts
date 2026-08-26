@@ -14,7 +14,7 @@
 import { readdir, readFile } from "fs/promises";
 import { join } from "path";
 
-import type { DocSection } from "./docs-search";
+import type { DocSection, DocSource } from "./docs-search";
 import { makeUniqueSlugger } from "./docs-slug";
 
 function filenameToTitle(filename: string): string {
@@ -33,6 +33,8 @@ function splitDocIntoSections(
   docSlug: string,
   docTitle: string,
   markdown: string,
+  source: DocSource = "guide",
+  repoPath = `docs/guide/${docSlug}.md`,
 ): DocSection[] {
   const lines = markdown.split("\n");
   const sluggify = makeUniqueSlugger();
@@ -46,6 +48,8 @@ function splitDocIntoSections(
     sectionId: "",
     sectionTitle: "",
     level: 0,
+    source,
+    repoPath,
     content: "",
   };
 
@@ -67,6 +71,8 @@ function splitDocIntoSections(
         sectionId: sluggify(text),
         sectionTitle: text,
         level,
+        source,
+        repoPath,
         content: "",
       };
       continue;
@@ -110,9 +116,102 @@ export async function buildDocsIndex(): Promise<DocSection[]> {
   return cachedIndex;
 }
 
+const REPO_ROOT = join(process.cwd(), "..", "..");
+
+interface CorpusEntry {
+  /** Absolute directory to scan, non-recursively. */
+  dir: string;
+  /** Repo-relative prefix used to build DocSection.repoPath. */
+  repoDir: string;
+  source: DocSource;
+}
+
+/**
+ * Filenames excluded from the corpus even though they sit in a scanned
+ * directory.
+ *
+ * CHANGELOG.md lives at the repo root but is bind-mounted to /docs in the
+ * web container so the About page can render it. That makes it visible to a
+ * `docs/*.md` scan in production and invisible in dev and tests -- the same
+ * code would build a different corpus depending on where it runs. It is
+ * excluded outright rather than left to differ, and release history was not
+ * part of the corpus this feature was scoped to.
+ */
+const CORPUS_EXCLUDE = new Set(["CHANGELOG.md"]);
+
+/**
+ * The corpus the docs Ask bubble answers from (#990).
+ *
+ * Non-recursive per directory on purpose: `docs/` must pick up
+ * docs/configuration.md and its siblings, but never docs/audit/ or
+ * docs/superpowers/, which are agent working files rather than
+ * documentation. A recursive walk would quietly pull both in.
+ */
+const CORPUS: CorpusEntry[] = [
+  { dir: join(REPO_ROOT, "docs", "guide"), repoDir: "docs/guide", source: "guide" },
+  { dir: join(REPO_ROOT, "docs"), repoDir: "docs", source: "reference" },
+  { dir: join(REPO_ROOT, "prds"), repoDir: "prds", source: "prd" },
+];
+
+let cachedCorpus: DocSection[] | null = null;
+
+/**
+ * Build the full documentation corpus: guide, reference docs and PRDs,
+ * split into heading-delimited sections (#990).
+ *
+ * Separate from buildDocsIndex(), which backs the /docs search UI and must
+ * keep returning guide sections only. Memoized the same way; a missing
+ * directory is skipped rather than fatal, so a checkout without prds/
+ * degrades to a smaller corpus instead of failing the request.
+ */
+export async function buildDocsCorpusIndex(): Promise<DocSection[]> {
+  if (cachedCorpus) return cachedCorpus;
+
+  const out: DocSection[] = [];
+  for (const entry of CORPUS) {
+    let files: string[] = [];
+    try {
+      files = (await readdir(entry.dir, { withFileTypes: true }))
+        .filter(
+          (d) =>
+            d.isFile() &&
+            d.name.endsWith(".md") &&
+            !CORPUS_EXCLUDE.has(d.name),
+        )
+        .map((d) => d.name)
+        .sort();
+    } catch {
+      continue;
+    }
+
+    for (const file of files) {
+      const slug = file.replace(/\.md$/, "");
+      let raw = "";
+      try {
+        raw = await readFile(join(entry.dir, file), "utf-8");
+      } catch {
+        continue;
+      }
+      out.push(
+        ...splitDocIntoSections(
+          slug,
+          filenameToTitle(slug),
+          raw,
+          entry.source,
+          `${entry.repoDir}/${file}`,
+        ),
+      );
+    }
+  }
+
+  cachedCorpus = out;
+  return cachedCorpus;
+}
+
 /** Test hook to force a re-read on the next call. Not used in app code. */
 export function _resetDocsIndexCache(): void {
   cachedIndex = null;
+  cachedCorpus = null;
 }
 
 export { splitDocIntoSections };

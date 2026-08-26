@@ -145,9 +145,19 @@ services:
       EMBED_COOLDOWN_MS: ${EMBED_COOLDOWN_MS:-}
     volumes:
       - audio_data:/data/audio:ro
-      - ./docs/guide:/docs/guide:ro
-      - ./docs/about.md:/docs/about.md:ro
-      - ./CHANGELOG.md:/docs/CHANGELOG.md:ro
+      # #990: the docs Ask bubble retrieves from the guide, the reference
+      # docs and the PRDs at request time, so the whole of docs/ and prds/
+      # is mounted rather than the two files the pages needed before.
+      # Read-only: nothing in the web container ever writes here.
+      - ./docs:/docs:ro
+      - ./prds:/prds:ro
+      # CHANGELOG.md is mounted at the repo-root path it actually has, not
+      # inside /docs. It used to be mapped to /docs/CHANGELOG.md, which a
+      # read-only ./docs mount cannot host -- runc cannot create a
+      # mountpoint inside a :ro bind. Reading it from the root also makes
+      # dev match the container, where the About page previously found no
+      # changelog at all because <repo>/docs/CHANGELOG.md does not exist.
+      - ./CHANGELOG.md:/CHANGELOG.md:ro
       # /api/version reads this at request time and compares against
       # NEXT_PUBLIC_APP_VERSION (baked at build time) so the footer can
       # signal "your running image is stale, rebuild it" when VERSION

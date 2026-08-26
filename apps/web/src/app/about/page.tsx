@@ -9,8 +9,13 @@ import { makeUniqueSlugger } from "@/lib/docs-slug";
 
 export const dynamic = "force-dynamic";
 
-async function readDocOrNull(filename: string): Promise<string | null> {
-  const path = join(process.cwd(), "..", "..", "docs", filename);
+async function readDocOrNull(relativePath: string): Promise<string | null> {
+  // Repo-relative, so callers say where a file actually lives. CHANGELOG.md
+  // sits at the root, not under docs/ (#990) -- it used to be bind-mounted
+  // into /docs, which stopped being possible once docs/ became a read-only
+  // directory mount, and which meant the changelog rendered in the
+  // container but never in local dev.
+  const path = join(process.cwd(), "..", "..", relativePath);
   try {
     return await readFile(path, "utf-8");
   } catch {
@@ -78,7 +83,7 @@ function firstOccurrenceMap(headings: HeadingId[]): Map<string, string> {
 
 export default async function AboutPage() {
   const [aboutContent, changelogContent] = await Promise.all([
-    readDocOrNull("about.md"),
+    readDocOrNull("docs/about.md"),
     readDocOrNull("CHANGELOG.md"),
   ]);
 

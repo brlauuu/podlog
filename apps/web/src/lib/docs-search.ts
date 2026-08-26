@@ -6,6 +6,9 @@
  * the corpus and produce the snippet UI.
  */
 
+/** Which corpus a section came from (#990). */
+export type DocSource = "guide" | "reference" | "prd";
+
 export interface DocSection {
   /** Filename without extension, e.g. "06-speakers". Matches DocEntry.name. */
   docSlug: string;
@@ -17,6 +20,10 @@ export interface DocSection {
   sectionTitle: string;
   /** Heading level, 2 for ##, 3 for ###. 0 means "before any heading" (preamble). */
   level: 0 | 2 | 3;
+  /** Which corpus this section came from (#990). */
+  source: DocSource;
+  /** Repo-relative file path, e.g. "docs/guide/08-queue.md" (#990). */
+  repoPath: string;
   /** Section body, raw markdown text. */
   content: string;
 }
