@@ -128,6 +128,35 @@ make shell-db          # Open psql shell
   - Web: `jest` + `@testing-library/react` for unit, `playwright` for e2e.
 - **PRD references:** When implementing a feature, cite the PRD section (e.g. "per PRD-02 §5.6") in code comments only where the requirement is non-obvious.
 - **Security model (#960, #988):** Podlog assumes a single trusted host **on a trusted network**. The pipeline API has **no authentication** — every write endpoint (settings, which holds the Fireworks/pyannote keys; feed CRUD; upload; retry; backfill; backup deletion) is open to anything that can reach port 8000. Binding db/pipeline/ollama to `127.0.0.1` (#952) protects port 8000 *directly*, but **the web app is an unauthenticated write proxy to it** — there is no `middleware.ts` and no auth check anywhere in `apps/web`, and 23 mutating routes under `apps/web/src/app/api/` forward straight through. So the effective trust boundary is the **LAN**, not the host: anyone who can reach `:3000` can delete feeds, episodes and backups. Do not describe LAN exposure as read-only browsing. Two changes break what boundary remains and require adding auth first: re-publishing db/pipeline/ollama to `0.0.0.0`, or moving the `web` container to a different host. Documented in `docs/guide/01-installation.md`; options weighed in #960.
+- **Per-change obligations (#991):** Three things are expected of every PR. They live together here because they are one habit, not three.
+
+  1. **CHANGELOG.** A one-line entry under `## Unreleased` for user-visible behaviour, grouped Major / Minor / Fixes / Internal. Enforced by `.github/workflows/changelog.yml`; the escape hatch is the `no-changelog` label.
+  2. **Docs accuracy.** Before opening the PR, work out which docs describe the behaviour you changed and update them in the same PR — or state explicitly in the PR body that you checked and none apply. Saying "checked, none apply" is most of the value: it is the difference between deciding and forgetting. Use the map below. This is **not** CI-enforced on purpose — a gate that cannot judge correctness degrades into touching any docs file to go green, which manufactures assurance rather than providing it. `scripts/check_docs_sync.py` only verifies that paths named in the docs exist; it cannot tell that a documented default changed.
+  3. **Design docs.** If the change alters the design, update the relevant PRD and `prds/RISKS-AND-GAPS.md` (this is the pre-existing rule, folded in here so all three obligations are in one place).
+
+  **Which doc covers what.** The step most likely to be skipped is "which doc describes this?", so it is written down. Not exhaustive — when in doubt, grep `docs/guide/` for the feature name.
+
+  | If you changed… | Check |
+  |---|---|
+  | `apps/pipeline/app/config.py`, `.env.example` | `docs/configuration.md`, `docs/guide/10-configuration.md` |
+  | `docker-compose.yml` ports, `Makefile` startup, `scripts/print-access.sh` | `docs/guide/01-installation.md` (incl. the Security model section) |
+  | `apps/pipeline/app/tasks/ingest.py`, feeds API/UI | `docs/guide/03-feeds.md` |
+  | `apps/web/src/lib/search.ts`, search routes | `docs/guide/04-search.md` |
+  | Episode page, transcript rendering | `docs/guide/05-episodes.md` |
+  | `apps/pipeline/app/services/inference.py`, `tasks/infer.py`, speaker UI | `docs/guide/06-speakers.md` |
+  | `apps/web/src/components/AudioPlayer.tsx` | `docs/guide/07-audio-playback.md` |
+  | `apps/pipeline/app/api/queue.py`, `apps/web/src/lib/queueStatus.ts` | `docs/guide/08-queue.md` |
+  | Notification settings, digest, healthcheck | `docs/guide/09-notifications.md` |
+  | Timings, image sizes, storage figures | `docs/guide/11-hardware.md`, `docs/hardware.md` |
+  | `apps/pipeline/app/services/rag.py`, `apps/web/src/lib/rag-models.ts` | `docs/guide/12-rag-search.md` |
+  | `apps/pipeline/app/services/pyannote_cloud.py`, diarization providers | `docs/guide/13-pyannote-cloud.md`, `docs/guide/19-inference-providers.md` |
+  | `apps/web/src/app/meta-analysis` | `docs/guide/14-meta-analysis.md` |
+  | `apps/explore`, notebooks | `docs/guide/15-explore.md` |
+  | `apps/backup`, `apps/pipeline/app/services/backup_files.py` | `docs/guide/16-backups.md` |
+  | `apps/web/src/lib/keyboardShortcuts.ts` | `docs/guide/18-keyboard-shortcuts.md` |
+
+  This table is itself checked: `check_docs_sync.py` scans `CLAUDE.md` for path mentions and fails CI if any stops existing.
+
 - **Versioning (#936):** `/VERSION` at the repo root is the **only file containing a version**. The git tag is the only other place a version appears, and `scripts/release_notes.py` asserts the two agree before a release publishes. `apps/pipeline/pyproject.toml` and `apps/web/package.json` are both pinned to the `0.0.0` sentinel on purpose — neither is read at runtime, and keeping them "in sync by hand" is exactly how `package.json` drifted five minor versions behind without anything noticing. Do not reintroduce a version number anywhere else.
 - **Semver policy:** **Major** — a change the operator must act on: a removed or renamed env var, a migration that cannot be rolled back by restoring the previous dump, a new external service requirement (e.g. a newly mandatory API key), or a breaking change to the pipeline API the web app consumes. **Minor** — new user-visible capability, additive env vars with working defaults, additive migrations. **Patch** — fixes, dependency refreshes, docs, internal work.
 - **Releasing:** bump `/VERSION`, graduate `## Unreleased` into a dated section, merge, then push a `vX.Y.Z` annotated tag. `.github/workflows/release.yml` validates and publishes. It refuses to publish if the tag disagrees with `VERSION`, or if `## Unreleased` still holds entries. No fixed calendar — cut a release when `Unreleased` has accumulated user-visible entries and CI is green.
