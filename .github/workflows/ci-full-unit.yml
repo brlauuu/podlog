@@ -112,7 +112,14 @@ jobs:
       # so PyPI's advisories for 2.8.0 apply unchanged. Stripping the suffix
       # audits the version that is actually running.
       - name: Make CPU-wheel pins auditable against PyPI advisories
-        run: sed -i -E 's/^(torch|torchaudio|torchvision)==([0-9.]+)\+cpu/\1==\2/' /tmp/requirements.txt
+        run: |
+          echo "--- pins carrying a local version, before ---"
+          grep -nE '^[A-Za-z0-9._-]+==[^ ;]*\+' /tmp/requirements.txt || echo "(none)"
+          # Strip any local version identifier, not just +cpu, so a future
+          # variant (+rocm, +cu128) cannot silently reintroduce the gap.
+          sed -i -E 's/^([A-Za-z0-9._-]+==[0-9][^ ;+]*)\+[A-Za-z0-9.]+/\1/' /tmp/requirements.txt
+          echo "--- the same lines, after ---"
+          grep -nE '^(torch|torchaudio|torchvision)==' /tmp/requirements.txt || echo "(no torch pins found -- unexpected)"
 
       # Fail loudly if the strip above ever stops matching -- silently
       # reverting to an unaudited torch is the failure mode this guards.
