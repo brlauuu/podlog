@@ -85,3 +85,71 @@ describe("queueStatus logic", () => {
     ]);
   });
 });
+
+describe("no_speech folded into the done bucket (#968)", () => {
+  const base = {
+    active_count: 0, pending_count: 0, failed_count: 0, stuck_count: 0,
+    active_jobs: [], pending_jobs: [], failed_jobs: [], stuck_jobs: [],
+  };
+  const job = (id: string, status: string) => ({
+    episode_id: id, title: id, status,
+    error_message: null, error_class: null,
+    retry_count: 0, retry_max: 3,
+    feed_mode: null, feed_title: null, updated_at: "2026-08-26T00:00:00Z",
+  });
+
+  const queue = {
+    ...base,
+    done_count: 2,
+    done_jobs: [job("ep-ok", "done"), job("ep-ns", "no_speech")],
+  };
+
+  it("lists no_speech rows alongside done ones", () => {
+    const vm = computeQueueViewModel({
+      queue, search: "", stageFilter: null, showDone: true,
+    });
+    expect(vm.filteredDone.map((j) => j.episode_id)).toEqual(["ep-ok", "ep-ns"]);
+  });
+
+  it("includes no_speech when filtering by Done", () => {
+    // The Done segment counts them, so the Done filter has to return them
+    // too -- otherwise the count is one the filter cannot reproduce.
+    const vm = computeQueueViewModel({
+      queue, search: "", stageFilter: "done", showDone: false,
+    });
+    expect(vm.filteredDone.map((j) => j.episode_id)).toEqual(["ep-ok", "ep-ns"]);
+    expect(vm.effectiveShowDone).toBe(true);
+  });
+
+  it("does not report an empty queue when only no_speech episodes exist", () => {
+    const vm = computeQueueViewModel({
+      queue: { ...base, done_count: 1, done_jobs: [job("ep-ns", "no_speech")] },
+      search: "", stageFilter: null, showDone: true,
+    });
+    expect(vm.isEmpty).toBe(false);
+  });
+
+  it("seeds a count for statuses that have no bar segment", () => {
+    const vm = computeQueueViewModel({
+      queue, search: "", stageFilter: null, showDone: true,
+    });
+    expect(vm.counts.no_speech).toBe(0);
+    expect(vm.counts.chunking).toBe(0);
+    expect(vm.counts.embedding).toBe(0);
+  });
+
+  it("counts chunking and embedding episodes in the bar", () => {
+    const vm = computeQueueViewModel({
+      queue: {
+        ...base,
+        done_count: 0,
+        done_jobs: [],
+        active_jobs: [job("ep-c", "chunking"), job("ep-e", "embedding")],
+        active_count: 2,
+      },
+      search: "", stageFilter: null, showDone: false,
+    });
+    expect(vm.counts.chunking).toBe(1);
+    expect(vm.counts.embedding).toBe(1);
+  });
+});

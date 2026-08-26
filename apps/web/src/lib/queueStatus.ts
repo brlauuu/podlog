@@ -24,20 +24,45 @@ export interface QueueState {
   stuck_jobs: Job[];
 }
 
+/**
+ * Every status the dashboard can display, in pipeline order.
+ *
+ * `inBar: false` means the status still needs a colour and a label -- it is
+ * rendered as a badge on a row -- but gets no segment in the stage bar.
+ *
+ * #968: chunking and embedding were absent entirely. Episodes in those two
+ * stages were uncounted in the bar, unfilterable, and rendered grey because
+ * StatusBadge falls back to #888 when it finds no entry -- so an episode
+ * dropped out of the bar after Diarizing and reappeared at Inferring. Any
+ * status a pipeline task can write must have an entry here; the parity test
+ * in tests/unit/queue-stage-parity.test.ts enforces it against the Python
+ * task modules.
+ */
 export const STAGES = [
   { key: "pending", label: "Pending", color: "#eab308", bg: "rgba(234,179,8,0.15)" },
   { key: "downloading", label: "Downloading", color: "#06b6d4", bg: "rgba(6,182,212,0.15)" },
   { key: "transcribing", label: "Transcribing", color: "#2563eb", bg: "rgba(37,99,235,0.15)" },
   { key: "diarizing", label: "Diarizing", color: "#7c3aed", bg: "rgba(124,58,237,0.15)" },
+  { key: "chunking", label: "Chunking", color: "#0891b2", bg: "rgba(8,145,178,0.15)" },
+  { key: "embedding", label: "Embedding", color: "#4f46e5", bg: "rgba(79,70,229,0.15)" },
   { key: "inferring", label: "Inferring", color: "#f97316", bg: "rgba(249,115,22,0.15)" },
   { key: "archiving", label: "Archiving", color: "#14b8a6", bg: "rgba(20,184,166,0.15)" },
   { key: "done", label: "Done", color: "#16a34a", bg: "rgba(22,163,74,0.15)" },
+  // Terminal, not a failure, and deliberately not a bar segment: no_speech
+  // rows ride in the done bucket (#968) and are told apart by this badge.
+  { key: "no_speech", label: "No speech", color: "#d97706", bg: "rgba(217,119,6,0.15)", inBar: false },
   { key: "failed", label: "Failed", color: "#dc2626", bg: "rgba(220,38,38,0.15)" },
   { key: "stuck", label: "Stuck", color: "#a855f7", bg: "rgba(168,85,247,0.15)" },
 ] as const;
 
+/** The subset of STAGES that gets a clickable segment in the stage bar. */
+export const BAR_STAGES = STAGES.filter(
+  (s) => !("inBar" in s && s.inBar === false)
+);
+
 export const ACTIVE_STATUSES = new Set([
-  "downloading", "transcribing", "diarizing", "embedding", "inferring", "archiving",
+  "downloading", "transcribing", "diarizing", "chunking", "embedding",
+  "inferring", "archiving",
 ]);
 
 /**
@@ -82,6 +107,8 @@ export function sortByUpdated(jobs: Job[]): Job[] {
 
 export function stageCounts(queue: QueueState): Record<string, number> {
   const counts: Record<string, number> = {};
+  // Seed every known status, including ones with no bar segment, so callers
+  // can read a count for any of them without an undefined check.
   for (const s of STAGES) counts[s.key] = 0;
   const allJobs = [
     ...queue.active_jobs, ...queue.pending_jobs,
@@ -126,7 +153,13 @@ export function computeQueueViewModel({
   const matchesSearch = (j: Job) =>
     (j.title ?? "").toLowerCase().includes(q) ||
     (j.feed_title ?? "").toLowerCase().includes(q);
-  const matchesStage = (j: Job) => !stageFilter || j.status === stageFilter;
+  // #968: no_speech rides in the done bucket and is counted under Done, so
+  // filtering by Done has to include it too -- otherwise the segment shows a
+  // count the filter cannot reproduce.
+  const matchesStage = (j: Job) =>
+    !stageFilter ||
+    j.status === stageFilter ||
+    (stageFilter === "done" && j.status === "no_speech");
 
   const filtered = allJobs.filter((j) => matchesSearch(j) && matchesStage(j));
   const filteredDone = queue.done_jobs.filter((j) => matchesSearch(j) && matchesStage(j));
