@@ -22,6 +22,27 @@ async function fetchSnapshot(): Promise<SnapshotResponse> {
   return r.json();
 }
 
+/**
+ * Episodes not represented in the snapshot: in flight, queued, failed or
+ * stuck (#970). Returns null if the queue cannot be reached, so the strip
+ * hides the segment rather than claiming a false zero.
+ */
+async function fetchNotDoneCount(): Promise<number | null> {
+  try {
+    const r = await fetch("/api/queue", { cache: "no-store" });
+    if (!r.ok) return null;
+    const q = await r.json();
+    return (
+      (q.active_count ?? 0) +
+      (q.pending_count ?? 0) +
+      (q.failed_count ?? 0) +
+      (q.stuck_count ?? 0)
+    );
+  } catch {
+    return null;
+  }
+}
+
 async function refreshSnapshot(): Promise<SnapshotResponse> {
   const r = await fetch("/api/meta-analysis/refresh", { method: "POST" });
   if (!r.ok) throw new Error("refresh failed");
@@ -36,6 +57,15 @@ export default function MetaAnalysisClient() {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
+  // Same polling cadence as the queue dashboard, so the number does not sit
+  // stale while episodes drain.
+  const { data: notDone } = useQuery({
+    queryKey: ["meta-analysis-queue-not-done"],
+    queryFn: fetchNotDoneCount,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
+
   const refresh = useMutation({
     mutationFn: refreshSnapshot,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meta-analysis-snapshot"] }),
@@ -119,10 +149,9 @@ export default function MetaAnalysisClient() {
           <CoverageStrip
             feedCount={data?.feed_count ?? 0}
             episodeCount={data?.episode_count ?? 0}
-            queuedFailed={0}
+            queuedFailed={notDone ?? null}
             missingSpeakers={snap.coverage?.host_share?.excluded?.length ?? 0}
             onOpenMissingSpeakers={openMissing}
-            onOpenQueuedFailed={() => {}}
           />
           <MissingSpeakersModal
             open={missingOpen}

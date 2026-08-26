@@ -12,7 +12,7 @@ If nothing has been computed yet you'll see *"No analysis yet — hit ↻ Refres
 
 ## What's on the page
 
-**A coverage line** at the top: how many podcasts and how many processed episodes the snapshot covers, plus a **missing speakers** link that opens a per-podcast breakdown of speakers excluded from the host/guest chart.
+**A coverage line** at the top: how many podcasts and how many processed episodes the snapshot covers, a **queued/failed** link through to the queue when episodes are still outstanding — so you can tell whether the charts are looking at your whole library or only part of it — and a **missing speakers** link that opens a per-podcast breakdown of speakers excluded from the host/guest chart.
 
 **A filter bar** listing **All podcasts** plus one button per feed. It is single-select — click a podcast to restrict every chart to it, click **All podcasts** to go back. There is no date or episode-length filter.
 
