@@ -223,24 +223,53 @@ def write_speaker_names(
     # Build a map of new_label → candidate name
     name_assignments: dict[str, CandidateName] = {}
 
-    if result.host:
-        name_assignments["SPEAKER_00"] = result.host
+    # Slots the run analysis allocated to *real* speakers, post-remap
+    # (#972). label_map is `assignment.label_remap`, i.e. pyannote label →
+    # new slot for every label with at least one long-enough run.
+    real_slots = sorted(set(label_map.values())) if label_map else []
 
-    # Assign guests to SPEAKER_01, SPEAKER_02, etc. in order
-    for i, guest in enumerate(result.guests):
-        slot = f"SPEAKER_{i + 1:02d}"
-        name_assignments[slot] = guest
+    if real_slots:
+        # Guests fill the real slots after the host, in order. Numbering them
+        # SPEAKER_01..N independently of the assignment is what caused #972:
+        # assign_speaker_slots hands out Other slots starting immediately
+        # after the real labels, so as soon as the classifier had at least as
+        # many guests as there are real labels, a guest slot number landed on
+        # an Other slot. Both writers then added a pending row for the same
+        # (episode_id, speaker_label); with autoflush=False neither existence
+        # check saw the other's pending row, and the commit died on
+        # uq_speaker_episode_label -- rolling back every name for the episode.
+        #
+        # Surplus guests are dropped, which is the same outcome the
+        # existing_labels filter below already produced for them (#703).
+        if result.host and "SPEAKER_00" in real_slots:
+            name_assignments["SPEAKER_00"] = result.host
+        guest_slots = [slot for slot in real_slots if slot != "SPEAKER_00"]
+        for guest, slot in zip(result.guests, guest_slots):
+            name_assignments[slot] = guest
 
-    # The set of speaker_labels that actually appear in this episode's
-    # segments. Computed once instead of per-candidate.
-    existing_labels = {
-        row[0]
-        for row in db.query(Segment.speaker_label)
-        .filter(Segment.episode_id == episode_id)
-        .filter(Segment.speaker_label.isnot(None))
-        .distinct()
-        .all()
-    }
+        # Every real slot is backed by at least one segment by construction,
+        # and these are post-remap names. Querying segments here instead would
+        # read the *pre*-remap labels: _apply_segment_remap mutates the ORM
+        # objects in memory and autoflush=False means this query would not see
+        # them, so a correctly-named guest could be dropped as a phantom.
+        existing_labels = set(real_slots)
+    else:
+        # No slot assignment (diarization produced nothing to analyse).
+        # Fall back to positional numbering, bounded by the labels actually
+        # present in the episode's segments.
+        if result.host:
+            name_assignments["SPEAKER_00"] = result.host
+        for i, guest in enumerate(result.guests):
+            name_assignments[f"SPEAKER_{i + 1:02d}"] = guest
+
+        existing_labels = {
+            row[0]
+            for row in db.query(Segment.speaker_label)
+            .filter(Segment.episode_id == episode_id)
+            .filter(Segment.speaker_label.isnot(None))
+            .distinct()
+            .all()
+        }
 
     for new_label, candidate in name_assignments.items():
         if new_label not in existing_labels:

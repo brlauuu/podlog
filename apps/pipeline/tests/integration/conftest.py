@@ -45,7 +45,14 @@ def db_session(engine) -> Session:
     """
     connection = engine.connect()
     transaction = connection.begin()
-    session = sessionmaker(bind=connection)()
+    # autoflush=False mirrors SessionLocal in app/database.py. It used to take
+    # SQLAlchemy's default of True, which meant integration tests ran with
+    # different flush semantics from production -- and that difference hid
+    # #972 completely: with autoflush on, the existence check before a
+    # db.add() flushes the pending row and finds it, so the duplicate-key
+    # collision that cost 39 episodes their speaker names could never
+    # reproduce here.
+    session = sessionmaker(bind=connection, autoflush=False)()
     real_close = session.close
     session.close = lambda: None
 

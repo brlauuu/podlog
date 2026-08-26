@@ -279,9 +279,21 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950">
           <CardContent className="p-3 flex items-start gap-2">
             <Info size={16} className="text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              Speaker name inference was unavailable for this episode.
-            </p>
+            <div className="text-sm text-blue-800 dark:text-blue-200">
+              <p>Speaker name inference was unavailable for this episode.</p>
+              {/* #972: the banner used to render a fixed string and drop
+                  inference_error entirely, so diagnosing a failure meant
+                  opening psql. 39 episodes had silently lost every speaker
+                  name to one constraint violation before anyone looked. */}
+              <details className="mt-1">
+                <summary className="text-xs opacity-80 cursor-pointer">
+                  Show details
+                </summary>
+                <pre className="mt-1 text-xs opacity-80 whitespace-pre-wrap break-words font-mono">
+                  {episode.inference_error}
+                </pre>
+              </details>
+            </div>
           </CardContent>
         </Card>
       )}
