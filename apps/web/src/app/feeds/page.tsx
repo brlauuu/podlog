@@ -226,29 +226,41 @@ export default function FeedsPage() {
     });
   }
 
-  function toggleAll() {
+  /**
+   * Select/deselect in bulk.
+   *
+   * `scopeGuids` is what the selection step currently has on screen (#982).
+   * With no filter active that is the whole feed, so this behaves exactly as
+   * it did before. With a filter active it must touch only the visible
+   * episodes -- clicking "Select all" while looking at 12 of 357 and getting
+   * all 357 would be a nasty surprise.
+   *
+   * Selections outside the scope are always preserved: this adds to or
+   * removes from the existing set rather than replacing it.
+   */
+  function toggleAll(scopeGuids?: string[]) {
     if (!preview) return;
     const allGuids = preview.episodes.map((e) => e.guid);
-    if (addMoreFeed) {
-      // Issue #487: preserve existing selections; toggle only the remaining episodes
-      const togglable = allGuids.filter((g) => !existingGuids.has(g));
-      const allTogglableSelected = togglable.every((g) => selectedGuids.has(g));
-      setSelectedGuids((prev) => {
-        const next = new Set(prev);
-        if (allTogglableSelected) {
-          togglable.forEach((g) => next.delete(g));
-        } else {
-          togglable.forEach((g) => next.add(g));
-        }
-        return next;
-      });
-      return;
-    }
-    if (selectedGuids.size === allGuids.length) {
-      setSelectedGuids(new Set());
-    } else {
-      setSelectedGuids(new Set(allGuids));
-    }
+    // Array check, not a null check: wiring this callback straight to an
+    // onClick hands it a MouseEvent, which `?? allGuids` would happily accept
+    // and then crash on .filter.
+    const scope = Array.isArray(scopeGuids) ? scopeGuids : allGuids;
+    // Issue #487: never touch episodes the feed already has.
+    const togglable = addMoreFeed
+      ? scope.filter((g) => !existingGuids.has(g))
+      : scope;
+    if (togglable.length === 0) return;
+
+    const allTogglableSelected = togglable.every((g) => selectedGuids.has(g));
+    setSelectedGuids((prev) => {
+      const next = new Set(prev);
+      if (allTogglableSelected) {
+        togglable.forEach((g) => next.delete(g));
+      } else {
+        togglable.forEach((g) => next.add(g));
+      }
+      return next;
+    });
   }
 
   const dialogTitle = addMoreFeed
