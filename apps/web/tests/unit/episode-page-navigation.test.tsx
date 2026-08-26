@@ -169,6 +169,46 @@ describe("Episode page navigation", () => {
     expect(screen.getByText(/Speaker assignment/i)).toBeInTheDocument();
   });
 
+  it("shows the underlying inference error in the banner (#972)", async () => {
+    // The banner used to render a fixed string and drop inference_error, so
+    // diagnosing a failure meant opening psql -- 39 episodes had silently
+    // lost every speaker name to one constraint violation before anyone
+    // looked at the column.
+    const err =
+      '(psycopg2.errors.UniqueViolation) duplicate key value violates ' +
+      'unique constraint "uq_speaker_episode_label"';
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{ ...currentEpisode, inference_error: err }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    render(await EpisodePage({ params: Promise.resolve({ id: "ep-current" }) }));
+
+    expect(
+      screen.getByText(/Speaker name inference was unavailable/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Show details/i)).toBeInTheDocument();
+    expect(screen.getByText(/uq_speaker_episode_label/)).toBeInTheDocument();
+  });
+
+  it("shows no inference banner when there is no error (#972)", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ ...currentEpisode }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    render(await EpisodePage({ params: Promise.resolve({ id: "ep-current" }) }));
+
+    expect(
+      screen.queryByText(/Speaker name inference was unavailable/i)
+    ).toBeNull();
+    expect(screen.queryByText(/Show details/i)).toBeNull();
+  });
+
   it("renders previous and next as button-style links with flex layout", async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [currentEpisode] })
