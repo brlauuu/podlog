@@ -112,6 +112,7 @@ make build             # Build Docker images
 make up                # Start the stack (6 services; explore is opt-in, see `make explore`)
 make logs              # Follow logs
 make test-unit         # Run pipeline unit tests + host healthcheck test (no web unit tests)
+make ci-local          # Run every blocking CI check locally, using CI's own commands
 make shell-db          # Open psql shell
 ```
 

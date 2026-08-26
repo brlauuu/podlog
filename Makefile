@@ -1,4 +1,4 @@
-.PHONY: up up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs backup-now backup-list restore-db restore-audio
+.PHONY: up up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e ci-local migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs backup-now backup-list restore-db restore-audio
 
 up:             ## Start full stack
 	docker compose up -d
@@ -39,6 +39,9 @@ test-unit:      ## Run unit tests only (fast, no Docker required for ML models)
 
 test-healthcheck: ## Run host healthcheck script tests
 	python3 -m pytest apps/pipeline/tests/unit/test_healthcheck_script.py -v
+
+ci-local:       ## Run every blocking CI check locally (same commands CI uses)
+	@bash scripts/ci-local.sh
 
 test-integration: ## Run integration tests (requires HF_TOKEN for pyannote)
 	docker compose -f docker-compose.test.yml run --rm test pytest tests/integration/ -v
