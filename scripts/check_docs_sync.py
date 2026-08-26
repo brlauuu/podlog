@@ -1,11 +1,22 @@
 #!/usr/bin/env python3
-"""Docs-sync CI check (#679).
+"""Docs-sync CI check (#679, widened in #991).
 
-Scans agent-context docs that drift quickly — CLAUDE.md and
-docs/development.md — for path mentions under top-level project
-directories (apps/, prds/, docs/, scripts/, .github/) and verifies each
-referenced path exists on disk. Exits non-zero with a list of missing
-paths so CI fails the PR before the stale reference lands on main.
+Scans docs for path mentions under top-level project directories
+(apps/, prds/, docs/, scripts/, .github/) and verifies each referenced
+path exists on disk. Exits non-zero with a list of missing paths so CI
+fails the PR before the stale reference lands on main.
+
+Targets are CLAUDE.md, docs/development.md, the reference docs under
+docs/, and the whole user-facing manual in docs/guide/. The manual was
+outside the default targets until #991 -- 20 files that get rendered at
+/docs and had none of the path checking CLAUDE.md got, which is part of
+how the drift catalogued in #412 went unnoticed.
+
+What this does NOT do, deliberately: judge whether a doc still describes
+what the code does. It confirms a file exists at a path. It cannot tell
+that a documented default changed last week. That check is semantic and
+lives in the per-change routine in CLAUDE.md, not here -- see #991 for
+why a CI gate that cannot judge correctness is worse than none.
 
 Heuristic, not a parser: we extract candidate paths via a regex that
 matches the common forms in the docs (bare references, backtick-wrapped
@@ -42,7 +53,17 @@ PATH_RE = re.compile(
     r"(?P<path>(?:apps|prds|docs|scripts|\.github)/[A-Za-z0-9_./-]+(?:/[A-Za-z0-9_.-]+)*)/?",
 )
 
-DEFAULT_TARGETS = ("CLAUDE.md", "docs/development.md")
+def _default_targets() -> tuple[str, ...]:
+    """CLAUDE.md, the reference docs, and every page of the user manual."""
+    targets = ["CLAUDE.md"]
+    for pattern in ("docs/*.md", "docs/guide/*.md"):
+        targets.extend(
+            str(p.relative_to(REPO_ROOT)) for p in sorted(REPO_ROOT.glob(pattern))
+        )
+    return tuple(targets)
+
+
+DEFAULT_TARGETS = _default_targets()
 
 # Bare-name listing checks (#898).
 #
