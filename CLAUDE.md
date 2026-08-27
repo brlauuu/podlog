@@ -225,4 +225,5 @@ If the resolved version is still ≤ 7.37.x, the block stands and the audit find
 - CI enforces coverage thresholds: pipeline `--cov-fail-under=82` in `ci-full-unit.yml`, web `coverageThreshold` in `jest.config.js`
 
 **Not yet done:**
-- Full end-to-end pipeline smoke test in CI. The test exists (`apps/pipeline/tests/e2e/test_full_flow.py`, `@pytest.mark.e2e`, spins up the full Docker stack and exercises ingest→archive), but no CI job runs it: `ci-slow.yml` runs only pipeline `tests/integration/` and the web Playwright suite. Wiring the `tests/e2e/` full-flow test into CI is the remaining work.
+- Real ML in an end-to-end run. `apps/pipeline/tests/integration/test_pipeline_flow.py` (#1015) drives an episode through all seven stages — download → transcribe → diarize → chunk → embed → infer → archive — against a real database, the real job queue and the real task bodies, with only the model calls stubbed. It runs in `ci-slow.yml` with the rest of `tests/integration/`. What it does **not** do is execute Whisper or pyannote, which would mean model downloads and minutes of CPU per run; that is a deliberate trade, not an oversight.
+- `apps/pipeline/tests/e2e/` holds one health-check test (`test_full_flow.py`) that no CI job runs. Its name predates its contents — it does not exercise a full flow, and the flow test above is what does.

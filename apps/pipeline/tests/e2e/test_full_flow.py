@@ -1,8 +1,14 @@
 """
-End-to-end tests — PRD-01 §12
+Liveness check against a running stack — PRD-01 §12.
 
-Spins up the full Docker stack and exercises the complete ingestion flow
-using a mock RSS feed served by nginx (see docker-compose.test.yml).
+NOT a full-flow test, despite the filename. It asserts one thing: that
+/api/health answers on a stack that is already up. The complete
+ingest -> archive chain is exercised by
+tests/integration/test_pipeline_flow.py (#1015), which runs in CI.
+
+This file's docstring claimed to exercise "the complete ingestion flow"
+for months, and CLAUDE.md repeated the claim, which made the gap look
+like a wiring job rather than a missing test.
 
 Run with: make test-e2e
 """
