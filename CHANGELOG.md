@@ -21,6 +21,8 @@ fresh empty `Unreleased` is left at the top.
 ## Unreleased
 
 ### Minor changes
+- `make update` updates a running install without you having to remember the order. It refuses to start if the queue is busy or you have uncommitted changes, takes a database backup and refuses to go on without one, moves to the new version, pulls the images, restarts, and tells you which settings the new version knows about that your configuration does not. If anything fails it prints the exact command to restore the backup it just took. `make update VERSION=0.10.0` pins a version, which is also how you go back to an earlier one. ([#937](https://github.com/brlauuu/podlog/issues/937))
+- `make env-diff` reports settings your `.env` is missing or no longer needs, without ever editing it. ([#937](https://github.com/brlauuu/podlog/issues/937))
 - You can now start Podlog from a published image instead of building it yourself: `make up-release` pulls a released build and starts it, no compiling. Set `PODLOG_VERSION` in `.env` to `stable`, `edge`, or an exact version like `0.10.0` — which is also how you go back to an older one. Images are for 64-bit Intel/AMD machines only; on anything else, build from source as before. `make up` is unchanged and still runs whatever you have built locally. ([#937](https://github.com/brlauuu/podlog/issues/937))
 
 ## 0.10.0 — 2026-08-27

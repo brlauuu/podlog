@@ -103,23 +103,34 @@ res $FULL_RC "pipeline unit full + cov>=82"
 # not. `make test-unit` already compensates by running them on the host;
 # this step is the same compensation. Found when CI reported 1073 tests
 # against this script's 1050.
-step "Pipeline Healthcheck (host — skipped inside the container)"
-python3 -m pytest apps/pipeline/tests/unit/test_healthcheck_script.py -q 2>&1 | tail -2
-res ${PIPESTATUS[0]} "healthcheck script tests"
+# Tests for repo-root scripts/. The test image's build context is
+# apps/pipeline/, so these modules skip themselves inside the container and
+# have to run on the host. CI checks out the whole repo and runs them
+# normally, which is why the counts differ.
+HOST_ONLY_TESTS=(
+  apps/pipeline/tests/unit/test_healthcheck_script.py
+  apps/pipeline/tests/unit/test_env_diff_script.py
+)
 
-# Guard the general form of that bug: any further module that vanishes
-# inside the container would be just as silent. One module-level skip is
-# expected (healthcheck, covered above); more means something else is
-# quietly not running here.
+step "Pipeline host-only script tests (skipped inside the container)"
+python3 -m pytest "${HOST_ONLY_TESTS[@]}" -q 2>&1 | tail -2
+res ${PIPESTATUS[0]} "repo-root script tests"
+
+# Guard the general form of that bug: any further module that vanishes inside
+# the container would be just as silent. The expected count is derived from
+# the list above rather than hardcoded -- a magic number here would just get
+# bumped each time, which is how the check stops meaning anything.
 step "No unexpected module-level skips"
+EXPECTED_SKIPS=${#HOST_ONLY_TESTS[@]}
 SKIPPED=$(grep -oE '[0-9]+ skipped' "$FULL_LOG" | grep -oE '^[0-9]+' | tail -1)
 rm -f "$FULL_LOG"
-if [ "${SKIPPED:-0}" -le 1 ]; then
-  echo "PASS: $SKIPPED skipped (healthcheck module only)"
+if [ "${SKIPPED:-0}" -le "$EXPECTED_SKIPS" ]; then
+  echo "PASS: $SKIPPED skipped (the $EXPECTED_SKIPS host-only modules)"
 else
-  echo "FAIL: $SKIPPED skipped in the container, expected 1."
+  echo "FAIL: $SKIPPED skipped in the container, expected $EXPECTED_SKIPS."
   echo "      A test module is silently not running locally. Find it with:"
   echo "      docker compose -f docker-compose.test.yml run --rm test pytest tests/unit -rs"
+  echo "      If it is another repo-root script test, add it to HOST_ONLY_TESTS."
   FAIL=1
 fi
 
