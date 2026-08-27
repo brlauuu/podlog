@@ -102,3 +102,32 @@ export function selectSections(
   }
   return out;
 }
+
+const REPO_BLOB_BASE_URL = "https://github.com/brlauuu/podlog/blob/main";
+
+/**
+ * Where a cited section lives (#990).
+ *
+ * Guide pages are rendered at /docs and get a deep link to the exact
+ * heading. PRDs and reference docs have no rendered surface in the app, so
+ * they cite to the repository instead -- the same convention DocsClient
+ * already uses for links that leave the rendered guide.
+ */
+export function citationHref(
+  source: string,
+  slug: string,
+  anchor: string | null,
+  repoPath: string,
+): string {
+  if (source === "guide") {
+    return `/docs?page=${encodeURIComponent(slug)}${anchor ? `#${anchor}` : ""}`;
+  }
+  return `${REPO_BLOB_BASE_URL}/${repoPath}`;
+}
+
+/** Human label for where a citation came from. */
+export function citationSourceLabel(source: string): string {
+  if (source === "guide") return "guide";
+  if (source === "prd") return "design doc";
+  return "reference";
+}
