@@ -21,6 +21,9 @@ fresh empty `Unreleased` is left at the top.
 ## Unreleased
 
 ### Internal
+- Third step of the documentation Ask bubble: the question-answering endpoint can now be handed the passages to answer from, instead of always searching podcast transcripts for them. This is what lets the documentation be answered over at all — the transcripts live in the database, but the documentation lives in files that only the web app can read. Asking about podcast content is unchanged, and a test now guards that specifically. ([#990](https://github.com/brlauuu/podlog/issues/990))
+
+### Internal
 - Second step of the documentation Ask bubble: picking which sections of the documentation are relevant to a question. Matches on the individual meaningful words rather than the whole phrase, and caps how much text it returns so answers fit even the smallest local model. Still not wired to anything. ([#990](https://github.com/brlauuu/podlog/issues/990))
 
 ### Internal
