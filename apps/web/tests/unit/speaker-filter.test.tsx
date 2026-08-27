@@ -202,3 +202,71 @@ describe("SpeakerFilter", () => {
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("SpeakerFilter — refetch discipline (#1006)", () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ speaker_label: "Alice", display_name: "Alice" }],
+    });
+  });
+
+  function renderWith(feedIds: string[]) {
+    return (
+      <SpeakerFilter
+        feedIds={feedIds}
+        includeManualUploads={false}
+        selectedSpeaker={null}
+        onSelectionChange={jest.fn()}
+      />
+    );
+  }
+
+  it("does not refetch when the parent re-renders with an equal but new array", async () => {
+    // The bug: both call sites pass `Array.from(selectedFeedIds)` inline, so a
+    // fresh array object arrives on every parent render. useEffect compares
+    // deps by reference, so every keystroke on /search re-ran the fetch and
+    // flashed "Loading..." in the label.
+    const { rerender } = render(renderWith(["feed-1", "feed-2"]));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+
+    // Same contents, new object -- exactly what Array.from produces.
+    rerender(renderWith(["feed-1", "feed-2"]));
+    rerender(renderWith(["feed-1", "feed-2"]));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /speaker:/i })).toHaveTextContent("All"));
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not refetch when the same ids arrive in a different order", async () => {
+    // The API filters with `= ANY($1::uuid[])`, so order carries no meaning.
+    const { rerender } = render(renderWith(["feed-1", "feed-2"]));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+
+    rerender(renderWith(["feed-2", "feed-1"]));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /speaker:/i })).toHaveTextContent("All"));
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("still refetches when the selection genuinely changes", async () => {
+    // The guard above must not be achieved by never refetching at all.
+    const { rerender } = render(renderWith(["feed-1"]));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+
+    rerender(renderWith(["feed-1", "feed-2"]));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+
+    rerender(renderWith([]));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+  });
+
+  it("sends the selected feed ids to the API", async () => {
+    render(renderWith(["feed-2", "feed-1"]));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+
+    const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    const feedId = new URL(url, "http://localhost").searchParams.get("feedId");
+    expect(feedId?.split(",").sort()).toEqual(["feed-1", "feed-2"]);
+  });
+});
