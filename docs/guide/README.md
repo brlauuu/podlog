@@ -25,6 +25,7 @@ Everything runs in Docker on your own machine. **In the default configuration no
 17. [Troubleshooting](17-troubleshooting.md) — Common issues and fixes
 18. [Keyboard Shortcuts](18-keyboard-shortcuts.md) — `J`/`K` episode nav, `/` focus search, `Space` / arrows for playback, `?` help overlay
 19. [Inference Providers](19-inference-providers.md) — Local vs remote choices for transcription + diarization, decision matrix, and providers we evaluated but didn't ship
+20. [Updating](20-updating.md) — `make update`, channels, rollback, and the amd64-only note
 
 ## Ask about the docs
 

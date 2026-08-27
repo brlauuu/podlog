@@ -35,19 +35,46 @@
 
 ## Quick Start
 
+> **From v1.0.0 onward.** Published images are tagged on release, so until the
+> first `v1.0.0` tag exists the `make up-release` step below has nothing to
+> pull. Build from source in the meantime — see
+> [Development install](#development-install).
+
 ```bash
-# 1. Clone
-git clone https://github.com/brlauuu/podlog.git
+# 1. Clone a released version
+git clone --depth 1 --branch v1.0.0 https://github.com/brlauuu/podlog.git
 cd podlog
 
 # 2. Configure (set POSTGRES_PASSWORD and HF_TOKEN)
 cp .env.example .env
 nano .env
 
-# 3. Build and start
+# 3. Start from published images — no build
+make up-release
+```
+
+Podlog is cloned rather than downloaded as loose files because updating
+depends on it: `make update` moves the working copy with `git`, compares the
+new `.env.example` against your `.env`, and reads `VERSION` to tell you what
+you are running. See [Updating](docs/guide/20-updating.md).
+
+Images are **linux/amd64 only**. On any other architecture, build from source.
+
+### Development install
+
+Building from source compiles the machine-learning stack locally, which takes
+a while the first time and needs several gigabytes of disk:
+
+```bash
+git clone https://github.com/brlauuu/podlog.git
+cd podlog
+cp .env.example .env && nano .env
 make build
 make up
 ```
+
+`make up` never contacts the registry, so it always runs the code in your
+working copy — including changes you have just made.
 
 Open **http://localhost:3000**. From the navbar you can reach Search (`/search`), Ask (`/ask`), Sources (`/podcasts`, where you add feeds or upload audio), Queue (`/queue`), Meta-Analysis (`/meta-analysis`), Settings (`/settings`), Docs (`/docs`) and About (`/about`).
 
