@@ -8,6 +8,12 @@ interface VersionResponse {
   on_disk: string | null;
 }
 
+interface UpdateCheckResponse {
+  enabled: boolean;
+  current: string | null;
+  latest: string | null;
+}
+
 export default function Footer() {
   // Read NEXT_PUBLIC_APP_VERSION inside the component so tests can
   // set it per-test without juggling module-level captures. Next.js
@@ -21,6 +27,12 @@ export default function Footer() {
   // rebuild-available hint (#744).
   const [onDisk, setOnDisk] = useState<string | null>(null);
 
+  // #937 phase 5: a newer published release, when the operator has opted in
+  // with UPDATE_CHECK_ENABLED. The route answers `latest: null` when the
+  // check is off, unreachable, or already up to date, so there is nothing
+  // to special-case here.
+  const [latest, setLatest] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     fetch("/api/version", { cache: "no-store" })
@@ -31,6 +43,22 @@ export default function Footer() {
       })
       .catch(() => {
         // Network/parse failures stay silent — equivalent to "can't compare"
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/update-check", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: UpdateCheckResponse | null) => {
+        if (cancelled || !data) return;
+        setLatest(data.latest);
+      })
+      .catch(() => {
+        // Silent: an update check is not worth an error in the footer.
       });
     return () => {
       cancelled = true;
@@ -71,6 +99,17 @@ export default function Footer() {
             >
               → {onDisk} (rebuild available)
             </span>
+          )}
+          {latest && (
+            <a
+              href="https://github.com/brlauuu/podlog/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-2 text-link underline hover:text-foreground"
+              title={`Podlog ${latest} has been released. Update with: make update`}
+            >
+              {latest} available
+            </a>
           )}
         </p>
       </div>
