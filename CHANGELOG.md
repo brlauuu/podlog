@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+- The navigation bar now collapses behind a menu button on a phone. Eight links in one row wrapped to four rows on a narrow screen, and because the bar is pinned to the top that cost about a fifth of the screen on every page. Menu entries are also sized for a fingertip rather than a mouse pointer.
+- Several pages no longer scroll sideways on a phone: the home screen buttons, the Ask model selector, the queue's stage bar and summary line, the Settings tabs, and long web addresses in the release notes and Telegram setup instructions. ([#989](https://github.com/brlauuu/podlog/issues/989))
+
 ### Fixes
 - Settings now shows which model is configured even when it is not one of the ones Podlog lists, instead of leaving the dropdown blank. A model can leave the list two ways — a hosted one retired by the provider, or one you pulled into Ollama yourself — and previously both looked identical to having nothing selected, including the case where every request was failing because of it. The note that appears says the model may still work, because an unlisted local model usually does. ([#1005](https://github.com/brlauuu/podlog/issues/1005))
 

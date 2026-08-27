@@ -66,11 +66,23 @@ describe("HomePage issue 274", () => {
     const searchLink = screen.getByRole("link", { name: "Search" });
     const buttonRow = searchLink.parentElement as HTMLElement;
 
-    expect(buttonRow.className).toContain("w-[280px]");
-    expect(buttonRow.className).toContain("sm:w-[420px]");
-    expect(searchLink.className).toContain("flex-1");
-    expect(screen.getByRole("link", { name: "Ask" }).className).toContain("flex-1");
-    expect(screen.getByRole("link", { name: "Explore" }).className).toContain("flex-1");
+    // #528's requirement is that the three buttons cannot outgrow the logo.
+    // That is now a max-width rather than a fixed width (#989): a fixed
+    // w-[280px] capped the container but not its contents, and flex-1
+    // children default to min-width:auto, so once icon + label + padding
+    // needed more than a third of 280px they overflowed the page instead of
+    // shrinking. The cap is what #528 asked for; min-w-0 is what makes it
+    // hold.
+    expect(buttonRow.className).toContain("max-w-[280px]");
+    expect(buttonRow.className).toContain("sm:max-w-[420px]");
+    // Anchored: a plain `toContain("w-[280px]")` also matches the
+    // max-w-[280px] we want, which made this assertion vacuous.
+    expect(buttonRow.className).not.toMatch(/(^|\s)w-\[280px\]/);
+    for (const name of ["Search", "Ask", "Explore"]) {
+      const cls = screen.getByRole("link", { name }).className;
+      expect(cls).toContain("flex-1");
+      expect(cls).toContain("min-w-0");
+    }
 
     // Button row should be a direct child of the HomePage root (the logo's container)
     expect(container.contains(buttonRow)).toBe(true);
