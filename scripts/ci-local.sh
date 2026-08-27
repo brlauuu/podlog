@@ -87,9 +87,41 @@ docker compose -f docker-compose.test.yml run --rm test pytest \
 res ${PIPESTATUS[0]} "pipeline unit fast"
 
 step "Pipeline Unit Full (coverage gate)"
+# Written to a file rather than piped: `x=$(cmd | tail)` reports tail's exit
+# status, so the coverage gate would pass silently on a pytest failure.
+FULL_LOG=$(mktemp)
 docker compose -f docker-compose.test.yml run --rm test \
-  pytest tests/unit -q --cov=app --cov-fail-under=82 2>&1 | tail -3
-res ${PIPESTATUS[0]} "pipeline unit full + cov>=82"
+  pytest tests/unit -q --cov=app --cov-fail-under=82 >"$FULL_LOG" 2>&1
+FULL_RC=$?
+tail -3 "$FULL_LOG"
+res $FULL_RC "pipeline unit full + cov>=82"
+
+# The container's build context is apps/pipeline/, so repo-root
+# scripts/healthcheck.py does not exist inside it and
+# test_healthcheck_script.py skips its whole module at collection time --
+# 23 tests that CI runs (it checks out the whole repo) and this script did
+# not. `make test-unit` already compensates by running them on the host;
+# this step is the same compensation. Found when CI reported 1073 tests
+# against this script's 1050.
+step "Pipeline Healthcheck (host — skipped inside the container)"
+python3 -m pytest apps/pipeline/tests/unit/test_healthcheck_script.py -q 2>&1 | tail -2
+res ${PIPESTATUS[0]} "healthcheck script tests"
+
+# Guard the general form of that bug: any further module that vanishes
+# inside the container would be just as silent. One module-level skip is
+# expected (healthcheck, covered above); more means something else is
+# quietly not running here.
+step "No unexpected module-level skips"
+SKIPPED=$(grep -oE '[0-9]+ skipped' "$FULL_LOG" | grep -oE '^[0-9]+' | tail -1)
+rm -f "$FULL_LOG"
+if [ "${SKIPPED:-0}" -le 1 ]; then
+  echo "PASS: $SKIPPED skipped (healthcheck module only)"
+else
+  echo "FAIL: $SKIPPED skipped in the container, expected 1."
+  echo "      A test module is silently not running locally. Find it with:"
+  echo "      docker compose -f docker-compose.test.yml run --rm test pytest tests/unit -rs"
+  FAIL=1
+fi
 
 # --- Web -------------------------------------------------------------------
 step "Web Unit Fast"
