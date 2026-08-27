@@ -40,6 +40,7 @@ import {
   type PipelineStep,
   PIPELINE_STEPS,
   getCurrentModel,
+  isUnlistedModel,
   isRemoteStep,
 } from "./RemoteInferencePipelineSteps";
 
@@ -147,9 +148,15 @@ export function PipelineStepCards({
       <h3 className="text-sm font-medium">Pipeline Steps</h3>
       {PIPELINE_STEPS.map((step) => {
         const remote = isRemoteStep(settings, step);
-        const models = remote ? step.remoteModels : step.localModels;
+        const models =
+          remote && step.remoteModelField ? step.remoteModels : step.localModels;
         const currentModel = getCurrentModel(settings, step);
         const disabled = !step.remoteAvailable;
+        // #1005: keep a drifted value visible. Without an item matching the
+        // Select's value, Radix renders an empty trigger -- so a model that
+        // was retired upstream and one that simply is not on our list both
+        // look like "nothing selected".
+        const unlisted = isUnlistedModel(settings, step);
 
         return (
           <div key={step.key} className="rounded-lg border border-border p-4">
@@ -197,6 +204,11 @@ export function PipelineStepCards({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                {unlisted && (
+                  <SelectItem key={currentModel} value={currentModel}>
+                    {currentModel}
+                  </SelectItem>
+                )}
                 {models.map((m) => (
                   <SelectItem key={m.value} value={m.value}>
                     {m.label}
@@ -204,6 +216,16 @@ export function PipelineStepCards({
                 ))}
               </SelectContent>
             </Select>
+            {unlisted && (
+              // Deliberately not phrased as an error: an unlisted local model
+              // pulled into Ollama usually works. The point is to say that
+              // Podlog cannot vouch for it, not that it is broken.
+              <p className="mt-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{currentModel}</span>{" "}
+                is not one of the models Podlog offers. It may still work if it
+                is available on your provider.
+              </p>
+            )}
           </div>
         );
       })}
