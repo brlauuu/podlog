@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Internal
+- Added a test that carries an episode through all seven pipeline stages in one run — download, transcribe, diarize, chunk, embed, infer, archive — and fails if any stage stops handing off to the next. Previously each stage was only ever tested on its own, which is why several recent bugs lived in the joins between them rather than inside any one stage. It runs in the nightly test suite. The file that claimed to do this already turned out to be a health check with a misleading name; both it and the agent-context file now say what they actually cover. ([#1015](https://github.com/brlauuu/podlog/issues/1015))
+
 ### Fixes
 - The Speaker dropdown on Search and Ask no longer flickers while you type. Every keystroke was re-fetching the speaker list and flashing it back to "Loading...", even though nothing about your filter selection had changed — nineteen wasted requests for a seventeen-character query. ([#1006](https://github.com/brlauuu/podlog/issues/1006))
 
