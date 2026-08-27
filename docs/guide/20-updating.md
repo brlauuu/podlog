@@ -3,11 +3,6 @@
 How to move to a new version without losing work, and how to get back if it
 goes wrong.
 
-> **Release installs need v1.0.0.** The published-image path below works from
-> the first `v1.0.0` tag onward. Until then `stable` does not exist yet and
-> `make up-release` will fail to pull — build from source with `make build`
-> as usual.
-
 ## The short version
 
 ```bash
