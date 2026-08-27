@@ -108,6 +108,28 @@ make build && make up
 
 Everything else on this page works the same; only the pull step differs.
 
+## Being told an update exists
+
+Off by default. Podlog does not contact anything you did not ask it to, and a
+version check is an outbound call like any other.
+
+To turn it on, set this in `.env` and restart the web service:
+
+```
+UPDATE_CHECK_ENABLED=true
+```
+
+The footer then shows a link when a newer release exists. Details worth
+knowing:
+
+- **The machine running Podlog makes the call**, not your browser. On a LAN
+  install that is one request rather than one per device per page.
+- **Roughly every six hours**, cached in between. A tab left open does not
+  keep asking.
+- **It never installs anything.** Updating is still `make update`, run by you.
+- **Failure is silence.** Offline, air-gapped, DNS blocked or rate-limited all
+  show nothing rather than an error.
+
 ## Where the backups are
 
 `make update` uses the same backup system as everything else. To see what is on

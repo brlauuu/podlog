@@ -222,6 +222,21 @@ The `backup` service runs by default (see [Backups](guide/16-backups.md) for res
 | `BACKUP_RETENTION_MONTHLY` | `12` | Monthly dumps to keep. |
 | `BACKUP_CHECK_INTERVAL_SECS` | `3600` | How often the backup loop wakes to check whether today's backup has run. |
 
+## Releases and updating
+
+Used by `make up-release` and `make update` — see [Updating](guide/20-updating.md).
+None of these are read by the pipeline; they are consumed by the Makefile and
+the web footer.
+
+| Variable | Default | Description |
+|---|---|---|
+| `PODLOG_VERSION` | `stable` | Which published image `make up-release` starts: `stable`, `edge`, or an exact `X.Y.Z`. Ignored by `make build`, which builds from source and tags the result with this value. |
+| `PODLOG_CHANNEL` | `stable` | What `make update` follows when no `VERSION=` is passed: `stable` (newest release tag) or `edge` (current `main`, rebuilt from source). |
+| `UPDATE_CHECK_ENABLED` | `false` | Check GitHub for a newer release and show a link in the footer. Off by default — it is an outbound call. The host makes it, roughly every six hours, cached in between. It never installs anything. |
+
+Published images are `linux/amd64` only; build from source on other
+architectures.
+
 ## Ask AI Prompts
 
 System prompts sent to the LLM at the start of each chat. These are the build-time defaults; overrides saved from Settings → Prompts live in the database and take precedence. "Reset to default" in the UI clears the override and falls back to the value here.
