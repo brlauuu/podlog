@@ -28,6 +28,9 @@ seconds, and then checks that nothing is still marked running before going on.
 Migrations run automatically when the pipeline starts, so the update *is* the
 migration. The nightly backup is not good enough here: restoring a day-old
 dump costs a day of transcription, which on modest hardware is hours of CPU.
+It waits up to 30 minutes for the dump to finish — a large library takes
+minutes — and accepts only a dump completed by this run, never one already on
+disk. Set `BACKUP_WAIT_SECONDS` if yours needs longer.
 
 **4. It moves the working copy** — to the newest release tag, to `main` on the
 `edge` channel, or to the tag you pinned with `VERSION=`.
