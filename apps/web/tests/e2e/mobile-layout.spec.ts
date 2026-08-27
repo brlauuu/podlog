@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import type { Pool } from "pg";
+import { getFixturePool, seedEpisode, type SeededEpisode } from "./fixtures/db";
 
 /**
  * Mobile layout guards (#989).
@@ -24,6 +26,29 @@ import { test, expect } from "@playwright/test";
  * jsdom has no layout engine, so a real browser is the only way to measure
  * this at all, and the fast PR workflow is deliberately kept fast.
  */
+
+// One seeded episode, so the queue's tables actually render. Without it the
+// completed list is empty, no <table> exists, and the clipping check below
+// passes by measuring nothing -- which is the failure mode it exists to
+// prevent. A deliberately long title, because the whole question is what
+// happens when a cell is wider than a phone.
+let pool: Pool | null = null;
+let seeded: SeededEpisode | null = null;
+
+test.beforeAll(async () => {
+  pool = getFixturePool();
+  if (!pool) return;
+  seeded = await seedEpisode(pool, {
+    title:
+      "A deliberately very long seeded episode title, used to push the queue table past the width of a phone screen",
+    feedTitle: "Mobile layout fixture feed with a long name too",
+  });
+});
+
+test.afterAll(async () => {
+  await seeded?.cleanup();
+  await pool?.end();
+});
 
 const VIEWPORTS = [
   { name: "iPhone 14 (390px)", width: 390, height: 844 },
@@ -103,6 +128,68 @@ for (const vp of VIEWPORTS) {
         ).toBeLessThanOrEqual(clientWidth + 1);
       });
     }
+
+    test("no table is silently clipped instead of scrolling", async ({ page }) => {
+      // #989: a table that outgrows its box should scroll, not vanish. The
+      // queue's two tables sat in `overflow-hidden` wrappers (there for the
+      // rounded corners), so once the columns stopped fitting the right-hand
+      // ones were cut off with no scrollbar and nothing to reveal them --
+      // invisible to the horizontal-scroll check above, because a clipped
+      // element does not widen the page.
+      //
+      // This asserts the structure rather than a width: any table whose
+      // content can overflow must sit inside something scrollable. That way
+      // it holds for data we have not seen, which is the case that matters --
+      // a long episode title on someone else's install.
+      // Every page holding a <table>: two on /queue, one on /meta-analysis.
+      const clipped: string[] = [];
+      let tablesSeen = 0;
+
+      for (const path of ["/queue", "/meta-analysis"]) {
+      await page.goto(path);
+      await page.locator("nav").first().waitFor();
+      await page.waitForLoadState("networkidle");
+
+      // The queue tables only render when there are rows; expand the
+      // completed list so this measures something.
+      const showDone = page.getByRole("button", { name: /Show \d+ completed/ });
+      if (await showDone.count()) {
+        await showDone.first().click();
+        await page.waitForTimeout(1000);
+      }
+
+      tablesSeen += await page.locator("table").count();
+      clipped.push(...await page.evaluate(() => {
+        const bad: string[] = [];
+        document.querySelectorAll("table").forEach((t) => {
+          let el: HTMLElement | null = t.parentElement;
+          while (el && el !== document.body) {
+            const ox = getComputedStyle(el).overflowX;
+            if (ox === "hidden") {
+              bad.push(`table in <${el.tagName.toLowerCase()} class="${el.className}">`);
+              return;
+            }
+            if (ox === "auto" || ox === "scroll") return; // scrollable: fine
+            el = el.parentElement;
+          }
+        });
+        return bad;
+      }));
+      }
+
+      // Without this the whole check passes on a page that rendered no
+      // tables at all -- which is exactly what /queue does when the queue is
+      // empty and the completed list is collapsed.
+      expect(
+        tablesSeen,
+        "no tables were rendered, so nothing was checked " +
+          "(set DATABASE_URL so the fixture episode can be seeded)",
+      ).toBeGreaterThan(0);
+      expect(
+        clipped,
+        "these tables would be cut off rather than scroll once their columns stop fitting",
+      ).toEqual([]);
+    });
 
     test("the sticky navbar does not eat the viewport", async ({ page }) => {
       await page.goto("/search");
