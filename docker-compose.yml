@@ -169,6 +169,13 @@ services:
       # Empty means "use the built-in defaults" (2000ms / 30000ms).
       EMBED_TIMEOUT_MS: ${EMBED_TIMEOUT_MS:-}
       EMBED_COOLDOWN_MS: ${EMBED_COOLDOWN_MS:-}
+      # #1012: the LAN address to show in Settings. The container cannot work
+      # this out -- it sees only its bridge address (172.x) -- so `make up`
+      # computes it on the host and passes it in. Empty when started with a
+      # bare `docker compose up`, in which case the app falls back to the
+      # address the browser used to reach it.
+      PODLOG_LAN_URL: ${PODLOG_LAN_URL:-}
+      UPDATE_CHECK_ENABLED: ${UPDATE_CHECK_ENABLED:-}
     volumes:
       - audio_data:/data/audio:ro
       # #990: the docs Ask bubble retrieves from the guide, the reference

@@ -232,6 +232,7 @@ the web footer.
 |---|---|---|
 | `PODLOG_VERSION` | `stable` | Which published image `make up-release` starts: `stable`, `edge`, or an exact `X.Y.Z`. Ignored by `make build`, which builds from source and tags the result with this value. |
 | `PODLOG_CHANNEL` | `stable` | What `make update` follows when no `VERSION=` is passed: `stable` (newest release tag) or `edge` (current `main`, rebuilt from source). |
+| `PODLOG_LAN_URL` | *(set by `make up`)* | The address to show under **Settings → Access from another device**. `make up` computes it on the host and passes it in; the container cannot work it out, since it sees only its Docker bridge address. With a bare `docker compose up` it is empty and the app falls back to whatever address your browser used. |
 | `UPDATE_CHECK_ENABLED` | `false` | Check GitHub for a newer release and show a link in the footer. Off by default — it is an outbound call. The host makes it, roughly every six hours, cached in between. It never installs anything. |
 
 Published images are `linux/amd64` only; build from source on other
