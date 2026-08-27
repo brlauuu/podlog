@@ -21,6 +21,9 @@ fresh empty `Unreleased` is left at the top.
 ## Unreleased
 
 ### Internal
+- The local CI script was running 23 fewer tests than CI does, without saying so. The tests covering the health-check script cannot run inside the test container — the file they test lives outside it — so they were skipped there and never picked up again. They now run, and the script fails if any further test file goes quiet the same way. ([#990](https://github.com/brlauuu/podlog/issues/990))
+
+### Internal
 - Third step of the documentation Ask bubble: the question-answering endpoint can now be handed the passages to answer from, instead of always searching podcast transcripts for them. This is what lets the documentation be answered over at all — the transcripts live in the database, but the documentation lives in files that only the web app can read. Asking about podcast content is unchanged, and a test now guards that specifically. Also fixes the local CI script, which could report a pass while running an out-of-date copy of the test suite — it now rebuilds the test image first. ([#990](https://github.com/brlauuu/podlog/issues/990))
 
 ### Internal
