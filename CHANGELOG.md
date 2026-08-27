@@ -21,6 +21,9 @@ fresh empty `Unreleased` is left at the top.
 ## Unreleased
 
 ### Internal
+- Fourth step of the documentation Ask bubble: the piece that joins the two halves together. It finds the relevant parts of the documentation and hands them to the answering service, which writes the answer and streams it back. If nothing in the documentation matches the question it says so, rather than letting the model invent an answer from nothing. Still no way to reach this from the interface — that is the last step. ([#990](https://github.com/brlauuu/podlog/issues/990))
+
+### Internal
 - The local CI script was running 23 fewer tests than CI does, without saying so. The tests covering the health-check script cannot run inside the test container — the file they test lives outside it — so they were skipped there and never picked up again. They now run, and the script fails if any further test file goes quiet the same way. ([#990](https://github.com/brlauuu/podlog/issues/990))
 
 ### Internal
