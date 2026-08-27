@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+- The Speaker dropdown on Search and Ask no longer flickers while you type. Every keystroke was re-fetching the speaker list and flashing it back to "Loading...", even though nothing about your filter selection had changed — nineteen wasted requests for a seventeen-character query. ([#1006](https://github.com/brlauuu/podlog/issues/1006))
+
 ### Internal
 - Corrected a comment in the Docker configuration that described the web interface as read-mostly when justifying why it is reachable from the local network. It is not: there is no login and it forwards writes, which is what the security documentation says a few files away. The comment sits directly above the setting it justifies, so it was the first thing anyone would read when deciding whether that exposure was acceptable. ([#1012](https://github.com/brlauuu/podlog/issues/1012))
 

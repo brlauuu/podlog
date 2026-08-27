@@ -28,11 +28,26 @@ export default function SpeakerFilter({
   const [reloadToken, setReloadToken] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
 
+  // #1006: both call sites pass `Array.from(selectedFeedIds)` inline, so a new
+  // array object arrives on every parent render -- and on /search every
+  // keystroke re-renders the parent long before the query is submitted. The
+  // effect below compares dependencies by reference, so it re-ran each time,
+  // flashing "Loading..." in the label and "Loading speakers..." in the open
+  // dropdown while refetching a result that could not have changed.
+  //
+  // Keying on a derived string instead of the array puts the fix here rather
+  // than asking every present and future caller to remember useMemo. Sorted
+  // because the API filters with `= ANY($1::uuid[])`, where order carries no
+  // meaning, so a reordered selection is the same selection.
+  const feedKey = [...feedIds].sort().join(",");
+
   useEffect(() => {
     setLoading(true);
     setError(false);
     const params = new URLSearchParams();
-    const realIds = feedIds.filter((id) => id !== "__uploads__");
+    const realIds = feedKey
+      ? feedKey.split(",").filter((id) => id && id !== "__uploads__")
+      : [];
     if (realIds.length > 0) params.set("feedId", realIds.join(","));
     if (includeManualUploads) params.set("uploads", "true");
 
@@ -54,7 +69,7 @@ export default function SpeakerFilter({
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [feedIds, includeManualUploads, reloadToken]);
+  }, [feedKey, includeManualUploads, reloadToken]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

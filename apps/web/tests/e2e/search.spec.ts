@@ -53,6 +53,38 @@ test.describe("Search", () => {
     await expect(page.getByText("Found in 1 podcast, 1 episode (1 mention)")).toBeVisible();
   });
 
+  test("typing does not refetch the speaker list on every keystroke (#1006)", async ({ page }) => {
+    // The unit test proves the component no longer refetches on an equal-but-
+    // new array. This proves the reported symptom is actually gone: on the
+    // real page, every keystroke re-rendered the parent (query state lives in
+    // search/page.tsx) and the Speaker dropdown flashed "Loading..." while
+    // refetching a result that could not have changed.
+    let speakerFetches = 0;
+    await page.route("**/api/search/speakers?**", async (route) => {
+      speakerFetches += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([{ speaker_label: "Alice", display_name: "Alice" }]),
+      });
+    });
+
+    await page.goto("/search");
+    const speakerButton = page.getByRole("button", { name: /speaker:/i });
+    await expect(speakerButton).toContainText("All"); // initial load settled
+    const afterLoad = speakerFetches;
+    expect(afterLoad).toBeGreaterThan(0); // the stub is actually being hit
+
+    // Type without submitting -- this is the repro from the issue.
+    await page.getByRole("textbox").first().pressSequentially("machine learning", { delay: 30 });
+
+    await expect(speakerButton).toContainText("All");
+    expect(
+      speakerFetches,
+      `speaker list refetched ${speakerFetches - afterLoad} extra times while typing`,
+    ).toBe(afterLoad);
+  });
+
   test("empty state shown when no results", async ({ page }) => {
     await page.route("**/api/search/grouped?**", async (route) => {
       await route.fulfill({
