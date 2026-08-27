@@ -21,6 +21,9 @@ fresh empty `Unreleased` is left at the top.
 ## Unreleased
 
 ### Internal
+- Second step of the documentation Ask bubble: picking which sections of the documentation are relevant to a question. Matches on the individual meaningful words rather than the whole phrase, and caps how much text it returns so answers fit even the smallest local model. Still not wired to anything. ([#990](https://github.com/brlauuu/podlog/issues/990))
+
+### Internal
 - First step of the documentation Ask bubble: the reference documentation and the design documents are now indexed alongside the user guide, each section tagged with where it came from so answers can cite it later. Nothing uses this yet. As a side effect the release notes on the About page now also render when running locally, not just in Docker — they were being read from a path that only existed inside the container. ([#990](https://github.com/brlauuu/podlog/issues/990))
 
 ### Internal
