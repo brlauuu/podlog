@@ -26,6 +26,24 @@ Everything runs in Docker on your own machine. **In the default configuration no
 18. [Keyboard Shortcuts](18-keyboard-shortcuts.md) — `J`/`K` episode nav, `/` focus search, `Space` / arrows for playback, `?` help overlay
 19. [Inference Providers](19-inference-providers.md) — Local vs remote choices for transcription + diarization, decision matrix, and providers we evaluated but didn't ship
 
+## Ask about the docs
+
+Every page of this guide has an **Ask about the docs** bubble in the bottom
+corner of the web app. It answers questions about Podlog itself — how to
+configure something, or why it works the way it does — drawing on this guide,
+the reference documentation and the design documents, and it links to the exact
+section each answer came from.
+
+It is separate from [Ask AI](12-rag-search.md), which searches your podcast
+transcripts. This one never looks at your episodes; that one never looks at the
+documentation.
+
+It uses the same provider and model as [Ask AI](12-rag-search.md) — whatever you
+have set under **Settings → Inference**. Switching that between local inference
+and Fireworks switches this too; there is no separate setting to keep in step.
+Only the handful of sections relevant to your question are sent to the model, not
+the whole manual, so it works on a local-only install.
+
 ## Quick Start
 
 If you just want to get running, head to [Installation](01-installation.md).

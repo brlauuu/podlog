@@ -43,6 +43,21 @@ describe("POST /api/docs/ask (#990)", () => {
     expect(sent.context[0].text).toContain("Whisper is unloaded");
   });
 
+  it("sends documentation instructions, not the transcript prompt", async () => {
+    // The pipeline's stored ask_page_system prompt mandates
+    // [Episode Title, MM:SS] citations; docs have neither, and the model
+    // emitted "[Context, N/A]" after every claim until this was sent.
+    const fetchMock = jest.fn(async () => new Response("data: {}\n\n", { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await POST(req({ question: "why is Whisper unloaded before pyannote?" }));
+
+    const [, init] = fetchMock.mock.calls[0];
+    const sent = JSON.parse((init as RequestInit).body as string);
+    expect(sent.system_prompt).toContain("Podlog");
+    expect(sent.system_prompt).toMatch(/do not add inline citations/i);
+  });
+
   it("answers 400 for a missing question rather than calling the pipeline", async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;

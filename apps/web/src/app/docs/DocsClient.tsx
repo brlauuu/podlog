@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { Search, X } from "lucide-react";
+import DocsAskBubble from "@/components/DocsAskBubble";
 import { slugifyHeading, makeUniqueSlugger } from "@/lib/docs-slug";
 import {
   searchIndex as searchDocs,
@@ -445,6 +446,9 @@ export default function DocsClient({ docs, searchIndex }: DocsClientProps) {
         </div>
       </aside>
       </div>
+      {/* #990: fixed to the viewport, so it sits outside the scrolling
+          content and stays reachable from any docs page. */}
+      <DocsAskBubble />
     </div>
   );
 }

@@ -156,3 +156,56 @@ describe("against the real corpus (#990)", () => {
     expect(worst).toBeLessThan(4096);
   });
 });
+
+describe("scoring: rare terms and question coverage (#990)", () => {
+  // Both behaviours below were added after retrieval was probed against the
+  // real 485-section corpus. "why is there no authentication on the pipeline
+  // API?" returned eight sections about pipeline stages and Dockerfiles and
+  // missed the Security model section, which is the answer.
+
+  function sec(
+    docSlug: string,
+    sectionTitle: string,
+    content: string,
+  ): DocSection {
+    return {
+      docSlug,
+      docTitle: docSlug,
+      sectionId: sectionTitle.toLowerCase().replace(/\s+/g, "-"),
+      sectionTitle,
+      level: 2,
+      source: "guide",
+      repoPath: `docs/guide/${docSlug}.md`,
+      content,
+    };
+  }
+
+  it("prefers the section holding the rare term over one titled for a common one", () => {
+    const index: DocSection[] = [
+      // "pipeline" is everywhere; only one section mentions "authentication".
+      ...Array.from({ length: 20 }, (_, i) =>
+        sec(`common-${i}`, "The pipeline", "pipeline pipeline details"),
+      ),
+      sec("security", "Security model", "There is no authentication on the pipeline."),
+    ];
+
+    const got = selectSections("why is there no authentication on the pipeline?", index, {
+      maxSections: 1,
+    });
+    expect(got[0].sectionTitle).toBe("Security model");
+  });
+
+  it("prefers a section covering the whole question over one matching a single term loudly", () => {
+    const index: DocSection[] = [
+      // Matches one term, but in the title, three times over.
+      sec("loud", "backup backup backup", "backup"),
+      // Matches every term, only in the body.
+      sec("complete", "Restoring", "To restore a backup, decrypt the archive first."),
+    ];
+
+    const got = selectSections("how do I restore a backup archive?", index, {
+      maxSections: 1,
+    });
+    expect(got[0].docSlug).toBe("complete");
+  });
+});

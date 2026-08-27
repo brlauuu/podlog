@@ -8,9 +8,16 @@ export const MAX_SECTIONS = 8;
  *
  * The smallest supported local model is qwen2.5:3b at 8192 context
  * (rag.py::MODEL_NUM_CTX), shared with the system prompt and the
- * conversation history, so 4000 leaves room for both.
+ * conversation history, so this leaves room for both.
+ *
+ * Lowered from 4000 for latency, not for context: on a CPU-only host,
+ * generation time grows with the prompt (~108s at 1000 tokens, ~164s at
+ * 2500, same num_ctx), and every second here is a second the reader waits
+ * for the first token. 2500 keeps answers well-sourced -- the 8-section cap
+ * usually binds first -- without paying for passages that rarely change the
+ * answer. rag.py's read timeout was raised to 300s in the same change.
  */
-export const MAX_CONTEXT_TOKENS = 4000;
+export const MAX_CONTEXT_TOKENS = 2500;
 
 const CHARS_PER_TOKEN = 4;
 
@@ -41,15 +48,61 @@ function terms(question: string): string[] {
 const TITLE_WEIGHT = 3;
 const CONTENT_WEIGHT = 1;
 
-function scoreSection(section: DocSection, qTerms: string[]): number {
+/**
+ * How much one term is worth, by how rare it is in the corpus.
+ *
+ * Without this, every term counts the same, and a question like "why is
+ * there no authentication on the pipeline API?" is decided by "pipeline"
+ * and "api" -- which appear in most of the corpus -- while
+ * "authentication", the one term that actually identifies the answer, is
+ * outvoted. Asked against the real corpus, that question returned eight
+ * sections about pipeline stages and Dockerfiles and missed the Security
+ * model section entirely.
+ *
+ * Standard inverse document frequency, smoothed so a term present in every
+ * section still scores slightly above zero rather than being discarded.
+ */
+function idfWeights(index: DocSection[], qTerms: string[]): Map<string, number> {
+  const weights = new Map<string, number>();
+  for (const t of qTerms) {
+    let df = 0;
+    for (const section of index) {
+      if (
+        section.sectionTitle.toLowerCase().includes(t) ||
+        section.content.toLowerCase().includes(t)
+      ) {
+        df += 1;
+      }
+    }
+    weights.set(t, Math.log((index.length + 1) / (df + 1)) + 1);
+  }
+  return weights;
+}
+
+function scoreSection(
+  section: DocSection,
+  qTerms: string[],
+  idf: Map<string, number>,
+): number {
   const title = section.sectionTitle.toLowerCase();
   const body = section.content.toLowerCase();
   let score = 0;
+  let matched = 0;
   for (const t of qTerms) {
-    if (title.includes(t)) score += TITLE_WEIGHT;
-    if (body.includes(t)) score += CONTENT_WEIGHT;
+    const w = idf.get(t) ?? 1;
+    const inTitle = title.includes(t);
+    const inBody = body.includes(t);
+    if (inTitle) score += TITLE_WEIGHT * w;
+    if (inBody) score += CONTENT_WEIGHT * w;
+    if (inTitle || inBody) matched += 1;
   }
-  return score;
+  // Scale by how much of the question a section actually covers. IDF alone
+  // is not enough: "why is there no authentication on the pipeline API?"
+  // put eight sections titled after "pipeline" or "API" above the Security
+  // model section, which was the only one matching all three terms -- it
+  // landed at rank 8, one place outside the cutoff. Covering the whole
+  // question is a better signal than matching one word of it loudly.
+  return score * (matched / qTerms.length);
 }
 
 /**
@@ -76,8 +129,9 @@ export function selectSections(
   const qTerms = terms(question);
   if (qTerms.length === 0 || index.length === 0) return [];
 
+  const idf = idfWeights(index, qTerms);
   const scored = index
-    .map((section) => ({ section, score: scoreSection(section, qTerms) }))
+    .map((section) => ({ section, score: scoreSection(section, qTerms, idf) }))
     .filter((s) => s.score > 0)
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
@@ -101,4 +155,33 @@ export function selectSections(
     chars += cost;
   }
   return out;
+}
+
+const REPO_BLOB_BASE_URL = "https://github.com/brlauuu/podlog/blob/main";
+
+/**
+ * Where a cited section lives (#990).
+ *
+ * Guide pages are rendered at /docs and get a deep link to the exact
+ * heading. PRDs and reference docs have no rendered surface in the app, so
+ * they cite to the repository instead -- the same convention DocsClient
+ * already uses for links that leave the rendered guide.
+ */
+export function citationHref(
+  source: string,
+  slug: string,
+  anchor: string | null,
+  repoPath: string,
+): string {
+  if (source === "guide") {
+    return `/docs?page=${encodeURIComponent(slug)}${anchor ? `#${anchor}` : ""}`;
+  }
+  return `${REPO_BLOB_BASE_URL}/${repoPath}`;
+}
+
+/** Human label for where a citation came from. */
+export function citationSourceLabel(source: string): string {
+  if (source === "guide") return "guide";
+  if (source === "prd") return "design doc";
+  return "reference";
 }
