@@ -7,6 +7,25 @@ import { PIPELINE_API } from "@/lib/pipeline";
 export const dynamic = "force-dynamic";
 
 /**
+ * Instructions for answering over documentation (#990).
+ *
+ * Sent explicitly rather than reusing the pipeline's stored
+ * `ask_page_system` prompt, which mandates transcript-style
+ * `[Episode Title, MM:SS]` citations. Documentation has neither, and the
+ * model dutifully appended "[Context, N/A]" to every claim. Citations are
+ * rendered as links from the `sources` event, so the model is told to leave
+ * them out of the prose entirely.
+ */
+const DOCS_SYSTEM_PROMPT = `You are answering questions about Podlog, a self-hosted podcast transcription and search app, using excerpts from its own documentation.
+
+RULES:
+- Answer ONLY from the provided documentation excerpts.
+- If the excerpts do not cover the question, say so plainly rather than guessing.
+- Do NOT add inline citations, source markers, or bracketed references of any kind. The interface shows the sources separately.
+- Format with Markdown: **bold** for emphasis, bullet lists for multiple points.
+- Be concise and direct.`;
+
+/**
  * POST /api/docs/ask — Ask over Podlog's own documentation (#990).
  *
  * Retrieval happens here because this is the only container with the docs
@@ -50,6 +69,7 @@ export async function POST(req: Request) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       question,
+      system_prompt: DOCS_SYSTEM_PROMPT,
       model: body.model,
       history: body.history,
       context: sections.map((s) => ({

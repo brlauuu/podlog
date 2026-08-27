@@ -78,6 +78,11 @@ class AskRequest(BaseModel):
     # #990: documentation passages supplied by the web app, which is the only
     # container with the docs mounted. Present => skip transcript retrieval.
     context: list[ContextSection] | None = None
+    # #990: overrides the stored ask_page_system prompt, but only on the
+    # supplied-context path. The stored prompt mandates transcript-style
+    # [Episode Title, MM:SS] citations; a docs caller has neither, and the
+    # model dutifully emitted "[Context, N/A]" against every claim.
+    system_prompt: str | None = None
 
 
 def _sse_event(event: str, data: dict | list | str) -> str:
@@ -93,6 +98,7 @@ async def _stream_ask(
     speaker_display: str | None = None,
     history: list[dict] | None = None,
     context: list[ContextSection] | None = None,
+    system_prompt: str | None = None,
 ):
     db = SessionLocal()
     try:
@@ -154,7 +160,7 @@ async def _stream_ask(
             messages = build_prompt_from_text(
                 question,
                 [c.text for c in context],
-                system_prompt=get_prompt(db, "ask_page_system"),
+                system_prompt=system_prompt or get_prompt(db, "ask_page_system"),
                 history=(history or [])[-MAX_HISTORY_MESSAGES:],
             )
         else:
@@ -179,12 +185,15 @@ async def _stream_ask(
             # are inserted between system and user — capped to MAX_HISTORY_MESSAGES
             # defensively even if the client over-sent.
             prompt_key = "ask_episode_system" if episode_id else "ask_page_system"
-            system_prompt = get_prompt(db, prompt_key)
+            # Deliberately ignores the request's system_prompt: the transcript
+            # path answers with the operator's stored, user-editable prompt and
+            # is not overridable per request (#990).
+            stored_prompt = get_prompt(db, prompt_key)
             capped_history = (history or [])[-MAX_HISTORY_MESSAGES:]
             messages = build_prompt(
                 question,
                 chunks,
-                system_prompt=system_prompt,
+                system_prompt=stored_prompt,
                 history=capped_history,
             )
 
@@ -225,6 +234,7 @@ async def ask_endpoint(req: AskRequest):
             speaker_display=req.speaker_display,
             history=history,
             context=req.context,
+            system_prompt=req.system_prompt,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

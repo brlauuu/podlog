@@ -317,7 +317,15 @@ async def _stream_ollama_once(messages: list[dict], model: str):
     }
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=10)) as client:
+        # read=300, not 120 (#990). The read timeout is the wait for the FIRST
+        # token, which on CPU is dominated by prefill over num_ctx -- not by
+        # prompt length. Measured on a CPU-only host with qwen2.5:3b at
+        # num_ctx=8192: a ~1000-token prompt took 108s and a ~2500-token one
+        # 164s. At read=120 the shorter one squeaks through and the longer one
+        # fails, which is how this surfaced: one docs question answered and the
+        # next timed out. Raising it only lets slow requests finish; nothing
+        # that already succeeded changes.
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=300, write=10, pool=10)) as client:
             async with client.stream("POST", url, json=payload) as resp:
                 if resp.status_code != 200:
                     body = await resp.aread()
