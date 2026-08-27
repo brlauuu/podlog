@@ -7,7 +7,7 @@ up:             ## Start full stack (builds from source)
 	@# pushes `stable` this would silently start the released image instead of
 	@# the tree you have checked out -- your local edits simply would not
 	@# appear. `never` keeps this target meaning "run what is here".
-	docker compose up -d --pull never
+	PODLOG_LAN_URL="$$(bash scripts/print-access.sh --url-only)" docker compose up -d --pull never
 	@bash scripts/print-access.sh
 
 update:         ## Update safely: drain, back up, move, pull, restart. VERSION=X.Y.Z to pin.
@@ -22,11 +22,11 @@ up-release:     ## Start from published images without building (see PODLOG_VERS
 	@# the one outcome this target exists to avoid -- a user on a laptop
 	@# discovering the multi-GB ML build they were trying to skip.
 	docker compose pull
-	docker compose up -d --no-build
+	PODLOG_LAN_URL="$$(bash scripts/print-access.sh --url-only)" docker compose up -d --no-build
 	@bash scripts/print-access.sh
 
 up-remote:      ## Start remote-inference profile (Fireworks providers, no Ollama)
-	docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d --pull never
+	PODLOG_LAN_URL="$$(bash scripts/print-access.sh --url-only)" docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d --pull never
 	@bash scripts/print-access.sh
 
 down:           ## Stop all services

@@ -120,6 +120,8 @@ The "same network" address is the one to use from a phone or another computer. R
 
 The address comes from DHCP and can change when your router or machine restarts. Reserve it in your router if you want it stable.
 
+If you missed it scrolling past, the same address is shown under **Settings → Access from another device**, with the same warning. That panel is empty when Podlog is reachable from this machine only.
+
 ### Optional: Remote-Inference Profile
 
 Use this when you want Fireworks-backed inference and no local Ollama container:

@@ -12,6 +12,14 @@
 # and delete feeds, delete episodes, delete backups and change settings.
 set -uo pipefail
 
+# --url-only prints just the LAN URL (or nothing) and exits, so `make up` can
+# capture it and pass it into the web container -- see PODLOG_LAN_URL in
+# docker-compose.yml (#1012). Without that, the address exists only in this
+# terminal output, which scrolls away and is DHCP-assigned, so the moment it
+# is most likely to have changed is the moment you have no record of it.
+URL_ONLY=false
+[ "${1:-}" = "--url-only" ] && URL_ONLY=true
+
 PORT=3000
 
 # What the web container is actually bound to. Authoritative, and it respects
@@ -30,6 +38,11 @@ if [ -z "$binding" ] || [ "$host_part" = "0.0.0.0" ] || [ "$host_part" = "::" ];
       [ -n "$iface" ] && lan_ip=$(ipconfig getifaddr "$iface" 2>/dev/null || true)
       ;;
   esac
+fi
+
+if [ "$URL_ONLY" = true ]; then
+  [ -n "$lan_ip" ] && echo "http://${lan_ip}:${PORT}"
+  exit 0
 fi
 
 echo
