@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+- The queue's episode tables now scroll sideways when they are wider than the screen, instead of quietly cutting off the right-hand columns with no way to reach them. ([#989](https://github.com/brlauuu/podlog/issues/989))
+
 ### Minor changes
 - The navigation bar now collapses behind a menu button on a phone. Eight links in one row wrapped to four rows on a narrow screen, and because the bar is pinned to the top that cost about a fifth of the screen on every page. Menu entries are also sized for a fingertip rather than a mouse pointer.
 - Several pages no longer scroll sideways on a phone: the home screen buttons, the Ask model selector, the queue's stage bar and summary line, the Settings tabs, and long web addresses in the release notes and Telegram setup instructions. ([#989](https://github.com/brlauuu/podlog/issues/989))

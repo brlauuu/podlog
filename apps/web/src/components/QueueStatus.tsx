@@ -351,8 +351,13 @@ export default function QueueStatus() {
         </div>
       )}
 
+      {/* #989: overflow-x-auto, not overflow-hidden, on both table wrappers.
+          The hidden was for the rounded corners, but it also meant a table too
+          wide for its box lost the right-hand columns with no scrollbar to get
+          them back -- and a clipped table does not widen the page, so the
+          horizontal-scroll check could not see it either. */}
       {filtered.length > 0 && (
-        <div className="rounded-lg border border-border overflow-hidden">
+        <div className="rounded-lg border border-border overflow-x-auto overflow-y-hidden">
           <table className="w-full">
             <TableHeader />
             <tbody>
@@ -381,7 +386,7 @@ export default function QueueStatus() {
             {effectiveShowDone ? "▴" : "▾"}
           </button>
           {effectiveShowDone && filteredDone.length > 0 && (
-            <div className="mt-2 rounded-lg border border-border overflow-hidden">
+            <div className="mt-2 rounded-lg border border-border overflow-x-auto overflow-y-hidden">
               <table className="w-full">
                 <TableHeader />
                 <tbody>
