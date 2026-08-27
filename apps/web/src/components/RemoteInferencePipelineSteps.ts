@@ -170,6 +170,34 @@ export function isRemoteStep(settings: Settings, step: PipelineStep): boolean {
   return settings[step.providerField] === remoteValue;
 }
 
+/**
+ * True when the configured model is not one of the options offered for the
+ * step's current provider (#1005).
+ *
+ * The lists in rag-models.ts are a curated selection, not the set of models
+ * that work. A stored value can leave them two ways: a remote model retired
+ * upstream (this is how `qwen2p5-72b-instruct` started failing every
+ * Fireworks request), or a local model pulled in Ollama that Podlog never
+ * listed (`gemma4:e4b` works fine and is not in RAG_MODELS).
+ *
+ * Both render as an empty Radix trigger, which reads as "nothing selected"
+ * rather than "something unrecognised" -- so a broken setting and a working
+ * one look identical, and neither looks configured.
+ */
+export function isUnlistedModel(settings: Settings, step: PipelineStep): boolean {
+  const current = getCurrentModel(settings, step);
+  if (!current) return false;
+  // Compare against the list getCurrentModel actually read from. The two can
+  // disagree: the embedding step is remote-provider-aware but has
+  // `remoteModels: []` and `remoteModelField: null`, so on a remote provider
+  // getCurrentModel falls back to the LOCAL model. Comparing that against an
+  // empty remote list flags every model as unlisted -- a warning about a
+  // setting this card does not even own.
+  const usesRemoteModel = isRemoteStep(settings, step) && !!step.remoteModelField;
+  const models = usesRemoteModel ? step.remoteModels : step.localModels;
+  return !models.some((m) => m.value === current);
+}
+
 export function getCurrentModel(settings: Settings, step: PipelineStep): string {
   if (isRemoteStep(settings, step) && step.remoteModelField) {
     return (

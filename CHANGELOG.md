@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+- Settings now shows which model is configured even when it is not one of the ones Podlog lists, instead of leaving the dropdown blank. A model can leave the list two ways — a hosted one retired by the provider, or one you pulled into Ollama yourself — and previously both looked identical to having nothing selected, including the case where every request was failing because of it. The note that appears says the model may still work, because an unlisted local model usually does. ([#1005](https://github.com/brlauuu/podlog/issues/1005))
+
 ### Major changes
 - The documentation now has its own Ask box. Open any docs page and the bubble in the corner answers questions about Podlog itself — how to configure something, why it behaves the way it does — drawing on the user guide, the reference documentation and the design documents, and linking to the exact section each answer came from. It is separate from Ask AI, which searches your podcast transcripts: this one never looks at your episodes. It works the same on a local-only install as on remote inference, because it sends only the handful of relevant sections rather than the whole manual. ([#990](https://github.com/brlauuu/podlog/issues/990))
 - The documentation Ask box follows your existing Ask AI provider setting, so switching between local inference and Fireworks switches both. It also uses whichever model you have configured there, rather than a fixed one. ([#990](https://github.com/brlauuu/podlog/issues/990))

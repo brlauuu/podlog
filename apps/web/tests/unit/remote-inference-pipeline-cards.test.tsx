@@ -201,3 +201,114 @@ describe("PipelineStepCards — StepHelpContent", () => {
     expect(screen.getByText(/transcribing a\s+60-minute episode/i)).toBeInTheDocument();
   });
 });
+
+describe("PipelineStepCards — stored model outside the offered list (#1005)", () => {
+  // A stored model can drift out of the offered list: a remote model retired
+  // upstream, or a local model pulled in Ollama that Podlog never listed.
+  // Radix Select renders a value with no matching item as an EMPTY trigger,
+  // so the UI showed nothing at all -- indistinguishable from "unset", and
+  // giving no clue why requests were failing.
+
+  it("keeps the stored remote model visible as an option", () => {
+    render(
+      <PipelineStepCards
+        settings={makeSettings({
+          rag_provider: "fireworks",
+          fireworks_api_key: "fw-key",
+          fireworks_chat_model: "accounts/fireworks/models/qwen2p5-72b-instruct",
+        })}
+        hwInfo={null}
+        onChange={jest.fn()}
+        onRequireApiKey={jest.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole("option", {
+        name: /accounts\/fireworks\/models\/qwen2p5-72b-instruct/,
+      })
+    ).toBeInTheDocument();
+  });
+
+  it("warns that the stored remote model is not one Podlog offers", () => {
+    render(
+      <PipelineStepCards
+        settings={makeSettings({
+          rag_provider: "fireworks",
+          fireworks_api_key: "fw-key",
+          fireworks_chat_model: "accounts/fireworks/models/qwen2p5-72b-instruct",
+        })}
+        hwInfo={null}
+        onChange={jest.fn()}
+        onRequireApiKey={jest.fn()}
+      />
+    );
+
+    const warning = screen.getByText(/not one of the models Podlog offers/i);
+    expect(warning).toBeInTheDocument();
+    // Must not claim it is broken: an unlisted local model often works fine.
+    expect(warning.textContent).toMatch(/may still work/i);
+  });
+
+  it("warns for an unlisted local model too", () => {
+    render(
+      <PipelineStepCards
+        settings={makeSettings({ rag_provider: "local", rag_local_model: "gemma4:e4b" })}
+        hwInfo={null}
+        onChange={jest.fn()}
+        onRequireApiKey={jest.fn()}
+      />
+    );
+
+    expect(screen.getByRole("option", { name: /gemma4:e4b/ })).toBeInTheDocument();
+    expect(screen.getByText(/not one of the models Podlog offers/i)).toBeInTheDocument();
+  });
+
+  it("says nothing when the stored model is one of the offered ones", () => {
+    render(
+      <PipelineStepCards
+        settings={makeSettings({ rag_provider: "local", rag_local_model: "qwen2.5:3b" })}
+        hwInfo={null}
+        onChange={jest.fn()}
+        onRequireApiKey={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByText(/not one of the models Podlog offers/i)).toBeNull();
+  });
+
+  it("says nothing for a step that offers no remote models to compare against", () => {
+    // The embedding step has remoteModels: [] and remoteModelField: null, so
+    // getCurrentModel falls back to the LOCAL model while the comparison list
+    // is empty. Comparing against nothing makes every model look unlisted --
+    // a warning about a setting the user cannot even change here.
+    render(
+      <PipelineStepCards
+        settings={makeSettings({
+          embedding_provider: "fireworks",
+          embedding_model: "all-MiniLM-L6-v2",
+        })}
+        hwInfo={null}
+        onChange={jest.fn()}
+        onRequireApiKey={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByText(/not one of the models Podlog offers/i)).toBeNull();
+  });
+
+  it("says nothing when no model is stored at all", () => {
+    // getCurrentModel falls back to the first offered option, which is
+    // recognised by definition. An empty setting is not drift.
+    render(
+      <PipelineStepCards
+        settings={makeSettings({ rag_provider: "local", rag_local_model: "" })}
+        hwInfo={null}
+        onChange={jest.fn()}
+        onRequireApiKey={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByText(/not one of the models Podlog offers/i)).toBeNull();
+  });
+});
