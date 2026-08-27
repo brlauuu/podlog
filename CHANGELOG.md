@@ -21,6 +21,9 @@ fresh empty `Unreleased` is left at the top.
 ## Unreleased
 
 ### Fixes
+- Buttons are easier to hit on a phone. The dark-mode switch in particular only responded to a tap on the small bulb icon itself; it now has a proper finger-sized area, and shared buttons across the app get the same treatment on narrow screens. Nothing changes on a desktop. ([#989](https://github.com/brlauuu/podlog/issues/989))
+
+### Fixes
 - The queue's episode tables now scroll sideways when they are wider than the screen, instead of quietly cutting off the right-hand columns with no way to reach them. ([#989](https://github.com/brlauuu/podlog/issues/989))
 
 ### Minor changes
