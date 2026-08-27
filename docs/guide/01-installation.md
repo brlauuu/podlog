@@ -78,6 +78,32 @@ Podlog is running.
 
 Open **http://localhost:3000** — you should see the Podlog home page with quick links to Search and Ask. The search page itself is at `/search`.
 
+### Starting from a published image instead
+
+`make build` compiles everything from source, which pulls several gigabytes of
+machine-learning dependencies and takes a while the first time. If you would
+rather run a released build:
+
+```bash
+make up-release   # pull the published images and start, no build
+```
+
+Which build you get is set by `PODLOG_VERSION` in `.env`:
+
+| Value | Meaning |
+|---|---|
+| `stable` | the newest release (default) |
+| `edge` | current `main`, rebuilt on every merge |
+| `0.10.0` | an exact version — also how you downgrade |
+
+The images are **linux/amd64 only**. On any other architecture, building from
+source is the supported path.
+
+`make up` and `make up-release` are deliberately separate: `make up` never
+contacts the registry, so it always runs the code in your working copy, even
+after you have edited it. `make up-release` never builds, so it cannot
+surprise you with a multi-gigabyte compile.
+
 The "same network" address is the one to use from a phone or another computer. Read the [Security model](#security-model) below before you use it: anyone who can reach that address has full control, with no login. If no LAN address is shown, either your machine has no network route or you have bound the web service to loopback — either way Podlog is reachable from this machine only.
 
 The address comes from DHCP and can change when your router or machine restarts. Reserve it in your router if you want it stable.

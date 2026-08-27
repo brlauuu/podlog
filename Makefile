@@ -1,11 +1,26 @@
-.PHONY: up up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e ci-local migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs backup-now backup-list restore-db restore-audio
+.PHONY: up up-release up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e ci-local migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs backup-now backup-list restore-db restore-audio
 
-up:             ## Start full stack
-	docker compose up -d
+up:             ## Start full stack (builds from source)
+	@# --pull never (#937 phase 2). Once services carry an `image:` pointing at
+	@# GHCR, a plain `up` tries the registry FIRST and only builds when the pull
+	@# fails. The published images are public, so as soon as a version tag
+	@# pushes `stable` this would silently start the released image instead of
+	@# the tree you have checked out -- your local edits simply would not
+	@# appear. `never` keeps this target meaning "run what is here".
+	docker compose up -d --pull never
+	@bash scripts/print-access.sh
+
+up-release:     ## Start from published images without building (see PODLOG_VERSION)
+	@# Phase 2 of #937. `--no-build` is the point: without it compose would
+	@# quietly fall back to building from source on a pull failure, which is
+	@# the one outcome this target exists to avoid -- a user on a laptop
+	@# discovering the multi-GB ML build they were trying to skip.
+	docker compose pull
+	docker compose up -d --no-build
 	@bash scripts/print-access.sh
 
 up-remote:      ## Start remote-inference profile (Fireworks providers, no Ollama)
-	docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d
+	docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d --pull never
 	@bash scripts/print-access.sh
 
 down:           ## Stop all services
