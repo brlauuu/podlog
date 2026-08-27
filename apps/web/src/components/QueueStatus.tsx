@@ -380,7 +380,7 @@ export default function QueueStatus() {
         <div>
           <button
             onClick={() => { setShowDone(!effectiveShowDone); if (stageFilter === "done") setStageFilter(null); }}
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="text-sm text-muted-foreground hover:text-foreground max-md:min-h-11 max-md:inline-flex max-md:items-center"
           >
             {effectiveShowDone ? "Hide" : "Show"} {doneCount} completed episode{doneCount !== 1 ? "s" : ""}{" "}
             {effectiveShowDone ? "▴" : "▾"}

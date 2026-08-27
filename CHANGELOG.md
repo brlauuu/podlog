@@ -21,6 +21,10 @@ fresh empty `Unreleased` is left at the top.
 ## Unreleased
 
 ### Fixes
+- Buttons, filters, tabs and checkboxes across the app are now sized for a fingertip on a phone, including the Settings tabs, the search and Ask filters, the podcast chips on Meta-Analysis and the notification form. Desktop is unchanged.
+- The chart toolbars on Meta-Analysis are hidden on a phone. Each chart added nine tiny buttons for zoom, pan and lasso-select — none of them usable with a finger, and they cluttered a screen that has little room to spare. They still appear on a larger screen. ([#989](https://github.com/brlauuu/podlog/issues/989))
+
+### Fixes
 - Buttons are easier to hit on a phone. The dark-mode switch in particular only responded to a tap on the small bulb icon itself; it now has a proper finger-sized area, and shared buttons across the app get the same treatment on narrow screens. Nothing changes on a desktop. ([#989](https://github.com/brlauuu/podlog/issues/989))
 
 ### Fixes

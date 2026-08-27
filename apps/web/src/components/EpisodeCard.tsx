@@ -383,7 +383,7 @@ export default function EpisodeCard({
           aria-label="Delete upload"
           onClick={handleDeleteClick}
           disabled={deleting}
-          className="absolute bottom-2 right-2 z-10 p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="absolute bottom-2 right-2 z-10 p-1.5 max-md:min-h-11 max-md:min-w-11 max-md:inline-flex max-md:items-center max-md:justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
         </button>

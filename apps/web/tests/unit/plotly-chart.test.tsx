@@ -121,3 +121,42 @@ describe("<PlotlyChart>", () => {
     fireEvent.click(screen.getByTestId("plot-stub"));
   });
 });
+
+describe("PlotlyChart — modebar on phones (#989)", () => {
+  // Plotly injects nine 22px toolbar buttons per chart. Three charts on the
+  // Meta-Analysis page is 27 targets no finger can hit, for interactions
+  // (box select, lasso) that need a pointer anyway. Hidden below md:.
+  function mockWidth(matches: boolean) {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: jest.fn().mockImplementation((query: string) => ({
+        matches,
+        media: query,
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+        onchange: null,
+      })),
+    });
+  }
+
+  it("hides the modebar on a narrow viewport", () => {
+    mockWidth(true);
+    render(<PlotlyChart data={[]} layout={{}} />);
+    expect((captured.props?.config as Record<string, unknown>).displayModeBar).toBe(false);
+  });
+
+  it("leaves it to Plotly on a wide viewport", () => {
+    mockWidth(false);
+    render(<PlotlyChart data={[]} layout={{}} />);
+    expect((captured.props?.config as Record<string, unknown>).displayModeBar).toBeUndefined();
+  });
+
+  it("still lets a caller ask for it explicitly", () => {
+    mockWidth(true);
+    render(<PlotlyChart data={[]} layout={{}} config={{ displayModeBar: true }} />);
+    expect((captured.props?.config as Record<string, unknown>).displayModeBar).toBe(true);
+  });
+});

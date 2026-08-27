@@ -17,7 +17,7 @@ export default function FiltersBar({ feeds, selectedFeedId, onSelectionChange }:
       <button
         type="button"
         onClick={() => onSelectionChange(null)}
-        className={`px-2 py-1 rounded ${selectedFeedId === null ? "bg-accent text-accent-foreground" : "hover:bg-accent"}`}
+        className={`px-2 py-1 max-md:min-h-11 rounded ${selectedFeedId === null ? "bg-accent text-accent-foreground" : "hover:bg-accent"}`}
       >
         All podcasts
       </button>
@@ -26,7 +26,7 @@ export default function FiltersBar({ feeds, selectedFeedId, onSelectionChange }:
           key={f.feed_id}
           type="button"
           onClick={() => onSelectionChange(f.feed_id)}
-          className={`px-2 py-1 rounded ${selectedFeedId === f.feed_id ? "bg-accent text-accent-foreground" : "hover:bg-accent"}`}
+          className={`px-2 py-1 max-md:min-h-11 rounded ${selectedFeedId === f.feed_id ? "bg-accent text-accent-foreground" : "hover:bg-accent"}`}
         >
           {f.title}
         </button>

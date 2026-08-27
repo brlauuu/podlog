@@ -115,7 +115,7 @@ function ViewToggle({
             aria-label={opt.label}
             aria-pressed={active}
             onClick={() => onChange(opt.mode)}
-            className={`h-7 w-8 flex items-center justify-center transition-colors ${
+            className={`h-7 w-8 max-md:h-11 max-md:w-11 flex items-center justify-center transition-colors ${
               active
                 ? "bg-accent text-foreground"
                 : "text-muted-foreground hover:bg-accent/60"

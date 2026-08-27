@@ -126,7 +126,7 @@ export default function MetaAnalysisClient() {
           ) : null}
         </div>
         <button
-          className="px-3 py-1.5 rounded-md border text-sm"
+          className="px-3 py-1.5 rounded-md border text-sm max-md:min-h-11"
           onClick={() => refresh.mutate()}
           disabled={refresh.isPending}
           aria-label="Refresh meta-analysis"

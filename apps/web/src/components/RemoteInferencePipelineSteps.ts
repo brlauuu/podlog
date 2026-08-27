@@ -162,7 +162,7 @@ export const PIPELINE_STEPS: PipelineStep[] = [
 ];
 
 export const inputClass =
-  "w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring";
+  "w-full rounded-md border border-border bg-background px-3 py-2 max-md:min-h-11 text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring";
 
 export function isRemoteStep(settings: Settings, step: PipelineStep): boolean {
   if (!step.providerField) return false;

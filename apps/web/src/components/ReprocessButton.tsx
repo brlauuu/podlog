@@ -34,7 +34,7 @@ export default function ReprocessButton({ episodeId }: ReprocessButtonProps) {
     <button
       onClick={handleReprocess}
       disabled={loading}
-      className="inline-flex items-center gap-1 rounded border border-input bg-background px-1.5 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+      className="inline-flex items-center gap-1 rounded border border-input bg-background px-1.5 py-0.5 max-md:min-h-11 max-md:px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
     >
       <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
       {loading ? "Reprocessing..." : "Reprocess"}

@@ -173,7 +173,7 @@ function SetupGuide({
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <div className="rounded-lg border border-border bg-muted/50 p-4 mb-6">
-        <CollapsibleTrigger className="flex w-full items-center justify-between text-left">
+        <CollapsibleTrigger className="flex w-full items-center justify-between text-left max-md:min-h-11">
           <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
           <span className="text-xs text-muted-foreground">
             {open ? "Hide" : "Show"}
@@ -264,7 +264,7 @@ export function TelegramNotificationCard({
       </FieldGroup>
 
       <button
-        className="px-4 py-2 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-50 mt-2"
+        className="px-4 py-2 max-md:min-h-11 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-50 mt-2"
         onClick={() => onTest("telegram")}
         disabled={!settings.telegram_configured || testing}
       >
@@ -344,7 +344,7 @@ export function EmailNotificationCard({
 
       <Collapsible open={smtpOpen} onOpenChange={setSmtpOpen}>
         <div className="border-t border-border my-4" />
-        <CollapsibleTrigger className="flex w-full items-center justify-between text-left text-sm mb-4">
+        <CollapsibleTrigger className="flex w-full items-center justify-between text-left text-sm mb-4 max-md:min-h-11">
           <span className="font-medium">SMTP Configuration</span>
           <span className="text-xs text-muted-foreground">
             {smtpOpen ? "Hide" : "Show"} — optional, defaults work with local
@@ -411,9 +411,10 @@ export function EmailNotificationCard({
                 />
               </FieldGroup>
             </div>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm max-md:min-h-11">
               <input
                 type="checkbox"
+                className="max-md:h-5 max-md:w-5"
                 checked={settings.smtp_use_tls}
                 onChange={(e) => onChange("smtp_use_tls", e.target.checked)}
               />
@@ -427,7 +428,7 @@ export function EmailNotificationCard({
       </Collapsible>
 
       <button
-        className="px-4 py-2 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-50 mt-2"
+        className="px-4 py-2 max-md:min-h-11 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-50 mt-2"
         onClick={() => onTest("email")}
         disabled={!settings.notification_email_to || testing}
       >
@@ -451,7 +452,7 @@ export function GeneralNotificationCard({
       >
         <select
           id="notification-frequency"
-          className={inputClass}
+          className={`${inputClass} max-md:min-h-11`}
           value={settings.notification_frequency}
           onChange={(e) => onChange("notification_frequency", e.target.value)}
         >
@@ -473,9 +474,10 @@ export function GeneralNotificationCard({
         label="Health Check Notifications"
         hint="Host-level monitoring alerts (service status, zombie jobs). Runs via cron every 15 minutes."
       >
-        <label className="flex items-center gap-2 text-sm mt-2">
+        <label className="flex items-center gap-2 text-sm mt-2 max-md:min-h-11">
           <input
             type="checkbox"
+            className="max-md:h-5 max-md:w-5"
             checked={settings.health_check_notifications_enabled}
             onChange={(e) =>
               onChange("health_check_notifications_enabled", e.target.checked)

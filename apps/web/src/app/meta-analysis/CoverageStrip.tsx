@@ -36,7 +36,7 @@ export default function CoverageStrip({
           <span>·</span>
           <Link
             href="/queue"
-            className="underline-offset-2 hover:underline hover:text-foreground"
+            className="underline-offset-2 hover:underline hover:text-foreground max-md:min-h-11 max-md:inline-flex max-md:items-center"
             title="Not yet in this snapshot — open the queue"
           >
             {queuedFailed} queued/failed ▸
@@ -47,7 +47,7 @@ export default function CoverageStrip({
       <button
         type="button"
         onClick={onOpenMissingSpeakers}
-        className="underline-offset-2 hover:underline hover:text-foreground"
+        className="underline-offset-2 hover:underline hover:text-foreground max-md:min-h-11 max-md:inline-flex max-md:items-center"
       >
         {missingSpeakers} missing speakers ▸
       </button>
