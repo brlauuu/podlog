@@ -131,9 +131,20 @@ services:
         APP_VERSION: ${APP_VERSION:-}
     # Deliberately NOT loopback-bound (#952), unlike db/pipeline/ollama above.
     # This is the user-facing UI and being able to open Podlog from a phone or
-    # another machine on the LAN is a reasonable thing to want. It is read-
-    # mostly and does not expose the API keys the settings endpoint holds.
-    # Change this to 127.0.0.1:3000:3000 if you only ever browse from this host.
+    # another machine on the LAN is a reasonable thing to want.
+    #
+    # Know what that means before leaving it: this is NOT a read-only viewer.
+    # There is no login, and the web app forwards writes to the pipeline API on
+    # your behalf, so anyone who can open port 3000 -- every device on the
+    # network, guests included -- has full control of Podlog: add and delete
+    # feeds, delete episodes and transcripts, delete backups, upload audio,
+    # trigger re-processing, change every setting. API keys are the one
+    # exception; they are masked when read back.
+    #
+    # So the trust boundary is the network, not the host. See "Security model"
+    # in docs/guide/01-installation.md (#960, #988), which is the source this
+    # summarises. Change this to 127.0.0.1:3000:3000 if you only ever browse
+    # from this host.
     ports:
       - "3000:3000"
     environment:
