@@ -102,36 +102,14 @@ source is the supported path.
 ### Updating
 
 ```bash
-make update                  # follow your channel
+make update                  # move to the newest release
 make update VERSION=0.10.0   # pin an exact version, or go back to one
 ```
 
-`make update` does the things that are easy to forget:
-
-1. **Refuses if you have uncommitted changes**, since updating moves `HEAD`.
-2. **Drains the queue.** The worker handles one episode at a time and a
-   transcription runs for minutes; restarting mid-job loses that work.
-3. **Takes a database backup first**, and refuses to continue without one.
-   Migrations run when the pipeline starts, so this is the only thing standing
-   between a bad migration and your transcripts.
-4. **Moves, pulls and restarts.**
-5. **Reports configuration drift** — settings the new version's `.env.example`
-   lists that your `.env` does not set. It never edits `.env`, which holds your
-   passwords and API keys. Run it on its own with `make env-diff`.
-
-If anything goes wrong it prints the exact command to get back:
-
-```
-make restore-db DATE=2026-08-27
-```
-
-Rolling back means restoring that dump and then `make update VERSION=<the one
-you were on>`. Not `alembic downgrade` — the downgrade paths have never been
-exercised and are not a supported route.
-
-Set `PODLOG_CHANNEL` in `.env` to choose what `make update` follows: `stable`
-for the newest release, or `edge` to track `main` (which rebuilds from source
-rather than pulling).
+`make update` drains the queue, takes a database backup and refuses to
+continue without one, moves, pulls, restarts, and prints the exact restore
+command if anything fails. See [Updating](20-updating.md) for what each step
+protects against, channels, rollback and the amd64-only note.
 
 `make up` and `make up-release` are deliberately separate: `make up` never
 contacts the registry, so it always runs the code in your working copy, even
