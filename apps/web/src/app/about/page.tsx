@@ -159,7 +159,7 @@ export default async function AboutPage() {
         )}
         <div className="mx-auto w-full max-w-2xl space-y-10 [&_h1]:scroll-mt-20 [&_h2]:scroll-mt-20">
           {aboutContent ? (
-            <article className="prose prose-sm dark:prose-invert max-w-none leading-7">
+            <article className="prose prose-sm dark:prose-invert max-w-none leading-7 prose-code:break-words prose-pre:overflow-x-auto prose-table:block prose-table:overflow-x-auto">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw]}
@@ -177,7 +177,7 @@ export default async function AboutPage() {
 
           {changelogContent && (
             <section className="border-t pt-8">
-              <article className="prose prose-sm dark:prose-invert max-w-none leading-7">
+              <article className="prose prose-sm dark:prose-invert max-w-none leading-7 prose-code:break-words prose-pre:overflow-x-auto prose-table:block prose-table:overflow-x-auto">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}

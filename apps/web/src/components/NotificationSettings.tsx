@@ -201,7 +201,9 @@ export default function NotificationSettings() {
       </div>
 
       <Tabs defaultValue="notifications">
-        <TabsList className="mb-6">
+        {/* #989: h-10 inline-flex kept four triggers on one unwrappable row,
+            which overflowed below ~420px. Allowed to wrap instead. */}
+        <TabsList className="mb-6 h-auto flex-wrap">
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="inference">Inference</TabsTrigger>
           <TabsTrigger value="prompts">Prompts</TabsTrigger>

@@ -49,7 +49,12 @@ function StageBar({
   onFilterChange: (stage: string | null) => void;
 }) {
   return (
-    <div className="flex gap-0.5 rounded-lg overflow-hidden">
+    // #989: eleven stage buttons in one row. flex-1 children default to
+    // min-width:auto, so below ~600px their labels stopped fitting and the
+    // bar pushed the whole page into horizontal scroll. The bar now scrolls
+    // inside itself: still one row, still distributed when there is room.
+    <div className="overflow-x-auto rounded-lg">
+      <div className="flex gap-0.5 min-w-full">
       {BAR_STAGES.map((s) => {
         const count = counts[s.key] || 0;
         const dimmed = count === 0 && activeFilter !== s.key;
@@ -57,7 +62,7 @@ function StageBar({
         return (
           <button
             key={s.key}
-            className="flex-1 text-center py-2 px-1 transition-all"
+            className="flex-1 min-w-[62px] text-center py-2 px-1 transition-all"
             style={{
               background: isActive ? s.color : s.bg,
               opacity: dimmed ? 0.4 : activeFilter && !isActive ? 0.5 : 1,
@@ -81,6 +86,7 @@ function StageBar({
           </button>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -292,14 +298,18 @@ export default function QueueStatus() {
     <div className="space-y-4">
       <StageBar counts={counts} activeFilter={stageFilter} onFilterChange={setStageFilter} />
 
-      {/* Search bar + summary */}
-      <div className="flex items-center gap-3">
+      {/* Search bar + summary. #989: the summary is whitespace-nowrap and sat
+          beside a flex-1 input, so together they were wider than a phone and
+          pushed the page into horizontal scroll. Allowed to wrap onto its own
+          line instead; the nowrap is worth keeping so the counts never split
+          mid-phrase. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <input
           type="text"
           placeholder="Search episodes..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 px-3 py-1.5 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+          className="flex-1 min-w-[12rem] px-3 py-1.5 text-sm rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
         />
         <span className="text-xs text-muted-foreground whitespace-nowrap">
           {activeCount} active · {failedCount} failed{stuckCount > 0 ? ` · ${stuckCount} stuck` : ""} · {doneCount} done

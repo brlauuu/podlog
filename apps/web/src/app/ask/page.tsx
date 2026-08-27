@@ -357,10 +357,12 @@ export default function AskPage() {
           {/* Settings row below input */}
           <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
             {/* Model selector */}
-            <div className="flex items-center gap-1.5">
+            {/* #989: min-w-0 + max-w-full, or the select sizes itself to its
+                longest option and drags the row past the viewport. */}
+            <div className="flex items-center gap-1.5 min-w-0 max-w-full">
               <label
                 htmlFor="model-select"
-                className="text-muted-foreground"
+                className="text-muted-foreground shrink-0"
               >
                 Model:
               </label>
@@ -368,7 +370,7 @@ export default function AskPage() {
                 id="model-select"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+                className="min-w-0 max-w-full truncate text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
               >
                 {modelsFor(ragProvider).map((m) => (
                   <option key={m.value} value={m.value}>

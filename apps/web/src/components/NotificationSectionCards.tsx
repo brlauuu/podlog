@@ -207,12 +207,12 @@ export function TelegramNotificationCard({
             Open Telegram and search for <strong>@BotFather</strong>
           </li>
           <li>
-            Send <code className="bg-muted px-1 rounded text-xs">/newbot</code>{" "}
+            Send <code className="bg-muted px-1 rounded text-xs break-all">/newbot</code>{" "}
             and follow the prompts to create a bot
           </li>
           <li>
             Copy the <strong>bot token</strong> (looks like{" "}
-            <code className="bg-muted px-1 rounded text-xs">
+            <code className="bg-muted px-1 rounded text-xs break-all">
               123456:ABC-DEF...
             </code>
             ) and paste it below
@@ -220,14 +220,14 @@ export function TelegramNotificationCard({
           <li>Start a chat with your new bot (send it any message)</li>
           <li>
             Visit{" "}
-            <code className="bg-muted px-1 rounded text-xs">
+            <code className="bg-muted px-1 rounded text-xs break-all">
               {"https://api.telegram.org/bot<TOKEN>/getUpdates"}
             </code>{" "}
             in your browser
           </li>
           <li>
             Find{" "}
-            <code className="bg-muted px-1 rounded text-xs">
+            <code className="bg-muted px-1 rounded text-xs break-all">
               {'"chat":{"id":123456789}'}
             </code>{" "}
             in the response — that&apos;s your <strong>Chat ID</strong>
@@ -305,10 +305,10 @@ export function EmailNotificationCard({
           <li>
             For <strong>Gmail</strong>: enable 2FA, then create an App Password
             in Google account settings. Use{" "}
-            <code className="bg-muted px-1 rounded text-xs">
+            <code className="bg-muted px-1 rounded text-xs break-all">
               smtp.gmail.com
             </code>{" "}
-            port <code className="bg-muted px-1 rounded text-xs">587</code>{" "}
+            port <code className="bg-muted px-1 rounded text-xs break-all">587</code>{" "}
             with TLS enabled
           </li>
           <li>
