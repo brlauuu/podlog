@@ -129,6 +129,50 @@ for (const vp of VIEWPORTS) {
       });
     }
 
+    test("navbar controls are big enough to tap", async ({ page }) => {
+      // #989: 44px is what iOS and Android both ask for. Scoped to the navbar
+      // deliberately -- it is the chrome present on every page, and it is
+      // where the dark-mode toggle sat at 18px.
+      //
+      // NOT applied site-wide on purpose: /about renders the changelog, which
+      // is ~480 inline prose links. A blanket rule would fail there forever
+      // and be silenced, which is worse than not having it. The rest of the
+      // sweep is tracked on the issue rather than pretended at here.
+      await page.goto("/search");
+      await page.locator("nav").first().waitFor();
+      // Wait for hydration. Before it, DarkModeToggle is an SSR placeholder
+      // <div>, not a <button> -- so this check found only the menu button and
+      // passed while the 18px toggle it was written for was not even present.
+      await page.getByRole("button", { name: /switch to (light|dark) mode/i }).waitFor();
+
+      const tooSmall = await page.evaluate(() => {
+        const nav = document.querySelector("nav")!;
+        const bad: string[] = [];
+        nav.querySelectorAll("button").forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) return; // not shown at this width
+          if (r.height < 44) {
+            bad.push(
+              `${el.getAttribute("aria-label") || el.textContent?.trim() || "<button>"} = ${Math.round(r.height)}px`,
+            );
+          }
+        });
+        return bad;
+      });
+      const measured = await page.evaluate(() => {
+        let n = 0;
+        document.querySelector("nav")!.querySelectorAll("button").forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) n += 1;
+        });
+        return n;
+      });
+
+      // Both the menu button and the dark-mode toggle must have been measured.
+      expect(measured, "fewer navbar buttons than expected were measured").toBeGreaterThanOrEqual(2);
+      expect(tooSmall, "navbar controls smaller than a fingertip").toEqual([]);
+    });
+
     test("no table is silently clipped instead of scrolling", async ({ page }) => {
       // #989: a table that outgrows its box should scroll, not vanish. The
       // queue's two tables sat in `overflow-hidden` wrappers (there for the

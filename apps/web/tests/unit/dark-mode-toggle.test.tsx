@@ -98,3 +98,14 @@ describe("DarkModeToggle", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("DarkModeToggle — touch target (#989)", () => {
+  // The tap area used to be the 18px image itself, on every page. The icon is
+  // still 18px; only the area a finger has to hit changed.
+  it("offers a 44px tap area", () => {
+    render(<DarkModeToggle />);
+    const btn = screen.getByRole("button");
+    expect(btn.className).toContain("h-11");
+    expect(btn.className).toContain("w-11");
+  });
+});
