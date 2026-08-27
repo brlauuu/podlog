@@ -335,7 +335,7 @@ export default function AskPage() {
               <button
                 type="submit"
                 disabled={!question.trim() || isProcessing}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                className="p-1.5 max-md:min-h-11 max-md:min-w-11 max-md:inline-flex max-md:items-center max-md:justify-center rounded-md text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
               >
                 <ArrowRight size={18} />
               </button>
@@ -370,7 +370,7 @@ export default function AskPage() {
                 id="model-select"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="min-w-0 max-w-full truncate text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+                className="min-w-0 max-w-full truncate text-sm border border-input rounded-md px-2 py-1 max-md:min-h-11 bg-background text-foreground"
               >
                 {modelsFor(ragProvider).map((m) => (
                   <option key={m.value} value={m.value}>

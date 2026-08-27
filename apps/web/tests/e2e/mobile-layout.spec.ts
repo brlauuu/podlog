@@ -129,6 +129,58 @@ for (const vp of VIEWPORTS) {
       });
     }
 
+    test("our own controls are big enough to tap", async ({ page }) => {
+      // #989: the site-wide sweep, with two categories excluded on purpose.
+      //
+      //  - Prose and inline links. /about renders the changelog and /docs the
+      //    guide body: ~525 inline links between them. A 44px rule on body
+      //    text is not what the guideline means, and a check that fails
+      //    forever gets silenced.
+      //  - Plotly's modebar. ~27 buttons at 22px, injected by the library, not
+      //    ours to restyle. They are hidden below md: instead -- see
+      //    PlotlyChart.tsx.
+      //
+      // What remains is the controls Podlog itself renders as chrome.
+      const PAGES_WITH_CONTROLS = ["/", "/search", "/ask", "/queue", "/feeds", "/podcasts", "/settings", "/meta-analysis"];
+      const offenders: string[] = [];
+      let measured = 0;
+
+      for (const path of PAGES_WITH_CONTROLS) {
+        await page.goto(path);
+        await page.locator("nav").first().waitFor();
+        await page.waitForLoadState("networkidle");
+        await page.waitForTimeout(1200); // charts and async panels
+
+        const found = await page.evaluate((p) => {
+          const bad: string[] = [];
+          let seen = 0;
+          document.querySelectorAll("button, select, a[role=button], input[type=checkbox]").forEach((el) => {
+            const r = el.getBoundingClientRect();
+            if (r.width === 0 || r.height === 0) return;
+            if (el.closest("article, .prose, p, li, aside")) return;   // prose
+            if (el.closest(".js-plotly-plot, .modebar")) return;        // third-party
+            seen += 1;
+            // A checkbox wrapped in a <label> is tapped via the label -- that
+            // is the target, and a 44px checkbox would look absurd. Measure
+            // what the finger actually hits.
+            const label = el.closest("label");
+            const box = label ? label.getBoundingClientRect() : r;
+            if (box.height < 44) {
+              const name = (el.getAttribute("aria-label") || label?.textContent || el.textContent || "").trim().slice(0, 40);
+              bad.push(`${p} — "${name}" ${Math.round(box.height)}px`);
+            }
+          });
+          return { bad, seen };
+        }, path);
+
+        offenders.push(...found.bad);
+        measured += found.seen;
+      }
+
+      expect(measured, "no controls were measured at all").toBeGreaterThan(20);
+      expect(offenders, "controls smaller than a fingertip").toEqual([]);
+    });
+
     test("navbar controls are big enough to tap", async ({ page }) => {
       // #989: 44px is what iOS and Android both ask for. Scoped to the navbar
       // deliberately -- it is the chrome present on every page, and it is

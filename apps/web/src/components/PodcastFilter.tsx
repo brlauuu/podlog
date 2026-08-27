@@ -52,7 +52,7 @@ export default function PodcastFilter({
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={loading && !hasAnyOptions}
-        className="flex items-center gap-1.5 text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground hover:bg-accent/30 transition-colors"
+        className="flex items-center gap-1.5 text-sm border border-input rounded-md px-2 py-1 max-md:min-h-11 bg-background text-foreground hover:bg-accent/30 transition-colors"
       >
         <span className="text-muted-foreground">Source:</span>
         {loading && !hasAnyOptions

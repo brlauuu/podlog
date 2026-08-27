@@ -10,7 +10,7 @@ export default function InfoBlock() {
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex items-center gap-2 text-left w-full font-medium"
+        className="flex items-center gap-2 text-left w-full font-medium max-md:min-h-11"
       >
         <span aria-hidden="true">{open ? "▾" : "▸"}</span>
         What do these charts show?

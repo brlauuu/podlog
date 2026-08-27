@@ -39,9 +39,15 @@ export default function HelpPopover({ title, children }: HelpPopoverProps) {
             setPinned(nextPinned);
             setOpen(nextPinned);
           }}
-          className="h-5 w-5 rounded-full border border-input text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
+          // #989: the button carries the 44px tap area on a phone; the ring
+          // stays 20px. Growing the circle itself to 44px would put a heavy
+          // disc next to the page heading, so the visual and the target are
+          // separated rather than compromised.
+          className="inline-flex items-center justify-center h-5 w-5 max-md:h-11 max-md:w-11 text-muted-foreground hover:text-foreground transition-colors"
         >
-          ?
+          <span className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-input text-xs font-semibold hover:bg-accent/30">
+            ?
+          </span>
         </button>
         {open && (
           <div

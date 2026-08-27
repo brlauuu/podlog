@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { Loader2 } from "lucide-react";
 import type { Data, Layout, Config } from "plotly.js";
 import type { PlotParams } from "react-plotly.js";
@@ -42,6 +42,21 @@ interface Props {
 }
 
 export default function PlotlyChart({ data, layout, config, onPointClick, height = 360 }: Props) {
+  // Tailwind's md: is 768px. Matched in JS because Plotly's modebar is not
+  // ours to style with a class.
+  const [isNarrow, setIsNarrow] = useState(false);
+  useEffect(() => {
+    // Guarded: matchMedia is missing in jsdom and in any other non-browser
+    // consumer. Without this the whole chart throws rather than falling back
+    // to desktop behaviour -- it took out six existing tests when added.
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsNarrow(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   const template = usePlotlyTheme();
 
   const themeLayout: Partial<Layout> = template === "plotly_dark"
@@ -88,7 +103,16 @@ export default function PlotlyChart({ data, layout, config, onPointClick, height
           legend: { ...themeLayout.legend, ...layout?.legend },
           hoverlabel: { ...themeLayout.hoverlabel, ...layout?.hoverlabel },
         }}
-        config={{ displaylogo: false, responsive: true, ...config }}
+        // #989: the modebar is nine 22px buttons per chart -- 27 unhittable
+        // targets on a phone, for interactions (box select, lasso) that need a
+        // pointer regardless. Hidden below md: rather than enlarged. An
+        // explicit `config.displayModeBar` from a caller still wins.
+        config={{
+          displaylogo: false,
+          responsive: true,
+          displayModeBar: isNarrow ? false : undefined,
+          ...config,
+        }}
         useResizeHandler
         style={{ width: "100%", height: "100%" }}
         onClick={(ev) => {

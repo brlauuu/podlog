@@ -189,7 +189,7 @@ export default function NotificationSettings() {
   }
 
   const actionButtonClass =
-    "px-5 py-2 rounded-md bg-action text-action-foreground text-sm font-medium hover:bg-action/90 disabled:opacity-50";
+    "px-5 py-2 max-md:min-h-11 rounded-md bg-action text-action-foreground text-sm font-medium hover:bg-action/90 disabled:opacity-50";
 
   return (
     <div>

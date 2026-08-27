@@ -76,7 +76,7 @@ export default function ExploreStatusPanel() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+          className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline max-md:min-h-11 max-md:inline-flex max-md:items-center"
           aria-expanded={open}
         >
           {open
