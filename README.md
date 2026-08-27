@@ -35,11 +35,6 @@
 
 ## Quick Start
 
-> **From v1.0.0 onward.** Published images are tagged on release, so until the
-> first `v1.0.0` tag exists the `make up-release` step below has nothing to
-> pull. Build from source in the meantime — see
-> [Development install](#development-install).
-
 ```bash
 # 1. Clone a released version
 git clone --depth 1 --branch v1.0.0 https://github.com/brlauuu/podlog.git

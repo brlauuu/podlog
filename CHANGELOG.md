@@ -2,7 +2,7 @@
 
 All notable changes to Podlog are documented here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Pre-v1 versions follow `0.x.y` and may break compatibility between minor bumps.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html). From 1.0.0 onward a major bump means something you have to act on — a removed or renamed setting, a migration that cannot be undone by restoring the previous backup, or a newly required external service. The `0.x` sections below predate that promise.
 
 Each release section groups changes as:
 
@@ -20,6 +20,8 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+## 1.0.0 — 2026-08-27
+
 ### Minor changes
 - Settings now shows the address for reaching Podlog from a phone or another computer, alongside the warning that anyone who can open it has full control. It was previously printed once by `make up`, to a terminal that scrolls away — and since the address is assigned by your router, the moment it is most likely to have changed is the moment you have no record of the old one. The panel is hidden entirely when Podlog is reachable from this machine only. ([#1012](https://github.com/brlauuu/podlog/issues/1012))
 - Podlog can tell you when a newer version has been released, showing a link in the footer. It is **off by default** and stays that way unless you set `UPDATE_CHECK_ENABLED=true` — Podlog does not contact anything you have not asked it to. When on, the machine running Podlog checks roughly every six hours, not your browser and not on every page view, and it never installs anything: updating is still `make update`, run by you. If the machine is offline or GitHub is unreachable, nothing is shown rather than an error. ([#937](https://github.com/brlauuu/podlog/issues/937))
@@ -27,7 +29,6 @@ fresh empty `Unreleased` is left at the top.
 - `make update` updates a running install without you having to remember the order. It refuses to start if the queue is busy or you have uncommitted changes, takes a database backup and refuses to go on without one, moves to the new version, pulls the images, restarts, and tells you which settings the new version knows about that your configuration does not. If anything fails it prints the exact command to restore the backup it just took. `make update VERSION=0.10.0` pins a version, which is also how you go back to an earlier one. ([#937](https://github.com/brlauuu/podlog/issues/937))
 - `make env-diff` reports settings your `.env` is missing or no longer needs, without ever editing it. ([#937](https://github.com/brlauuu/podlog/issues/937))
 - You can now start Podlog from a published image instead of building it yourself: `make up-release` pulls a released build and starts it, no compiling. Set `PODLOG_VERSION` in `.env` to `stable`, `edge`, or an exact version like `0.10.0` — which is also how you go back to an older one. Images are for 64-bit Intel/AMD machines only; on anything else, build from source as before. `make up` is unchanged and still runs whatever you have built locally. ([#937](https://github.com/brlauuu/podlog/issues/937))
-
 ## 0.10.0 — 2026-08-27
 
 ### Major changes
