@@ -1,4 +1,16 @@
 services:
+# Phase 2 of #937: an `image:` alongside each `build:`, so one compose file
+# serves both paths instead of a release copy that silently drifts from the
+# real one.
+#
+#   make build && make up   -- builds from source, tags the result with the
+#                              name below. The development path, unchanged.
+#   make up-release         -- pulls the published image and starts without
+#                              building. The user path.
+#
+# PODLOG_VERSION selects which published image: `stable` (the newest release),
+# `edge` (current main), or an exact `X.Y.Z`. It has no effect when you build
+# locally -- the build just gets tagged with whatever it resolves to.
   db:
     image: pgvector/pgvector:pg15
     environment:
@@ -21,6 +33,7 @@ services:
       retries: 5
 
   pipeline:
+    image: ghcr.io/brlauuu/podlog-pipeline:${PODLOG_VERSION:-stable}
     build:
       context: ./apps/pipeline
       dockerfile: Dockerfile.control
@@ -78,6 +91,7 @@ services:
       start_period: 30s
 
   worker:
+    image: ghcr.io/brlauuu/podlog-worker:${PODLOG_VERSION:-stable}
     build:
       context: ./apps/pipeline
       dockerfile: Dockerfile.worker
@@ -118,6 +132,7 @@ services:
           memory: 20g
 
   web:
+    image: ghcr.io/brlauuu/podlog-web:${PODLOG_VERSION:-stable}
     build:
       # Context is the repo root so the Dockerfile can read the VERSION file
       # directly (a root .dockerignore keeps the context small).
@@ -185,6 +200,7 @@ services:
   # individual buckets; set all three to 0 to opt out entirely.
   # Backups land on the host at ./backups/ (gitignored).
   backup:
+    image: ghcr.io/brlauuu/podlog-backup:${PODLOG_VERSION:-stable}
     build: ./apps/backup
     environment:
       POSTGRES_HOST: db

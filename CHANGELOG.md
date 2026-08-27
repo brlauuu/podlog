@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+- You can now start Podlog from a published image instead of building it yourself: `make up-release` pulls a released build and starts it, no compiling. Set `PODLOG_VERSION` in `.env` to `stable`, `edge`, or an exact version like `0.10.0` — which is also how you go back to an older one. Images are for 64-bit Intel/AMD machines only; on anything else, build from source as before. `make up` is unchanged and still runs whatever you have built locally. ([#937](https://github.com/brlauuu/podlog/issues/937))
+
 ## 0.10.0 — 2026-08-27
 
 ### Major changes
