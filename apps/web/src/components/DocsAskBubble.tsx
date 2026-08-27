@@ -17,7 +17,6 @@ import { BookOpen, Loader2, Send, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { citationHref, citationSourceLabel } from "@/lib/docs-retrieval";
-import { DEFAULT_RAG_MODEL } from "@/lib/rag-models";
 
 type StreamStatus = "idle" | "connecting" | "streaming" | "error";
 
@@ -89,9 +88,13 @@ export default function DocsAskBubble() {
         const resp = await fetch("/api/docs/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          // No `model` on purpose (#990). The pipeline resolves it from
+          // Settings: rag_provider chooses local vs Fireworks, then
+          // rag_local_model / fireworks_chat_model chooses the model. Pinning
+          // one here would win over `model or runtime.get("rag_local_model")`
+          // in api/ask.py and silently ignore the configured local model.
           body: JSON.stringify({
             question: q,
-            model: DEFAULT_RAG_MODEL,
             history: priorHistory,
           }),
           signal: controller.signal,

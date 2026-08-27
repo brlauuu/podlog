@@ -115,6 +115,22 @@ describe("DocsAskBubble (#990)", () => {
     expect(JSON.parse(init.body as string).question).toBe("how do I add a feed?");
   });
 
+  it("does not pin a model, so Settings decides the provider and model", async () => {
+    // The pipeline resolves: rag_provider picks local vs Fireworks, then
+    // rag_local_model / fireworks_chat_model picks the model. Sending a
+    // model here wins over `model or runtime.get("rag_local_model")` in
+    // api/ask.py, silently ignoring the operator's configured local model.
+    mockAsk(`event: done\ndata: {}\n\n`);
+
+    render(<DocsAskBubble />);
+    openAndAsk("anything");
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const sent = JSON.parse(init.body as string);
+    expect(sent.model).toBeUndefined();
+  });
+
   it("deep-links a guide citation to its heading", async () => {
     mockAsk(
       `event: sources\ndata: [{"title":"A note on memory","source":"guide","slug":"19-inference-providers","anchor":"a-note-on-memory","repo_path":"docs/guide/19-inference-providers.md","text":"..."}]\n\n` +

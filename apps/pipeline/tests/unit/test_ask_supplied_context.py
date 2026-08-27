@@ -222,3 +222,72 @@ class TestSuppliedSystemPrompt:
             )
 
         assert captured["system_prompt"] == "STORED"
+
+
+class TestProviderRoutingOnTheContextPath:
+    """#990: the docs path must obey the same Settings as transcript Ask.
+
+    Provider comes from rag_provider, model from rag_local_model /
+    fireworks_chat_model. A caller that pins a model wins over the stored
+    one -- which is why the docs bubble sends none.
+    """
+
+    async def _drain(self, gen):
+        return [frame async for frame in gen]
+
+    def _section(self):
+        return ContextSection(
+            title="Memory", source="guide", slug="19-inference-providers",
+            anchor=None, repo_path="docs/guide/19-inference-providers.md",
+            text="Whisper is unloaded before pyannote loads.",
+        )
+
+    async def _resolved_model(self, runtime, model=None):
+        from app.api import ask as ask_mod
+
+        captured = {}
+
+        async def _fake_stream(messages, model=None, runtime=None):
+            captured["model"] = model
+            yield "x"
+
+        with (
+            patch.object(ask_mod, "SessionLocal", return_value=MagicMock()),
+            patch.object(ask_mod, "get_runtime_inference_settings", return_value=runtime),
+            patch.object(ask_mod, "check_model_available", return_value=True),
+            patch.object(ask_mod, "get_prompt", return_value="SYS"),
+            patch.object(ask_mod, "stream_response", _fake_stream),
+        ):
+            await self._drain(
+                ask_mod._stream_ask(
+                    "why?", model, None, context=[self._section()]
+                )
+            )
+        return captured["model"]
+
+    @pytest.mark.asyncio
+    async def test_unpinned_uses_the_configured_local_model(self):
+        got = await self._resolved_model(
+            {"rag_provider": "local", "rag_local_model": "phi3:mini"}
+        )
+        assert got == "phi3:mini"
+
+    @pytest.mark.asyncio
+    async def test_unpinned_uses_the_configured_fireworks_model(self):
+        got = await self._resolved_model(
+            {
+                "rag_provider": "fireworks",
+                "fireworks_api_key": "fw-key",
+                "fireworks_chat_model": "accounts/fireworks/models/llama-v3p1-70b",
+            }
+        )
+        assert got == "accounts/fireworks/models/llama-v3p1-70b"
+
+    @pytest.mark.asyncio
+    async def test_a_pinned_model_overrides_the_configured_one(self):
+        """This is the trap the bubble avoids by sending no model."""
+        got = await self._resolved_model(
+            {"rag_provider": "local", "rag_local_model": "phi3:mini"},
+            model="qwen2.5:3b",
+        )
+        assert got == "qwen2.5:3b"

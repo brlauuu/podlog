@@ -38,9 +38,11 @@ It is separate from [Ask AI](12-rag-search.md), which searches your podcast
 transcripts. This one never looks at your episodes; that one never looks at the
 documentation.
 
-It uses the same local model as Ask AI, so it works on a local-only install. Only
-the handful of sections relevant to your question are sent to the model, not the
-whole manual.
+It uses the same provider and model as [Ask AI](12-rag-search.md) — whatever you
+have set under **Settings → Inference**. Switching that between local inference
+and Fireworks switches this too; there is no separate setting to keep in step.
+Only the handful of sections relevant to your question are sent to the model, not
+the whole manual, so it works on a local-only install.
 
 ## Quick Start
 
