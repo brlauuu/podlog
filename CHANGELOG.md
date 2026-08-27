@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Internal
+- Corrected a comment in the Docker configuration that described the web interface as read-mostly when justifying why it is reachable from the local network. It is not: there is no login and it forwards writes, which is what the security documentation says a few files away. The comment sits directly above the setting it justifies, so it was the first thing anyone would read when deciding whether that exposure was acceptable. ([#1012](https://github.com/brlauuu/podlog/issues/1012))
+
 ### Fixes
 - Buttons, filters, tabs and checkboxes across the app are now sized for a fingertip on a phone, including the Settings tabs, the search and Ask filters, the podcast chips on Meta-Analysis and the notification form. Desktop is unchanged.
 - The chart toolbars on Meta-Analysis are hidden on a phone. Each chart added nine tiny buttons for zoom, pan and lasso-select — none of them usable with a finger, and they cluttered a screen that has little room to spare. They still appear on a larger screen. ([#989](https://github.com/brlauuu/podlog/issues/989))
