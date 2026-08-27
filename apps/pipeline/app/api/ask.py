@@ -24,6 +24,7 @@ from app.services.prompts import get_prompt
 from app.services.rag import (
     DEFAULT_MODEL,
     build_prompt,
+    build_prompt_from_text,
     check_model_available,
     chunks_to_sources,
     retrieve_chunks,
@@ -45,6 +46,23 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class ContextSection(BaseModel):
+    """A documentation passage supplied by the caller (#990).
+
+    When AskRequest.context is present the endpoint answers over these
+    instead of retrieving transcript chunks. That makes /api/ask a
+    general-purpose "answer over supplied text" endpoint -- see the
+    consequences section of the docs-Ask design spec.
+    """
+
+    title: str
+    source: str          # guide | reference | prd
+    slug: str
+    anchor: str | None = None
+    repo_path: str
+    text: str
+
+
 class AskRequest(BaseModel):
     question: str
     model: str | None = None
@@ -57,6 +75,9 @@ class AskRequest(BaseModel):
     speaker_display: str | None = None
     # Issue #699: prior turns of the conversation for follow-up awareness.
     history: list[ChatMessage] | None = None
+    # #990: documentation passages supplied by the web app, which is the only
+    # container with the docs mounted. Present => skip transcript retrieval.
+    context: list[ContextSection] | None = None
 
 
 def _sse_event(event: str, data: dict | list | str) -> str:
@@ -71,6 +92,7 @@ async def _stream_ask(
     episode_id: str | None = None,
     speaker_display: str | None = None,
     history: list[dict] | None = None,
+    context: list[ContextSection] | None = None,
 ):
     db = SessionLocal()
     try:
@@ -109,35 +131,62 @@ async def _stream_ask(
             yield _sse_event("done", {})
             return
 
-        # 1. Retrieve relevant chunks
-        chunks = retrieve_chunks(
-            db, question, feed_ids=feed_ids, episode_id=episode_id,
-            speaker_display=speaker_display,
-        )
+        if context:
+            # #990: the caller supplied the passages, so there is nothing to
+            # retrieve. The web app does that, being the only container with
+            # the documentation mounted. An empty list is not special-cased:
+            # the docs route returns its "nothing matched" stream without
+            # calling us at all, so this branch only runs with passages in hand.
+            yield _sse_event(
+                "sources",
+                [
+                    {
+                        "title": c.title,
+                        "source": c.source,
+                        "slug": c.slug,
+                        "anchor": c.anchor,
+                        "repo_path": c.repo_path,
+                        "text": c.text[:200],
+                    }
+                    for c in context
+                ],
+            )
+            messages = build_prompt_from_text(
+                question,
+                [c.text for c in context],
+                system_prompt=get_prompt(db, "ask_page_system"),
+                history=(history or [])[-MAX_HISTORY_MESSAGES:],
+            )
+        else:
+            # 1. Retrieve relevant chunks
+            chunks = retrieve_chunks(
+                db, question, feed_ids=feed_ids, episode_id=episode_id,
+                speaker_display=speaker_display,
+            )
 
-        if not chunks:
-            yield _sse_event("error", {"message": "No relevant transcript excerpts found for your question."})
-            yield _sse_event("done", {})
-            return
+            if not chunks:
+                yield _sse_event("error", {"message": "No relevant transcript excerpts found for your question."})
+                yield _sse_event("done", {})
+                return
 
-        # 2. Send sources first
-        sources = chunks_to_sources(chunks)
-        yield _sse_event("sources", sources)
+            # 2. Send sources first
+            sources = chunks_to_sources(chunks)
+            yield _sse_event("sources", sources)
 
-        # 3. Build prompt and stream response. Issue #643: per-episode Ask
-        # popup and the global /ask page get separate, user-editable system
-        # prompts (defaulting to the same text). Issue #699: prior turns
-        # are inserted between system and user — capped to MAX_HISTORY_MESSAGES
-        # defensively even if the client over-sent.
-        prompt_key = "ask_episode_system" if episode_id else "ask_page_system"
-        system_prompt = get_prompt(db, prompt_key)
-        capped_history = (history or [])[-MAX_HISTORY_MESSAGES:]
-        messages = build_prompt(
-            question,
-            chunks,
-            system_prompt=system_prompt,
-            history=capped_history,
-        )
+            # 3. Build prompt and stream response. Issue #643: per-episode Ask
+            # popup and the global /ask page get separate, user-editable system
+            # prompts (defaulting to the same text). Issue #699: prior turns
+            # are inserted between system and user — capped to MAX_HISTORY_MESSAGES
+            # defensively even if the client over-sent.
+            prompt_key = "ask_episode_system" if episode_id else "ask_page_system"
+            system_prompt = get_prompt(db, prompt_key)
+            capped_history = (history or [])[-MAX_HISTORY_MESSAGES:]
+            messages = build_prompt(
+                question,
+                chunks,
+                system_prompt=system_prompt,
+                history=capped_history,
+            )
 
         async for token in stream_response(messages, model=resolved_model, runtime=runtime):
             yield _sse_event("token", {"content": token})
@@ -175,6 +224,7 @@ async def ask_endpoint(req: AskRequest):
             episode_id=req.episode_id,
             speaker_display=req.speaker_display,
             history=history,
+            context=req.context,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

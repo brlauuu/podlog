@@ -71,6 +71,14 @@ else
 fi
 
 # --- Pipeline --------------------------------------------------------------
+# The test image bakes tests in at build time (COPY . .), so a run against a
+# stale image silently executes the OLD test files and reports a pass. That is
+# not hypothetical: it happened on #990's own branch, where this script printed
+# PASS while running the pre-change suite. Rebuild before the first pytest.
+step "Rebuild test image"
+docker compose -f docker-compose.test.yml build test >/dev/null 2>&1
+res $? "test image rebuilt (baked-in tests are current)"
+
 step "Pipeline Unit Fast"
 docker compose -f docker-compose.test.yml run --rm test pytest \
   tests/unit/test_api.py tests/unit/test_rag_helpers.py tests/unit/test_rag_endpoint.py \

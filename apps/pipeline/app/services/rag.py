@@ -230,6 +230,35 @@ Question: {question}"""
     return messages
 
 
+def build_prompt_from_text(
+    question: str,
+    passages: list[str],
+    system_prompt: str | None = None,
+    history: list[dict] | None = None,
+) -> list[dict]:
+    """Build chat messages from caller-supplied passages (#990).
+
+    Mirrors build_prompt's message shape exactly -- system, then prior
+    turns, then the user turn with context inline -- so the provider paths
+    downstream cannot tell the two apart. Used by /api/ask when the caller
+    supplies the text to answer over (documentation sections, retrieved by
+    the web app, which is the only container with the docs mounted).
+    """
+    context_block = "\n\n---\n\n".join(passages)
+    messages: list[dict] = [
+        {"role": "system", "content": system_prompt or SYSTEM_PROMPT}
+    ]
+    if history:
+        messages.extend(history)
+    messages.append(
+        {
+            "role": "user",
+            "content": f"Context:\n\n{context_block}\n\nQuestion: {question}",
+        }
+    )
+    return messages
+
+
 def chunks_to_sources(chunks: list[ChunkResult]) -> list[dict]:
     """Convert chunks to a serializable sources list for the SSE stream."""
     return [
