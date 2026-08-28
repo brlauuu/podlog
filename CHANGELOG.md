@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+- `make update` no longer blanks the LAN address panel in Settings. The restart at the end of an update did not pass the address through to the web container the way `make up` does, so after every update the panel went empty for anyone browsing from the machine running Podlog — while the update's own closing message printed the address correctly, so nothing looked wrong. ([#1027](https://github.com/brlauuu/podlog/pull/1027))
+
 ## 1.0.1 — 2026-08-28
 
 ### Fixes
