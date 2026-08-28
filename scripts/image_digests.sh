@@ -49,7 +49,13 @@ for ref in $IMAGES; do
   fi
 
   if [ -z "$current" ]; then
-    printf '%-28s pinned %s (registry unreachable)\n' "$ref" "${pinned:0:19}"
+    # Counts as drift, deliberately. Reporting "all clear" when the check
+    # could not run makes a machine without buildx, or without network,
+    # indistinguishable from one that is genuinely up to date -- which is
+    # the failure this script exists to prevent.
+    printf '%-28s COULD NOT CHECK -- pinned %s\n' "$ref" "${pinned:0:19}"
+    printf '                             no answer from the registry; is `docker buildx` available?\n'
+    drift=1
     continue
   fi
 
