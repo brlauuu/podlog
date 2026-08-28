@@ -36,9 +36,10 @@
 ## Quick Start
 
 ```bash
-# 1. Clone a released version
-git clone --depth 1 --branch v1.0.0 https://github.com/brlauuu/podlog.git
+# 1. Clone, and switch to the newest released version
+git clone https://github.com/brlauuu/podlog.git
 cd podlog
+git checkout "$(git tag -l 'v*' --sort=-v:refname | head -1)"
 
 # 2. Configure (set POSTGRES_PASSWORD and HF_TOKEN)
 cp .env.example .env
