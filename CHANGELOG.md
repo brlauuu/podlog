@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- `make update` no longer fails at the backup step with *"no dump dated ... appeared within 60s"*. It was comparing the host's local date against a filename the backup service builds from UTC, so west-to-east of UTC every update run between local midnight and UTC midnight waited for a file that could never exist; it also gave a multi-gigabyte dump only 60 seconds to finish, and would have accepted a half-written or day-old dump as the rollback point. The wait now follows the actual dump, and lasts 30 minutes (override with `BACKUP_WAIT_SECONDS`).
+
 ## 1.0.0 — 2026-08-27
 
 ### Minor changes

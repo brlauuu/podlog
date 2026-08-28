@@ -93,25 +93,74 @@ fi
 # day-old dump costs a day of transcription, which on this hardware is hours
 # of CPU you cannot get back.
 say "Taking a database backup"
-TODAY=$(date +%F)
+# Ask the container for the date, do not compute it here. backup.sh names the
+# dump from `date -u`, while this script runs in the host's timezone, so for
+# everyone east of UTC every `make update` run between local midnight and UTC
+# midnight waited for a file that could never appear.
+TODAY=$(docker compose exec -T backup date -u +%F 2>/dev/null | tr -d '\r')
+if [ -z "$TODAY" ]; then
+  fail "could not reach the backup service."
+  echo "  Refusing to update without a fresh dump."
+  exit 1
+fi
 if ! docker compose exec -T backup rm -f /backups/.last_run 2>/dev/null; then
   fail "could not reach the backup service."
   echo "  Refusing to update without a fresh dump."
   exit 1
 fi
+TRIGGERED_AT=$(docker compose exec -T backup date -u +%s 2>/dev/null | tr -d '\r')
+if [ -z "$TRIGGERED_AT" ]; then
+  fail "could not read the clock in the backup service."
+  echo "  Refusing to update without a fresh dump."
+  exit 1
+fi
 docker compose restart backup >/dev/null 2>&1
 echo "backup triggered; waiting for it to land..."
-for _ in $(seq 1 30); do
-  if docker compose exec -T backup sh -c "ls /backups/db/daily 2>/dev/null | grep -q '$TODAY'"; then
-    break
+# Existence of the file proves nothing, for two reasons. pg_dump writes
+# podlog-<date>.dump.partial and renames it only on success, so anything
+# matching the date can be a half-written file; and if the nightly run already
+# fired, yesterday's completed dump sits at the same path and would satisfy a
+# presence check instantly -- handing you a rollback point from before the
+# update, which is the one thing this step exists to prevent. So require a
+# dump whose mtime is after we triggered the run.
+DUMP="/backups/db/daily/podlog-$TODAY.dump"
+dump_landed() {
+  local mtime
+  mtime=$(docker compose exec -T backup stat -c %Y "$DUMP" 2>/dev/null | tr -d '\r')
+  [ -n "$mtime" ] && [ "$mtime" -ge "$TRIGGERED_AT" ]
+}
+
+# 30 minutes, not 60 seconds. The dump is proportional to the database, and a
+# real install's is gigabytes -- this step legitimately takes minutes.
+BACKUP_WAIT_SECONDS="${BACKUP_WAIT_SECONDS:-1800}"
+case "$BACKUP_WAIT_SECONDS" in
+  ''|*[!0-9]*) fail "BACKUP_WAIT_SECONDS must be a whole number of seconds, got: $BACKUP_WAIT_SECONDS"; exit 1 ;;
+esac
+elapsed=0
+while ! dump_landed && [ "$elapsed" -lt "$BACKUP_WAIT_SECONDS" ]; do
+  # Setting every retention tier to 0 disables backups (#682), and backup.sh
+  # then returns without dumping. Nothing about that state distinguishes
+  # itself from a slow dump, so without this check the update would sit here
+  # for the full 30 minutes before failing. Say it immediately instead.
+  if docker compose logs --tail 20 backup 2>/dev/null | grep -q 'backups disabled'; then
+    fail "backups are disabled (every retention tier is 0)."
+    echo "  The update runs migrations, so it will not proceed with no way back."
+    echo "  Set a daily retention above 0 in Settings, then re-run."
+    exit 1
   fi
-  sleep 2
+  sleep 5
+  elapsed=$((elapsed + 5))
+  if [ $((elapsed % 30)) -eq 0 ]; then
+    printf '  still dumping (%dm%02ds elapsed)\n' $((elapsed / 60)) $((elapsed % 60))
+  fi
 done
-if docker compose exec -T backup sh -c "ls /backups/db/daily 2>/dev/null | grep -q '$TODAY'"; then
+if dump_landed; then
   echo "dump for $TODAY is on disk"
 else
-  fail "no dump dated $TODAY appeared within 60s."
+  fail "no dump dated $TODAY appeared within $((BACKUP_WAIT_SECONDS / 60))m."
   echo "  Check 'docker compose logs backup'. Refusing to continue without one."
+  echo "  If the dump is simply slow, re-run with a longer wait:"
+  echo "    BACKUP_WAIT_SECONDS=3600 make update"
   exit 1
 fi
 
