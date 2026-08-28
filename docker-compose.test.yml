@@ -1,6 +1,11 @@
 services:
   db_test:
-    image: pgvector/pgvector:pg15
+    # Same digest as `db` in docker-compose.yml, pinned for the same reason
+    # (#1028) -- tests should run against the engine they were written
+    # against. Bump both together.
+    #
+    # pgvector/pgvector:pg15 as of 2026-08-28
+    image: pgvector/pgvector@sha256:a947c45cdc5906a1bc951f20a8709e321256343ee0f251e4ae00b5e7def4e6da
     environment:
       POSTGRES_DB: podlog_test
       POSTGRES_USER: postgres
