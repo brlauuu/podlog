@@ -74,7 +74,7 @@ podlog/
 │   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
 │   └── explore/                    # Jupyter DB-exploration container (Dockerfile + requirements.txt; opt-in via `make explore`)
 ├── docs/                           # User-facing documentation and guides
-├── scripts/                        # Operational scripts (health check, docs-sync + npm/node CI gates, release-notes extractor, workflow-injection check)
+├── scripts/                        # Operational scripts (health check, docs-sync + npm/node CI gates, release-notes extractor, workflow-injection check, third-party image digest report)
 └── prds/                           # Specifications and risk register
 ```
 
@@ -158,6 +158,7 @@ make shell-db          # Open psql shell
   This table is itself checked: `check_docs_sync.py` scans `CLAUDE.md` for path mentions and fails CI if any stops existing.
 
 - **Versioning (#936):** `/VERSION` at the repo root is the **only file containing a version**. The git tag is the only other place a version appears, and `scripts/release_notes.py` asserts the two agree before a release publishes. `apps/pipeline/pyproject.toml` and `apps/web/package.json` are both pinned to the `0.0.0` sentinel on purpose — neither is read at runtime, and keeping them "in sync by hand" is exactly how `package.json` drifted five minor versions behind without anything noticing. Do not reintroduce a version number anywhere else.
+- **Third-party images are pinned by digest (#1028):** `db` and `ollama` carry `image: repo@sha256:...`, not a tag. `make update` runs a bare `docker compose pull`, which fetches every service — so a moving tag meant updating Podlog could also move the database engine or the LLM runtime, unannounced, during the operation that also runs migrations. It also left `make update VERSION=X.Y.Z` pinning only four of six containers, which is not much of a rollback. Do not "simplify" these back to tags. `scripts/image_digests.sh` (`make image-digests`) reports what is pinned and whether the upstream tag has moved; bumping one is a normal reviewed change with a changelog line. Use the **manifest-list** digest — `docker buildx imagetools inspect <ref> --format '{{.Manifest.Digest}}'` — never a platform-specific one, which would break every architecture but the one that read it.
 - **Semver policy:** **Major** — a change the operator must act on: a removed or renamed env var, a migration that cannot be rolled back by restoring the previous dump, a new external service requirement (e.g. a newly mandatory API key), or a breaking change to the pipeline API the web app consumes. **Minor** — new user-visible capability, additive env vars with working defaults, additive migrations. **Patch** — fixes, dependency refreshes, docs, internal work.
 - **Releasing:** bump `/VERSION`, graduate `## Unreleased` into a dated section, merge, then push a `vX.Y.Z` annotated tag. `.github/workflows/release.yml` validates and publishes. It refuses to publish if the tag disagrees with `VERSION`, or if `## Unreleased` still holds entries. No fixed calendar — cut a release when `Unreleased` has accumulated user-visible entries and CI is green.
 - **When modifying the design:** Update the relevant PRD and RISKS-AND-GAPS.md. Bump the version number.

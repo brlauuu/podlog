@@ -1,4 +1,4 @@
-.PHONY: up up-release update env-diff up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e ci-local migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs backup-now backup-list restore-db restore-audio
+.PHONY: up up-release update env-diff image-digests up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e ci-local migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs backup-now backup-list restore-db restore-audio
 
 up:             ## Start full stack (builds from source)
 	@# --pull never (#937 phase 2). Once services carry an `image:` pointing at
@@ -7,6 +7,15 @@ up:             ## Start full stack (builds from source)
 	@# pushes `stable` this would silently start the released image instead of
 	@# the tree you have checked out -- your local edits simply would not
 	@# appear. `never` keeps this target meaning "run what is here".
+	@# Pinned third-party images (#1028) must exist locally before `--pull never`
+	@# runs, or compose fails with a bare "No such image: ...@sha256:...". The
+	@# flag is there to stop compose reaching for the published PODLOG images
+	@# over your local build; db and ollama have no `build:` and are pinned, so
+	@# fetching them first honours the flag's intent rather than working around
+	@# it. `|| true` keeps this advisory -- offline with the images already
+	@# present still works, and if they are genuinely missing the `up` below
+	@# reports it.
+	@docker compose pull db ollama 2>/dev/null || true
 	PODLOG_LAN_URL="$$(bash scripts/print-access.sh --url-only)" docker compose up -d --pull never
 	@bash scripts/print-access.sh
 
@@ -15,6 +24,9 @@ update:         ## Update safely: drain, back up, move, pull, restart. VERSION=X
 
 env-diff:       ## Report settings your .env is missing or no longer needs
 	@python3 scripts/env_diff.py
+
+image-digests:  ## Report pinned third-party image digests and whether the tags moved
+	@bash scripts/image_digests.sh
 
 up-release:     ## Start from published images without building (see PODLOG_VERSION)
 	@# Phase 2 of #937. `--no-build` is the point: without it compose would
@@ -26,6 +38,8 @@ up-release:     ## Start from published images without building (see PODLOG_VERS
 	@bash scripts/print-access.sh
 
 up-remote:      ## Start remote-inference profile (Fireworks providers, no Ollama)
+	@# See the note in `up` -- the same pinned-image requirement applies.
+	@docker compose pull db 2>/dev/null || true
 	PODLOG_LAN_URL="$$(bash scripts/print-access.sh --url-only)" docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d --pull never
 	@bash scripts/print-access.sh
 

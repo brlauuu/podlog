@@ -35,7 +35,13 @@ disk. Set `BACKUP_WAIT_SECONDS` if yours needs longer.
 **4. It moves the working copy** — to the newest release tag, to `main` on the
 `edge` channel, or to the tag you pinned with `VERSION=`.
 
-**5. It fetches images** — pulling on `stable`, rebuilding on `edge`.
+**5. It fetches images** — pulling on `stable`, rebuilding on `edge`. The
+pull covers every service, but PostgreSQL and Ollama are pinned to exact image
+digests rather than to moving tags, so updating Podlog cannot also move your
+database engine or your LLM runtime. That matters most for the rollback path:
+`make update VERSION=1.0.0` puts back the same six containers it would have a
+month ago, not whatever `latest` happens to be today. Run `make image-digests`
+to see what is pinned and whether the upstream tags have moved since.
 
 **6. It reports configuration drift.** Settings the new version's
 `.env.example` lists that your `.env` does not set. This is advisory and never

@@ -12,7 +12,16 @@ services:
 # `edge` (current main), or an exact `X.Y.Z`. It has no effect when you build
 # locally -- the build just gets tagged with whatever it resolves to.
   db:
-    image: pgvector/pgvector:pg15
+    # Pinned by digest, not by tag (#1028). `make update` runs a bare
+    # `docker compose pull`, which fetches every service here -- so while this
+    # said `:pg15`, updating Podlog could also move the database engine under
+    # a live data volume, unannounced, during the one operation that also runs
+    # migrations. A digest makes that impossible: the pull can only fetch what
+    # is written here. Bumping it is a normal reviewed change; see
+    # `make image-digests`.
+    #
+    # pgvector/pgvector:pg15 as of 2026-08-28
+    image: pgvector/pgvector@sha256:a947c45cdc5906a1bc951f20a8709e321256343ee0f251e4ae00b5e7def4e6da
     environment:
       POSTGRES_DB: podlog
       POSTGRES_USER: postgres
@@ -113,7 +122,12 @@ services:
         condition: service_healthy  # Ensures migrations are done before worker writes to DB
 
   ollama:
-    image: ollama/ollama:latest
+    # Pinned by digest (#1028). `:latest` was the least bounded thing in the
+    # file -- it could move across major versions during an unrelated Podlog
+    # update. See the note on `db` above.
+    #
+    # ollama/ollama:latest as of 2026-08-28
+    image: ollama/ollama@sha256:075246f72d4109385b4a01c3ac8e9cbd26a0bcb21cd7aa30edbccd24e1b3180c
     # Bound to loopback (#952). Ollama's API is unauthenticated and will run
     # arbitrary prompts against local models for anyone who can reach it.
     ports:
