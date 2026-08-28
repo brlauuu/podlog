@@ -109,6 +109,11 @@ if ! docker compose exec -T backup rm -f /backups/.last_run 2>/dev/null; then
   exit 1
 fi
 TRIGGERED_AT=$(docker compose exec -T backup date -u +%s 2>/dev/null | tr -d '\r')
+if [ -z "$TRIGGERED_AT" ]; then
+  fail "could not read the clock in the backup service."
+  echo "  Refusing to update without a fresh dump."
+  exit 1
+fi
 docker compose restart backup >/dev/null 2>&1
 echo "backup triggered; waiting for it to land..."
 # Existence of the file proves nothing, for two reasons. pg_dump writes
@@ -128,8 +133,21 @@ dump_landed() {
 # 30 minutes, not 60 seconds. The dump is proportional to the database, and a
 # real install's is gigabytes -- this step legitimately takes minutes.
 BACKUP_WAIT_SECONDS="${BACKUP_WAIT_SECONDS:-1800}"
+case "$BACKUP_WAIT_SECONDS" in
+  ''|*[!0-9]*) fail "BACKUP_WAIT_SECONDS must be a whole number of seconds, got: $BACKUP_WAIT_SECONDS"; exit 1 ;;
+esac
 elapsed=0
 while ! dump_landed && [ "$elapsed" -lt "$BACKUP_WAIT_SECONDS" ]; do
+  # Setting every retention tier to 0 disables backups (#682), and backup.sh
+  # then returns without dumping. Nothing about that state distinguishes
+  # itself from a slow dump, so without this check the update would sit here
+  # for the full 30 minutes before failing. Say it immediately instead.
+  if docker compose logs --tail 20 backup 2>/dev/null | grep -q 'backups disabled'; then
+    fail "backups are disabled (every retention tier is 0)."
+    echo "  The update runs migrations, so it will not proceed with no way back."
+    echo "  Set a daily retention above 0 in Settings, then re-run."
+    exit 1
+  fi
   sleep 5
   elapsed=$((elapsed + 5))
   if [ $((elapsed % 30)) -eq 0 ]; then
