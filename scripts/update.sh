@@ -222,10 +222,17 @@ python3 scripts/env_diff.py || true   # advisory: never blocks an update
 # but that also means the migration happens here, which is why step 2 was
 # not optional.
 say "Restarting"
+# PODLOG_LAN_URL has to be set on the `up` that creates the container, exactly
+# as the `up`, `up-release` and `up-remote` Makefile targets do. Restarting
+# without it leaves the web container holding an empty value, which blanks the
+# LAN address panel in Settings (#1012) for anyone browsing from the machine
+# itself -- the case that feature exists for. The update printed the address
+# correctly at the end while failing to pass it in, so nothing looked wrong.
+LAN_URL=$(bash scripts/print-access.sh --url-only 2>/dev/null || true)
 if [ "$CHANNEL" = "edge" ] && [ -z "$PIN" ]; then
-  docker compose up -d --pull never
+  PODLOG_LAN_URL="$LAN_URL" docker compose up -d --pull never
 else
-  docker compose up -d --no-build
+  PODLOG_LAN_URL="$LAN_URL" docker compose up -d --no-build
 fi
 RC=$?
 
