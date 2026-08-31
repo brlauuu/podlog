@@ -65,3 +65,6 @@ apps/web/test-results/
 .superpowers/
 .omx/
 apps/pipeline/coverage.json
+
+# Enola
+.enola/*

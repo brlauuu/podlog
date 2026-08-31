@@ -13,3 +13,5 @@
 examples/*.html
 examples/_*.html
 
+# Trash
+.Trash-0/*
