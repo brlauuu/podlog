@@ -61,6 +61,10 @@ class FeedMeta:
 class FeedPreview:
     feed: "FeedMeta"
     episodes: "list[EpisodeMeta]"
+    # Issue #1031: False when the HTTP fetch failed. Callers must not treat
+    # the resulting empty episode list as "the feed has no new episodes" —
+    # notably, the poller must not stamp last_polled_at on a failed fetch.
+    ok: bool = True
 
 
 @dataclass
@@ -178,8 +182,9 @@ def fetch_feed_and_episodes(url: str) -> FeedPreview:
     Same single-HTTP-call shape as preview_feed, but used by the pipeline
     poll path so feed-level metadata (e.g. itunes_author) gets refreshed
     alongside episode ingestion. Unlike preview_feed, this does not raise
-    on transient fetch failures — it logs and returns an empty result so
-    the periodic poller keeps going.
+    on transient fetch failures — it logs and returns ``ok=False`` so the
+    periodic poller keeps going without mistaking the failure for an
+    empty feed (issue #1031).
     """
     _require_http_url(url)
     try:
@@ -190,6 +195,7 @@ def fetch_feed_and_episodes(url: str) -> FeedPreview:
         return FeedPreview(
             feed=FeedMeta(title=None, description=None, image_url=None, website_url=None),
             episodes=[],
+            ok=False,
         )
 
     parsed = feedparser.parse(resp.text)

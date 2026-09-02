@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+- A feed whose RSS fetch fails is now retried on the next poll cycle instead of waiting out the full `FEED_POLL_INTERVAL_HOURS`. Previously a failed fetch still stamped the "last polled" timestamp and logged as a successful poll that found nothing, so a brief network outage silently delayed new episodes by up to a day with no indication anything had gone wrong. Failed polls now log `poll_feed_failed`, and clicking refresh on a feed reports the error instead of appearing to succeed. ([#1031](https://github.com/brlauuu/podlog/issues/1031))
+
 ### Internal
 - PostgreSQL and Ollama are pinned to exact image digests instead of the moving `pgvector/pgvector:pg15` and `ollama/ollama:latest` tags. `make update` pulls every service, so an update could previously move the database engine or the LLM runtime as a side effect — unannounced, on a live data volume, during the one operation that also runs migrations. It also meant `make update VERSION=X.Y.Z` pinned only four of the six containers, which weakened the rollback path it exists to provide. `make image-digests` reports what is pinned and whether the upstream tags have moved. The first `make up` or `make update` after this recreates the `db` and `ollama` containers once — same image, no version change, no data touched. ([#1028](https://github.com/brlauuu/podlog/issues/1028))
 

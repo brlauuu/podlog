@@ -258,6 +258,48 @@ class TestFeedsEndpoint:
         finally:
             app.dependency_overrides.clear()
 
+    def test_poll_returns_502_when_feed_fetch_fails(self):
+        """Issue #1031: a failed fetch must not look like a successful poll."""
+        from app.database import get_db
+
+        feed = MagicMock()
+        feed.id = "feed-1"
+        feed.mode = "full"
+        feed.paused = False
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = feed
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            with patch(
+                "app.api.feeds._ingest_feed",
+                return_value={"new_episodes": 0, "error": "feed_fetch_failed"},
+            ):
+                resp = client.post("/api/feeds/feed-1/poll")
+            assert resp.status_code == 502
+            assert "unreachable" in resp.json()["detail"].lower()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_poll_returns_202_on_success(self):
+        from app.database import get_db
+
+        feed = MagicMock()
+        feed.id = "feed-1"
+        feed.mode = "full"
+        feed.paused = False
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = feed
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            with patch("app.api.feeds._ingest_feed", return_value={"new_episodes": 2}):
+                resp = client.post("/api/feeds/feed-1/poll")
+            assert resp.status_code == 202
+            assert resp.json() == {"queued": True}
+        finally:
+            app.dependency_overrides.clear()
+
 
 class TestAddFeedEpisodesEndpoint:
     """Issue #487: POST /api/feeds/{id}/episodes — add more episodes to a selective feed."""
