@@ -23,6 +23,13 @@ from app.models import Episode, Feed
 from app.services import rss as rss_service
 from app.tasks.ingest import ingest_feed as _ingest_feed
 
+# Issue #1031: shown when an RSS fetch fails, on both the manual-poll and
+# add-episodes paths. 502, not 422 — the request was fine, the upstream feed
+# was not, and retrying is the right advice.
+_FEED_UNREACHABLE_DETAIL = (
+    "Could not fetch the feed. It may be temporarily unreachable — try again shortly."
+)
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -247,7 +254,11 @@ def poll_feed(feed_id: str, db: Session = Depends(get_db)) -> dict:
             status_code=422,
             detail="Feed is paused. Unpause it before polling for new episodes.",
         )
-    _ingest_feed(feed.id)
+    # Issue #1031: report a fetch failure instead of returning 202 with a
+    # silent no-op, which looked identical to "polled, nothing new".
+    result = _ingest_feed(feed.id)
+    if result.get("error") == "feed_fetch_failed":
+        raise HTTPException(status_code=502, detail=_FEED_UNREACHABLE_DETAIL)
     return {"queued": True}
 
 
@@ -339,6 +350,13 @@ def add_feed_episodes(
 
     result = _ingest_feed(feed_id, selected_guids=new_guids)
     if isinstance(result, dict) and result.get("error"):
+        # Issue #1031: an unreachable feed is an upstream failure, not a bad
+        # request. Without this it surfaced as a 422 whose detail was either the
+        # raw "feed_fetch_failed" code or, before the fetch was checked at all,
+        # a misleading "GUIDs not present in feed" — the GUIDs were fine, the
+        # empty feed was the symptom of a failed fetch.
+        if result["error"] == "feed_fetch_failed":
+            raise HTTPException(status_code=502, detail=_FEED_UNREACHABLE_DETAIL)
         raise HTTPException(status_code=422, detail=result["error"])
 
     queued = int(result.get("new_episodes", 0)) if isinstance(result, dict) else 0

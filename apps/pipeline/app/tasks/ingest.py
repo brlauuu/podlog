@@ -52,6 +52,20 @@ def ingest_feed(feed_id: str, selected_guids: Optional[list[str]] = None) -> dic
         # Single HTTP fetch gets both feed-level metadata (refreshed for
         # PRD-04 B1 person tags) and episode entries.
         preview = rss_service.fetch_feed_and_episodes(feed.url)
+
+        # Issue #1031: a failed fetch returns an empty preview that is otherwise
+        # indistinguishable from "no new episodes". Bail out *before* stamping
+        # last_polled_at — otherwise one transient DNS/HTTP blip silently costs a
+        # whole FEED_POLL_INTERVAL_HOURS before the feed is looked at again.
+        if not preview.ok:
+            # Same action name as the exception path in poll_all_feeds below, so
+            # one grep finds every feed that failed to poll.
+            logger.error(
+                '"action": "poll_feed_failed", "feed_id": "%s", "reason": "feed_fetch_failed"',
+                feed_id,
+            )
+            return {"new_episodes": 0, "error": "feed_fetch_failed"}
+
         episodes_meta = preview.episodes
 
         # Refresh RSS-derived person tags on each poll. When the publisher
@@ -148,13 +162,17 @@ def poll_all_feeds() -> dict:
     try:
         # Issue #23: skip test feeds; #84: skip selective; #743: skip paused
         feeds = db.query(Feed).filter(Feed.mode == "full", Feed.paused.is_(False)).all()
-        results = []
+        failed = 0
         for feed in feeds:
             try:
                 result = ingest_feed(feed.id)
-                results.append(result)
+                # Issue #1031: surface fetch failures in the cycle summary so a
+                # run where every feed failed does not read as a clean poll.
+                if result.get("error"):
+                    failed += 1
             except Exception:
                 logger.exception('"action": "poll_feed_failed", "feed_id": "%s"', feed.id)
-        return {"polled": len(feeds)}
+                failed += 1
+        return {"polled": len(feeds), "failed": failed}
     finally:
         db.close()

@@ -450,6 +450,36 @@ class TestFetchFeedAndEpisodes:
             assert preview.episodes == []
             assert preview.feed.title is None
             assert preview.feed.itunes_author is None
+            # Issue #1031: the empty result must be flagged, so the caller can
+            # tell it apart from a feed that genuinely has no episodes.
+            assert preview.ok is False
+
+    def test_http_status_error_marks_preview_not_ok(self):
+        """A 4xx/5xx is a failed fetch too, not an empty feed."""
+        import httpx
+
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "500", request=MagicMock(), response=MagicMock()
+            )
+            mock_get.return_value = mock_resp
+
+            preview = fetch_feed_and_episodes("https://example.com/feed.xml")
+
+            assert preview.ok is False
+            assert preview.episodes == []
+
+    def test_successful_fetch_is_ok(self):
+        with patch("httpx.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.text = RSS_WITH_AUTHOR_ONLY
+            mock_resp.raise_for_status.return_value = None
+            mock_get.return_value = mock_resp
+
+            preview = fetch_feed_and_episodes("https://example.com/feed.xml")
+
+            assert preview.ok is True
 
 
 class TestParseDuration:

@@ -47,6 +47,8 @@ Selective feeds get an extra **Add episodes** button. It reopens the episode pic
 
 Manual polling is useful when you know a new episode just dropped and don't want to wait for the next automatic poll. Note that polling a Test feed will not pull anything new: Test mode is capped at one episode, so once it has that episode the poll updates the "last polled" timestamp and stops.
 
+**If a poll can't reach the feed** — the show's host is down, or your network is — the "last polled" timestamp is left alone and the feed is tried again on the next cycle, rather than counting the failure as a completed poll and waiting another full interval. A manual refresh reports the error instead of quietly doing nothing. So a feed whose timestamp is older than the poll interval is telling you something real: recent polls have been failing. The worker logs `feed_poll_failed` with the feed id in that case.
+
 ## Pausing a Feed
 
 The pause button on a feed card stops ingestion without deleting anything. A paused feed shows a **Paused** badge, is skipped by automatic polling, and has its refresh icon disabled — the tooltip reads *"Unpause to poll"*. Everything already ingested stays searchable.

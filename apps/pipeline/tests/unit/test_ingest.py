@@ -309,7 +309,108 @@ class TestPausedFeed:
             patch("app.tasks.ingest.SessionLocal", return_value=db),
             patch("app.tasks.ingest.ingest_feed") as mock_ingest,
         ):
+            mock_ingest.return_value = {"new_episodes": 0}
             result = poll_all_feeds()
 
-        assert result == {"polled": 1}
+        assert result == {"polled": 1, "failed": 0}
         mock_ingest.assert_called_once_with("feed-active")
+
+
+class TestFetchFailure:
+    """Issue #1031: a failed fetch must not be mistaken for an empty feed."""
+
+    @staticmethod
+    def _failed_preview() -> FeedPreview:
+        return FeedPreview(
+            feed=FeedMeta(title=None, description=None, image_url=None, website_url=None),
+            episodes=[],
+            ok=False,
+        )
+
+    def test_failed_fetch_does_not_stamp_last_polled_at(self):
+        """The whole point: a transient failure must not consume the poll slot."""
+        db, feed = _make_db(feed_mode="full")
+        feed.last_polled_at = "untouched"
+
+        with (
+            patch("app.tasks.ingest.SessionLocal", return_value=db),
+            patch(
+                "app.tasks.ingest.rss_service.fetch_feed_and_episodes",
+                return_value=self._failed_preview(),
+            ),
+        ):
+            result = ingest_feed("feed-1")
+
+        assert result == {"new_episodes": 0, "error": "feed_fetch_failed"}
+        assert feed.last_polled_at == "untouched"
+        db.commit.assert_not_called()
+
+    def test_failed_fetch_enqueues_nothing(self):
+        db, feed = _make_db(feed_mode="full")
+
+        with (
+            patch("app.tasks.ingest.SessionLocal", return_value=db),
+            patch(
+                "app.tasks.ingest.rss_service.fetch_feed_and_episodes",
+                return_value=self._failed_preview(),
+            ),
+            patch("app.tasks.ingest.job_queue.enqueue") as mock_enqueue,
+        ):
+            ingest_feed("feed-1")
+
+        mock_enqueue.assert_not_called()
+
+    def test_successful_empty_feed_still_stamps_last_polled_at(self):
+        """The contrast case — a genuinely empty feed is not a failure."""
+        db, feed = _make_db(feed_mode="full")
+        feed.last_polled_at = None
+
+        with (
+            patch("app.tasks.ingest.SessionLocal", return_value=db),
+            patch(
+                "app.tasks.ingest.rss_service.fetch_feed_and_episodes",
+                return_value=_preview([]),
+            ),
+        ):
+            result = ingest_feed("feed-1")
+
+        assert result == {"new_episodes": 0}
+        assert feed.last_polled_at is not None
+        db.commit.assert_called_once()
+
+    def test_poll_all_feeds_counts_failed_fetches(self):
+        from app.tasks.ingest import poll_all_feeds
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.all.return_value = [
+            MagicMock(id="feed-ok", paused=False, mode="full"),
+            MagicMock(id="feed-bad", paused=False, mode="full"),
+        ]
+
+        with (
+            patch("app.tasks.ingest.SessionLocal", return_value=db),
+            patch("app.tasks.ingest.ingest_feed") as mock_ingest,
+        ):
+            mock_ingest.side_effect = [
+                {"new_episodes": 1},
+                {"new_episodes": 0, "error": "feed_fetch_failed"},
+            ]
+            result = poll_all_feeds()
+
+        assert result == {"polled": 2, "failed": 1}
+
+    def test_poll_all_feeds_counts_raised_exceptions(self):
+        from app.tasks.ingest import poll_all_feeds
+
+        db = MagicMock()
+        db.query.return_value.filter.return_value.all.return_value = [
+            MagicMock(id="feed-bad", paused=False, mode="full"),
+        ]
+
+        with (
+            patch("app.tasks.ingest.SessionLocal", return_value=db),
+            patch("app.tasks.ingest.ingest_feed", side_effect=RuntimeError("boom")),
+        ):
+            result = poll_all_feeds()
+
+        assert result == {"polled": 1, "failed": 1}
