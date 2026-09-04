@@ -1,4 +1,6 @@
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -8,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.api import ask, backfill, backups, feeds, episodes, queue, health, embed, explore, notifications, hardware, meta_analysis, prompts
 from app.services.events import bus
 from app.services.digest import register_notification_handlers
+from app.services import telegram_bot
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,7 +35,29 @@ __version__ = _read_version()
 
 register_notification_handlers(bus)
 
-app = FastAPI(title="Podlog Pipeline API", version=__version__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Run the Telegram bot's long-poll loop for the life of the process (#1034).
+
+    The loop idles (no network calls) until a bot token and a non-empty
+    allowlist are configured, so this is a no-op on a fresh install.
+    """
+    task = asyncio.create_task(telegram_bot.run_forever(), name="telegram-bot")
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await asyncio.wait_for(task, timeout=5)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
+        except Exception as exc:  # never let a bot error delay shutdown
+            logger.warning('"action": "telegram_bot_shutdown_error", "error": "%s"', exc)
+
+
+app = FastAPI(title="Podlog Pipeline API", version=__version__, lifespan=lifespan)
 
 
 @app.exception_handler(Exception)

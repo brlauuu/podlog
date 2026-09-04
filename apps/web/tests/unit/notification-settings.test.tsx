@@ -13,6 +13,7 @@ global.fetch = mockFetch;
 const defaultSettings = {
   telegram_bot_token: null,
   telegram_chat_id: null,
+  telegram_allowed_user_ids: null,
   notification_email_to: null,
   notification_email_from: "podlog@localhost",
   smtp_host: "host.docker.internal",

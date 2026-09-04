@@ -198,6 +198,9 @@ Delivery settings for pipeline notifications. Telegram credentials are shared wi
 | `NOTIFICATION_FREQUENCY` | `immediate` | When to deliver. One of `immediate`, `daily`, `weekly`. The digest modes batch events instead of sending per-episode. |
 | `NOTIFICATION_EMAIL_TO` | (unset) | Recipient address for email notifications. Email delivery is off unless this is set. |
 | `NOTIFICATION_EMAIL_FROM` | `podlog@localhost` | From address on outgoing notification email. |
+| `TELEGRAM_BOT_TOKEN` | (unset) | Bot token from @BotFather. Telegram delivery is off unless this and `TELEGRAM_CHAT_ID` are set. |
+| `TELEGRAM_CHAT_ID` | (unset) | Chat that receives done/failed notifications and health alerts. |
+| `TELEGRAM_ALLOWED_USER_IDS` | (unset) | Comma-separated numeric Telegram user IDs allowed to send the bot commands (`/queue`, `/help`, …). Empty means the bot never reads messages. See the [notifications guide](guide/09-notifications.md#telegram-bot-commands). |
 
 ### SMTP
 

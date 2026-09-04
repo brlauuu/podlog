@@ -21,6 +21,7 @@ SETTINGS_KEY = "notification_settings"
 _FIELDS = [
     "telegram_bot_token",
     "telegram_chat_id",
+    "telegram_allowed_user_ids",
     "notification_email_to",
     "notification_email_from",
     "smtp_host",
@@ -62,6 +63,7 @@ _SENSITIVE_FIELDS = {
 _NULLABLE_FIELDS = {
     "telegram_bot_token",
     "telegram_chat_id",
+    "telegram_allowed_user_ids",
     "notification_email_to",
     "smtp_user",
     "smtp_password",
@@ -126,6 +128,30 @@ _DIARIZATION_FIELDS = {
 }
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
+
+
+def _normalize_allowed_user_ids(raw) -> str | None:
+    """Validate the Telegram allowlist (#1034): numeric ids, comma-separated.
+
+    Rejects anything that is not a positive integer so a typo cannot silently
+    shrink the list (the bot treats unparsable entries as absent). Returns the
+    canonical "1, 2, 3" form, or None when the list is empty.
+    """
+    if not isinstance(raw, str):
+        raise ValueError("telegram_allowed_user_ids must be a comma-separated string of ids")
+    ids: list[str] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if not part.isdigit():
+            raise ValueError(
+                f"telegram_allowed_user_ids must contain only numeric Telegram user ids, "
+                f"got '{part}'"
+            )
+        if part not in ids:
+            ids.append(part)
+    return ", ".join(ids) if ids else None
 
 
 def _env_defaults() -> dict:
@@ -244,6 +270,14 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
     for key in list(updates.keys()):
         if key in _NULLABLE_FIELDS and isinstance(updates[key], str) and not updates[key].strip():
             updates[key] = None
+
+    if (
+        "telegram_allowed_user_ids" in updates
+        and updates["telegram_allowed_user_ids"] is not None
+    ):
+        updates["telegram_allowed_user_ids"] = _normalize_allowed_user_ids(
+            updates["telegram_allowed_user_ids"]
+        )
 
     if "notification_email_to" in updates and updates["notification_email_to"] is not None:
         emails = [e.strip() for e in updates["notification_email_to"].split(",") if e.strip()]
