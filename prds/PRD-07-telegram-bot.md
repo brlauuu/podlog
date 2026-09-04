@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search
 **Document:** PRD-07 — Telegram bot (inbound long-poll loop, user allowlist, chat commands)
-**Version:** 1.0
-**Status:** Foundation shipped (Issue #1034); commands `/search`, `/ask`, `/transcript` tracked in #1035, #1036, #1037 under epic #1030
+**Version:** 1.1
+**Status:** Foundation shipped (#1034), `/search` shipped (#1035); `/ask` and `/transcript` tracked in #1036, #1037 under epic #1030
 **Depends on:** PRD-02 (queue dashboard contract, search, Ask), PRD-03 (compose layout, security model)
 
 **Changelog:**
+- v1.1 — `/search` (#1035): the web app's search route is the source; `WEB_INTERNAL_URL` and `PODLOG_LAN_URL` added to the pipeline config; paging via a `pN` suffix rather than callback queries, so the loop keeps subscribing to `message` updates only.
 - v1.0 — Initial. Specifies the inbound loop, the allowlist and the four foundation commands; reserves sections for the three follow-up commands.
 
 ---
@@ -53,7 +54,7 @@ Podlog's web UI is reachable only on the LAN, by design (PRD-03, #960). Using it
 | `/start`, `/help` | listed | command list | — |
 | `/whoami` | anyone | `Your Telegram user id is N.` | — |
 | `/queue` | listed | counts, running episode + stage, up to 5 pending, up to 5 latest failures with error class, stuck count | `queue_snapshot()` |
-| `/search <q>` | listed | reserved — #1035 | web `/api/search` |
+| `/search <q> [pN]` | listed | 5 hits per page: feed, episode, speaker, timestamp, ~160-char snippet around the first match, deep link when `PODLOG_LAN_URL` is set; footer with the remaining count and the next-page command | web `GET /api/search` over `WEB_INTERNAL_URL` (#1035) |
 | `/ask <q>` | listed | reserved — #1036 | pipeline `/api/ask` (SSE) |
 | `/transcript <ep>` | listed | reserved — #1037 | web transcript export route |
 

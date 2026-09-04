@@ -53,6 +53,10 @@ Why a name may not appear:
 
 Tip: if you confirm a speaker name on an episode page, return to `/search` and the name will become available in speaker filtering for relevant sources.
 
+## Searching from Telegram
+
+If you have enabled bot commands (see [Notifications](09-notifications.md#telegram-bot-commands)), `/search <words>` runs the same full-text search from a Telegram chat, five hits per page, using exactly the syntax above. It is the way to search Podlog from outside the home network.
+
 ## Exporting Results
 
 Click the download button to export search results:

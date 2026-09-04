@@ -375,3 +375,200 @@ class TestLoop:
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
+
+
+# --------------------------------------------------------------------------
+# /search (#1035)
+# --------------------------------------------------------------------------
+
+from app.services.telegram_bot import (  # noqa: E402
+    SEARCH_UNAVAILABLE,
+    SEARCH_USAGE,
+    SearchCommand,
+    format_search,
+    parse_search_args,
+)
+
+WEB = "http://web-test:3000"
+LAN = "http://192.168.1.10:3000"
+
+
+def _hit(i=1, **over):
+    base = {
+        "id": i, "startTime": 3725.4, "endTime": 3730.0,
+        "speakerLabel": "SPEAKER_00", "speakerDisplay": "Alice",
+        "snippet": f"we talked about <b>carbon</b> tax number {i}",
+        "rank": 0.5, "episodeId": f"ep-{i}", "episodeTitle": f"Episode {i}",
+        "feedTitle": "The Feed", "feedMode": "full", "feedId": "f1",
+    }
+    base.update(over)
+    return base
+
+
+def _page(results, total=None, page=1):
+    return {
+        "results": results, "total": len(results) if total is None else total,
+        "page": page, "pageSize": 5, "coverage": {"processed": 1, "total": 1},
+    }
+
+
+class TestParseSearchArgs:
+    def test_no_query(self):
+        assert parse_search_args("/search") is None
+        assert parse_search_args("/search   ") is None
+        # A lone "p2" is a search for the word p2, not an empty page request.
+        assert parse_search_args("/search p2") == ("p2", 1)
+
+    def test_plain_query_defaults_to_page_one(self):
+        assert parse_search_args('/search "carbon tax" -diesel') == ('"carbon tax" -diesel', 1)
+
+    def test_page_suffix(self):
+        assert parse_search_args("/search carbon tax p3") == ("carbon tax", 3)
+        assert parse_search_args("/search@PodlogBot carbon p12") == ("carbon", 12)
+
+    def test_p_inside_query_is_not_a_page(self):
+        assert parse_search_args("/search p2 policy") == ("p2 policy", 1)
+        assert parse_search_args("/search vitamin p0") == ("vitamin", 1)  # clamped to page 1
+
+
+class TestFormatSearch:
+    def test_no_results(self):
+        assert format_search(_page([]), "zzz", 1, LAN) == 'No results for "zzz".'
+        assert "page 3" in format_search(_page([]), "zzz", 3, LAN)
+
+    def test_hit_layout_with_links(self):
+        out = format_search(_page([_hit()]), "carbon tax", 1, LAN)
+        lines = out.splitlines()
+        assert lines[0] == 'Results for "carbon tax" (1 total, page 1):'
+        assert lines[1] == "1. The Feed — Episode 1"
+        assert lines[2] == "   [1:02:05] Alice: we talked about carbon tax number 1"
+        assert lines[3] == f"   {LAN}/episodes/ep-1?q=carbon%20tax#t-3725"
+        assert len(lines) == 4
+
+    def test_no_links_without_lan_url(self):
+        out = format_search(_page([_hit()]), "carbon", 1, None)
+        assert "/episodes/" not in out
+
+    def test_missing_speaker_feed_and_title(self):
+        out = format_search(
+            _page([_hit(speakerDisplay=None, speakerLabel=None, feedTitle=None, episodeTitle=None)]),
+            "x", 1, None,
+        )
+        assert "1. (untitled episode)" in out
+        assert "] we talked" in out
+
+    def test_footer_and_numbering_on_later_pages(self):
+        out = format_search(_page([_hit(i) for i in range(6, 9)], total=23, page=2), "carbon", 2, None)
+        assert out.splitlines()[1].startswith("6. ")
+        assert out.splitlines()[-1] == "15 more. Send: /search carbon p3"
+
+    def test_no_footer_on_last_page(self):
+        out = format_search(_page([_hit()], total=6), "carbon", 2, None)
+        assert "more." not in out
+
+    def test_snippet_is_windowed_around_first_match(self):
+        long = "filler " * 80 + "<b>needle</b> found " + "tail " * 80
+        out = format_search(_page([_hit(snippet=long)]), "needle", 1, None)
+        snippet_line = out.splitlines()[2]
+        assert "needle found" in snippet_line
+        assert "<b>" not in snippet_line
+        assert len(snippet_line) < 220
+        assert snippet_line.startswith("   [1:02:05] Alice: …")
+
+    def test_timestamp_without_hours(self):
+        out = format_search(_page([_hit(startTime=65)]), "x", 1, None)
+        assert "[1:05]" in out
+
+    def test_never_exceeds_telegram_limit(self):
+        hits = [_hit(i, snippet="<b>w</b> " * 400, episodeTitle="t" * 200) for i in range(5)]
+        assert len(format_search(_page(hits, total=500), "w", 1, LAN)) <= tb.MAX_MESSAGE_CHARS
+
+
+class TestSearchRouting:
+    def test_search_without_query_returns_usage(self):
+        assert handle_update(_msg("/search"), frozenset({1}), MagicMock) == (1, SEARCH_USAGE)
+
+    def test_search_returns_command_for_the_loop(self):
+        cmd = handle_update(_msg("/search carbon p2", chat_id=-5), frozenset({1}), MagicMock)
+        assert cmd == SearchCommand(chat_id=-5, query="carbon", page=2)
+
+    def test_unlisted_user_cannot_search(self):
+        assert handle_update(_msg("/search x", user_id=9), frozenset({1}), MagicMock) == (9, REFUSAL_TEXT)
+
+
+class _Web:
+    """Fake web app: records search requests, serves one canned page."""
+
+    def __init__(self, page=None, status=200):
+        self.requests = []
+        self.page = page if page is not None else _page([_hit()])
+        self.status = status
+
+    def handler(self, request):
+        self.requests.append(request)
+        if self.status != 200:
+            return httpx.Response(self.status, text="boom")
+        return httpx.Response(200, json=self.page)
+
+
+def _bot_with_web(fake_tg, fake_web, sleeps, lan_url=LAN):
+    def route(request):
+        if request.url.host == "web-test":
+            return fake_web.handler(request)
+        return fake_tg.handler(request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(route))
+
+    async def sleep(secs):
+        sleeps.append(secs)
+
+    return TelegramBot(
+        client,
+        db_factory=MagicMock,
+        settings_reader=lambda _db: {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"},
+        sleep=sleep,
+        web_url=WEB + "/",
+        lan_url=lan_url,
+    )
+
+
+class TestSearchLoop:
+    async def test_calls_web_search_and_replies(self, sleeps):
+        tg = _Telegram([[_msg('/search "carbon tax" p2')]])
+        web = _Web(_page([_hit()], total=7, page=2))
+        bot = _bot_with_web(tg, web, sleeps)
+        await bot.poll_once()
+
+        assert len(web.requests) == 1
+        req = web.requests[0]
+        assert req.url.path == "/api/search"
+        assert req.url.params["q"] == '"carbon tax"'
+        assert req.url.params["page"] == "2"
+        assert req.url.params["pageSize"] == str(tb.SEARCH_PAGE_SIZE)
+        sends = tg.calls("sendMessage")
+        assert sends[0]["chat_id"] == 1
+        assert sends[0]["text"].startswith('Results for ""carbon tax"" (7 total, page 2):')
+        assert f"{LAN}/episodes/ep-1" in sends[0]["text"]
+
+    async def test_web_error_gives_short_reply(self, sleeps, caplog):
+        tg = _Telegram([[_msg("/search x")]])
+        bot = _bot_with_web(tg, _Web(status=500), sleeps)
+        await bot.poll_once()
+        assert tg.calls("sendMessage")[0]["text"] == SEARCH_UNAVAILABLE
+        assert '"status": 500' in caplog.text
+        assert bot.offset == 11
+
+    async def test_web_unreachable_gives_short_reply(self, sleeps, caplog):
+        tg = _Telegram([[_msg("/search x")]])
+
+        class Down:
+            def handler(self, _request):
+                raise httpx.ConnectError("no route to host")
+
+        bot = _bot_with_web(tg, Down(), sleeps)
+        await bot.poll_once()
+        assert tg.calls("sendMessage")[0]["text"] == SEARCH_UNAVAILABLE
+        assert "telegram_bot_search_failed" in caplog.text
+
+    async def test_help_mentions_search(self):
+        assert "/search" in HELP_TEXT

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchSegments } from "@/lib/search";
 
+// Two consumers: the search page, and the pipeline's Telegram bot
+// (apps/pipeline/app/services/telegram_bot.py, #1035), which calls this route
+// over the compose network and formats `results[]` for chat. Changing the
+// response shape means changing both.
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
 

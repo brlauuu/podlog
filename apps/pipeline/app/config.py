@@ -158,6 +158,13 @@ class Settings(BaseSettings):
     # Comma-separated numeric Telegram user ids allowed to talk to the bot
     # (#1034). Empty means the bot is off. See services/telegram_bot.py.
     telegram_allowed_user_ids: str | None = None
+    # Where the bot reaches the web app for search (#1035). Full-text search
+    # lives in the web app, not here. Compose service name by default;
+    # native dev sets http://localhost:3000.
+    web_internal_url: str = "http://web:3000"
+    # The LAN address `make up` computes on the host (#1012). The bot uses it
+    # to build deep links into episode pages; empty means no links.
+    podlog_lan_url: str | None = None
     notification_frequency: Literal["immediate", "daily", "weekly"] = "immediate"
     health_check_notifications_enabled: bool = True
 
