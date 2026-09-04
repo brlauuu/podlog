@@ -12,11 +12,35 @@ The Notifications tab holds three sections: **Telegram**, **Email** and **Genera
    ```
    https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
    ```
-   Find `"chat":{"id":123456789}` in the response — that number is your **Chat ID**.
+   Find `"chat":{"id":123456789}` in the response — that number is your **Chat ID**. In a private chat it is also your Telegram **user ID**, which you will need below if you want to send the bot commands.
+
+   > Once the bot is enabled for commands (next section), this URL stops returning anything: Telegram hands each update to one consumer, and Podlog becomes that consumer. Use `/whoami` from then on.
 
 3. **Configure in Podlog:** Go to `/settings`, open the **Notifications** tab, find the **Telegram** section, enter your bot token and chat ID, and click **Save**.
 
 4. **Test:** Click **Send test message**. You should receive a message from your bot in Telegram.
+
+## Telegram Bot Commands
+
+Notifications only go one way. You can also let the bot **answer commands**, which turns the chat into a small remote window into Podlog: check the queue from your phone without being on the home network, opening a port, or running a VPN. Podlog reaches Telegram from inside the Docker network by long-polling, so nothing inbound is exposed.
+
+This is the first part of Podlog that answers to someone other than "whoever is on the LAN", so it is **off until you say who may use it**:
+
+1. In `/settings` → **Notifications** → **Telegram**, fill in **Allowed user IDs** with the numeric Telegram user IDs that may talk to the bot, comma-separated. Your own is the Chat ID from step 2 above. Save.
+2. Anyone else can find theirs by sending the bot `/whoami` — that is the one command that answers everybody, and it answers with nothing but the sender's own ID.
+3. Everyone not on the list gets a one-line refusal, and the refused ID is logged by the `pipeline` container so you can copy it into the list.
+
+Leave the field empty and the bot never reads a message; notifications keep working as before. The same list can be set as `TELEGRAM_ALLOWED_USER_IDS` in `.env`; the UI value wins where both exist. Changes take effect within about half a minute, no restart needed.
+
+| Command | Reply |
+|---|---|
+| `/queue` | What the pipeline is doing: counts per state, the episode being processed and its stage, the next few pending, the latest failures |
+| `/whoami` | Your numeric Telegram user ID (works for everyone) |
+| `/help`, `/start` | The command list |
+
+Every command is read-only. Nothing you can send the bot changes a feed, an episode, a setting or a backup. Read the [Security model](01-installation.md#security-model) for what putting someone on the list means.
+
+The bot's log lines are prefixed `telegram_bot_` in `docker compose logs pipeline`. `telegram_bot_conflict` means something else is calling `getUpdates` with the same token — usually a second Podlog install, or the manual `getUpdates` URL from setup still open in a browser tab.
 
 ## Email Setup
 

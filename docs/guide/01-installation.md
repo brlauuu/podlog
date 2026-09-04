@@ -189,6 +189,8 @@ The remaining boundary is doing real work, so two changes would break it:
 
 If you need either, treat adding authentication as a prerequisite rather than a follow-up. See [issue #960](https://github.com/brlauuu/podlog/issues/960) for the options that were considered.
 
+**The Telegram bot is the one surface that reaches past your network.** If you list user IDs under Allowed user IDs (see [Notifications](09-notifications.md#telegram-bot-commands)), those people can query Podlog from anywhere through Telegram. The bot is off until that list is non-empty, refuses everyone not on it, and every command it accepts is read-only — it can report what the queue is doing, not change anything. What you are trusting is those Telegram accounts: whoever holds one of them, including someone who has taken it over, can read what the bot can read.
+
 **Your API keys live in `.env`** — Fireworks, pyannote, Telegram, SMTP. It is gitignored. The settings API masks them on read, but anyone who can read the file has them outright.
 
 ## Common Commands

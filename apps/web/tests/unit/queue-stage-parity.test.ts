@@ -23,7 +23,9 @@ import {
 } from "@/lib/queueStatus";
 
 const TASKS_DIR = join(__dirname, "../../../pipeline/app/tasks");
-const QUEUE_API = join(__dirname, "../../../pipeline/app/api/queue.py");
+// TASK_TO_STATUS moved from api/queue.py to services/queue_snapshot.py (#1034)
+// so the Telegram bot can share the query without importing the API layer.
+const QUEUE_API = join(__dirname, "../../../pipeline/app/services/queue_snapshot.py");
 
 /** Every literal assigned to `status=` / `status = ` in the task modules. */
 function statusesWrittenByTasks(): Set<string> {
@@ -41,7 +43,7 @@ function statusesWrittenByTasks(): Set<string> {
 function displayStatusesFromQueueApi(): Set<string> {
   const src = readFileSync(QUEUE_API, "utf8");
   const block = src.match(/TASK_TO_STATUS: dict\[str, str\] = \{([^}]*)\}/);
-  if (!block) throw new Error("TASK_TO_STATUS not found in api/queue.py");
+  if (!block) throw new Error("TASK_TO_STATUS not found in services/queue_snapshot.py");
   return new Set(
     [...block[1].matchAll(/"[a-z_]+":\s*"([a-z_]+)"/g)].map((m) => m[1])
   );

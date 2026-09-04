@@ -6,6 +6,7 @@ import { SettingsSchema } from "@/lib/settings-schema";
 const validPayload = {
   telegram_bot_token: null,
   telegram_chat_id: null,
+  telegram_allowed_user_ids: null,
   notification_email_to: null,
   notification_email_from: "podlog@example.com",
   smtp_host: "smtp.example.com",

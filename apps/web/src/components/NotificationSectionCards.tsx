@@ -230,7 +230,10 @@ export function TelegramNotificationCard({
             <code className="bg-muted px-1 rounded text-xs break-all">
               {'"chat":{"id":123456789}'}
             </code>{" "}
-            in the response — that&apos;s your <strong>Chat ID</strong>
+            in the response — that&apos;s your <strong>Chat ID</strong>. In a
+            private chat it is also your <strong>user ID</strong>, so paste it
+            into <strong>Allowed user IDs</strong> below too if you want to
+            send the bot commands.
           </li>
         </ol>
       </SetupGuide>
@@ -260,6 +263,20 @@ export function TelegramNotificationCard({
           placeholder="123456789"
           value={settings.telegram_chat_id ?? ""}
           onChange={(e) => onChange("telegram_chat_id", e.target.value)}
+        />
+      </FieldGroup>
+
+      <FieldGroup
+        label="Allowed user IDs"
+        hint="Comma-separated numeric Telegram user IDs allowed to send the bot commands (/queue, /help). Leave empty to keep the bot receive-only. Anyone can send the bot /whoami to learn their ID once it is running."
+      >
+        <input
+          id="allowed-user-ids"
+          type="text"
+          className={inputClass}
+          placeholder="123456789, 987654321"
+          value={settings.telegram_allowed_user_ids ?? ""}
+          onChange={(e) => onChange("telegram_allowed_user_ids", e.target.value)}
         />
       </FieldGroup>
 

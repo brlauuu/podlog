@@ -533,3 +533,40 @@ class TestRuntimeDiarizationSettings:
             result = get_runtime_diarization_settings(None)
         assert result["diarization_provider"] == "local"
         assert result["pyannote_api_key"] is None
+
+
+class TestTelegramAllowedUserIds:
+    """#1034: the bot allowlist is validated on save, canonicalised, and nullable."""
+
+    def _save(self, value):
+        db = _mock_db(stored_json=None)
+        with patch("app.services.notification_settings.settings") as mock_settings:
+            for field in _FIELDS:
+                setattr(mock_settings, field, None)
+            result = save_notification_settings(db, {"telegram_allowed_user_ids": value})
+        added = db.add.call_args[0][0]
+        return result, json.loads(added.value)
+
+    def test_canonicalises_whitespace_and_duplicates(self):
+        result, stored = self._save(" 12,34 , 12 ,")
+        assert stored["telegram_allowed_user_ids"] == "12, 34"
+        assert result["telegram_allowed_user_ids"] == "12, 34"
+
+    def test_empty_string_becomes_none(self):
+        _, stored = self._save("   ")
+        assert stored["telegram_allowed_user_ids"] is None
+
+    @pytest.mark.parametrize("bad", ["@alice", "12, alice", "-5", "12.5", "+4915123"])
+    def test_rejects_non_numeric_entries(self, bad):
+        with pytest.raises(ValueError, match="numeric Telegram user ids"):
+            self._save(bad)
+
+    def test_rejects_non_string(self):
+        with pytest.raises(ValueError, match="comma-separated string"):
+            self._save([12, 34])
+
+    def test_field_is_part_of_the_allowlist_and_nullable(self):
+        from app.services.notification_settings import _NULLABLE_FIELDS
+
+        assert "telegram_allowed_user_ids" in _FIELDS
+        assert "telegram_allowed_user_ids" in _NULLABLE_FIELDS

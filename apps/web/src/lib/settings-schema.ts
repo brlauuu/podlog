@@ -20,6 +20,7 @@ export const SettingsSchema = z.object({
   // Nullable string fields (mirror _NULLABLE_FIELDS).
   telegram_bot_token: z.string().nullable(),
   telegram_chat_id: z.string().nullable(),
+  telegram_allowed_user_ids: z.string().nullable(),
   notification_email_to: z.string().nullable(),
   smtp_user: z.string().nullable(),
   smtp_password: z.string().nullable(),

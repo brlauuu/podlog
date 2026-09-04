@@ -13,6 +13,7 @@ function makeSettings(overrides: Record<string, unknown> = {}): Settings {
   return {
     telegram_bot_token: null,
     telegram_chat_id: null,
+  telegram_allowed_user_ids: null,
     telegram_configured: false,
     notification_email_to: null,
     notification_email_from: "podlog@localhost",
@@ -49,6 +50,23 @@ describe("TelegramNotificationCard", () => {
       target: { value: "42" },
     });
     expect(onChange).toHaveBeenCalledWith("telegram_chat_id", "42");
+  });
+
+  it("edits the bot allowlist via onChange (#1034)", () => {
+    const onChange = jest.fn();
+    render(
+      <TelegramNotificationCard
+        settings={makeSettings({ telegram_allowed_user_ids: "1" })}
+        onChange={onChange}
+        onTest={jest.fn()}
+        testing={false}
+      />
+    );
+
+    const input = screen.getByLabelText("Allowed user IDs") as HTMLInputElement;
+    expect(input.value).toBe("1");
+    fireEvent.change(input, { target: { value: "1, 2" } });
+    expect(onChange).toHaveBeenCalledWith("telegram_allowed_user_ids", "1, 2");
   });
 
   it("disables the test button until configured, then fires onTest", () => {

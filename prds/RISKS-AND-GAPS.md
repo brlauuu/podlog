@@ -242,6 +242,21 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
+### RISK-12: Telegram Bot Is a Remote, Read-Only Surface Keyed on Telegram Accounts
+
+**Severity:** Medium
+**Component:** PRD-07 — Telegram bot (`app/services/telegram_bot.py`) — Issue #1034
+**Description:** Until #1034 the trust boundary was the LAN (#960, #988). The bot moves it: any Telegram account whose numeric user ID is on `telegram_allowed_user_ids` can query Podlog from anywhere, through Telegram's servers, with no port opened. Podlog has no notion of a user beyond that list, so a compromised or shared Telegram account on the list has whatever the bot has. Today that is read-only (queue state; later `/search`, `/ask`, `/transcript` per #1030), so the exposure is the transcripts' contents, not control of the install.
+**Mitigation:**
+1. Deny by default: the loop does not call `getUpdates` at all until a token and a non-empty allowlist exist; an empty list means off, never open.
+2. Allowlist by immutable numeric user ID, not by username (mutable, optional) or phone number (never exposed to bots).
+3. Every command is read-only. A write command would need its own issue, its own confirmation step, and an update to this entry.
+4. Refusals are logged with the sender's ID; `docs/guide/01-installation.md` Security model tells operators what listing an account means.
+
+**Status:** Active. Accepted as the cost of remote access without a VPN.
+
+---
+
 ### ~~RISK-07: Celery Beat Single Point of Failure~~ → Resolved in v1.3
 
 *Moved to Part 4: Resolved Items.*

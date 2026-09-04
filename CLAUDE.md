@@ -18,6 +18,7 @@ Detailed specifications live in `prds/`:
 | `prds/PRD-04-host-guest-inference.md` | Host/guest speaker name inference via NER |
 | `prds/PRD-05-exploratory-plots.md` | Exploratory speaker plots in the Jupyter notebook (superseded in part by PRD-06) |
 | `prds/PRD-06-speaker-analytics-plots.md` | Plotly speaker analytics on the Meta-Analysis web page |
+| `prds/PRD-07-telegram-bot.md` | Telegram bot: inbound long-poll loop, user allowlist, read-only commands |
 | `prds/RISKS-AND-GAPS.md` | Active risks, known gaps, hardware requirements, resolved items |
 
 When making decisions, reference PRD sections (e.g. "per PRD-01 §5.4") rather than re-deriving. The PRDs are the source of truth for requirements.
@@ -60,7 +61,7 @@ podlog/
 │   │   │   ├── worker.py           # Background job worker + feed polling loop
 │   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis, backups, explore, prompts)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
-│   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, embed_provenance, speaker_turns, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels, prompts, backup_files, backup_settings)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, embed_provenance, speaker_turns, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels, prompts, backup_files, backup_settings, queue_snapshot, telegram_bot)
 │   │   ├── alembic/                # Database migrations (22 versions)
 │   │   └── tests/                  # unit, integration, e2e
 │   ├── web/                        # Next.js 16 (App Router)
@@ -146,7 +147,7 @@ make shell-db          # Open psql shell
   | `apps/pipeline/app/services/inference.py`, `tasks/infer.py`, speaker UI | `docs/guide/06-speakers.md` |
   | `apps/web/src/components/AudioPlayer.tsx` | `docs/guide/07-audio-playback.md` |
   | `apps/pipeline/app/api/queue.py`, `apps/web/src/lib/queueStatus.ts` | `docs/guide/08-queue.md` |
-  | Notification settings, digest, healthcheck | `docs/guide/09-notifications.md` |
+  | Notification settings, digest, healthcheck, `apps/pipeline/app/services/telegram_bot.py` | `docs/guide/09-notifications.md`, and the Security model in `docs/guide/01-installation.md` if what the bot can do changes |
   | Timings, image sizes, storage figures | `docs/guide/11-hardware.md`, `docs/hardware.md` |
   | `apps/pipeline/app/services/rag.py`, `apps/web/src/lib/rag-models.ts` | `docs/guide/12-rag-search.md` |
   | `apps/pipeline/app/services/pyannote_cloud.py`, diarization providers | `docs/guide/13-pyannote-cloud.md`, `docs/guide/19-inference-providers.md` |

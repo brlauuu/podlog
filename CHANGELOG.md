@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+- The Telegram bot can now answer commands, so you can check on Podlog from your phone without being on the home network. Add the numeric Telegram user IDs that may talk to it under **Allowed user IDs** in Settings → Notifications → Telegram (in a private chat your Chat ID is your user ID; anyone else can ask the bot `/whoami`). Then send it `/queue` for what the pipeline is doing. The bot stays off until that list is filled in, refuses everyone not on it, and cannot change anything — every command is read-only. Notifications are unaffected. ([#1034](https://github.com/brlauuu/podlog/issues/1034))
+
 ### Fixes
 - A feed whose RSS fetch fails is now retried on the next poll cycle instead of waiting out the full `FEED_POLL_INTERVAL_HOURS`. Previously a failed fetch still stamped the "last polled" timestamp and logged as a successful poll that found nothing, so a brief network outage silently delayed new episodes by up to a day with no indication anything had gone wrong. Failed polls now log `poll_feed_failed`, and clicking refresh on a feed reports the error instead of appearing to succeed. ([#1031](https://github.com/brlauuu/podlog/issues/1031))
 

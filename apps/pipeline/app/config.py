@@ -155,6 +155,9 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
+    # Comma-separated numeric Telegram user ids allowed to talk to the bot
+    # (#1034). Empty means the bot is off. See services/telegram_bot.py.
+    telegram_allowed_user_ids: str | None = None
     notification_frequency: Literal["immediate", "daily", "weekly"] = "immediate"
     health_check_notifications_enabled: bool = True
 
