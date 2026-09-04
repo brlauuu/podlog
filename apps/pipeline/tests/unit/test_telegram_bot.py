@@ -314,6 +314,47 @@ class TestLoop:
         assert caplog.text.count("telegram_bot_send_failed") == 2
         assert bot.offset == 3
 
+    async def test_token_never_reaches_the_log(self, sleeps, caplog):
+        """httpx error strings embed the request URL, and the URL embeds the token."""
+        fake = _Telegram([[_msg("/help")]])
+        orig = fake.handler
+
+        def handler(request):
+            if request.url.path.endswith("sendMessage"):
+                return httpx.Response(400, json={"ok": False, "description": "bad"})
+            return orig(request)
+
+        fake.handler = handler
+        bot = _bot(fake, {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"}, sleeps)
+        await bot.poll_once()  # send fails
+        fake.status = 500
+        await bot.poll_once()  # poll fails
+        fake.status = 409
+        await bot.poll_once()  # conflict
+        assert "telegram_bot_send_failed" in caplog.text
+        assert "telegram_bot_poll_failed" in caplog.text
+        assert "telegram_bot_conflict" in caplog.text
+        assert TOKEN not in caplog.text
+
+    async def test_non_json_error_body_is_handled(self, sleeps, caplog):
+        def handler(_request):
+            return httpx.Response(502, text="<html>bad gateway</html>")
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+        async def sleep(secs):
+            sleeps.append(secs)
+
+        bot = TelegramBot(
+            client,
+            db_factory=MagicMock,
+            settings_reader=lambda _db: {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"},
+            sleep=sleep,
+        )
+        await bot.poll_once()
+        assert '"status": 502' in caplog.text
+        assert sleeps == [tb.BACKOFF_INITIAL_SECS]
+
     async def test_settings_change_takes_effect_without_restart(self, sleeps):
         fake = _Telegram([[_msg("/help", user_id=2)], [_msg("/help", user_id=2)]])
         settings = {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"}

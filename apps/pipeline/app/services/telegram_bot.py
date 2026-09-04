@@ -197,6 +197,26 @@ def handle_update(
     return chat_id, HELP_TEXT
 
 
+class TelegramApiError(Exception):
+    """A Bot API call failed. Carries the status and Telegram's description only.
+
+    Deliberately not an `httpx.HTTPStatusError`: that one's message embeds the
+    request URL, and the URL embeds the bot token. Nothing built from this
+    class can leak the token into a log line.
+    """
+
+    def __init__(self, method: str, status: int, description: str) -> None:
+        super().__init__(f"{method} -> {status}: {description}")
+        self.method = method
+        self.status = status
+        self.description = description
+
+
+def _redact(token: str | None, text: str) -> str:
+    """Belt and braces for any error string that might carry the token."""
+    return text.replace(token, "<token>") if token else text
+
+
 # --------------------------------------------------------------------------
 # The loop.
 # --------------------------------------------------------------------------
@@ -251,17 +271,23 @@ class TelegramBot:
     async def _api(self, method: str, token: str, **params: Any) -> dict:
         url = f"{API_BASE}/bot{token}/{method}"
         resp = await self._client.post(url, json=params)
-        resp.raise_for_status()
-        payload = resp.json()
-        if not payload.get("ok"):
-            raise RuntimeError(f"Telegram {method} failed: {payload.get('description')}")
+        try:
+            payload = resp.json()
+        except ValueError:
+            payload = {}
+        if resp.status_code != 200 or not payload.get("ok"):
+            raise TelegramApiError(
+                method, resp.status_code, str(payload.get("description") or "no description")
+            )
         return payload
 
     async def _send(self, token: str, chat_id: int, text: str) -> None:
         try:
             await self._api("sendMessage", token, chat_id=chat_id, text=text)
         except Exception as exc:  # a failed reply must not stop the loop
-            logger.warning('"action": "telegram_bot_send_failed", "error": "%s"', exc)
+            logger.warning(
+                '"action": "telegram_bot_send_failed", "error": "%s"', _redact(token, str(exc))
+            )
 
     # -- one iteration -------------------------------------------------------
 
@@ -295,9 +321,8 @@ class TelegramBot:
             params["offset"] = self.offset
         try:
             payload = await self._api("getUpdates", token, **params)
-        except httpx.HTTPStatusError as exc:
-            status = exc.response.status_code
-            if status == 409:
+        except TelegramApiError as exc:
+            if exc.status == 409:
                 # Another process is polling with this token. Almost always a
                 # second Podlog instance or a leftover manual getUpdates.
                 logger.warning(
@@ -305,13 +330,17 @@ class TelegramBot:
                     '"another getUpdates consumer is using this token"'
                 )
             else:
-                logger.warning('"action": "telegram_bot_poll_failed", "status": %s', status)
+                logger.warning(
+                    '"action": "telegram_bot_poll_failed", "status": %s, "detail": "%s"',
+                    exc.status,
+                    _redact(token, exc.description),
+                )
             await self._back_off()
             return True
         except Exception as exc:
             logger.warning(
                 '"action": "telegram_bot_poll_failed", "error": "%s (%s)"',
-                exc,
+                _redact(token, str(exc)),
                 type(exc).__name__,
             )
             await self._back_off()
@@ -332,7 +361,7 @@ class TelegramBot:
         except Exception as exc:
             logger.error(
                 '"action": "telegram_bot_command_failed", "error": "%s (%s)"',
-                exc,
+                _redact(token, str(exc)),
                 type(exc).__name__,
             )
             chat_id = ((update.get("message") or {}).get("chat") or {}).get("id")
