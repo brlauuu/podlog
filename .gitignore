@@ -67,4 +67,4 @@ apps/web/test-results/
 apps/pipeline/coverage.json
 
 # Enola
-.enola/*
+.enola/
