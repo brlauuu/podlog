@@ -30,6 +30,19 @@ See [Speaker Management](06-speakers.md) for the full workflow.
 
 Click any timestamp to start audio playback from that point. The persistent player at the bottom of the screen loads the episode's audio and seeks to the clicked position. See [Audio Playback](07-audio-playback.md) for details.
 
+## Exporting a Transcript
+
+The **Export** button above the transcript downloads it as Markdown or plain text, or opens a printable view. Both files start with the podcast and episode metadata, then one entry per speaker turn with its timestamp.
+
+The same two files are served over HTTP, so scripts and the Telegram bot can fetch them:
+
+```
+GET /api/episodes/<episode-id>/transcript?format=txt
+GET /api/episodes/<episode-id>/transcript?format=md
+```
+
+The episode id is on the episode page (the copy button next to the title). From Telegram, `/transcript <title words>` sends the file to the chat; see [Notifications](09-notifications.md#telegram-bot-commands).
+
 ## Reprocessing an Episode
 
 If you change your Whisper model, compute type, or other processing settings, existing episodes aren't automatically re-transcribed. To reprocess:

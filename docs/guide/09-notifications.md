@@ -35,6 +35,7 @@ Leave the field empty and the bot never reads a message; notifications keep work
 | Command | Reply |
 |---|---|
 | `/search <words>` | The top five transcript hits, with podcast, episode, speaker, timestamp and a snippet. Same syntax as the [search page](04-search.md): `"exact phrase"`, `-exclude`, `OR`, `speaker:Name`. Add `p2`, `p3`… for the next page. Each hit links to the episode at that moment; the link uses the LAN address `make up` detected, so it opens only on the home network |
+| `/transcript <episode>` | Sends the episode's transcript as a file, the same export as the episode page's Export button. `<episode>` is an episode id or a few words from the title; when several titles match you get a numbered list and reply `/transcript 2`. Add `md` for Markdown instead of plain text |
 | `/queue` | What the pipeline is doing: counts per state, the episode being processed and its stage, the next few pending, the latest failures |
 | `/whoami` | Your numeric Telegram user ID (works for everyone) |
 | `/help`, `/start` | The command list |

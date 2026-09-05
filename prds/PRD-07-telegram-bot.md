@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search
 **Document:** PRD-07 — Telegram bot (inbound long-poll loop, user allowlist, chat commands)
-**Version:** 1.1
-**Status:** Foundation shipped (#1034), `/search` shipped (#1035); `/ask` and `/transcript` tracked in #1036, #1037 under epic #1030
+**Version:** 1.2
+**Status:** Foundation (#1034), `/search` (#1035) and `/transcript` (#1037) shipped; `/ask` tracked in #1036 under epic #1030
 **Depends on:** PRD-02 (queue dashboard contract, search, Ask), PRD-03 (compose layout, security model)
 
 **Changelog:**
+- v1.2 — `/transcript` (#1037): the episode page's client-side export formatters moved to `apps/web/src/lib/transcriptExport.ts` and are served by a new route; the bot looks episodes up in the DB directly (it owns the DB) and fetches the file from the web app. Per-chat disambiguation state is in-memory.
 - v1.1 — `/search` (#1035): the web app's search route is the source; `WEB_INTERNAL_URL` and `PODLOG_LAN_URL` added to the pipeline config; paging via a `pN` suffix rather than callback queries, so the loop keeps subscribing to `message` updates only.
 - v1.0 — Initial. Specifies the inbound loop, the allowlist and the four foundation commands; reserves sections for the three follow-up commands.
 
@@ -56,7 +57,7 @@ Podlog's web UI is reachable only on the LAN, by design (PRD-03, #960). Using it
 | `/queue` | listed | counts, running episode + stage, up to 5 pending, up to 5 latest failures with error class, stuck count | `queue_snapshot()` |
 | `/search <q> [pN]` | listed | 5 hits per page: feed, episode, speaker, timestamp, ~160-char snippet around the first match, deep link when `PODLOG_LAN_URL` is set; footer with the remaining count and the next-page command | web `GET /api/search` over `WEB_INTERNAL_URL` (#1035) |
 | `/ask <q>` | listed | reserved — #1036 | pipeline `/api/ask` (SSE) |
-| `/transcript <ep>` | listed | reserved — #1037 | web transcript export route |
+| `/transcript <ref> [md]` | listed | uploads the episode's transcript as a document (`sendDocument`), caption = title · feed · duration. `<ref>` is an episode id or title words (case-insensitive contains, finished episodes, newest first, 6 shown); several matches → numbered list kept per chat, `/transcript <n>` picks | web `GET /api/episodes/{id}/transcript?format=txt\|md` (#1037), the Export button's formatters served over HTTP |
 
 Unknown commands and plain text from a listed user return the command list. Commands are case-insensitive and accept the `@BotName` suffix Telegram appends in groups.
 

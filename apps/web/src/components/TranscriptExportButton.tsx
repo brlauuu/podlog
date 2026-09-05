@@ -8,112 +8,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Segment } from "@/lib/types";
 import { formatTimestamp } from "@/lib/timestamp";
 import { formatDate } from "@/lib/dateFormat";
-import { sanitizeFilename } from "@/lib/filename";
+import {
+  buildExportMarkdown,
+  buildExportText,
+  formatDuration,
+  transcriptExportFilename,
+  type TranscriptExportInput,
+} from "@/lib/transcriptExport";
 
-interface Props {
-  episodeTitle: string;
-  feedTitle: string | null;
-  publishedAt: string | null;
-  durationSecs: number | null;
-  description: string | null;
-  feedUrl: string | null;
-  feedWebsiteUrl: string | null;
-  feedDescription: string | null;
-  audioUrl: string | null;
-  guid: string | null;
-  segments: Segment[];
-}
+// The formatters live in lib/transcriptExport.ts (#1037) so the
+// /api/episodes/[id]/transcript route serves the same bytes this button
+// downloads.
+type Props = TranscriptExportInput;
 
-
-function formatDuration(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
-function buildExportText(props: Props): string {
-  const lines: string[] = [];
-  const sep = "=".repeat(60);
-
-  // Podcast metadata
-  lines.push(sep);
-  lines.push("PODCAST METADATA");
-  lines.push(sep);
-  if (props.feedTitle) lines.push(`Podcast:      ${props.feedTitle}`);
-  if (props.feedWebsiteUrl) lines.push(`Website:      ${props.feedWebsiteUrl}`);
-  if (props.feedUrl) lines.push(`Feed URL:     ${props.feedUrl}`);
-  if (props.feedDescription) lines.push(`Description:  ${props.feedDescription}`);
-  lines.push("");
-
-  // Episode metadata
-  lines.push(sep);
-  lines.push("EPISODE METADATA");
-  lines.push(sep);
-  lines.push(`Title:        ${props.episodeTitle}`);
-  if (props.publishedAt) lines.push(`Published:    ${formatDate(props.publishedAt)}`);
-  if (props.durationSecs) lines.push(`Duration:     ${formatDuration(props.durationSecs)}`);
-  if (props.description) lines.push(`Description:  ${props.description}`);
-  if (props.audioUrl) lines.push(`Audio URL:    ${props.audioUrl}`);
-  if (props.guid) lines.push(`Episode GUID: ${props.guid}`);
-  lines.push("");
-
-  // Transcript
-  lines.push(sep);
-  lines.push("TRANSCRIPT");
-  lines.push(sep);
-  lines.push("");
-
-  for (const seg of props.segments) {
-    const ts = formatTimestamp(seg.start_time, { padHours: true });
-    const speaker = seg.display_name || seg.speaker_label;
-    if (speaker) {
-      lines.push(`[${ts}] ${speaker}:`);
-    } else {
-      lines.push(`[${ts}]`);
-    }
-    lines.push(seg.text);
-    lines.push("");
-  }
-
-  return lines.join("\n");
-}
-
-function buildExportMarkdown(props: Props): string {
-  const lines: string[] = [];
-  lines.push("# Transcript Export");
-  lines.push("");
-  if (props.feedTitle) lines.push(`**Podcast:** ${props.feedTitle}`);
-  lines.push(`**Episode:** ${props.episodeTitle}`);
-  if (props.publishedAt) lines.push(`**Published:** ${formatDate(props.publishedAt)}`);
-  if (props.durationSecs) lines.push(`**Duration:** ${formatDuration(props.durationSecs)}`);
-  if (props.audioUrl) lines.push(`**Audio URL:** ${props.audioUrl}`);
-  if (props.guid) lines.push(`**Episode GUID:** ${props.guid}`);
-  lines.push("");
-  if (props.description) {
-    lines.push("## Description");
-    lines.push("");
-    lines.push(props.description);
-    lines.push("");
-  }
-  lines.push("## Transcript");
-  lines.push("");
-
-  for (const seg of props.segments) {
-    const ts = formatTimestamp(seg.start_time, { padHours: true });
-    const speaker = seg.display_name || seg.speaker_label;
-    if (speaker) {
-      lines.push(`- \`${ts}\` **${speaker}:** ${seg.text}`);
-    } else {
-      lines.push(`- \`${ts}\` ${seg.text}`);
-    }
-  }
-
-  return lines.join("\n");
-}
 
 function downloadFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
@@ -182,11 +91,13 @@ function openPrintView(props: Props) {
 
 export default function TranscriptExportButton(props: Props) {
   function handleExport(format: "markdown" | "text" | "print") {
-    const safe = sanitizeFilename(props.episodeTitle);
-
     if (format === "markdown") {
       const content = buildExportMarkdown(props);
-      downloadFile(content, `${safe}_transcript.md`, "text/markdown;charset=utf-8");
+      downloadFile(
+        content,
+        transcriptExportFilename(props.episodeTitle, "md"),
+        "text/markdown;charset=utf-8",
+      );
       return;
     }
 
@@ -196,7 +107,11 @@ export default function TranscriptExportButton(props: Props) {
     }
 
     const text = buildExportText(props);
-    downloadFile(text, `${safe}_transcript.txt`, "text/plain;charset=utf-8");
+    downloadFile(
+      text,
+      transcriptExportFilename(props.episodeTitle, "txt"),
+      "text/plain;charset=utf-8",
+    );
   }
 
   return (

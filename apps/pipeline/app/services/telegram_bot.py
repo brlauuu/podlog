@@ -45,6 +45,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import SessionLocal
+from app.models import Episode
 from app.services.notification_settings import get_notification_settings
 from app.services.queue_snapshot import queue_snapshot
 
@@ -67,10 +68,23 @@ _SNIPPET_WINDOW = 160
 _SEARCH_PAGE_RE = re.compile(r"\s+p(\d{1,3})$")
 _HEADLINE_TAG_RE = re.compile(r"</?b>")
 
+TRANSCRIPT_MATCH_LIMIT = 6
+TRANSCRIPT_TIMEOUT_SECS = 30
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+_FILENAME_STAR_RE = re.compile(r"filename\*=UTF-8''([^;]+)", re.I)
+_FILENAME_RE = re.compile(r'filename="([^"]+)"', re.I)
+
+# Per-chat numbered candidate lists from the last ambiguous /transcript, so
+# "/transcript 2" can pick from them. In-memory on purpose: it is a
+# convenience for the next message, not state worth persisting.
+_pending_choices: dict[int, list[str]] = {}
+
 REFUSAL_TEXT = "This bot is private."
 HELP_TEXT = (
     "Podlog bot commands:\n"
     "/search <words> - search transcripts; add p2 for the next page\n"
+    "/transcript <episode> - send an episode's transcript as a file; "
+    "episode id or title words, add md for Markdown\n"
     "/queue - what the pipeline is doing right now\n"
     "/whoami - show your Telegram user id\n"
     "/help - this list\n"
@@ -80,6 +94,12 @@ HELP_TEXT = (
 )
 SEARCH_USAGE = "Usage: /search <words>   (add p2, p3 ... for more pages)"
 SEARCH_UNAVAILABLE = "Search is unavailable right now: the web app did not answer."
+TRANSCRIPT_USAGE = (
+    "Usage: /transcript <episode id or title words>   (add md for Markdown)\n"
+    "After a list of matches: /transcript <number>"
+)
+TRANSCRIPT_UNAVAILABLE = "Transcript is unavailable right now: the web app did not answer."
+TRANSCRIPT_MISSING = "That episode has no transcript yet."
 
 
 # --------------------------------------------------------------------------
@@ -235,6 +255,105 @@ def format_search(page: dict, query: str, page_no: int, lan_url: str | None) -> 
     return _truncate("\n".join(lines), MAX_MESSAGE_CHARS)
 
 
+@dataclass(frozen=True)
+class TranscriptCommand:
+    """A /transcript the loop still has to run: fetch the file, upload it."""
+
+    chat_id: int
+    episode_id: str
+    fmt: str
+    title: str
+    feed_title: str | None
+    duration_secs: int | None
+
+
+def parse_transcript_args(text: str) -> tuple[str, str] | None:
+    """Split `/transcript <ref> [md|txt]` into (ref, fmt). None when no ref."""
+    body = (text or "").strip().split(maxsplit=1)
+    if len(body) < 2:
+        return None
+    rest = body[1].strip()
+    fmt = "txt"
+    parts = rest.rsplit(maxsplit=1)
+    if len(parts) == 2 and parts[1].lower() in ("md", "txt"):
+        fmt = parts[1].lower()
+        rest = parts[0].strip()
+    return (rest, fmt) if rest else None
+
+
+def find_episodes(db: Session, ref: str) -> list[Episode]:
+    """Episode candidates for a /transcript reference: exact id, else title words."""
+    if _UUID_RE.match(ref):
+        ep = db.query(Episode).filter(Episode.id == ref).first()
+        return [ep] if ep is not None else []
+    pattern = "%" + ref.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    return (
+        db.query(Episode)
+        .filter(Episode.status == "done", Episode.title.ilike(pattern, escape="\\"))
+        .order_by(Episode.published_at.desc().nullslast())
+        .limit(TRANSCRIPT_MATCH_LIMIT + 1)
+        .all()
+    )
+
+
+def _transcript_command(chat_id: int, ep: Episode, fmt: str) -> TranscriptCommand:
+    feed = getattr(ep, "feed", None)
+    return TranscriptCommand(
+        chat_id=chat_id,
+        episode_id=str(ep.id),
+        fmt=fmt,
+        title=ep.title or "Untitled Episode",
+        feed_title=getattr(feed, "title", None) if feed is not None else None,
+        duration_secs=ep.duration_secs,
+    )
+
+
+def format_transcript_choices(eps: list[Episode], ref: str) -> str:
+    lines = [f"Several episodes match \"{ref}\". Reply with /transcript <number>:"]
+    for i, ep in enumerate(eps[:TRANSCRIPT_MATCH_LIMIT], start=1):
+        feed = getattr(ep, "feed", None)
+        feed_title = getattr(feed, "title", None) if feed is not None else None
+        when = ep.published_at.date().isoformat() if ep.published_at else ""
+        head = f"{i}. {_truncate(ep.title or 'Untitled Episode', _TITLE_MAX)}"
+        tail = ", ".join(x for x in (feed_title, when) if x)
+        lines.append(f"{head} ({tail})" if tail else head)
+    if len(eps) > TRANSCRIPT_MATCH_LIMIT:
+        lines.append("More matches not shown; add more words from the title.")
+    return "\n".join(lines)
+
+
+def _handle_transcript(chat_id: int, text: str, db_factory: Callable[[], Session]):
+    parsed = parse_transcript_args(text)
+    if parsed is None:
+        return chat_id, TRANSCRIPT_USAGE
+    ref, fmt = parsed
+    db = db_factory()
+    try:
+        # A bare number picks from the last list sent to this chat.
+        if ref.isdigit() and chat_id in _pending_choices:
+            choices = _pending_choices[chat_id]
+            n = int(ref)
+            if not 1 <= n <= len(choices):
+                return chat_id, f"Pick a number between 1 and {len(choices)}."
+            ep = db.query(Episode).filter(Episode.id == choices[n - 1]).first()
+            if ep is None:
+                _pending_choices.pop(chat_id, None)
+                return chat_id, "That episode is gone. Search again."
+            _pending_choices.pop(chat_id, None)
+            return _transcript_command(chat_id, ep, fmt)
+
+        eps = find_episodes(db, ref)
+        if not eps:
+            return chat_id, f"No finished episode matches \"{ref}\"."
+        if len(eps) == 1:
+            _pending_choices.pop(chat_id, None)
+            return _transcript_command(chat_id, eps[0], fmt)
+        _pending_choices[chat_id] = [str(ep.id) for ep in eps[:TRANSCRIPT_MATCH_LIMIT]]
+        return chat_id, format_transcript_choices(eps, ref)
+    finally:
+        db.close()
+
+
 def _command_of(text: str) -> str | None:
     """Return the lower-cased command word of a message, or None.
 
@@ -252,11 +371,11 @@ def handle_update(
     update: dict,
     allowlist: frozenset[int],
     db_factory: Callable[[], Session],
-) -> tuple[int, str] | SearchCommand | None:
+) -> tuple[int, str] | SearchCommand | TranscriptCommand | None:
     """Route one Telegram update to a reply.
 
-    Returns `(chat_id, text)` to send, a `SearchCommand` the loop must still
-    run (it needs an async HTTP call), or None when the update needs no reply
+    Returns `(chat_id, text)` to send, a `SearchCommand` / `TranscriptCommand`
+    the loop must still run (they need an async HTTP call), or None when the update needs no reply
     (non-message updates, messages without text). Synchronous on purpose: the
     DB session is sync, and the caller runs this in a worker thread.
     """
@@ -300,6 +419,8 @@ def handle_update(
         if parsed is None:
             return chat_id, SEARCH_USAGE
         return SearchCommand(chat_id, parsed[0], parsed[1])
+    if command == "/transcript":
+        return _handle_transcript(chat_id, text, db_factory)
     if command is not None:
         return chat_id, f"Unknown command {command}.\n\n{HELP_TEXT}"
     return chat_id, HELP_TEXT
@@ -318,6 +439,17 @@ class TelegramApiError(Exception):
         self.method = method
         self.status = status
         self.description = description
+
+
+def _attachment_filename(content_disposition: str) -> str | None:
+    """Filename from a Content-Disposition header, preferring the RFC 5987 form."""
+    m = _FILENAME_STAR_RE.search(content_disposition)
+    if m:
+        from urllib.parse import unquote
+
+        return unquote(m.group(1).strip())
+    m = _FILENAME_RE.search(content_disposition)
+    return m.group(1) if m else None
 
 
 def _redact(token: str | None, text: str) -> str:
@@ -484,8 +616,12 @@ class TelegramBot:
             return
         if isinstance(reply, SearchCommand):
             reply = (reply.chat_id, await self._search(reply))
-        chat_id, text = reply
-        await self._send(token, chat_id, text)
+        elif isinstance(reply, TranscriptCommand):
+            failure = await self._transcript(token, reply)
+            reply = (reply.chat_id, failure) if failure else None
+        if reply is not None:
+            chat_id, text = reply
+            await self._send(token, chat_id, text)
         message = update.get("message") or {}
         logger.info(
             '"action": "telegram_bot_command", "user_id": %s, "command": "%s", '
@@ -517,6 +653,67 @@ class TelegramBot:
             )
             return SEARCH_UNAVAILABLE
         return format_search(page, cmd.query, cmd.page, self._lan_url)
+
+    async def _send_document(
+        self, token: str, chat_id: int, filename: str, data: bytes, mime: str, caption: str
+    ) -> None:
+        """`sendDocument` is multipart, unlike every other call here."""
+        url = f"{API_BASE}/bot{token}/sendDocument"
+        resp = await self._client.post(
+            url,
+            data={"chat_id": str(chat_id), "caption": caption[:1024]},
+            files={"document": (filename, data, mime)},
+        )
+        try:
+            payload = resp.json()
+        except ValueError:
+            payload = {}
+        if resp.status_code != 200 or not payload.get("ok"):
+            raise TelegramApiError(
+                "sendDocument", resp.status_code, str(payload.get("description") or "no description")
+            )
+
+    async def _transcript(self, token: str, cmd: TranscriptCommand) -> str | None:
+        """Fetch the export from the web app and upload it. Returns an error text, or None."""
+        try:
+            resp = await self._client.get(
+                f"{self._web_url}/api/episodes/{cmd.episode_id}/transcript",
+                params={"format": cmd.fmt},
+                timeout=TRANSCRIPT_TIMEOUT_SECS,
+            )
+        except Exception as exc:
+            logger.warning(
+                '"action": "telegram_bot_transcript_failed", "error": "%s (%s)"',
+                exc,
+                type(exc).__name__,
+            )
+            return TRANSCRIPT_UNAVAILABLE
+        if resp.status_code == 404:
+            return TRANSCRIPT_MISSING
+        if resp.status_code != 200:
+            logger.warning(
+                '"action": "telegram_bot_transcript_failed", "status": %s', resp.status_code
+            )
+            return TRANSCRIPT_UNAVAILABLE
+
+        filename = _attachment_filename(resp.headers.get("content-disposition", ""))
+        if not filename:
+            filename = f"transcript.{cmd.fmt}"
+        mime = "text/markdown" if cmd.fmt == "md" else "text/plain"
+        caption_bits = [cmd.title]
+        if cmd.feed_title:
+            caption_bits.append(cmd.feed_title)
+        if cmd.duration_secs:
+            caption_bits.append(_fmt_ts(cmd.duration_secs))
+        caption = " · ".join(caption_bits)
+        try:
+            await self._send_document(token, cmd.chat_id, filename, resp.content, mime, caption)
+        except Exception as exc:
+            logger.warning(
+                '"action": "telegram_bot_send_failed", "error": "%s"', _redact(token, str(exc))
+            )
+            return "Could not upload the transcript to Telegram."
+        return None
 
     async def _back_off(self) -> None:
         await self._sleep(self._backoff)
