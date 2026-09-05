@@ -200,7 +200,7 @@ class TestLoop:
         caplog.set_level(logging.INFO)
         fake = _Telegram()
         bot = _bot(fake, {"telegram_bot_token": None, "telegram_allowed_user_ids": "1"}, sleeps)
-        assert await bot.poll_once() is False
+        assert await bot.poll_once(wait=True) is False
         assert fake.requests == []
         assert sleeps == [tb.IDLE_RECHECK_SECS]
         assert "no bot token configured" in caplog.text
@@ -209,8 +209,8 @@ class TestLoop:
         caplog.set_level(logging.INFO)
         fake = _Telegram()
         bot = _bot(fake, {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": ""}, sleeps)
-        assert await bot.poll_once() is False
-        assert await bot.poll_once() is False
+        assert await bot.poll_once(wait=True) is False
+        assert await bot.poll_once(wait=True) is False
         assert fake.requests == []
         # Idle reason is logged once, not once per iteration.
         assert caplog.text.count("telegram_bot_idle") == 1
@@ -221,8 +221,8 @@ class TestLoop:
         fake = _Telegram([[_msg("/queue", update_id=7), _msg("/help", user_id=9, update_id=8)]])
         bot = _bot(fake, {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"}, sleeps)
 
-        assert await bot.poll_once() is True
-        assert await bot.poll_once() is True
+        assert await bot.poll_once(wait=True) is True
+        assert await bot.poll_once(wait=True) is True
 
         gets = fake.calls("getUpdates")
         assert "offset" not in gets[0]
@@ -230,9 +230,12 @@ class TestLoop:
         assert gets[0]["allowed_updates"] == ["message"]
         assert gets[1]["offset"] == 9
         sends = fake.calls("sendMessage")
-        assert sends[0] == {"chat_id": 1, "text": "Queue is empty. 1 episodes done."}
-        assert sends[1] == {"chat_id": 9, "text": REFUSAL_TEXT}
-        assert "parse_mode" not in sends[0]
+        # Handlers run concurrently (#1036), so compare as a set.
+        assert {(s["chat_id"], s["text"]) for s in sends} == {
+            (1, "Queue is empty. 1 episodes done."),
+            (9, REFUSAL_TEXT),
+        }
+        assert all("parse_mode" not in s for s in sends)
         assert sleeps == []
 
     async def test_uses_token_in_url(self, sleeps):
@@ -246,14 +249,14 @@ class TestLoop:
 
         fake.handler = handler
         bot = _bot(fake, {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"}, sleeps)
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         assert client_calls == [f"{tb.API_BASE}/bot{TOKEN}/getUpdates"]
 
     async def test_409_conflict_backs_off_and_keeps_going(self, sleeps, caplog):
         fake = _Telegram(status_for_get_updates=409)
         bot = _bot(fake, {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"}, sleeps)
-        await bot.poll_once()
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
+        await bot.poll_once(wait=True)
         assert "telegram_bot_conflict" in caplog.text
         assert sleeps == [tb.BACKOFF_INITIAL_SECS, tb.BACKOFF_INITIAL_SECS * 2]
 
@@ -273,7 +276,7 @@ class TestLoop:
             sleep=sleep,
         )
         for _ in range(9):
-            await bot.poll_once()
+            await bot.poll_once(wait=True)
         assert "telegram_bot_poll_failed" in caplog.text
         assert max(sleeps) == tb.BACKOFF_MAX_SECS
         assert sleeps[0] == tb.BACKOFF_INITIAL_SECS
@@ -281,11 +284,11 @@ class TestLoop:
     async def test_backoff_resets_after_success(self, sleeps):
         fake = _Telegram(status_for_get_updates=500)
         bot = _bot(fake, {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"}, sleeps)
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         fake.status = 200
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         fake.status = 500
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         assert sleeps == [tb.BACKOFF_INITIAL_SECS, tb.BACKOFF_INITIAL_SECS]
 
     async def test_command_exception_is_reported_not_raised(self, sleeps, monkeypatch, caplog):
@@ -295,7 +298,7 @@ class TestLoop:
         monkeypatch.setattr(tb, "queue_snapshot", broken)
         fake = _Telegram([[_msg("/queue")]])
         bot = _bot(fake, {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"}, sleeps)
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         assert "telegram_bot_command_failed" in caplog.text
         assert fake.calls("sendMessage") == [
             {"chat_id": 1, "text": "Something went wrong handling that command."}
@@ -313,7 +316,7 @@ class TestLoop:
 
         fake.handler = handler
         bot = _bot(fake, {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"}, sleeps)
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         assert caplog.text.count("telegram_bot_send_failed") == 2
         assert bot.offset == 3
 
@@ -329,11 +332,11 @@ class TestLoop:
 
         fake.handler = handler
         bot = _bot(fake, {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"}, sleeps)
-        await bot.poll_once()  # send fails
+        await bot.poll_once(wait=True)  # send fails
         fake.status = 500
-        await bot.poll_once()  # poll fails
+        await bot.poll_once(wait=True)  # poll fails
         fake.status = 409
-        await bot.poll_once()  # conflict
+        await bot.poll_once(wait=True)  # conflict
         assert "telegram_bot_send_failed" in caplog.text
         assert "telegram_bot_poll_failed" in caplog.text
         assert "telegram_bot_conflict" in caplog.text
@@ -354,7 +357,7 @@ class TestLoop:
             settings_reader=lambda _db: {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"},
             sleep=sleep,
         )
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         assert '"status": 502' in caplog.text
         assert sleeps == [tb.BACKOFF_INITIAL_SECS]
 
@@ -362,9 +365,9 @@ class TestLoop:
         fake = _Telegram([[_msg("/help", user_id=2)], [_msg("/help", user_id=2)]])
         settings = {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"}
         bot = _bot(fake, settings, sleeps)
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         settings["telegram_allowed_user_ids"] = "1, 2"
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         texts = [b["text"] for b in fake.calls("sendMessage")]
         assert texts == [REFUSAL_TEXT, HELP_TEXT]
 
@@ -540,7 +543,7 @@ class TestSearchLoop:
         tg = _Telegram([[_msg('/search "carbon tax" p2')]])
         web = _Web(_page([_hit()], total=7, page=2))
         bot = _bot_with_web(tg, web, sleeps)
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
 
         assert len(web.requests) == 1
         req = web.requests[0]
@@ -556,7 +559,7 @@ class TestSearchLoop:
     async def test_web_error_gives_short_reply(self, sleeps, caplog):
         tg = _Telegram([[_msg("/search x")]])
         bot = _bot_with_web(tg, _Web(status=500), sleeps)
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         assert tg.calls("sendMessage")[0]["text"] == SEARCH_UNAVAILABLE
         assert '"status": 500' in caplog.text
         assert bot.offset == 11
@@ -569,7 +572,7 @@ class TestSearchLoop:
                 raise httpx.ConnectError("no route to host")
 
         bot = _bot_with_web(tg, Down(), sleeps)
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         assert tg.calls("sendMessage")[0]["text"] == SEARCH_UNAVAILABLE
         assert "telegram_bot_search_failed" in caplog.text
 
@@ -813,7 +816,7 @@ class TestTranscriptLoop:
         web = _WebTranscript()
         sess = _Session(by_title=[_ep(eid=EP_ID)])
         bot = _bot_for_transcript(tg, web, sleeps, sess)
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
 
         assert web.requests[0].url.path == f"/api/episodes/{EP_ID}/transcript"
         assert web.requests[0].url.params["format"] == "txt"
@@ -837,7 +840,7 @@ class TestTranscriptLoop:
         tg = TG([[_msg("/transcript rome md", chat_id=-42)]])
         web = _WebTranscript(cd="attachment; filename*=UTF-8''Why-Rome-fell_transcript.md")
         bot = _bot_for_transcript(tg, web, sleeps, _Session(by_title=[_ep(eid=EP_ID)]))
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
 
         assert web.requests[0].url.params["format"] == "md"
         assert captured["ctype"].startswith("multipart/form-data")
@@ -851,7 +854,7 @@ class TestTranscriptLoop:
     async def test_web_404_means_no_transcript(self, sleeps):
         tg = _Telegram([[_msg("/transcript rome")]])
         bot = _bot_for_transcript(tg, _WebTranscript(status=404), sleeps, _Session(by_title=[_ep()]))
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         assert tg.calls("sendMessage") == [{"chat_id": 1, "text": TRANSCRIPT_MISSING}]
 
     async def test_web_500_and_unreachable(self, sleeps, caplog):
@@ -868,7 +871,7 @@ class TestTranscriptLoop:
 
         web.handler = flaky
         bot = _bot_for_transcript(tg, web, sleeps, _Session(by_title=[_ep()]))
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         texts = [b["text"] for b in tg.calls("sendMessage")]
         assert texts == [TRANSCRIPT_UNAVAILABLE, TRANSCRIPT_UNAVAILABLE]
         assert caplog.text.count("telegram_bot_transcript_failed") == 2
@@ -883,10 +886,254 @@ class TestTranscriptLoop:
 
         tg = TG([[_msg("/transcript rome")]])
         bot = _bot_for_transcript(tg, _WebTranscript(), sleeps, _Session(by_title=[_ep()]))
-        await bot.poll_once()
+        await bot.poll_once(wait=True)
         assert tg.calls("sendMessage") == [{"chat_id": 1, "text": "Could not upload the transcript to Telegram."}]
         assert "too big" in caplog.text
         assert TOKEN not in caplog.text
 
     async def test_help_mentions_transcript(self):
         assert "/transcript" in HELP_TEXT
+
+
+# --------------------------------------------------------------------------
+# /ask (#1036)
+# --------------------------------------------------------------------------
+
+from app.services.telegram_bot import (  # noqa: E402
+    ASK_BUSY,
+    ASK_UNAVAILABLE,
+    ASK_USAGE,
+    THINKING_TEXT,
+    AskCommand,
+    format_answer,
+    parse_ask_args,
+    parse_sse,
+)
+
+PIPE = "http://pipe-test:8000"
+
+
+def _sse(*events):
+    out = []
+    for ev, data in events:
+        out.append(f"event: {ev}\ndata: {json.dumps(data)}\n\n")
+    return "".join(out).encode()
+
+
+SOURCES = [
+    {"episode_id": "ep-1", "episode_title": "Why Rome fell", "start_time": 418.2},
+    {"episode_id": "ep-2", "episode_title": "Brazil Under Water", "start_time": 65},
+]
+
+
+class TestParseAsk:
+    def test_args(self):
+        assert parse_ask_args("/ask") is None
+        assert parse_ask_args("/ask   ") is None
+        assert parse_ask_args("/ask@PodlogBot why did rome fall?") == "why did rome fall?"
+
+    def test_routing(self):
+        assert handle_update(_msg("/ask"), frozenset({1}), MagicMock) == (1, ASK_USAGE)
+        assert handle_update(_msg("/ask why?", chat_id=-3), frozenset({1}), MagicMock) == AskCommand(-3, "why?")
+        assert handle_update(_msg("/ask why?", user_id=9), frozenset({1}), MagicMock) == (9, REFUSAL_TEXT)
+
+
+class TestParseSse:
+    def test_events_and_json(self):
+        lines = ["event: sources", 'data: [{"a": 1}]', "", "event: token", 'data: {"content": "hi"}', "",
+                 ": comment", "event: done", "data: {}", ""]
+        assert parse_sse(lines) == [("sources", [{"a": 1}]), ("token", {"content": "hi"}), ("done", {})]
+
+    def test_unterminated_last_event_is_flushed_and_junk_ignored(self):
+        assert parse_sse(["garbage", "event: token", "data: not json"]) == [("token", "not json")]
+        assert parse_sse(["data: {\"x\": 1}"]) == [("message", {"x": 1})]
+
+
+class TestFormatAnswer:
+    def test_partial_has_no_sources(self):
+        assert format_answer("so far", SOURCES, LAN, final=False) == "so far"
+        assert format_answer("", None, None, final=False) == THINKING_TEXT
+
+    def test_final_with_sources_and_links(self):
+        out = format_answer("Because plagues.", SOURCES, LAN, final=True)
+        assert out.splitlines()[0] == "Because plagues."
+        assert "Sources:" in out
+        assert f"1. Why Rome fell [6:58] {LAN}/episodes/ep-1#t-418" in out
+        assert "2. Brazil Under Water [1:05]" in out
+
+    def test_final_without_lan_has_no_links(self):
+        out = format_answer("x", SOURCES, None, final=True)
+        assert "/episodes/" not in out and "1. Why Rome fell [6:58]" in out
+
+    def test_empty_final(self):
+        assert format_answer("", [], None, final=True) == "(no answer)"
+
+    def test_truncation_keeps_sources(self):
+        out = format_answer("w" * 5000, SOURCES, None, final=True)
+        assert len(out) <= tb.MAX_MESSAGE_CHARS
+        assert "[answer truncated" in out
+        assert out.endswith("2. Brazil Under Water [1:05]")
+
+
+class _Pipeline:
+    def __init__(self, body=None, status=200):
+        self.body = body if body is not None else _sse(
+            ("sources", SOURCES), ("token", {"content": "Because "}), ("token", {"content": "plagues."}), ("done", {})
+        )
+        self.status = status
+        self.requests = []
+
+    def handler(self, request):
+        self.requests.append(request)
+        if self.status != 200:
+            return httpx.Response(self.status, text="nope")
+        return httpx.Response(200, content=self.body, headers={"content-type": "text/event-stream"})
+
+
+class _TelegramEdits(_Telegram):
+    """Telegram fake that hands out message ids and records edits."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.next_id = 100
+
+    def handler(self, request):
+        method = request.url.path.rsplit("/", 1)[-1]
+        if method == "sendMessage":
+            body = json.loads(request.content)
+            self.requests.append((method, body))
+            self.next_id += 1
+            return httpx.Response(200, json={"ok": True, "result": {"message_id": self.next_id}})
+        return super().handler(request)
+
+
+def _bot_for_ask(tg, pipe, sleeps, *, edit_interval=0.0, lan_url=LAN):
+    def route(request):
+        if request.url.host == "pipe-test":
+            return pipe.handler(request)
+        return tg.handler(request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(route))
+
+    async def sleep(secs):
+        sleeps.append(secs)
+
+    return TelegramBot(
+        client,
+        db_factory=MagicMock,
+        settings_reader=lambda _db: {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"},
+        sleep=sleep,
+        lan_url=lan_url,
+        pipeline_url=PIPE + "/",
+        edit_interval=edit_interval,
+    )
+
+
+class TestAskLoop:
+    async def test_streams_into_one_edited_message(self, sleeps):
+        tg = _TelegramEdits([[_msg("/ask why did rome fall?", chat_id=-9)]])
+        pipe = _Pipeline()
+        bot = _bot_for_ask(tg, pipe, sleeps)
+        await bot.poll_once(wait=True)
+
+        req = pipe.requests[0]
+        assert req.url.path == "/api/ask"
+        assert json.loads(req.content) == {"question": "why did rome fall?"}
+
+        sends = tg.calls("sendMessage")
+        assert sends == [{"chat_id": -9, "text": THINKING_TEXT}]
+        edits = tg.calls("editMessageText")
+        assert all(e["chat_id"] == -9 and e["message_id"] == 101 for e in edits)
+        assert [e["text"] for e in edits][:2] == ["Because", "Because plagues."]  # progress edits
+        final = edits[-1]["text"]
+        assert final.startswith("Because plagues.\n\nSources:\n1. Why Rome fell [6:58]")
+        assert f"{LAN}/episodes/ep-1#t-418" in final
+        assert bot._ask_busy is False
+
+    async def test_no_progress_edits_when_interval_is_large(self, sleeps):
+        tg = _TelegramEdits([[_msg("/ask q")]])
+        bot = _bot_for_ask(tg, _Pipeline(), sleeps, edit_interval=1e9)
+        await bot.poll_once(wait=True)
+        edits = tg.calls("editMessageText")
+        assert len(edits) == 1 and edits[0]["text"].startswith("Because plagues.")
+
+    async def test_error_event_is_relayed(self, sleeps):
+        body = _sse(("error", {"message": "Model 'qwen2.5:3b' is not available. Run: make ollama-pull"}), ("done", {}))
+        tg = _TelegramEdits([[_msg("/ask q")]])
+        bot = _bot_for_ask(tg, _Pipeline(body=body), sleeps)
+        await bot.poll_once(wait=True)
+        assert tg.calls("editMessageText")[-1]["text"].startswith("Model 'qwen2.5:3b' is not available")
+
+    async def test_pipeline_500_and_unreachable(self, sleeps, caplog):
+        tg = _TelegramEdits([[_msg("/ask q", update_id=1), _msg("/ask q", update_id=2)]])
+        pipe = _Pipeline(status=500)
+        n = {"c": 0}
+        orig = pipe.handler
+
+        def flaky(request):
+            n["c"] += 1
+            if n["c"] == 2:
+                raise httpx.ConnectError("down")
+            return orig(request)
+
+        pipe.handler = flaky
+        bot = _bot_for_ask(tg, pipe, sleeps, edit_interval=1e9)
+        # Two /ask in one batch run concurrently; the second one is refused as busy
+        # or served after the first -- either way both chats get a reply.
+        await bot.poll_once(wait=True)
+        texts = [e["text"] for e in tg.calls("editMessageText")] + [s["text"] for s in tg.calls("sendMessage")]
+        assert ASK_UNAVAILABLE in texts
+        assert "telegram_bot_ask_failed" in caplog.text
+        assert bot.offset == 3
+        assert bot._ask_busy is False
+
+    async def test_busy_reply_when_an_answer_is_in_flight(self, sleeps):
+        tg = _TelegramEdits([[_msg("/ask q", chat_id=5)]])
+        bot = _bot_for_ask(tg, _Pipeline(), sleeps)
+        bot._ask_busy = True
+        await bot.poll_once(wait=True)
+        assert tg.calls("sendMessage") == [{"chat_id": 5, "text": ASK_BUSY}]
+        assert tg.calls("editMessageText") == []
+
+    async def test_other_commands_are_not_blocked_by_ask(self, sleeps):
+        """Handlers are separate tasks: /help in the same batch answers regardless."""
+        tg = _TelegramEdits([[_msg("/ask q", update_id=1), _msg("/help", update_id=2)]])
+        bot = _bot_for_ask(tg, _Pipeline(), sleeps)
+        await bot.poll_once(wait=True)
+        assert {s["text"] for s in tg.calls("sendMessage")} == {THINKING_TEXT, HELP_TEXT}
+
+    async def test_falls_back_to_new_message_when_initial_send_failed(self, sleeps):
+        class TG(_TelegramEdits):
+            def __init__(self, *a, **k):
+                super().__init__(*a, **k)
+                self.fail_first = True
+
+            def handler(self, request):
+                if request.url.path.endswith("sendMessage") and self.fail_first:
+                    self.fail_first = False
+                    self.requests.append(("sendMessage", json.loads(request.content)))
+                    return httpx.Response(400, json={"ok": False, "description": "bad"})
+                return super().handler(request)
+
+        tg = TG([[_msg("/ask q")]])
+        bot = _bot_for_ask(tg, _Pipeline(), sleeps, edit_interval=1e9)
+        await bot.poll_once(wait=True)
+        assert tg.calls("editMessageText") == []
+        assert tg.calls("sendMessage")[-1]["text"].startswith("Because plagues.")
+
+    async def test_not_modified_edit_is_not_a_failure(self, sleeps, caplog):
+        class TG(_TelegramEdits):
+            def handler(self, request):
+                if request.url.path.endswith("editMessageText"):
+                    self.requests.append(("editMessageText", json.loads(request.content)))
+                    return httpx.Response(400, json={"ok": False, "description": "Bad Request: message is not modified"})
+                return super().handler(request)
+
+        tg = TG([[_msg("/ask q")]])
+        bot = _bot_for_ask(tg, _Pipeline(), sleeps, edit_interval=1e9)
+        await bot.poll_once(wait=True)
+        assert "telegram_bot_edit_failed" not in caplog.text
+        assert len(tg.calls("sendMessage")) == 1  # no fallback resend
+
+    async def test_help_mentions_ask(self):
+        assert "/ask" in HELP_TEXT

@@ -41,6 +41,10 @@ The dropdown is populated from **names you have confirmed**, not raw `SPEAKER_00
 - **Model selection (remote)** — a curated list of Fireworks chat models: **OpenAI gpt-oss 20B** (fast), **OpenAI gpt-oss 120B** (balanced), **GLM 5.1** (quality). Pick one in Settings; the Ask page dropdown re-renders with the active provider's list and migrates a stale `localStorage` value automatically. Fireworks retires serverless models on a regular cadence, so this list moves — it lives in `apps/web/src/lib/rag-models.ts` and is the only place it needs changing.
 - **Additional RAM:** ~2 GB when the local LLM is active (auto-unloaded when idle).
 
+## Asking from Telegram
+
+With bot commands enabled (see [Notifications](09-notifications.md#telegram-bot-commands)), `/ask <question>` runs the same retrieval and generation from a Telegram chat, with the configured default model and no feed scope. The reply streams into a single message that the bot keeps editing, and ends with the sources. One question is answered at a time.
+
 ## Prerequisites
 
 The Ask AI feature requires:

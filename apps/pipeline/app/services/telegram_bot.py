@@ -33,6 +33,7 @@ Design (see issue #1034 and PRD-07):
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 from collections.abc import Callable
@@ -68,6 +69,16 @@ _SNIPPET_WINDOW = 160
 _SEARCH_PAGE_RE = re.compile(r"\s+p(\d{1,3})$")
 _HEADLINE_TAG_RE = re.compile(r"</?b>")
 
+# The pipeline API in this very process; the bot posts /ask to it over
+# loopback so model resolution, provider routing and the stored system
+# prompt behave exactly as they do for the web page. Not configurable on
+# purpose: uvicorn binds 0.0.0.0:8000 in every deployment we ship.
+PIPELINE_INTERNAL_URL = "http://127.0.0.1:8000"
+ASK_TIMEOUT_SECS = 300  # matches rag.py's Ollama read timeout
+ASK_EDIT_INTERVAL_SECS = 2.0
+ASK_SOURCES_MAX = 5
+THINKING_TEXT = "Thinking…"
+
 TRANSCRIPT_MATCH_LIMIT = 6
 TRANSCRIPT_TIMEOUT_SECS = 30
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
@@ -82,6 +93,7 @@ _pending_choices: dict[int, list[str]] = {}
 REFUSAL_TEXT = "This bot is private."
 HELP_TEXT = (
     "Podlog bot commands:\n"
+    "/ask <question> - ask the transcripts a question (Ask AI)\n"
     "/search <words> - search transcripts; add p2 for the next page\n"
     "/transcript <episode> - send an episode's transcript as a file; "
     "episode id or title words, add md for Markdown\n"
@@ -100,6 +112,10 @@ TRANSCRIPT_USAGE = (
 )
 TRANSCRIPT_UNAVAILABLE = "Transcript is unavailable right now: the web app did not answer."
 TRANSCRIPT_MISSING = "That episode has no transcript yet."
+ASK_USAGE = "Usage: /ask <question>"
+ASK_BUSY = "Still answering the previous question. Try again in a moment."
+ASK_UNAVAILABLE = "Ask is unavailable right now: the pipeline did not answer."
+ASK_TRUNCATED = "\n\n[answer truncated: Telegram message limit]"
 
 
 # --------------------------------------------------------------------------
@@ -354,6 +370,92 @@ def _handle_transcript(chat_id: int, text: str, db_factory: Callable[[], Session
         db.close()
 
 
+@dataclass(frozen=True)
+class AskCommand:
+    """An /ask the loop still has to run: it streams from the pipeline API."""
+
+    chat_id: int
+    question: str
+
+
+def parse_ask_args(text: str) -> str | None:
+    body = (text or "").strip().split(maxsplit=1)
+    return body[1].strip() or None if len(body) == 2 else None
+
+
+def parse_sse(lines) -> list[tuple[str, Any]]:
+    """Turn SSE lines into (event, data) pairs. Tolerates junk; JSON where possible.
+
+    Sync and list-returning on purpose: the streaming consumer in `_ask`
+    feeds it line by line via `_SseParser`; this wrapper exists for tests
+    and for completeness.
+    """
+    parser = _SseParser()
+    out: list[tuple[str, Any]] = []
+    for line in lines:
+        out.extend(parser.feed(line))
+    out.extend(parser.flush())
+    return out
+
+
+class _SseParser:
+    def __init__(self) -> None:
+        self._event: str | None = None
+        self._data: list[str] = []
+
+    def feed(self, line: str) -> list[tuple[str, Any]]:
+        line = line.rstrip("\r\n")
+        if line == "":
+            return self.flush()
+        if line.startswith(":"):
+            return []
+        if line.startswith("event:"):
+            self._event = line[6:].strip()
+        elif line.startswith("data:"):
+            self._data.append(line[5:].lstrip())
+        return []
+
+    def flush(self) -> list[tuple[str, Any]]:
+        if self._event is None and not self._data:
+            return []
+        raw = "\n".join(self._data)
+        try:
+            data: Any = json.loads(raw) if raw else {}
+        except ValueError:
+            data = raw
+        ev = (self._event or "message", data)
+        self._event, self._data = None, []
+        return [ev]
+
+
+def format_answer(
+    text: str, sources: list[dict] | None, lan_url: str | None, *, final: bool
+) -> str:
+    """The answer plus, when final, a short numbered sources block with deep links."""
+    body = (text or "").strip() or ("(no answer)" if final else THINKING_TEXT)
+    if not final or not sources:
+        return _truncate_answer(body)
+    base = (lan_url or "").rstrip("/")
+    lines = ["Sources:"]
+    for i, src in enumerate(sources[:ASK_SOURCES_MAX], start=1):
+        title = _truncate(src.get("episode_title") or "(untitled episode)", _TITLE_MAX)
+        start = src.get("start_time") or 0
+        line = f"{i}. {title} [{_fmt_ts(start)}]"
+        if base and src.get("episode_id"):
+            line += f" {base}/episodes/{src['episode_id']}#t-{int(start)}"
+        lines.append(line)
+    block = "\n\n" + "\n".join(lines)
+    room = MAX_MESSAGE_CHARS - len(block)
+    return _truncate_answer(body, room) + block
+
+
+def _truncate_answer(text: str, limit: int = MAX_MESSAGE_CHARS) -> str:
+    if len(text) <= limit:
+        return text
+    keep = max(0, limit - len(ASK_TRUNCATED))
+    return text[:keep].rstrip() + ASK_TRUNCATED
+
+
 def _command_of(text: str) -> str | None:
     """Return the lower-cased command word of a message, or None.
 
@@ -371,11 +473,11 @@ def handle_update(
     update: dict,
     allowlist: frozenset[int],
     db_factory: Callable[[], Session],
-) -> tuple[int, str] | SearchCommand | TranscriptCommand | None:
+) -> tuple[int, str] | SearchCommand | TranscriptCommand | AskCommand | None:
     """Route one Telegram update to a reply.
 
     Returns `(chat_id, text)` to send, a `SearchCommand` / `TranscriptCommand`
-    the loop must still run (they need an async HTTP call), or None when the update needs no reply
+    / `AskCommand` the loop must still run (they need an async HTTP call), or None when the update needs no reply
     (non-message updates, messages without text). Synchronous on purpose: the
     DB session is sync, and the caller runs this in a worker thread.
     """
@@ -421,6 +523,9 @@ def handle_update(
         return SearchCommand(chat_id, parsed[0], parsed[1])
     if command == "/transcript":
         return _handle_transcript(chat_id, text, db_factory)
+    if command == "/ask":
+        question = parse_ask_args(text)
+        return AskCommand(chat_id, question) if question else (chat_id, ASK_USAGE)
     if command is not None:
         return chat_id, f"Unknown command {command}.\n\n{HELP_TEXT}"
     return chat_id, HELP_TEXT
@@ -478,6 +583,8 @@ class TelegramBot:
         sleep: Callable[[float], Any] = asyncio.sleep,
         web_url: str = "http://web:3000",
         lan_url: str | None = None,
+        pipeline_url: str = PIPELINE_INTERNAL_URL,
+        edit_interval: float = ASK_EDIT_INTERVAL_SECS,
     ) -> None:
         self._client = client
         self._db_factory = db_factory
@@ -485,6 +592,14 @@ class TelegramBot:
         self._sleep = sleep
         self._web_url = web_url.rstrip("/")
         self._lan_url = lan_url or None
+        self._pipeline_url = pipeline_url.rstrip("/")
+        self._edit_interval = edit_interval
+        # Handlers run as their own tasks so a two-minute /ask does not stop
+        # /queue from answering (#1036). Tracked so tests and shutdown can
+        # wait for them.
+        self._handlers: set[asyncio.Task] = set()
+        # One local model serves everyone: one /ask at a time, bot-wide.
+        self._ask_busy = False
         self.offset: int | None = None
         self._backoff = BACKOFF_INITIAL_SECS
         # Logged once per state change, not once per iteration.
@@ -525,20 +640,135 @@ class TelegramBot:
             )
         return payload
 
-    async def _send(self, token: str, chat_id: int, text: str) -> None:
+    async def _send(self, token: str, chat_id: int, text: str) -> int | None:
+        """Send a text message; returns its message_id, or None when it failed."""
         try:
-            await self._api("sendMessage", token, chat_id=chat_id, text=text)
+            payload = await self._api("sendMessage", token, chat_id=chat_id, text=text)
         except Exception as exc:  # a failed reply must not stop the loop
             logger.warning(
                 '"action": "telegram_bot_send_failed", "error": "%s"', _redact(token, str(exc))
             )
+            return None
+        result = payload.get("result") or {}
+        mid = result.get("message_id")
+        return mid if isinstance(mid, int) else None
+
+    async def _edit(self, token: str, chat_id: int, message_id: int, text: str) -> bool:
+        try:
+            await self._api(
+                "editMessageText", token, chat_id=chat_id, message_id=message_id, text=text
+            )
+            return True
+        except TelegramApiError as exc:
+            # Telegram rejects an edit that changes nothing; that is not a failure.
+            if "not modified" in exc.description.lower():
+                return True
+            logger.warning('"action": "telegram_bot_edit_failed", "error": "%s"', exc)
+            return False
+        except Exception as exc:
+            logger.warning(
+                '"action": "telegram_bot_edit_failed", "error": "%s"', _redact(token, str(exc))
+            )
+            return False
+
+    async def _ask(self, token: str, cmd: AskCommand) -> None:
+        """Stream an answer from the pipeline's /api/ask into one edited message."""
+        if self._ask_busy:
+            await self._send(token, cmd.chat_id, ASK_BUSY)
+            return
+        self._ask_busy = True
+        try:
+            await self._ask_locked(token, cmd)
+        finally:
+            self._ask_busy = False
+
+    async def _ask_locked(self, token: str, cmd: AskCommand) -> None:
+        message_id = await self._send(token, cmd.chat_id, THINKING_TEXT)
+        loop = asyncio.get_running_loop()
+        answer: list[str] = []
+        sources: list[dict] = []
+        error: str | None = None
+        last_edit = loop.time()
+        last_text = THINKING_TEXT
+        parser = _SseParser()
+        timeout = httpx.Timeout(connect=10, read=ASK_TIMEOUT_SECS, write=10, pool=10)
+
+        async def show(text: str) -> None:
+            nonlocal last_text, message_id
+            if text == last_text:
+                return
+            if message_id is not None and await self._edit(token, cmd.chat_id, message_id, text):
+                last_text = text
+                return
+            # No message to edit (initial send failed, or edit failed): send anew.
+            message_id = await self._send(token, cmd.chat_id, text)
+            last_text = text
+
+        try:
+            async with self._client.stream(
+                "POST",
+                f"{self._pipeline_url}/api/ask",
+                json={"question": cmd.question},
+                timeout=timeout,
+            ) as resp:
+                if resp.status_code != 200:
+                    logger.warning(
+                        '"action": "telegram_bot_ask_failed", "status": %s', resp.status_code
+                    )
+                    await show(ASK_UNAVAILABLE)
+                    return
+                async for line in resp.aiter_lines():
+                    for event, data in parser.feed(line):
+                        if event == "token" and isinstance(data, dict):
+                            answer.append(str(data.get("content") or ""))
+                        elif event == "sources" and isinstance(data, list):
+                            sources = [d for d in data if isinstance(d, dict)]
+                        elif event == "error":
+                            msg = data.get("message") if isinstance(data, dict) else str(data)
+                            error = str(msg or "Ask failed.")
+                        elif event == "done":
+                            break
+                    if error is not None:
+                        break
+                    now = loop.time()
+                    if answer and now - last_edit >= self._edit_interval:
+                        last_edit = now
+                        await show(format_answer("".join(answer), None, None, final=False))
+                for event, data in parser.flush():
+                    if event == "token" and isinstance(data, dict):
+                        answer.append(str(data.get("content") or ""))
+        except Exception as exc:
+            logger.warning(
+                '"action": "telegram_bot_ask_failed", "error": "%s (%s)"',
+                exc,
+                type(exc).__name__,
+            )
+            await show(ASK_UNAVAILABLE)
+            return
+
+        if error is not None:
+            await show(error)
+            return
+        await show(format_answer("".join(answer), sources, self._lan_url, final=True))
+        logger.info(
+            '"action": "telegram_bot_ask_answered", "chars": %d, "sources": %d',
+            len("".join(answer)),
+            len(sources),
+        )
 
     # -- one iteration -------------------------------------------------------
 
-    async def poll_once(self) -> bool:
+    async def wait_idle(self) -> None:
+        """Wait for every in-flight handler task (tests, shutdown)."""
+        while self._handlers:
+            await asyncio.gather(*list(self._handlers), return_exceptions=True)
+
+    async def poll_once(self, *, wait: bool = False) -> bool:
         """Run one iteration. Returns True if `getUpdates` was called.
 
-        Never raises: every failure path logs, backs off and returns.
+        Handlers are spawned as tasks; `wait=True` awaits them before
+        returning (tests). Never raises: every failure path logs, backs off
+        and returns.
         """
         token, allowlist = await asyncio.to_thread(self._read_config)
         reason = self._idle_reason(token, allowlist)
@@ -595,7 +825,11 @@ class TelegramBot:
             update_id = update.get("update_id")
             if isinstance(update_id, int):
                 self.offset = update_id + 1
-            await self._handle(token, allowlist, update)
+            task = asyncio.create_task(self._handle(token, allowlist, update))
+            self._handlers.add(task)
+            task.add_done_callback(self._handlers.discard)
+        if wait:
+            await self.wait_idle()
         return True
 
     async def _handle(self, token: str, allowlist: frozenset[int], update: dict) -> None:
@@ -619,6 +853,9 @@ class TelegramBot:
         elif isinstance(reply, TranscriptCommand):
             failure = await self._transcript(token, reply)
             reply = (reply.chat_id, failure) if failure else None
+        elif isinstance(reply, AskCommand):
+            await self._ask(token, reply)
+            reply = None
         if reply is not None:
             chat_id, text = reply
             await self._send(token, chat_id, text)
@@ -724,6 +961,8 @@ class TelegramBot:
             try:
                 await self.poll_once()
             except asyncio.CancelledError:
+                for task in list(self._handlers):
+                    task.cancel()
                 raise
             except Exception as exc:  # belt and braces: poll_once should not raise
                 logger.error(

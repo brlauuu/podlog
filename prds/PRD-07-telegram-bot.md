@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search
 **Document:** PRD-07 — Telegram bot (inbound long-poll loop, user allowlist, chat commands)
-**Version:** 1.2
-**Status:** Foundation (#1034), `/search` (#1035) and `/transcript` (#1037) shipped; `/ask` tracked in #1036 under epic #1030
+**Version:** 1.3
+**Status:** Shipped — foundation (#1034), `/search` (#1035), `/ask` (#1036), `/transcript` (#1037); epic #1030
 **Depends on:** PRD-02 (queue dashboard contract, search, Ask), PRD-03 (compose layout, security model)
 
 **Changelog:**
+- v1.3 — `/ask` (#1036). Update handlers now run as separate asyncio tasks so a long answer does not block `/queue`; `poll_once(wait=True)` is the test-only synchronous form. Progress is shown by editing one message, never by sending many.
 - v1.2 — `/transcript` (#1037): the episode page's client-side export formatters moved to `apps/web/src/lib/transcriptExport.ts` and are served by a new route; the bot looks episodes up in the DB directly (it owns the DB) and fetches the file from the web app. Per-chat disambiguation state is in-memory.
 - v1.1 — `/search` (#1035): the web app's search route is the source; `WEB_INTERNAL_URL` and `PODLOG_LAN_URL` added to the pipeline config; paging via a `pN` suffix rather than callback queries, so the loop keeps subscribing to `message` updates only.
 - v1.0 — Initial. Specifies the inbound loop, the allowlist and the four foundation commands; reserves sections for the three follow-up commands.
@@ -56,7 +57,7 @@ Podlog's web UI is reachable only on the LAN, by design (PRD-03, #960). Using it
 | `/whoami` | anyone | `Your Telegram user id is N.` | — |
 | `/queue` | listed | counts, running episode + stage, up to 5 pending, up to 5 latest failures with error class, stuck count | `queue_snapshot()` |
 | `/search <q> [pN]` | listed | 5 hits per page: feed, episode, speaker, timestamp, ~160-char snippet around the first match, deep link when `PODLOG_LAN_URL` is set; footer with the remaining count and the next-page command | web `GET /api/search` over `WEB_INTERNAL_URL` (#1035) |
-| `/ask <q>` | listed | reserved — #1036 | pipeline `/api/ask` (SSE) |
+| `/ask <q>` | listed | "Thinking…" sent at once, then `editMessageText` every ≥2 s with the partial answer, final edit = answer + up to 5 sources (title, timestamp, deep link). `error` events relayed verbatim. One `/ask` in flight bot-wide; a second gets a busy reply | pipeline `POST /api/ask` over loopback (SSE), default model, no scope (#1036) |
 | `/transcript <ref> [md]` | listed | uploads the episode's transcript as a document (`sendDocument`), caption = title · feed · duration. `<ref>` is an episode id or title words (case-insensitive contains, finished episodes, newest first, 6 shown); several matches → numbered list kept per chat, `/transcript <n>` picks | web `GET /api/episodes/{id}/transcript?format=txt\|md` (#1037), the Export button's formatters served over HTTP |
 
 Unknown commands and plain text from a listed user return the command list. Commands are case-insensitive and accept the `@BotName` suffix Telegram appends in groups.
@@ -65,6 +66,7 @@ Unknown commands and plain text from a listed user return the command list. Comm
 
 - HTTP 409 on `getUpdates` (another consumer) → `telegram_bot_conflict`, exponential back-off 5 s → 300 s.
 - Any other poll failure → `telegram_bot_poll_failed`, same back-off; back-off resets on the next success.
+- Ask: pipeline non-200 or unreachable → `telegram_bot_ask_failed` and the "unavailable" text edited into the placeholder; an edit rejected with "message is not modified" is not an error; any other failed edit falls back to a new message.
 - A command that raises → `telegram_bot_command_failed`, a generic apology to the chat, offset still advances so the update is not replayed forever.
 - A failed `sendMessage` → `telegram_bot_send_failed`, processing continues.
 - Nothing in the loop can propagate to the FastAPI process; shutdown cancels the task with a 5 s bound.
