@@ -57,6 +57,9 @@ services:
       BACKUP_RETENTION_DAILY: ${BACKUP_RETENTION_DAILY:-7}
       BACKUP_RETENTION_WEEKLY: ${BACKUP_RETENTION_WEEKLY:-4}
       BACKUP_RETENTION_MONTHLY: ${BACKUP_RETENTION_MONTHLY:-12}
+      # #1035: the Telegram bot links search hits to episode pages. Same
+      # value `make up` passes to web (#1012); empty means no links.
+      PODLOG_LAN_URL: ${PODLOG_LAN_URL:-}
     # Bound to loopback (#952, #960). Changing this to 0.0.0.0 puts an
     # UNAUTHENTICATED write API on your network -- see the Security model
     # section in docs/guide/01-installation.md before you do.

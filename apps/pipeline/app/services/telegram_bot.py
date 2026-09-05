@@ -34,12 +34,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import SessionLocal
 from app.services.notification_settings import get_notification_settings
 from app.services.queue_snapshot import queue_snapshot
@@ -57,13 +61,25 @@ MAX_MESSAGE_CHARS = 4096
 _TITLE_MAX = 70
 _QUEUE_LIST_MAX = 5
 
+SEARCH_PAGE_SIZE = 5
+SEARCH_TIMEOUT_SECS = 10
+_SNIPPET_WINDOW = 160
+_SEARCH_PAGE_RE = re.compile(r"\s+p(\d{1,3})$")
+_HEADLINE_TAG_RE = re.compile(r"</?b>")
+
 REFUSAL_TEXT = "This bot is private."
 HELP_TEXT = (
     "Podlog bot commands:\n"
+    "/search <words> - search transcripts; add p2 for the next page\n"
     "/queue - what the pipeline is doing right now\n"
     "/whoami - show your Telegram user id\n"
-    "/help - this list"
+    "/help - this list\n"
+    "\n"
+    "Search syntax is the web app's: \"exact phrase\", -exclude, OR, speaker:Name.\n"
+    "Links open only on the home network."
 )
+SEARCH_USAGE = "Usage: /search <words>   (add p2, p3 ... for more pages)"
+SEARCH_UNAVAILABLE = "Search is unavailable right now: the web app did not answer."
 
 
 # --------------------------------------------------------------------------
@@ -133,6 +149,92 @@ def format_queue(snapshot: dict) -> str:
     return _truncate("\n".join(lines), MAX_MESSAGE_CHARS)
 
 
+@dataclass(frozen=True)
+class SearchCommand:
+    """A /search the loop still has to run: it needs an HTTP call to the web app."""
+
+    chat_id: int
+    query: str
+    page: int
+
+
+def parse_search_args(text: str) -> tuple[str, int] | None:
+    """Split `/search foo bar p2` into ("foo bar", 2). None when no query."""
+    body = (text or "").strip().split(maxsplit=1)
+    if len(body) < 2:
+        return None
+    rest = body[1].strip()
+    page = 1
+    m = _SEARCH_PAGE_RE.search(rest)
+    if m:
+        page = max(1, int(m.group(1)))
+        rest = rest[: m.start()].rstrip()
+    return (rest, page) if rest else None
+
+
+def _fmt_ts(seconds: float | int | None) -> str:
+    total = int(seconds or 0)
+    h, rem = divmod(total, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h:d}:{m:02d}:{sec:02d}" if h else f"{m:d}:{sec:02d}"
+
+
+def _snippet(headline: str) -> str:
+    """Trim a PostgreSQL `ts_headline` (whole segment, matches in <b>) to a window.
+
+    The web route highlights the entire segment (`HighlightAll=true`), so the
+    field can be a several-hundred-word speaker turn. Cut ~160 chars around
+    the first match; fall back to the start when nothing is marked.
+    """
+    raw = headline or ""
+    first = raw.find("<b>")
+    text = _HEADLINE_TAG_RE.sub("", raw)
+    # Position of the first match in the stripped text.
+    anchor = len(_HEADLINE_TAG_RE.sub("", raw[:first])) if first >= 0 else 0
+    text = " ".join(text.split())
+    if len(text) <= _SNIPPET_WINDOW:
+        return text
+    start = max(0, anchor - _SNIPPET_WINDOW // 3)
+    end = min(len(text), start + _SNIPPET_WINDOW)
+    start = max(0, end - _SNIPPET_WINDOW)
+    out = text[start:end].strip()
+    if start > 0:
+        out = "…" + out
+    if end < len(text):
+        out = out + "…"
+    return out
+
+
+def format_search(page: dict, query: str, page_no: int, lan_url: str | None) -> str:
+    """Render one page of the web app's `/api/search` response as plain text."""
+    results = page.get("results") or []
+    total = int(page.get("total") or 0)
+    if not results:
+        if page_no > 1:
+            return f"No more results for \"{query}\" (page {page_no})."
+        return f"No results for \"{query}\"."
+
+    base = (lan_url or "").rstrip("/")
+    lines = [f"Results for \"{query}\" ({total} total, page {page_no}):"]
+    for i, r in enumerate(results, start=1 + (page_no - 1) * SEARCH_PAGE_SIZE):
+        feed = _truncate(r.get("feedTitle") or "", 40)
+        title = _truncate(r.get("episodeTitle") or "(untitled episode)", _TITLE_MAX)
+        head = f"{i}. {feed} — {title}" if feed else f"{i}. {title}"
+        speaker = r.get("speakerDisplay") or r.get("speakerLabel")
+        who = f"{speaker}: " if speaker else ""
+        lines.append(head)
+        lines.append(f"   [{_fmt_ts(r.get('startTime'))}] {who}{_snippet(r.get('snippet') or '')}")
+        if base and r.get("episodeId"):
+            lines.append(
+                f"   {base}/episodes/{r['episodeId']}?q={quote(query)}"
+                f"#t-{int(r.get('startTime') or 0)}"
+            )
+    shown = (page_no - 1) * SEARCH_PAGE_SIZE + len(results)
+    if shown < total:
+        lines.append(f"{total - shown} more. Send: /search {query} p{page_no + 1}")
+    return _truncate("\n".join(lines), MAX_MESSAGE_CHARS)
+
+
 def _command_of(text: str) -> str | None:
     """Return the lower-cased command word of a message, or None.
 
@@ -150,10 +252,11 @@ def handle_update(
     update: dict,
     allowlist: frozenset[int],
     db_factory: Callable[[], Session],
-) -> tuple[int, str] | None:
+) -> tuple[int, str] | SearchCommand | None:
     """Route one Telegram update to a reply.
 
-    Returns `(chat_id, text)` to send, or None when the update needs no reply
+    Returns `(chat_id, text)` to send, a `SearchCommand` the loop must still
+    run (it needs an async HTTP call), or None when the update needs no reply
     (non-message updates, messages without text). Synchronous on purpose: the
     DB session is sync, and the caller runs this in a worker thread.
     """
@@ -192,6 +295,11 @@ def handle_update(
             return chat_id, format_queue(queue_snapshot(db))
         finally:
             db.close()
+    if command == "/search":
+        parsed = parse_search_args(text)
+        if parsed is None:
+            return chat_id, SEARCH_USAGE
+        return SearchCommand(chat_id, parsed[0], parsed[1])
     if command is not None:
         return chat_id, f"Unknown command {command}.\n\n{HELP_TEXT}"
     return chat_id, HELP_TEXT
@@ -236,11 +344,15 @@ class TelegramBot:
         db_factory: Callable[[], Session] = SessionLocal,
         settings_reader: Callable[[Session], dict] = get_notification_settings,
         sleep: Callable[[float], Any] = asyncio.sleep,
+        web_url: str = "http://web:3000",
+        lan_url: str | None = None,
     ) -> None:
         self._client = client
         self._db_factory = db_factory
         self._settings_reader = settings_reader
         self._sleep = sleep
+        self._web_url = web_url.rstrip("/")
+        self._lan_url = lan_url or None
         self.offset: int | None = None
         self._backoff = BACKOFF_INITIAL_SECS
         # Logged once per state change, not once per iteration.
@@ -370,6 +482,8 @@ class TelegramBot:
             return
         if reply is None:
             return
+        if isinstance(reply, SearchCommand):
+            reply = (reply.chat_id, await self._search(reply))
         chat_id, text = reply
         await self._send(token, chat_id, text)
         message = update.get("message") or {}
@@ -380,6 +494,29 @@ class TelegramBot:
             _command_of(message.get("text") or "") or "text",
             int((asyncio.get_running_loop().time() - started) * 1000),
         )
+
+    async def _search(self, cmd: SearchCommand) -> str:
+        """Call the web app's search route and format one page."""
+        try:
+            resp = await self._client.get(
+                f"{self._web_url}/api/search",
+                params={"q": cmd.query, "page": cmd.page, "pageSize": SEARCH_PAGE_SIZE},
+                timeout=SEARCH_TIMEOUT_SECS,
+            )
+            if resp.status_code != 200:
+                logger.warning(
+                    '"action": "telegram_bot_search_failed", "status": %s', resp.status_code
+                )
+                return SEARCH_UNAVAILABLE
+            page = resp.json()
+        except Exception as exc:
+            logger.warning(
+                '"action": "telegram_bot_search_failed", "error": "%s (%s)"',
+                exc,
+                type(exc).__name__,
+            )
+            return SEARCH_UNAVAILABLE
+        return format_search(page, cmd.query, cmd.page, self._lan_url)
 
     async def _back_off(self) -> None:
         await self._sleep(self._backoff)
@@ -410,4 +547,8 @@ def new_client() -> httpx.AsyncClient:
 async def run_forever() -> None:
     """Entry point used by the FastAPI lifespan in `app/main.py`."""
     async with new_client() as client:
-        await TelegramBot(client).run_forever()
+        await TelegramBot(
+            client,
+            web_url=settings.web_internal_url,
+            lan_url=settings.podlog_lan_url,
+        ).run_forever()
