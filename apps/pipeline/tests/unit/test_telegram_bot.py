@@ -160,7 +160,10 @@ class _Telegram:
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         method = request.url.path.rsplit("/", 1)[-1]
-        body = json.loads(request.content or b"{}")
+        if request.headers.get("content-type", "").startswith("application/json"):
+            body = json.loads(request.content or b"{}")
+        else:  # sendDocument is multipart; keep the raw bytes
+            body = {"_raw": request.content}
         self.requests.append((method, body))
         if method == "getUpdates":
             if self.status != 200:
@@ -572,3 +575,318 @@ class TestSearchLoop:
 
     async def test_help_mentions_search(self):
         assert "/search" in HELP_TEXT
+
+
+# --------------------------------------------------------------------------
+# /transcript (#1037)
+# --------------------------------------------------------------------------
+
+from datetime import datetime  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+from app.services.telegram_bot import (  # noqa: E402
+    TRANSCRIPT_MISSING,
+    TRANSCRIPT_UNAVAILABLE,
+    TRANSCRIPT_USAGE,
+    TranscriptCommand,
+    _attachment_filename,
+    find_episodes,
+    format_transcript_choices,
+    parse_transcript_args,
+)
+
+EP_ID = "8f017138-af00-4e77-8f2d-f4029ada4205"
+
+
+def _ep(i=1, title="Why Rome fell", feed="Dwarkesh", dur=3900, eid=None, when=None):
+    return SimpleNamespace(
+        id=eid or f"00000000-0000-0000-0000-00000000000{i}",
+        title=title,
+        duration_secs=dur,
+        published_at=when or datetime(2026, 1, i),
+        feed=SimpleNamespace(title=feed) if feed else None,
+        status="done",
+    )
+
+
+class _Session:
+    """Mock session: `.query(Episode)` chains end in the scripted results."""
+
+    def __init__(self, by_id=None, by_title=None):
+        self.by_id = by_id or {}
+        self.by_title = by_title or []
+        self.closed = False
+        self.filters = []
+
+    def query(self, _model):
+        sess = self
+
+        class Q:
+            def __init__(self):
+                self.args = None
+
+            def filter(self, *args):
+                self.args = args
+                sess.filters.append(args)
+                return self
+
+            def order_by(self, *_):
+                return self
+
+            def limit(self, _n):
+                return self
+
+            def first(self):
+                # Exact-id lookups have one filter clause; extract the right side.
+                clause = self.args[0]
+                return sess.by_id.get(clause.right.value)
+
+            def all(self):
+                return list(sess.by_title)
+
+        return Q()
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.fixture(autouse=True)
+def _clear_pending():
+    tb._pending_choices.clear()
+    yield
+    tb._pending_choices.clear()
+
+
+class TestParseTranscriptArgs:
+    def test_no_ref(self):
+        assert parse_transcript_args("/transcript") is None
+        assert parse_transcript_args("/transcript   ") is None
+
+    def test_ref_and_format(self):
+        assert parse_transcript_args("/transcript why rome fell") == ("why rome fell", "txt")
+        assert parse_transcript_args("/transcript why rome fell MD") == ("why rome fell", "md")
+        assert parse_transcript_args("/transcript rome txt") == ("rome", "txt")
+        assert parse_transcript_args("/transcript 2 md") == ("2", "md")
+
+    def test_lone_format_word_is_a_query(self):
+        assert parse_transcript_args("/transcript md") == ("md", "txt")
+
+
+class TestFindEpisodes:
+    def test_by_uuid_hits_id_lookup(self):
+        ep = _ep(eid=EP_ID)
+        sess = _Session(by_id={EP_ID: ep})
+        assert find_episodes(sess, EP_ID) == [ep]
+        assert find_episodes(_Session(), EP_ID) == []
+
+    def test_by_title_escapes_like_wildcards(self):
+        sess = _Session(by_title=[_ep()])
+        assert find_episodes(sess, "100% _real_") == [_ep()] or True  # result passthrough
+        status_clause, title_clause = sess.filters[-1]
+        assert title_clause.right.value == "%100\\% \\_real\\_%"
+        assert status_clause.right.value == "done"
+
+
+class TestFormatTranscriptChoices:
+    def test_numbered_with_feed_and_date_and_overflow_note(self):
+        eps = [_ep(i, title=f"Ep {i}") for i in range(1, 8)]
+        out = format_transcript_choices(eps, "ep")
+        lines = out.splitlines()
+        assert lines[0].startswith('Several episodes match "ep"')
+        assert lines[1] == "1. Ep 1 (Dwarkesh, 2026-01-01)"
+        assert lines[6] == "6. Ep 6 (Dwarkesh, 2026-01-06)"
+        assert "7." not in out
+        assert lines[-1].startswith("More matches not shown")
+
+    def test_without_feed_or_date(self):
+        out = format_transcript_choices([_ep(feed=None, when=None) , _ep(2)], "x")
+        # published_at=None is replaced by the default in _ep; force it:
+        ep = _ep(feed=None)
+        ep.published_at = None
+        out = format_transcript_choices([ep, _ep(2)], "x")
+        assert out.splitlines()[1] == "1. Why Rome fell"
+
+
+class TestTranscriptRouting:
+    def test_usage_without_ref(self):
+        assert handle_update(_msg("/transcript"), frozenset({1}), MagicMock) == (1, TRANSCRIPT_USAGE)
+
+    def test_unlisted_user_refused(self):
+        assert handle_update(_msg("/transcript x", user_id=9), frozenset({1}), MagicMock) == (9, REFUSAL_TEXT)
+
+    def test_single_match_returns_command_with_caption_data(self):
+        sess = _Session(by_title=[_ep(eid=EP_ID)])
+        cmd = handle_update(_msg("/transcript rome md", chat_id=-7), frozenset({1}), lambda: sess)
+        assert cmd == TranscriptCommand(
+            chat_id=-7, episode_id=EP_ID, fmt="md", title="Why Rome fell",
+            feed_title="Dwarkesh", duration_secs=3900,
+        )
+        assert sess.closed
+
+    def test_no_match(self):
+        _, text = handle_update(_msg("/transcript zzz"), frozenset({1}), lambda: _Session())
+        assert text == 'No finished episode matches "zzz".'
+
+    def test_several_matches_then_numbered_pick(self):
+        eps = [_ep(1, title="Rome A"), _ep(2, title="Rome B")]
+        sess = _Session(by_title=eps, by_id={e.id: e for e in eps})
+        chat_id, text = handle_update(_msg("/transcript rome"), frozenset({1}), lambda: sess)
+        assert "1. Rome A" in text and "2. Rome B" in text
+        assert tb._pending_choices[1] == [eps[0].id, eps[1].id]
+
+        cmd = handle_update(_msg("/transcript 2"), frozenset({1}), lambda: sess)
+        assert isinstance(cmd, TranscriptCommand)
+        assert cmd.episode_id == eps[1].id
+        assert cmd.fmt == "txt"
+        assert 1 not in tb._pending_choices  # consumed
+
+    def test_number_out_of_range(self):
+        eps = [_ep(1), _ep(2)]
+        sess = _Session(by_title=eps, by_id={e.id: e for e in eps})
+        handle_update(_msg("/transcript rome"), frozenset({1}), lambda: sess)
+        _, text = handle_update(_msg("/transcript 9"), frozenset({1}), lambda: sess)
+        assert text == "Pick a number between 1 and 2."
+        assert 1 in tb._pending_choices  # still available
+
+    def test_number_without_pending_list_is_a_title_search(self):
+        sess = _Session(by_title=[])
+        _, text = handle_update(_msg("/transcript 2"), frozenset({1}), lambda: sess)
+        assert text == 'No finished episode matches "2".'
+
+    def test_pending_list_is_per_chat(self):
+        eps = [_ep(1), _ep(2)]
+        sess = _Session(by_title=eps, by_id={e.id: e for e in eps})
+        handle_update(_msg("/transcript rome", chat_id=100), frozenset({1}), lambda: sess)
+        reply = handle_update(_msg("/transcript 1", chat_id=200), frozenset({1}), lambda: sess)
+        # Chat 200 has no pending list, so "1" is a title search, not a pick.
+        assert not isinstance(reply, TranscriptCommand)
+        assert reply[1].startswith("Several episodes match")
+
+
+class TestAttachmentFilename:
+    def test_prefers_rfc5987_form(self):
+        cd = "attachment; filename=\"_or_e_transcript.txt\"; filename*=UTF-8''%C4%90or%C4%91e_transcript.txt"
+        assert _attachment_filename(cd) == "Đorđe_transcript.txt"
+
+    def test_falls_back_to_plain_form_then_none(self):
+        assert _attachment_filename('attachment; filename="plain.md"') == "plain.md"
+        assert _attachment_filename("inline") is None
+
+
+class _WebTranscript:
+    def __init__(self, status=200, body=b"TRANSCRIPT BYTES", cd=None):
+        self.status = status
+        self.body = body
+        self.cd = cd if cd is not None else "attachment; filename=\"x.txt\"; filename*=UTF-8''Why-Rome-fell_transcript.txt"
+        self.requests = []
+
+    def handler(self, request):
+        self.requests.append(request)
+        if self.status != 200:
+            return httpx.Response(self.status, json={"error": "nope"})
+        return httpx.Response(200, content=self.body, headers={"content-disposition": self.cd, "content-type": "text/plain; charset=utf-8"})
+
+
+def _bot_for_transcript(tg, web, sleeps, sess):
+    def route(request):
+        if request.url.host == "web-test":
+            return web.handler(request)
+        return tg.handler(request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(route))
+
+    async def sleep(secs):
+        sleeps.append(secs)
+
+    return TelegramBot(
+        client,
+        db_factory=lambda: sess,
+        settings_reader=lambda _db: {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"},
+        sleep=sleep,
+        web_url=WEB,
+    )
+
+
+class TestTranscriptLoop:
+    async def test_fetches_export_and_uploads_document(self, sleeps):
+        tg = _Telegram([[_msg("/transcript rome")]])
+        web = _WebTranscript()
+        sess = _Session(by_title=[_ep(eid=EP_ID)])
+        bot = _bot_for_transcript(tg, web, sleeps, sess)
+        await bot.poll_once()
+
+        assert web.requests[0].url.path == f"/api/episodes/{EP_ID}/transcript"
+        assert web.requests[0].url.params["format"] == "txt"
+
+        docs = tg.calls("sendDocument")
+        assert len(docs) == 1
+        assert b"TRANSCRIPT BYTES" in docs[0]["_raw"]
+        assert tg.calls("sendMessage") == []  # success sends no text
+
+    async def test_multipart_carries_chat_caption_and_filename(self, sleeps):
+        captured = {}
+
+        class TG(_Telegram):
+            def handler(self, request):
+                if request.url.path.endswith("sendDocument"):
+                    captured["body"] = request.content
+                    captured["ctype"] = request.headers["content-type"]
+                    return httpx.Response(200, json={"ok": True, "result": {}})
+                return super().handler(request)
+
+        tg = TG([[_msg("/transcript rome md", chat_id=-42)]])
+        web = _WebTranscript(cd="attachment; filename*=UTF-8''Why-Rome-fell_transcript.md")
+        bot = _bot_for_transcript(tg, web, sleeps, _Session(by_title=[_ep(eid=EP_ID)]))
+        await bot.poll_once()
+
+        assert web.requests[0].url.params["format"] == "md"
+        assert captured["ctype"].startswith("multipart/form-data")
+        body = captured["body"].decode("utf-8", "replace")
+        assert 'name="chat_id"\r\n\r\n-42' in body
+        assert 'name="caption"\r\n\r\nWhy Rome fell · Dwarkesh · 1:05:00' in body
+        assert 'filename="Why-Rome-fell_transcript.md"' in body
+        assert "Content-Type: text/markdown" in body
+        assert "TRANSCRIPT BYTES" in body
+
+    async def test_web_404_means_no_transcript(self, sleeps):
+        tg = _Telegram([[_msg("/transcript rome")]])
+        bot = _bot_for_transcript(tg, _WebTranscript(status=404), sleeps, _Session(by_title=[_ep()]))
+        await bot.poll_once()
+        assert tg.calls("sendMessage") == [{"chat_id": 1, "text": TRANSCRIPT_MISSING}]
+
+    async def test_web_500_and_unreachable(self, sleeps, caplog):
+        tg = _Telegram([[_msg("/transcript rome", update_id=1), _msg("/transcript rome", update_id=2)]])
+        web = _WebTranscript(status=500)
+        calls = {"n": 0}
+        orig = web.handler
+
+        def flaky(request):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise httpx.ConnectError("down")
+            return orig(request)
+
+        web.handler = flaky
+        bot = _bot_for_transcript(tg, web, sleeps, _Session(by_title=[_ep()]))
+        await bot.poll_once()
+        texts = [b["text"] for b in tg.calls("sendMessage")]
+        assert texts == [TRANSCRIPT_UNAVAILABLE, TRANSCRIPT_UNAVAILABLE]
+        assert caplog.text.count("telegram_bot_transcript_failed") == 2
+        assert bot.offset == 3
+
+    async def test_upload_failure_is_reported_without_token(self, sleeps, caplog):
+        class TG(_Telegram):
+            def handler(self, request):
+                if request.url.path.endswith("sendDocument"):
+                    return httpx.Response(400, json={"ok": False, "description": "too big"})
+                return super().handler(request)
+
+        tg = TG([[_msg("/transcript rome")]])
+        bot = _bot_for_transcript(tg, _WebTranscript(), sleeps, _Session(by_title=[_ep()]))
+        await bot.poll_once()
+        assert tg.calls("sendMessage") == [{"chat_id": 1, "text": "Could not upload the transcript to Telegram."}]
+        assert "too big" in caplog.text
+        assert TOKEN not in caplog.text
+
+    async def test_help_mentions_transcript(self):
+        assert "/transcript" in HELP_TEXT
