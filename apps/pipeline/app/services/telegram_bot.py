@@ -25,8 +25,10 @@ Design (see issue #1034 and PRD-07):
   mutable.
 - **Settings are re-read every iteration**, so changes made in the Settings UI
   take effect without a restart.
-- **Read-only.** No command here writes anything. Write commands (retry,
-  delete) would need their own confirmation step and their own issue.
+- **One write: `/addfeed` (#1053).** Every other command is read-only.
+  Adding a source is additive and undone with one click on the Feeds page;
+  typing the URL is the confirmation. Retry/delete would still need their
+  own issue and their own confirmation step.
 - **Plain-text replies.** No `parse_mode`, so an episode title containing
   Markdown characters cannot break a message.
 """
@@ -36,6 +38,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -94,6 +97,7 @@ REFUSAL_TEXT = "This bot is private."
 HELP_TEXT = (
     "Podlog bot commands:\n"
     "/ask <question> - ask the transcripts a question (Ask AI)\n"
+    "/addfeed <full|test|selective> <rss url> - add a podcast source\n"
     "/search <words> - search transcripts; add p2 for the next page\n"
     "/transcript <episode> - send an episode's transcript as a file; "
     "episode id or title words, add md for Markdown\n"
@@ -112,6 +116,20 @@ TRANSCRIPT_USAGE = (
 )
 TRANSCRIPT_UNAVAILABLE = "Transcript is unavailable right now: the web app did not answer."
 TRANSCRIPT_MISSING = "That episode has no transcript yet."
+ADDFEED_USAGE = (
+    "Usage: /addfeed <full|test|selective> <rss url>\n"
+    "full = every episode, kept current; test = the latest episode only; "
+    "selective = pick one of the five newest."
+)
+ADDFEED_PREVIEW_TIMEOUT_SECS = 60
+ADDFEED_PICK_TTL_SECS = 600
+ADDFEED_PICK_COUNT = 5
+ADDFEED_MORE_HINT = (
+    "Want more than one, or an older episode? Use the Feeds page; "
+    "you can add episodes to this feed there any time."
+)
+FETCHING_TEXT = "Fetching the feed…"
+_URL_TRAIL = ".,;:!?)]}>'\""
 ASK_USAGE = "Usage: /ask <question>"
 ASK_BUSY = "Still answering the previous question. Try again in a moment."
 ASK_UNAVAILABLE = "Ask is unavailable right now: the pipeline did not answer."
@@ -456,6 +474,100 @@ def _truncate_answer(text: str, limit: int = MAX_MESSAGE_CHARS) -> str:
     return text[:keep].rstrip() + ASK_TRUNCATED
 
 
+@dataclass(frozen=True)
+class FeedCommand:
+    """An /addfeed the loop still has to run against the pipeline's feeds API."""
+
+    chat_id: int
+    action: str  # "preview" | "add"
+    mode: str
+    url: str
+    guid: str | None = None
+
+
+@dataclass
+class _PendingPick:
+    expires_at: float
+    url: str
+    title: str | None
+    episodes: list[tuple[str, str]]  # (guid, label)
+
+
+# Per-chat "which of these five?" state for selective /addfeed. In-memory on
+# purpose, like /transcript's candidate list.
+_pending_picks: dict[int, _PendingPick] = {}
+
+
+def parse_addfeed_args(text: str) -> tuple[str, str] | tuple[str, None] | None:
+    """`/addfeed full <url>` -> ("full", url); `/addfeed 3` -> ("pick", "3");
+    `/addfeed cancel` -> ("cancel", None); None when unusable."""
+    body = (text or "").strip().split()
+    if len(body) < 2:
+        return None
+    first = body[1].lower()
+    if first == "cancel" and len(body) == 2:
+        return ("cancel", None)
+    if len(body) == 2 and first.isdigit():
+        return ("pick", first)
+    if first not in ("full", "test", "selective") or len(body) != 3:
+        return None
+    url = body[2].rstrip(_URL_TRAIL)
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return None
+    return (first, url)
+
+
+def _pick_label(ep: dict) -> str:
+    title = _truncate(ep.get("title") or "(untitled)", _TITLE_MAX)
+    when = (ep.get("published_at") or "")[:10]
+    return f"{title} ({when})" if when else title
+
+
+def newest_episodes(episodes: list[dict], n: int = ADDFEED_PICK_COUNT) -> list[dict]:
+    """Newest first by published_at (undated last, in feed order)."""
+    dated = [e for e in episodes if e.get("published_at")]
+    undated = [e for e in episodes if not e.get("published_at")]
+    dated.sort(key=lambda e: str(e["published_at"]), reverse=True)
+    return (dated + undated)[:n]
+
+
+def format_pick_list(title: str | None, episodes: list[dict]) -> str:
+    lines = [f"{title or 'This feed'} - the {len(episodes)} newest episodes. Reply /addfeed <number> to add one:"]
+    for i, ep in enumerate(episodes, start=1):
+        lines.append(f"{i}. {_pick_label(ep)}")
+    lines.append(ADDFEED_MORE_HINT)
+    return "\n".join(lines)
+
+
+def _handle_addfeed(chat_id: int, text: str, now: float) -> tuple[int, str] | FeedCommand:
+    parsed = parse_addfeed_args(text)
+    if parsed is None:
+        return chat_id, ADDFEED_USAGE
+    kind, arg = parsed
+    pending = _pending_picks.get(chat_id)
+    if pending is not None and pending.expires_at <= now:
+        _pending_picks.pop(chat_id, None)
+        pending = None
+
+    if kind == "cancel":
+        had = _pending_picks.pop(chat_id, None) is not None
+        return chat_id, "Cancelled." if had else "Nothing to cancel."
+    if kind == "pick":
+        if pending is None:
+            return chat_id, "No episode list is waiting. Start with /addfeed selective <rss url>."
+        n = int(arg or 0)
+        if not 1 <= n <= len(pending.episodes):
+            return chat_id, f"Pick one number between 1 and {len(pending.episodes)}. {ADDFEED_MORE_HINT}"
+        guid, _label = pending.episodes[n - 1]
+        _pending_picks.pop(chat_id, None)
+        return FeedCommand(chat_id, "add", "selective", pending.url, guid)
+    # A fresh /addfeed drops any pending list.
+    _pending_picks.pop(chat_id, None)
+    if kind == "selective":
+        return FeedCommand(chat_id, "preview", "selective", arg or "")
+    return FeedCommand(chat_id, "add", kind, arg or "")
+
+
 def _command_of(text: str) -> str | None:
     """Return the lower-cased command word of a message, or None.
 
@@ -473,7 +585,7 @@ def handle_update(
     update: dict,
     allowlist: frozenset[int],
     db_factory: Callable[[], Session],
-) -> tuple[int, str] | SearchCommand | TranscriptCommand | AskCommand | None:
+) -> tuple[int, str] | SearchCommand | TranscriptCommand | AskCommand | FeedCommand | None:
     """Route one Telegram update to a reply.
 
     Returns `(chat_id, text)` to send, a `SearchCommand` / `TranscriptCommand`
@@ -526,6 +638,8 @@ def handle_update(
     if command == "/ask":
         question = parse_ask_args(text)
         return AskCommand(chat_id, question) if question else (chat_id, ASK_USAGE)
+    if command == "/addfeed":
+        return _handle_addfeed(chat_id, text, time.monotonic())
     if command is not None:
         return chat_id, f"Unknown command {command}.\n\n{HELP_TEXT}"
     return chat_id, HELP_TEXT
@@ -544,6 +658,17 @@ class TelegramApiError(Exception):
         self.method = method
         self.status = status
         self.description = description
+
+
+def _api_detail(resp: httpx.Response) -> str:
+    """The pipeline's `detail` string, or the status code when there is none."""
+    try:
+        detail = resp.json().get("detail")
+    except Exception:
+        detail = None
+    if isinstance(detail, list):  # FastAPI validation errors
+        detail = "; ".join(str(d.get("msg", d)) for d in detail if isinstance(d, dict)) or None
+    return str(detail) if detail else f"the pipeline answered {resp.status_code}"
 
 
 def _attachment_filename(content_disposition: str) -> str | None:
@@ -856,6 +981,9 @@ class TelegramBot:
         elif isinstance(reply, AskCommand):
             await self._ask(token, reply)
             reply = None
+        elif isinstance(reply, FeedCommand):
+            await self._addfeed(token, reply)
+            reply = None
         if reply is not None:
             chat_id, text = reply
             await self._send(token, chat_id, text)
@@ -951,6 +1079,82 @@ class TelegramBot:
             )
             return "Could not upload the transcript to Telegram."
         return None
+
+    async def _addfeed(self, token: str, cmd: FeedCommand) -> None:
+        """Preview (selective step 1) or add a feed through the pipeline's feeds API."""
+        message_id = await self._send(token, cmd.chat_id, FETCHING_TEXT)
+
+        async def show(text: str) -> None:
+            if message_id is None or not await self._edit(token, cmd.chat_id, message_id, text):
+                await self._send(token, cmd.chat_id, text)
+
+        base = self._pipeline_url
+        try:
+            if cmd.action == "preview":
+                resp = await self._client.get(
+                    f"{base}/api/feeds/preview",
+                    params={"url": cmd.url},
+                    timeout=ADDFEED_PREVIEW_TIMEOUT_SECS,
+                )
+                if resp.status_code != 200:
+                    await show(f"Could not add that feed: {_api_detail(resp)}")
+                    return
+                data = resp.json()
+                episodes = newest_episodes(data.get("episodes") or [])
+                if not episodes:
+                    await show("Could not add that feed: it has no episodes.")
+                    return
+                _pending_picks[cmd.chat_id] = _PendingPick(
+                    expires_at=time.monotonic() + ADDFEED_PICK_TTL_SECS,
+                    url=cmd.url,
+                    title=data.get("title"),
+                    episodes=[(e.get("guid") or "", _pick_label(e)) for e in episodes],
+                )
+                await show(format_pick_list(data.get("title"), episodes))
+                return
+
+            # "add": look the URL up first, because POST /api/feeds answers the
+            # same way for a brand-new feed and for a test->full promotion.
+            existing = None
+            listing = await self._client.get(f"{base}/api/feeds", timeout=SEARCH_TIMEOUT_SECS)
+            if listing.status_code == 200:
+                existing = next(
+                    (f for f in listing.json() if f.get("url") == cmd.url), None
+                )
+            body: dict[str, Any] = {"url": cmd.url, "mode": cmd.mode}
+            if cmd.guid:
+                body["selected_guids"] = [cmd.guid]
+            resp = await self._client.post(
+                f"{base}/api/feeds", json=body, timeout=ADDFEED_PREVIEW_TIMEOUT_SECS
+            )
+            if resp.status_code not in (200, 201):
+                await show(f"Could not add that feed: {_api_detail(resp)}")
+                return
+            feed = resp.json()
+            title = feed.get("title") or cmd.url
+            if existing is not None:
+                await show(
+                    f"{title} was already here as {existing.get('mode')}; "
+                    f"promoted to full, remaining episodes are being queued."
+                )
+            elif cmd.mode == "full":
+                await show(f"Added {title} (full). Its episodes are being queued.")
+            elif cmd.mode == "test":
+                await show(f"Added {title} (test). The latest episode is being queued.")
+            else:
+                await show(f"Added {title} (selective). 1 episode queued. {ADDFEED_MORE_HINT}")
+            logger.info(
+                '"action": "telegram_bot_feed_added", "mode": "%s", "promoted": %s',
+                cmd.mode,
+                existing is not None,
+            )
+        except Exception as exc:
+            logger.warning(
+                '"action": "telegram_bot_addfeed_failed", "error": "%s (%s)"',
+                _redact(token, str(exc)),
+                type(exc).__name__,
+            )
+            await show("Could not add that feed: the pipeline did not answer.")
 
     async def _back_off(self) -> None:
         await self._sleep(self._backoff)

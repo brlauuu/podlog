@@ -36,6 +36,10 @@ You can change a feed's mode at any time, in either direction:
 
 Neither direction re-processes an episode that is already done, and neither deletes anything. Making a feed selective is the answer to a show that turned out to be chattier than you wanted: pausing stops the flood, but only going selective lets you keep picking the episodes you do want.
 
+## Adding a Feed from Telegram
+
+With bot commands enabled (see [Notifications](09-notifications.md#telegram-bot-commands)), `/addfeed full <rss url>` or `/addfeed test <rss url>` adds a source from your phone, and `/addfeed selective <rss url>` lets you pick one of the five newest episodes. The bot replies with one line either way, so you know whether it worked. Anything more than that, such as several episodes or an older one, is done here.
+
 ## Adding More Selective Episodes
 
 Selective feeds get an extra **Add episodes** button. It reopens the episode picker with everything you haven't ingested yet, so you can pull in a few more without promoting the whole back-catalog. The same filter box is available here, and episodes already in the feed stay greyed out and untouched — including when you use **Select all** on a filtered view.

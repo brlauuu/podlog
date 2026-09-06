@@ -37,11 +37,12 @@ Leave the field empty and the bot never reads a message; notifications keep work
 | `/ask <question>` | Ask AI from the chat. The bot replies "Thinking…" at once and edits that message as the answer streams in, then appends up to five sources with the episode and timestamp (linked when the LAN address is known). Uses the model and provider configured in Settings → Inference; one question at a time, since one local model serves everyone. A local answer can take a minute or two on CPU |
 | `/search <words>` | The top five transcript hits, with podcast, episode, speaker, timestamp and a snippet. Same syntax as the [search page](04-search.md): `"exact phrase"`, `-exclude`, `OR`, `speaker:Name`. Add `p2`, `p3`… for the next page. Each hit links to the episode at that moment; the link uses the LAN address `make up` detected, so it opens only on the home network |
 | `/transcript <episode>` | Sends the episode's transcript as a file, the same export as the episode page's Export button. `<episode>` is an episode id or a few words from the title; when several titles match you get a numbered list and reply `/transcript 2`. Add `md` for Markdown instead of plain text |
+| `/addfeed <full\|test\|selective> <rss url>` | Adds a podcast source, the same three modes as the Add Feed dialog. Full and test are one message: you get "Added <title>" or one line saying why it did not work (not a feed, unreachable, already present). Selective shows the five newest episodes and you reply `/addfeed <number>` to add exactly one; for more than one, or an older episode, use the Feeds page. This is the bot's only command that changes anything, and it is undone with one click on the Feeds page |
 | `/queue` | What the pipeline is doing: counts per state, the episode being processed and its stage, the next few pending, the latest failures |
 | `/whoami` | Your numeric Telegram user ID (works for everyone) |
 | `/help`, `/start` | The command list |
 
-Every command is read-only. Nothing you can send the bot changes a feed, an episode, a setting or a backup. Read the [Security model](01-installation.md#security-model) for what putting someone on the list means.
+Every command is read-only except `/addfeed`, which adds a source and nothing else. Nothing you can send the bot deletes or reprocesses an episode, changes a setting, or touches a backup. Read the [Security model](01-installation.md#security-model) for what putting someone on the list means.
 
 The bot's log lines are prefixed `telegram_bot_` in `docker compose logs pipeline`. `telegram_bot_conflict` means something else is calling `getUpdates` with the same token — usually a second Podlog install, or the manual `getUpdates` URL from setup still open in a browser tab.
 
