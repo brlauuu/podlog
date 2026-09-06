@@ -140,8 +140,17 @@ jobs:
 
       # --no-deps: the export is already fully pinned, so audit exactly those
       # versions rather than re-resolving.
+      #
+      # --ignore-vuln for every id in audit-ignore.txt (#1033): those are the
+      # findings triaged in pyproject.toml's CVE block as unfixable until
+      # whisperx moves. Without the list a new, fixable advisory (nltk, Sep
+      # 2026) was indistinguishable from the permanent backlog and sat
+      # unnoticed. The job stays continue-on-error; red now means "untriaged".
       - name: Audit locked dependencies for known CVEs
-        run: pip-audit -r /tmp/requirements.txt --no-deps --progress-spinner off
+        run: |
+          echo "ignoring $(grep -cvE '^\s*(#|$)' audit-ignore.txt) triaged advisories (see audit-ignore.txt)"
+          grep -vE '^\s*(#|$)' audit-ignore.txt | sed 's/^/--ignore-vuln /' \
+            | xargs pip-audit -r /tmp/requirements.txt --no-deps --progress-spinner off
 
   web-unit-full:
     name: Web Unit Full

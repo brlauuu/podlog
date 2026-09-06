@@ -1,0 +1,31 @@
+# Advisory ids the CI dependency audit ignores (#1033).
+#
+# Every id here is triaged in the "CVE triage" block of pyproject.toml, which
+# says why it cannot be fixed today (whisperx pins torch~=2.8.0 and
+# huggingface-hub<1.0, or no release carries the fix). Add an id ONLY after
+# writing its triage line there; remove it when the fix lands in the lock.
+# The audit job (.github/workflows/ci-full-unit.yml) turns each line into
+# `--ignore-vuln <id>`, so a red audit means an advisory nobody has looked at.
+#
+# torch 2.8.0 -- not applicable (pip-audit matches 2.6.0-only ranges)
+PYSEC-2025-194
+CVE-2025-2999
+CVE-2025-3001
+# torch 2.8.0 -- real, blocked by whisperx torch~=2.8.0
+PYSEC-2025-203
+PYSEC-2025-204
+PYSEC-2025-206
+PYSEC-2026-2286
+# torch -- no fix in any release
+PYSEC-2026-139
+# transformers 4.57.6 -- real, blocked by whisperx huggingface-hub<1.0
+PYSEC-2025-217
+PYSEC-2026-2288
+PYSEC-2026-2289
+PYSEC-2026-2290
+CVE-2026-9856
+# lightning 2.6.5 -- no fix in any release
+PYSEC-2026-3624
+# nltk 3.10.3 -- reported "through 3.10.3" by pip-audit's feed; parser/tagger
+# APIs whisperx never calls
+PYSEC-2026-3740
