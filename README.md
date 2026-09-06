@@ -18,6 +18,8 @@
 
 </div>
 
+> **Website:** [brlauuu.github.io/podlog](https://brlauuu.github.io/podlog/)
+>
 > **See it before installing:** two short recordings, a [fresh install](docs/walkthroughs/install.webm) (4 min) and [applying an update](docs/walkthroughs/update.webm) (2 min). Scripts and details in [`docs/walkthroughs/`](docs/walkthroughs/README.md).
 
 ## Features

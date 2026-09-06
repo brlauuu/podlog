@@ -1,0 +1,66 @@
+# Landing page (#1056): publishes site/ to GitHub Pages.
+#
+# The page is plain HTML and CSS with no build step. Two things are assembled
+# at deploy time so the page cannot drift from the product: the version is
+# read from the repo-root VERSION file (#936: the only place a version lives)
+# and the walkthrough recordings are copied from docs/walkthroughs/ (#1039).
+#
+# Runs on every push to main that touches an input, and on release tags, so
+# the published page always shows the newest release.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "VERSION"
+      - "docs/walkthroughs/*.webm"
+      - ".github/workflows/pages.yml"
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy site
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assemble the site
+        run: |
+          set -eu
+          rm -rf _site && mkdir -p _site/media
+          cp -R site/. _site/
+          cp docs/walkthroughs/install.webm docs/walkthroughs/update.webm _site/media/
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          DATE="$(date -u +%Y-%m-%d)"
+          sed -i "s/__VERSION__/$VERSION/g; s/__DEPLOYED__/$DATE/g" _site/index.html
+          grep -q "__VERSION__" _site/index.html && { echo "placeholder left in page"; exit 1; }
+          ls -la _site _site/media
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
