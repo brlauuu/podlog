@@ -24,7 +24,7 @@ Podlog runs entirely on CPU.
 
 2. **HuggingFace account** — [create one](https://huggingface.co/join) (free), then [generate an access token](https://huggingface.co/settings/tokens) (read access is sufficient)
 
-3. **Accept the pyannote license** — visit [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) and click "Agree and access repository." Without this, speaker diarization will silently fail. (If you override `PYANNOTE_MODEL` to a different pyannote release, accept the license for that model instead.)
+3. **Accept the pyannote license** — visit [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) and click "Agree and access repository." Without this, speaker diarization cannot run; Podlog checks at startup and says so on the queue page and in `/api/health`, so you will not find out an hour into your first transcription. (If you override `PYANNOTE_MODEL` to a different pyannote release, accept the license for that model instead.)
 
 4. **PostgreSQL client tools** (optional, for health monitoring) — needed by the host-level health check script:
    ```bash

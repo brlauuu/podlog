@@ -24,6 +24,8 @@ Episodes are processed sequentially (one at a time) to avoid running out of memo
 
 On a fresh install the worker spends its first 5–15 minutes downloading the speech models before it can take a job. While that is happening the queue page shows a banner saying so, and anything you add waits in Pending. It goes away by itself when the worker is ready. See [First Run](02-first-run.md).
 
+The same spot shows a red notice if speaker diarization cannot run because the HuggingFace token is wrong or the pyannote licence has not been accepted; see [Troubleshooting](17-troubleshooting.md).
+
 ## The Stage Bar
 
 The colored bar at the top of the queue page shows counts per stage, and clicking a segment filters the list to just those episodes. Every stage in the table above has its own segment, so you can watch an episode move across the bar from Pending through to Done.

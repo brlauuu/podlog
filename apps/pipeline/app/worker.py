@@ -210,6 +210,34 @@ def run_idle_hook(db) -> None:
         logger.exception('"action": "meta_analysis_idle_hook_failed"')
 
 
+def _warn_if_diarization_preflight_fails() -> None:
+    """Say at startup, not an hour later, that diarization cannot work (#1048).
+
+    A bad HF_TOKEN or an unaccepted pyannote licence used to surface only as
+    the first episode finishing without speakers. The same check feeds
+    /api/health, where the queue page shows it as a banner.
+    """
+    try:
+        from app.services.preflight import diarization_preflight
+
+        result = diarization_preflight(force=True)
+    except Exception:  # a warning must never be able to block worker startup
+        logger.warning('"action": "diarization_preflight_check_failed"')
+        return
+    if result.status == "FAILED":
+        logger.warning(
+            '"action": "diarization_preflight_failed", "model": "%s", "detail": "%s"',
+            result.model,
+            result.detail,
+        )
+    else:
+        logger.info(
+            '"action": "diarization_preflight", "status": "%s", "detail": "%s"',
+            result.status,
+            result.detail,
+        )
+
+
 def _warn_if_embedding_provider_retired() -> None:
     """Warn at startup when the stored embedding provider can no longer work (#944).
 
@@ -259,6 +287,7 @@ def main() -> None:
     register_notification_handlers(bus)
     validate_wiring()
     _warn_if_embedding_provider_retired()
+    _warn_if_diarization_preflight_fails()
 
     last_periodic_run: dict[str, datetime] = {}
 
