@@ -4,7 +4,7 @@ Common issues and how to fix them.
 
 ## Worker stuck on first run
 
-**Symptom:** Queue shows no activity, worker logs show download progress.
+**Symptom:** The queue page shows a "downloading speech models" banner, episodes stay in Pending, worker logs show download progress.
 
 **Cause:** The worker is downloading Whisper and pyannote models (~3 GB). This is normal and happens only once.
 
