@@ -1137,3 +1137,244 @@ class TestAskLoop:
 
     async def test_help_mentions_ask(self):
         assert "/ask" in HELP_TEXT
+
+
+# --------------------------------------------------------------------------
+# /addfeed (#1053)
+# --------------------------------------------------------------------------
+
+from app.services.telegram_bot import (  # noqa: E402
+    ADDFEED_MORE_HINT,
+    ADDFEED_USAGE,
+    FETCHING_TEXT,
+    FeedCommand,
+    format_pick_list,
+    newest_episodes,
+    parse_addfeed_args,
+)
+
+URL = "https://example.com/feed.xml"
+
+
+@pytest.fixture(autouse=True)
+def _clear_picks():
+    tb._pending_picks.clear()
+    yield
+    tb._pending_picks.clear()
+
+
+def _preview(n=8, title="The Show"):
+    return {
+        "title": title, "description": None, "image_url": None, "website_url": None,
+        "episodes": [
+            {"guid": f"g{i}", "title": f"Ep {i}", "published_at": f"2026-01-{i:02d}T00:00:00Z",
+             "duration_secs": 60, "audio_url": f"https://example.com/{i}.mp3"}
+            for i in range(1, n + 1)
+        ],
+    }
+
+
+class TestParseAddfeed:
+    def test_modes_and_url_cleanup(self):
+        assert parse_addfeed_args(f"/addfeed full {URL}") == ("full", URL)
+        assert parse_addfeed_args(f"/addfeed TEST {URL}.") == ("test", URL)
+        assert parse_addfeed_args(f"/addfeed@PodlogBot selective {URL}),") == ("selective", URL)
+
+    def test_pick_and_cancel(self):
+        assert parse_addfeed_args("/addfeed 3") == ("pick", "3")
+        assert parse_addfeed_args("/addfeed cancel") == ("cancel", None)
+
+    @pytest.mark.parametrize("bad", ["/addfeed", "/addfeed full", f"/addfeed weekly {URL}",
+                                     "/addfeed full ftp://x/y", "/addfeed full example.com/feed",
+                                     f"/addfeed full {URL} extra", "/addfeed 1 2"])
+    def test_unusable(self, bad):
+        assert parse_addfeed_args(bad) is None
+
+
+class TestNewestAndPickList:
+    def test_newest_five_by_date_undated_last(self):
+        eps = _preview(8)["episodes"]
+        eps.append({"guid": "u", "title": "Undated", "published_at": None})
+        out = newest_episodes(eps)
+        assert [e["guid"] for e in out] == ["g8", "g7", "g6", "g5", "g4"]
+        assert newest_episodes(eps[-1:])[0]["guid"] == "u"
+
+    def test_format(self):
+        out = format_pick_list("The Show", newest_episodes(_preview(8)["episodes"]))
+        lines = out.splitlines()
+        assert lines[0].startswith("The Show - the 5 newest episodes. Reply /addfeed <number>")
+        assert lines[1] == "1. Ep 8 (2026-01-08)"
+        assert lines[5] == "5. Ep 4 (2026-01-04)"
+        assert lines[-1] == ADDFEED_MORE_HINT
+
+
+class TestAddfeedRouting:
+    def test_usage_and_refusal(self):
+        assert handle_update(_msg("/addfeed"), frozenset({1}), MagicMock) == (1, ADDFEED_USAGE)
+        assert handle_update(_msg(f"/addfeed full {URL}", user_id=9), frozenset({1}), MagicMock) == (9, REFUSAL_TEXT)
+
+    def test_full_and_test_become_add_commands(self):
+        assert handle_update(_msg(f"/addfeed full {URL}"), frozenset({1}), MagicMock) == FeedCommand(1, "add", "full", URL)
+        assert handle_update(_msg(f"/addfeed test {URL}"), frozenset({1}), MagicMock) == FeedCommand(1, "add", "test", URL)
+
+    def test_selective_becomes_preview(self):
+        assert handle_update(_msg(f"/addfeed selective {URL}"), frozenset({1}), MagicMock) == FeedCommand(1, "preview", "selective", URL)
+
+    def test_pick_without_list_cancel_without_list(self):
+        assert handle_update(_msg("/addfeed 2"), frozenset({1}), MagicMock)[1].startswith("No episode list is waiting")
+        assert handle_update(_msg("/addfeed cancel"), frozenset({1}), MagicMock) == (1, "Nothing to cancel.")
+
+    def test_pick_flow(self, monkeypatch):
+        tb._pending_picks[1] = tb._PendingPick(expires_at=10_000, url=URL, title="S", episodes=[("g8", "a"), ("g7", "b"), ("g6", "c"), ("g5", "d"), ("g4", "e")])
+        monkeypatch.setattr(tb.time, "monotonic", lambda: 100.0)
+        _, text = handle_update(_msg("/addfeed 9"), frozenset({1}), MagicMock)
+        assert text.startswith("Pick one number between 1 and 5.") and ADDFEED_MORE_HINT in text
+        assert 1 in tb._pending_picks  # still waiting
+        cmd = handle_update(_msg("/addfeed 2"), frozenset({1}), MagicMock)
+        assert cmd == FeedCommand(1, "add", "selective", URL, "g7")
+        assert 1 not in tb._pending_picks
+
+    def test_pick_list_expires(self, monkeypatch):
+        tb._pending_picks[1] = tb._PendingPick(expires_at=50, url=URL, title="S", episodes=[("g", "a")])
+        monkeypatch.setattr(tb.time, "monotonic", lambda: 100.0)
+        _, text = handle_update(_msg("/addfeed 1"), frozenset({1}), MagicMock)
+        assert text.startswith("No episode list is waiting")
+
+    def test_cancel_and_fresh_addfeed_drop_the_list(self):
+        tb._pending_picks[1] = tb._PendingPick(expires_at=1e9, url=URL, title="S", episodes=[("g", "a")])
+        assert handle_update(_msg("/addfeed cancel"), frozenset({1}), MagicMock) == (1, "Cancelled.")
+        tb._pending_picks[1] = tb._PendingPick(expires_at=1e9, url=URL, title="S", episodes=[("g", "a")])
+        handle_update(_msg(f"/addfeed full {URL}"), frozenset({1}), MagicMock)
+        assert 1 not in tb._pending_picks
+
+    def test_pick_list_is_per_chat(self):
+        tb._pending_picks[1] = tb._PendingPick(expires_at=1e9, url=URL, title="S", episodes=[("g", "a")])
+        assert handle_update(_msg("/addfeed 1", chat_id=2), frozenset({1}), MagicMock)[1].startswith("No episode list")
+
+
+class _FeedsApi:
+    """Fake pipeline feeds API on the pipe-test host."""
+
+    def __init__(self, preview=None, preview_status=200, existing=None, post_status=201, post_body=None):
+        self.preview = preview if preview is not None else _preview()
+        self.preview_status = preview_status
+        self.existing = existing or []
+        self.post_status = post_status
+        self.post_body = post_body
+        self.posts = []
+
+    def handler(self, request):
+        path = request.url.path
+        if path == "/api/feeds/preview":
+            if self.preview_status != 200:
+                return httpx.Response(self.preview_status, json={"detail": "URL does not appear to be a valid RSS or Atom feed"})
+            return httpx.Response(200, json=self.preview)
+        if path == "/api/feeds" and request.method == "GET":
+            return httpx.Response(200, json=self.existing)
+        if path == "/api/feeds" and request.method == "POST":
+            self.posts.append(json.loads(request.content))
+            if self.post_status not in (200, 201):
+                return httpx.Response(self.post_status, json={"detail": self.post_body or "Feed already registered"})
+            return httpx.Response(201, json=self.post_body or {"id": "f1", "title": "The Show", "mode": self.posts[-1]["mode"], "paused": False})
+        raise AssertionError(f"unexpected {request.method} {path}")
+
+
+def _bot_for_feeds(tg, api, sleeps):
+    def route(request):
+        if request.url.host == "pipe-test":
+            return api.handler(request)
+        return tg.handler(request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(route))
+
+    async def sleep(secs):
+        sleeps.append(secs)
+
+    return TelegramBot(
+        client,
+        db_factory=MagicMock,
+        settings_reader=lambda _db: {"telegram_bot_token": TOKEN, "telegram_allowed_user_ids": "1"},
+        sleep=sleep,
+        pipeline_url=PIPE,
+    )
+
+
+def _final_text(tg):
+    edits = tg.calls("editMessageText")
+    return edits[-1]["text"] if edits else tg.calls("sendMessage")[-1]["text"]
+
+
+class TestAddfeedLoop:
+    async def test_full_add_success(self, sleeps):
+        tg = _TelegramEdits([[_msg(f"/addfeed full {URL}")]])
+        api = _FeedsApi()
+        bot = _bot_for_feeds(tg, api, sleeps)
+        await bot.poll_once(wait=True)
+        assert tg.calls("sendMessage")[0]["text"] == FETCHING_TEXT
+        assert api.posts == [{"url": URL, "mode": "full"}]
+        assert _final_text(tg) == "Added The Show (full). Its episodes are being queued."
+
+    async def test_test_add_success(self, sleeps):
+        tg = _TelegramEdits([[_msg(f"/addfeed test {URL}")]])
+        api = _FeedsApi()
+        await _bot_for_feeds(tg, api, sleeps).poll_once(wait=True)
+        assert api.posts[0]["mode"] == "test"
+        assert _final_text(tg) == "Added The Show (test). The latest episode is being queued."
+
+    async def test_invalid_feed_reports_pipeline_detail(self, sleeps):
+        tg = _TelegramEdits([[_msg(f"/addfeed full {URL}")]])
+        api = _FeedsApi(post_status=422, post_body="Could not fetch feed: 404 Not Found")
+        await _bot_for_feeds(tg, api, sleeps).poll_once(wait=True)
+        assert _final_text(tg) == "Could not add that feed: Could not fetch feed: 404 Not Found"
+
+    async def test_duplicate_reports_409(self, sleeps):
+        tg = _TelegramEdits([[_msg(f"/addfeed full {URL}")]])
+        api = _FeedsApi(existing=[{"id": "f1", "url": URL, "mode": "full", "title": "The Show"}], post_status=409)
+        await _bot_for_feeds(tg, api, sleeps).poll_once(wait=True)
+        assert _final_text(tg) == "Could not add that feed: Feed already registered"
+
+    async def test_promotion_is_named(self, sleeps):
+        tg = _TelegramEdits([[_msg(f"/addfeed full {URL}")]])
+        api = _FeedsApi(existing=[{"id": "f1", "url": URL, "mode": "test", "title": "The Show"}])
+        await _bot_for_feeds(tg, api, sleeps).poll_once(wait=True)
+        assert _final_text(tg).startswith("The Show was already here as test; promoted to full")
+
+    async def test_pipeline_unreachable(self, sleeps, caplog):
+        tg = _TelegramEdits([[_msg(f"/addfeed full {URL}")]])
+
+        class Down:
+            def handler(self, _r):
+                raise httpx.ConnectError("down")
+
+        await _bot_for_feeds(tg, Down(), sleeps).poll_once(wait=True)
+        assert _final_text(tg) == "Could not add that feed: the pipeline did not answer."
+        assert "telegram_bot_addfeed_failed" in caplog.text
+
+    async def test_selective_preview_then_pick(self, sleeps):
+        tg = _TelegramEdits([[_msg(f"/addfeed selective {URL}", update_id=1)], [_msg("/addfeed 2", update_id=2)]])
+        api = _FeedsApi()
+        bot = _bot_for_feeds(tg, api, sleeps)
+        await bot.poll_once(wait=True)
+        listing = _final_text(tg)
+        assert listing.startswith("The Show - the 5 newest episodes")
+        assert "2. Ep 7 (2026-01-07)" in listing and "6." not in listing
+        assert tb._pending_picks[1].episodes[1][0] == "g7"
+        assert api.posts == []
+
+        await bot.poll_once(wait=True)
+        assert api.posts == [{"url": URL, "mode": "selective", "selected_guids": ["g7"]}]
+        assert _final_text(tg).startswith("Added The Show (selective). 1 episode queued.")
+        assert 1 not in tb._pending_picks
+
+    async def test_selective_preview_failure_and_empty(self, sleeps):
+        tg = _TelegramEdits([[_msg(f"/addfeed selective {URL}")]])
+        await _bot_for_feeds(tg, _FeedsApi(preview_status=422), sleeps).poll_once(wait=True)
+        assert _final_text(tg) == "Could not add that feed: URL does not appear to be a valid RSS or Atom feed"
+        assert 1 not in tb._pending_picks
+
+        tg = _TelegramEdits([[_msg(f"/addfeed selective {URL}")]])
+        await _bot_for_feeds(tg, _FeedsApi(preview=_preview(0)), sleeps).poll_once(wait=True)
+        assert _final_text(tg) == "Could not add that feed: it has no episodes."
+
+    async def test_help_mentions_addfeed(self):
+        assert "/addfeed" in HELP_TEXT

@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search
 **Document:** PRD-07 — Telegram bot (inbound long-poll loop, user allowlist, chat commands)
-**Version:** 1.3
-**Status:** Shipped — foundation (#1034), `/search` (#1035), `/ask` (#1036), `/transcript` (#1037); epic #1030
+**Version:** 1.4
+**Status:** Shipped — foundation (#1034), `/search` (#1035), `/ask` (#1036), `/transcript` (#1037); epic #1030. `/addfeed` (#1053) is the first and only write.
 **Depends on:** PRD-02 (queue dashboard contract, search, Ask), PRD-03 (compose layout, security model)
 
 **Changelog:**
+- v1.4 — `/addfeed` (#1053): the bot's first write. Adds a source through the pipeline's own `POST /api/feeds` over loopback (validation, duplicate handling and promotion stay there); selective is a two-step pick from the five newest episodes, exactly one. §2 and §4 amended: "read-only" becomes "read-only except adding a source".
 - v1.3 — `/ask` (#1036). Update handlers now run as separate asyncio tasks so a long answer does not block `/queue`; `poll_once(wait=True)` is the test-only synchronous form. Progress is shown by editing one message, never by sending many.
 - v1.2 — `/transcript` (#1037): the episode page's client-side export formatters moved to `apps/web/src/lib/transcriptExport.ts` and are served by a new route; the bot looks episodes up in the DB directly (it owns the DB) and fetches the file from the web app. Per-chat disambiguation state is in-memory.
 - v1.1 — `/search` (#1035): the web app's search route is the source; `WEB_INTERNAL_URL` and `PODLOG_LAN_URL` added to the pipeline config; paging via a `pN` suffix rather than callback queries, so the loop keeps subscribing to `message` updates only.
@@ -26,7 +27,7 @@ Podlog's web UI is reachable only on the LAN, by design (PRD-03, #960). Using it
 - Zero behaviour change for installs that do not opt in.
 
 **Non-Goals**
-- Any write action (retry, delete, feed CRUD, settings). Each would need its own issue and confirmation step.
+- Write actions other than adding a source (retry, delete, feed removal, settings). Each would need its own issue and confirmation step. `/addfeed` (#1053) is allowed because it is additive and undone with one click on the Feeds page; typing the URL is its confirmation.
 - Webhooks. They need a public HTTPS endpoint, which is the thing this feature avoids.
 - Group-chat administration, inline mode, or multi-bot setups.
 
@@ -58,6 +59,7 @@ Podlog's web UI is reachable only on the LAN, by design (PRD-03, #960). Using it
 | `/queue` | listed | counts, running episode + stage, up to 5 pending, up to 5 latest failures with error class, stuck count | `queue_snapshot()` |
 | `/search <q> [pN]` | listed | 5 hits per page: feed, episode, speaker, timestamp, ~160-char snippet around the first match, deep link when `PODLOG_LAN_URL` is set; footer with the remaining count and the next-page command | web `GET /api/search` over `WEB_INTERNAL_URL` (#1035) |
 | `/ask <q>` | listed | "Thinking…" sent at once, then `editMessageText` every ≥2 s with the partial answer, final edit = answer + up to 5 sources (title, timestamp, deep link). `error` events relayed verbatim. One `/ask` in flight bot-wide; a second gets a busy reply | pipeline `POST /api/ask` over loopback (SSE), default model, no scope (#1036) |
+| `/addfeed <full\|test\|selective> <url>` | listed | "Fetching the feed…" then one line: added (mode), promoted (was already here as test/selective), or the pipeline's `detail` on failure. Selective: preview → five newest episodes → `/addfeed <n>` adds exactly one; list kept per chat for 10 min; `/addfeed cancel` | pipeline `GET /api/feeds`, `GET /api/feeds/preview`, `POST /api/feeds` over loopback (#1053) |
 | `/transcript <ref> [md]` | listed | uploads the episode's transcript as a document (`sendDocument`), caption = title · feed · duration. `<ref>` is an episode id or title words (case-insensitive contains, finished episodes, newest first, 6 shown); several matches → numbered list kept per chat, `/transcript <n>` picks | web `GET /api/episodes/{id}/transcript?format=txt\|md` (#1037), the Export button's formatters served over HTTP |
 
 Unknown commands and plain text from a listed user return the command list. Commands are case-insensitive and accept the `@BotName` suffix Telegram appends in groups.
