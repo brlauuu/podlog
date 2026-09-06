@@ -66,8 +66,15 @@ tiktoken = "^0.13.0"
 # lock, which is what made its advisories visible for the first time.
 #
 # ---------------------------------------------------------------------------
-# CVE triage, 2026-08-19 (#951). The audit reports 14 findings here. NONE can
-# be resolved by a version bump today, and the reason is a single package.
+# CVE triage, 2026-08-19 (#951), extended 2026-09-06 (#1033). Every finding
+# the audit still reports is listed here, and every id here is also in
+# `audit-ignore.txt`, which the CI audit job passes to pip-audit as
+# --ignore-vuln so the job is red only for a finding nobody has triaged. Add
+# an id to that file only after adding its line here.
+#
+# As of 2026-09-06 the ignored set is 15 ids: torch 8, transformers 5,
+# lightning 1, nltk 1. NONE can be resolved by a version bump today, and for
+# all but the nltk one the reason is a single package.
 #
 # whisperx 3.8.6 (the latest release; 3.8.7rc1 is identical here) declares:
 #     torch~=2.8.0            -> forbids torch 2.9.0 / 2.10.0
@@ -94,12 +101,35 @@ tiktoken = "^0.13.0"
 #     transformers PYSEC-2026-2288          fixed in 5.0.0
 #     transformers PYSEC-2026-2289          fixed in 5.3.0
 #     transformers PYSEC-2026-2290          fixed after 5.2.0
+#     transformers CVE-2026-9856            fixed in 5.10.0 (new 2026-09, #1033)
 #
-#   NO FIX IN ANY RELEASE (2)
+#   NO FIX IN ANY RELEASE (3)
 #     torch     PYSEC-2026-139   affects everything <=2.10.0; local-only attack
 #     lightning PYSEC-2026-3624  fixed only in an unreleased commit (d710d68).
 #                                The advisory's "fix version 2022.6.15" is bad
 #                                metadata, not a real target -- do not act on it.
+#     nltk      PYSEC-2026-3740  (CVE-2026-81726) path traversal in the
+#                                TransitionParser / AveragedPerceptron /
+#                                PerceptronTagger / maxent parameter APIs. OSV
+#                                says fixed in 3.10.3; pip-audit's feed says
+#                                "through 3.10.3" and reports it against our
+#                                3.10.3 with no fix version. Unreachable either
+#                                way: whisperx touches none of those APIs (it
+#                                loads only the punkt_tab sentence splitter).
+#
+#   RESOLVED (#1033, 2026-09-06)
+#     nltk 3.10.2  17 advisories (PYSEC-2026-3733..3752, CVE-2026-12876/
+#                  71513/71514/78680/81723); 16 fixed in 3.10.3, the 17th
+#                  (PYSEC-2026-3740) is triaged above. Transitive
+#                  via whisperx, whose constraint (>=3.9.1) allowed the bump,
+#                  so the floor above took it to 3.10.3. Reachability was
+#                  narrow anyway: Podlog never imports nltk, and whisperx's
+#                  only use is loading the punkt_tab sentence splitter during
+#                  alignment (whisperx/alignment.py), so the corpus-reader,
+#                  Stanford-wrapper, parser, stemmer and XML-view advisories
+#                  were unreachable; the unpickler / downloader / artifact-
+#                  path ones needed a tampered nltk data directory on the
+#                  worker volume, a local attack, not podcast audio.
 #
 # Reachability. Every real finding requires loading an attacker-controlled
 # model or checkpoint: torch's weights_only unpickler, lightning's
@@ -172,6 +202,10 @@ optional = true
 [tool.poetry.group.ml.dependencies]
 # WhisperX (CTranslate2 backend + wav2vec2 alignment)
 whisperx = "^3.8.0"
+# Transitive via whisperx (alignment's sentence splitter). Floor raised for
+# #1033: 3.10.2 carried 17 advisories, all fixed in 3.10.3, and whisperx's
+# own constraint (>=3.9.1) does not stand in the way.
+nltk = ">=3.10.3"
 torch = {version = "^2.2.0", source = "pytorch-cpu"}
 # torchaudio is a transitive requirement of whisperx/pyannote-audio and is
 # never imported directly (#915). Declared explicitly so the version is
