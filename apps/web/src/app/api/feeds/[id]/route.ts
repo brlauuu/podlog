@@ -14,7 +14,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 }
 
 // Issue #743: forwards { paused: boolean } to PATCH /api/feeds/{id} on
-// the pipeline. Used by the FeedCard pause/resume button.
+// the pipeline. Used by the FeedCard pause/resume button. #1045 sends
+// { mode: "selective" } through the same route (Make selective button).
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();

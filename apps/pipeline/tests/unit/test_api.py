@@ -236,6 +236,68 @@ class TestFeedsEndpoint:
         finally:
             app.dependency_overrides.clear()
 
+    def _patch_feed(self, mode="full", paused=True):
+        from datetime import datetime, timezone
+
+        feed = MagicMock()
+        feed.id = "feed-1"
+        feed.url = "https://example.com/x.xml"
+        feed.title = "X"
+        feed.description = None
+        feed.image_url = None
+        feed.website_url = None
+        feed.mode = mode
+        feed.paused = paused
+        feed.last_polled_at = None
+        feed.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = feed
+        return feed, mock_db
+
+    @pytest.mark.parametrize("mode,paused", [("full", True), ("full", False), ("test", True)])
+    def test_patch_mode_selective_converts_and_unpauses(self, mode, paused):
+        """#1045: any test/full feed can step down to selective; paused clears."""
+        from app.database import get_db
+
+        feed, mock_db = self._patch_feed(mode=mode, paused=paused)
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            resp = client.patch("/api/feeds/feed-1", json={"mode": "selective"})
+            assert resp.status_code == 200
+            assert resp.json()["mode"] == "selective"
+            assert resp.json()["paused"] is False
+            assert feed.mode == "selective" and feed.paused is False
+            mock_db.commit.assert_called()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_patch_mode_rejects_anything_but_selective(self):
+        from app.database import get_db
+
+        feed, mock_db = self._patch_feed()
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            for bad in ("full", "test", "paused", ""):
+                resp = client.patch("/api/feeds/feed-1", json={"mode": bad})
+                assert resp.status_code == 422, bad
+            assert feed.mode == "full"
+            mock_db.commit.assert_not_called()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_patch_selective_feed_cannot_be_paused(self):
+        """Selective feeds have no pause concept; a stray paused=true is ignored."""
+        from app.database import get_db
+
+        feed, mock_db = self._patch_feed(mode="selective", paused=False)
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            resp = client.patch("/api/feeds/feed-1", json={"paused": True})
+            assert resp.status_code == 200
+            assert resp.json()["paused"] is False
+        finally:
+            app.dependency_overrides.clear()
+
     def test_patch_feed_unknown_returns_404(self):
         from app.database import get_db
 

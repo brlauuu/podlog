@@ -25,6 +25,9 @@ interface FeedCardProps {
   onDelete: (feedId: string) => void;
   onAddMore?: (feed: FeedCardFeed) => void;
   onTogglePause?: (feedId: string, paused: boolean) => void;
+  /** #1045: step a test/full feed down to selective. */
+  onConvertToSelective?: (feedId: string) => void;
+  convertPending?: boolean;
 }
 
 export default function FeedCard({
@@ -36,6 +39,8 @@ export default function FeedCard({
   onDelete,
   onAddMore,
   onTogglePause,
+  onConvertToSelective,
+  convertPending = false,
 }: FeedCardProps) {
   return (
     <Card className="hover:bg-accent/30 transition-colors">
@@ -91,6 +96,20 @@ export default function FeedCard({
               className="h-8 text-xs"
             >
               Promote to Full
+            </Button>
+          )}
+          {feed.mode !== "selective" && onConvertToSelective && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onConvertToSelective(feed.id)}
+              disabled={convertPending}
+              className="h-8 text-xs gap-1"
+              data-testid={`selective-${feed.id}`}
+              title="Stop ingesting new episodes automatically; pick them by hand instead"
+            >
+              <ListChecks size={12} />
+              Make selective
             </Button>
           )}
           {feed.mode !== "selective" && (
