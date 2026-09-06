@@ -17,6 +17,9 @@ it costs something real.
 
 **1. It refuses if your working copy is dirty.** Updating moves `HEAD`, which
 would either fail outright or bury your edits. Commit or `git stash` first.
+If the edit is a local Compose change, such as binding web to loopback, move
+it into `docker-compose.override.yml`: Compose reads that file automatically,
+it is gitignored, and updates leave it alone.
 
 **2. It drains the queue.** Podlog processes one episode at a time and a
 transcription runs for minutes. Restarting mid-job loses that work — the

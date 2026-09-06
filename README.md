@@ -47,6 +47,9 @@ nano .env
 
 # 3. Start from published images — no build
 make up-release
+
+# 4. Pull the local models Ask AI offers (once; ~12 GB for all three). Skip if you will use Fireworks.
+make ollama-pull
 ```
 
 Podlog is cloned rather than downloaded as loose files because updating
@@ -67,6 +70,7 @@ cd podlog
 cp .env.example .env && nano .env
 make build
 make up
+make ollama-pull   # local models for Ask AI, once (~12 GB)
 ```
 
 `make up` never contacts the registry, so it always runs the code in your

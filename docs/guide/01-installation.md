@@ -38,13 +38,16 @@ Podlog runs entirely on CPU.
 ## Setup
 
 ```bash
-# Clone the repo
+# Clone the repo and switch to the newest released version
 git clone https://github.com/brlauuu/podlog.git
 cd podlog
+git checkout "$(git tag -l 'v*' --sort=-v:refname | head -1)"
 
 # Create your config file
 cp .env.example .env
 ```
+
+Podlog is cloned rather than downloaded as loose files because updating depends on it: `make update` moves the working copy with `git`, compares the new `.env.example` against your `.env`, and reads `VERSION` to tell you what you are running. Checking out the newest tag means the files on disk match the published images you are about to start.
 
 Edit `.env` and set the two required variables:
 
@@ -61,14 +64,14 @@ If you want remote Fireworks inference mode, also set:
 FIREWORKS_API_KEY=fw_your_key_here
 ```
 
-## Build and Start
+## Start
 
 ```bash
-make build    # Build Docker images (first time takes a few minutes)
-make up       # Start all services in the background
+make up-release   # pull the published images and start, no build
+make ollama-pull  # the local models Ask AI offers (once, ~12 GB); skip if you will use Fireworks
 ```
 
-`make up` prints where to reach Podlog when it finishes:
+`make up-release` prints where to reach Podlog when it finishes:
 
 ```
 Podlog is running.
@@ -78,17 +81,15 @@ Podlog is running.
 
 Open **http://localhost:3000** — you should see the Podlog home page with quick links to Search and Ask. The search page itself is at `/search`.
 
-### Starting from a published image instead
-
-`make build` compiles everything from source, which pulls several gigabytes of
-machine-learning dependencies and takes a while the first time. If you would
-rather run a released build:
+Ask AI needs a language model. With the default local setup that is an Ollama model, and nothing pulls it for you: until `make ollama-pull` has run, the first question fails with "Model not available". It fetches the three models the Ask page offers, about 12 GB in total; to start with only the default one (1.9 GB):
 
 ```bash
-make up-release   # pull the published images and start, no build
+docker compose exec ollama ollama pull qwen2.5:3b
 ```
 
-Which build you get is set by `PODLOG_VERSION` in `.env`:
+Fireworks users configure a key under Settings → Inference instead and can skip the pull.
+
+Which build `make up-release` gets is set by `PODLOG_VERSION` in `.env`:
 
 | Value | Meaning |
 |---|---|
@@ -98,6 +99,19 @@ Which build you get is set by `PODLOG_VERSION` in `.env`:
 
 The images are **linux/amd64 only**. On any other architecture, building from
 source is the supported path.
+
+### Building from source instead
+
+For development, or on an architecture the published images do not cover:
+
+```bash
+make build    # compiles everything, including the ML stack: a while, and several GB of disk
+make up       # starts what you built
+```
+
+`make up` never contacts the registry, so it always runs the code in your
+working copy, including changes you have just made. It prints the same
+address banner as `make up-release`.
 
 ### Updating
 
@@ -112,9 +126,8 @@ command if anything fails. See [Updating](20-updating.md) for what each step
 protects against, channels, rollback and the amd64-only note.
 
 `make up` and `make up-release` are deliberately separate: `make up` never
-contacts the registry, so it always runs the code in your working copy, even
-after you have edited it. `make up-release` never builds, so it cannot
-surprise you with a multi-gigabyte compile.
+contacts the registry, and `make up-release` never builds, so neither can
+surprise you with the other's cost.
 
 The "same network" address is the one to use from a phone or another computer. Read the [Security model](#security-model) below before you use it: anyone who can reach that address has full control, with no login. If no LAN address is shown, either your machine has no network route or you have bound the web service to loopback — either way Podlog is reachable from this machine only.
 
@@ -172,13 +185,16 @@ Your API keys are masked when read back, so those are not handed out directly. E
 
 **The pipeline API has no authentication.** Anything able to reach port 8000 can do all of the above directly. Port 8000 itself is bound to the host — but because the web app proxies to it without authenticating, the effective trust boundary is your **network**, not just the machine.
 
-**If you are on a shared, office or guest network,** treat that as the deciding fact. To opt out of LAN access entirely, bind the web service to loopback in `docker-compose.yml`:
+**If you are on a shared, office or guest network,** treat that as the deciding fact. To opt out of LAN access entirely, bind the web service to loopback. Put the override in a file called `docker-compose.override.yml` next to `docker-compose.yml`, not in `docker-compose.yml` itself:
 
 ```yaml
+services:
   web:
-    ports:
+    ports: !override
       - "127.0.0.1:3000:3000"   # this machine only
 ```
+
+Compose reads the override file automatically. It is gitignored, which is the point: `make update` refuses to run on a working copy with edits in it, so an edit to `docker-compose.yml` would block every future update, while the override file survives them untouched.
 
 Podlog then behaves like the other services: reachable over an SSH tunnel or from the host, and from nowhere else.
 
