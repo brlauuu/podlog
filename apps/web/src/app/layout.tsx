@@ -15,7 +15,9 @@ import GlobalChordShortcuts from "@/components/GlobalChordShortcuts";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Podlog",
+  // #1059: every page names itself ("Podlog | Search"); the home page and
+  // anything without a title fall back to the bare name.
+  title: { default: "Podlog", template: "Podlog | %s" },
   description: "Self-hosted podcast transcription and search",
   icons: {
     icon: "/brand/podlog-favicon.png",

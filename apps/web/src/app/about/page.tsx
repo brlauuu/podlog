@@ -3,11 +3,14 @@ import { join } from "path";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import type { Metadata } from "next";
+import rehypeStripHead from "@/lib/rehypeStripHead";
 
 import AboutToc, { type AboutTocItem } from "@/components/AboutToc";
 import { makeUniqueSlugger } from "@/lib/docs-slug";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "About" };
 
 async function readDocOrNull(relativePath: string): Promise<string | null> {
   // Repo-relative, so callers say where a file actually lives. CHANGELOG.md
@@ -162,7 +165,7 @@ export default async function AboutPage() {
             <article className="prose prose-sm dark:prose-invert max-w-none leading-7 prose-code:break-words prose-pre:overflow-x-auto prose-table:block prose-table:overflow-x-auto">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeRaw]}
+                rehypePlugins={[rehypeRaw, rehypeStripHead]}
                 components={aboutMarkdownComponents}
               >
                 {aboutContent}
@@ -180,7 +183,7 @@ export default async function AboutPage() {
               <article className="prose prose-sm dark:prose-invert max-w-none leading-7 prose-code:break-words prose-pre:overflow-x-auto prose-table:block prose-table:overflow-x-auto">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
+                  rehypePlugins={[rehypeRaw, rehypeStripHead]}
                   components={changelogMarkdownComponents}
                 >
                   {changelogContent}

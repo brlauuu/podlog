@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import MetaAnalysisClient from "./MetaAnalysisClient";
+
+export const metadata: Metadata = { title: "Meta-analysis" };
 
 export const dynamic = "force-dynamic";
 

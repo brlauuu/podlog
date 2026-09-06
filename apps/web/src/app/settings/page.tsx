@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import LanAccessCard from "@/components/LanAccessCard";
 import NotificationSettings from "@/components/NotificationSettings";
+
+export const metadata: Metadata = { title: "Settings" };
 
 export default function SettingsPage() {
   return (

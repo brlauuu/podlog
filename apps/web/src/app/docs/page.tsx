@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { readdir } from "fs/promises";
 import { join } from "path";
 import { Suspense } from "react";
 import DocsClient from "./DocsClient";
 import { buildDocsIndex } from "@/lib/docs-index";
+
+export const metadata: Metadata = { title: "Docs" };
 
 export const dynamic = "force-dynamic";
 

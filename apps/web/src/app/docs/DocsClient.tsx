@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import rehypeStripHead from "@/lib/rehypeStripHead";
 import { Search, X } from "lucide-react";
 import DocsAskBubble from "@/components/DocsAskBubble";
 import { slugifyHeading, makeUniqueSlugger } from "@/lib/docs-slug";
@@ -369,7 +370,7 @@ export default function DocsClient({ docs, searchIndex }: DocsClientProps) {
           <article className="prose prose-sm dark:prose-invert max-w-none leading-7">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
+              rehypePlugins={[rehypeRaw, rehypeStripHead]}
               components={{
                 // scroll-mt-24 offsets anchor jumps and scrollIntoView so
                 // the heading clears the sticky navbar instead of landing

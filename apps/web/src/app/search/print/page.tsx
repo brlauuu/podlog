@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { searchMentions, searchGrouped } from "@/lib/search";
 import { formatTimestamp } from "@/lib/timestamp";
 import { formatDate } from "@/lib/dateFormat";
 import PrintButton from "./PrintButton";
+
+export const metadata: Metadata = { title: "Print" };
 
 export const dynamic = "force-dynamic";
 
