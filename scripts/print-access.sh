@@ -56,8 +56,9 @@ if [ -n "$lan_ip" ]; then
   echo "  there is no login. They can add and delete feeds, delete episodes"
   echo "  and backups, and change settings. Keep it to networks you trust."
   echo "  To turn LAN access off, bind web to 127.0.0.1:${PORT} in"
-  echo "  docker-compose.yml. The address is DHCP-assigned and can change on"
-  echo "  reboot; reserve it in your router if you want it stable."
+  echo "  docker-compose.override.yml (see the Security model in the guide)."
+  echo "  The address is DHCP-assigned and can change on reboot; reserve it"
+  echo "  in your router if you want it stable."
 else
   echo
   echo "  No LAN address detected — reachable from this machine only."
