@@ -3,6 +3,7 @@ Unit tests for FastAPI endpoints -- PRD-01 S12
 
 Uses FastAPI TestClient with a mocked database.
 """
+import pytest
 from unittest.mock import patch, MagicMock
 
 from fastapi.testclient import TestClient
@@ -22,6 +23,15 @@ def _mock_prewarm_row(done: bool):
 
 
 class TestHealthEndpoint:
+
+    @pytest.fixture(autouse=True)
+    def _no_preflight(self):
+        # #1048: the pre-flight would call HuggingFace; keep these tests offline.
+        from app.services.preflight import PreflightResult
+
+        with patch("app.api.health.diarization_preflight",
+                   return_value=PreflightResult("OK", "stubbed")):
+            yield
     def _mock_ollama_ok(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 200

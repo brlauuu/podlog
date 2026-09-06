@@ -27,6 +27,16 @@ docker compose restart worker
 
 Then retry the failed episode from the queue page. See [Configuration](10-configuration.md) for model RAM requirements.
 
+## "Speaker diarization will fail until this is fixed"
+
+**Symptom:** A red notice on the queue page, and `Diarization: DEGRADED` in `curl localhost:8000/api/health`, before any episode has been processed.
+
+**Cause:** Podlog checks at startup, and every few minutes after, whether your `HF_TOKEN` is valid and whether the pyannote licence has been accepted for it. The notice quotes which of the two failed and what to do: re-enter the token in `.env` and restart, or open the model page on HuggingFace and click "Agree and access repository".
+
+**Impact:** Until it is fixed, episodes are transcribed but get no speaker labels. Nothing is lost: **Reprocess** on the episode page adds them later.
+
+**Fix:** Follow the notice. It clears on its own within a few minutes of the fix; no restart needed for the licence, a restart of the stack for a changed token. If HuggingFace is unreachable from your machine, the check reports "could not verify" and shows nothing.
+
 ## Diarization failed
 
 **Symptom:** Episode page shows "Diarization failed" banner. No speaker labels.
