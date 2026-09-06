@@ -1,7 +1,7 @@
 # Updating Podlog
 
 How to move to a new version without losing work, and how to get back if it
-goes wrong.
+goes wrong. There is a two-minute [recording of an update](../walkthroughs/update.webm) (1.0.1 to 1.1.0) if you would rather see it first.
 
 ## The short version
 

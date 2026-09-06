@@ -20,6 +20,9 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+- Two short walkthrough recordings, a fresh install and an update from 1.0.1 to 1.1.0, now live in `docs/walkthroughs/` and are linked from the README, the guide index and the updating page. They are made against a throwaway install by scripts kept next to them, so they can be redone after a release that changes either flow. ([#1039](https://github.com/brlauuu/podlog/issues/1039))
+
 ## 1.1.0 — 2026-09-06
 
 ### Major changes

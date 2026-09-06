@@ -49,4 +49,6 @@ the whole manual, so it works on a local-only install.
 
 If you just want to get running, head to [Installation](01-installation.md).
 
+Prefer to watch first? Two short silent recordings live in [`docs/walkthroughs/`](../walkthroughs/README.md): a [fresh install](../walkthroughs/install.webm) (4 min) and [applying an update](../walkthroughs/update.webm) (2 min), made against v1.1.0.
+
 For the full project README, tech stack, and architecture diagram, see the [main README](../../README.md).
