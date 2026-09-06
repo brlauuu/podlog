@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import pool from "@/lib/db";
 import { Separator } from "@/components/ui/separator";
 import UploadsSection, { type UploadedEpisode } from "@/components/UploadsSection";
 import PodcastsList, { type PodcastsListFeed } from "@/components/PodcastsList";
+
+export const metadata: Metadata = { title: "Sources" };
 
 export const dynamic = "force-dynamic";
 

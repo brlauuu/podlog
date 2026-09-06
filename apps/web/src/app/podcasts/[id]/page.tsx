@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { FlaskConical, ExternalLink } from "lucide-react";
 import pool from "@/lib/db";
@@ -70,6 +71,13 @@ async function getEpisodes(feedId: string): Promise<EnrichedEpisode[]> {
     [feedId]
   );
   return result.rows;
+}
+
+// #1059: the tab shows the podcast title; unknown ids fall back to "Podcast".
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const feed = await getFeed(id).catch(() => null);
+  return { title: feed?.title || "Podcast" };
 }
 
 export default async function PodcastPage({ params }: { params: Promise<{ id: string }> }) {

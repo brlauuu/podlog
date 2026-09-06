@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -15,6 +16,13 @@ import CopyIdButton from "@/components/CopyIdButton";
 import EpisodeKeyboardNav from "@/components/EpisodeKeyboardNav";
 
 export const dynamic = "force-dynamic";
+
+// #1059: the tab shows the episode title; unknown ids fall back to "Episode".
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const episode = await getEpisode(id).catch(() => null);
+  return { title: episode?.title || "Episode" };
+}
 
 interface AdjacentEpisode {
   id: string;
