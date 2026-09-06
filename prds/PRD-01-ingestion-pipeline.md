@@ -427,6 +427,7 @@ GET    /api/explore/status                 Jupyter explore container status (opt
 - pyannote.ai Precision-2 cloud diarization as an alternative to local pyannote, selected via `DIARIZATION_PROVIDER=precision2` (Issue #516; see RISKS-AND-GAPS RISK-11)
 - Fireworks AI remote-inference profile (`make up-remote`) for users who prefer remote Whisper/LLM over a local Ollama container
 - Feed pause/resume — stop polling without deleting, via `PATCH /api/feeds/{feed_id}` with `paused` (migration `020_add_feed_paused_column.py`); paused feeds also reject manual polls (Issue #743)
+- Step down to selective — the same `PATCH` accepts `mode: "selective"` for a test or full feed, paused or not: polling stops for good, everything ingested stays, `paused` is cleared, and further episodes arrive through `POST /api/feeds/{feed_id}/episodes`. Promotion to full stays on `POST /api/feeds` (Issue #1045)
 
 ### Future
 - GPU support via Docker NVIDIA runtime flag

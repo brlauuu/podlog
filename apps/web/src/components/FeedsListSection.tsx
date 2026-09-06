@@ -23,6 +23,8 @@ interface FeedsListSectionProps {
   onDelete: (feedId: string) => void;
   onAddMore?: (feed: Feed) => void;
   onTogglePause?: (feedId: string, paused: boolean) => void;
+  onConvertToSelective?: (feedId: string) => void;
+  convertPendingId?: string | null;
 }
 
 export default function FeedsListSection({
@@ -36,6 +38,8 @@ export default function FeedsListSection({
   onDelete,
   onAddMore,
   onTogglePause,
+  onConvertToSelective,
+  convertPendingId = null,
 }: FeedsListSectionProps) {
   if (isLoading) {
     return (
@@ -80,6 +84,8 @@ export default function FeedsListSection({
           onDelete={onDelete}
           onAddMore={onAddMore}
           onTogglePause={onTogglePause}
+          onConvertToSelective={onConvertToSelective}
+          convertPending={convertPendingId === feed.id}
         />
       ))}
     </div>

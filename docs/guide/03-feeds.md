@@ -27,14 +27,14 @@ On the Selective episode list there is a **filter box** above the episodes. Type
 
 Feed cards carry a **Test** or **Selective** badge so you can tell at a glance which feeds are being kept current and which are not. Full-mode feeds are unbadged. Each card also shows its episode count and when it was last polled.
 
-## Promoting a Feed
+## Changing a Feed's Mode
 
-You can upgrade a feed's mode at any time:
+You can change a feed's mode at any time, in either direction:
 
-- **Test → Full**: click **Promote to Full** on the feed card, and confirm. All remaining episodes are queued for processing.
-- **Selective → Full**: same button. Episodes you didn't select initially are now queued.
+- **Test → Full** and **Selective → Full**: click **Promote to Full** on the feed card, and confirm. Episodes you did not have yet are queued, and the feed is switched on for automatic polling.
+- **Full → Selective** and **Test → Selective**: click **Make selective**, and confirm. Automatic polling stops for good, everything already ingested stays exactly as it is, and from then on you bring episodes in one at a time with **Add episodes**. If the feed was paused, it is unpaused, since a selective feed has nothing to pause.
 
-Promotion never re-processes episodes that are already done. It is also what switches a feed on for automatic polling.
+Neither direction re-processes an episode that is already done, and neither deletes anything. Making a feed selective is the answer to a show that turned out to be chattier than you wanted: pausing stops the flood, but only going selective lets you keep picking the episodes you do want.
 
 ## Adding More Selective Episodes
 
@@ -53,7 +53,7 @@ Manual polling is useful when you know a new episode just dropped and don't want
 
 The pause button on a feed card stops ingestion without deleting anything. A paused feed shows a **Paused** badge, is skipped by automatic polling, and has its refresh icon disabled — the tooltip reads *"Unpause to poll"*. Everything already ingested stays searchable.
 
-Use this when a show goes on hiatus, or when you want to stop a chatty feed from filling the queue for a while. Click the same button again to resume. Selective feeds have no pause button, since they are never auto-polled in the first place.
+Use this when a show goes on hiatus, or when you want to stop a chatty feed from filling the queue for a while. Click the same button again to resume. If "a while" turns out to be "forever, but I still want the odd episode", use **Make selective** instead (see above). Selective feeds have no pause button, since they are never auto-polled in the first place.
 
 ## Deleting a Feed
 

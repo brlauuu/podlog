@@ -58,6 +58,10 @@ class FeedResponse(BaseModel):
 
 class UpdateFeedRequest(BaseModel):
     paused: Optional[bool] = None
+    # #1045: the only mode change this endpoint makes is the step DOWN to
+    # selective. Promotion to full stays on POST /api/feeds (re-add), which
+    # also queues the episodes the promotion brings in.
+    mode: Optional[Literal["selective"]] = None
 
 
 class EpisodePreview(BaseModel):
@@ -268,17 +272,33 @@ def update_feed(
     body: UpdateFeedRequest,
     db: Session = Depends(get_db),
 ) -> FeedResponse:
-    """Update mutable feed fields. Currently only ``paused`` (#743)."""
+    """Update mutable feed fields: ``paused`` (#743) and ``mode`` (#1045).
+
+    ``mode`` accepts only ``selective``: a test or full feed (paused or not)
+    stops being polled for good and keeps everything already ingested;
+    further episodes come in through POST /feeds/{id}/episodes. The paused
+    flag is cleared because selective feeds have no pause concept. Queued
+    jobs are left alone, exactly as pausing leaves them.
+    """
     feed = db.query(Feed).filter(Feed.id == feed_id).first()
     if not feed:
         raise HTTPException(status_code=404, detail="Feed not found")
-    if body.paused is not None:
+    if body.mode == "selective":
+        if feed.mode != "selective":
+            logger.info(
+                '"action": "feed_converted_to_selective", "feed_id": "%s", "from_mode": "%s", '
+                '"was_paused": %s',
+                feed_id, feed.mode, feed.paused,
+            )
+        feed.mode = "selective"
+        feed.paused = False
+    if body.paused is not None and feed.mode != "selective":
         feed.paused = body.paused
     db.commit()
     db.refresh(feed)
     logger.info(
-        '"action": "feed_updated", "feed_id": "%s", "paused": %s',
-        feed_id, feed.paused,
+        '"action": "feed_updated", "feed_id": "%s", "mode": "%s", "paused": %s',
+        feed_id, feed.mode, feed.paused,
     )
     return FeedResponse.model_validate(feed)
 

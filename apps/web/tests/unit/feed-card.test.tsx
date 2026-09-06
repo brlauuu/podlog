@@ -132,6 +132,64 @@ describe("<FeedCard>", () => {
     expect(onDelete).toHaveBeenCalledWith("feed-42");
   });
 
+  // Issue #1045
+  it("shows 'Make selective' for test and full feeds only, and fires the callback", () => {
+    const onConvertToSelective = jest.fn();
+    const { rerender } = render(
+      <FeedCard
+        feed={makeFeed({ mode: "full", paused: true, id: "feed-7" })}
+        pollPending={false}
+        onPromote={jest.fn()}
+        onPoll={jest.fn()}
+        onDelete={jest.fn()}
+        onConvertToSelective={onConvertToSelective}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Make selective/ }));
+    expect(onConvertToSelective).toHaveBeenCalledWith("feed-7");
+
+    rerender(
+      <FeedCard
+        feed={makeFeed({ mode: "test" })}
+        pollPending={false}
+        onPromote={jest.fn()}
+        onPoll={jest.fn()}
+        onDelete={jest.fn()}
+        onConvertToSelective={onConvertToSelective}
+      />
+    );
+    expect(screen.getByRole("button", { name: /Make selective/ })).toBeInTheDocument();
+
+    rerender(
+      <FeedCard
+        feed={makeFeed({ mode: "selective" })}
+        pollPending={false}
+        onPromote={jest.fn()}
+        onPoll={jest.fn()}
+        onDelete={jest.fn()}
+        onConvertToSelective={onConvertToSelective}
+      />
+    );
+    expect(screen.queryByRole("button", { name: /Make selective/ })).not.toBeInTheDocument();
+  });
+
+  it("hides 'Make selective' when no callback is supplied, disables it while pending", () => {
+    renderCard(makeFeed());
+    expect(screen.queryByRole("button", { name: /Make selective/ })).not.toBeInTheDocument();
+    render(
+      <FeedCard
+        feed={makeFeed({ id: "feed-8" })}
+        pollPending={false}
+        onPromote={jest.fn()}
+        onPoll={jest.fn()}
+        onDelete={jest.fn()}
+        onConvertToSelective={jest.fn()}
+        convertPending
+      />
+    );
+    expect(screen.getByRole("button", { name: /Make selective/ })).toBeDisabled();
+  });
+
   // Issue #487
   it("renders 'Add episodes' only for selective feeds and invokes onAddMore", () => {
     const onAddMore = jest.fn();

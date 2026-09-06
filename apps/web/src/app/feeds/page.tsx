@@ -174,6 +174,25 @@ export default function FeedsPage() {
     onError: (err: Error) => console.error("Toggle pause error:", err.message),
   });
 
+  // Issue #1045: step a test/full feed down to selective. Keeps everything
+  // ingested, stops automatic polling, unpauses (selective has no pause).
+  const convertToSelective = useMutation({
+    mutationFn: async (id: string) => {
+      const resp = await fetch(`/api/feeds/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "selective" }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail ?? "Failed to update feed");
+      }
+      return resp.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feeds"] }),
+    onError: (err: Error) => console.error("Convert to selective error:", err.message),
+  });
+
   const deleteFeed = useMutation({
     mutationFn: async ({ id, deleteEpisodes }: { id: string; deleteEpisodes: boolean }) => {
       await fetch(`/api/feeds/${id}?delete_episodes=${deleteEpisodes}`, { method: "DELETE" });
@@ -377,6 +396,19 @@ export default function FeedsPage() {
         onTogglePause={(feedId, paused) =>
           togglePause.mutate({ id: feedId, paused })
         }
+        convertPendingId={
+          convertToSelective.isPending ? (convertToSelective.variables ?? null) : null
+        }
+        onConvertToSelective={(feedId) => {
+          if (
+            confirm(
+              "Stop ingesting new episodes automatically and pick them by hand instead? " +
+                "Everything already ingested stays."
+            )
+          ) {
+            convertToSelective.mutate(feedId);
+          }
+        }}
       />
     </div>
   );

@@ -27,6 +27,7 @@ jest.mock("@/components/FeedsListSection", () => ({
     onPromote,
     onTogglePause,
     onAddMore,
+    onConvertToSelective,
   }: {
     isLoading: boolean;
     feeds: { id: string; url: string; title: string | null; paused?: boolean }[];
@@ -36,6 +37,7 @@ jest.mock("@/components/FeedsListSection", () => ({
     onPromote?: (url: string) => void;
     onTogglePause?: (id: string, paused: boolean) => void;
     onAddMore?: (feed: { id: string; url: string; title: string | null }) => void;
+    onConvertToSelective?: (id: string) => void;
   }) => {
     if (isLoading) return <div data-testid="feeds-loading">Loading…</div>;
     if (feeds.length === 0) {
@@ -66,6 +68,14 @@ jest.mock("@/components/FeedsListSection", () => ({
                 onClick={() => onTogglePause(f.id, !(f.paused ?? false))}
               >
                 Toggle pause
+              </button>
+            )}
+            {onConvertToSelective && (
+              <button
+                data-testid={`selective-${f.id}`}
+                onClick={() => onConvertToSelective(f.id)}
+              >
+                Make selective
               </button>
             )}
             {onAddMore && (
@@ -371,6 +381,56 @@ describe("FeedsPage", () => {
         expect(patch!.url).toContain("/api/feeds/f-9");
         expect(JSON.parse(patch!.init!.body as string)).toEqual({ paused: true });
       });
+    });
+  });
+
+  describe("convert to selective (#1045)", () => {
+    it("PATCHes /api/feeds/{id} with mode=selective after confirm", async () => {
+      const calls = installFetchMock({
+        "/api/feeds": () =>
+          json([
+            {
+              id: "f-5",
+              url: "https://ex.com/a.xml",
+              title: "A",
+              mode: "full",
+              paused: true,
+              last_polled_at: null,
+              episode_count: 3,
+            },
+          ]),
+        "/api/feeds/f-5": () => json({ id: "f-5", mode: "selective", paused: false }),
+      });
+      const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+
+      render(withQuery(<FeedsPage />));
+      await waitFor(() => expect(screen.getByTestId("selective-f-5")).toBeInTheDocument());
+      await userEvent.click(screen.getByTestId("selective-f-5"));
+
+      await waitFor(() => {
+        const patch = calls.find((c) => c.init?.method === "PATCH");
+        expect(patch).toBeDefined();
+        expect(patch!.url).toContain("/api/feeds/f-5");
+        expect(JSON.parse(patch!.init!.body as string)).toEqual({ mode: "selective" });
+      });
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringMatching(/already ingested stays/));
+      confirmSpy.mockRestore();
+    });
+
+    it("does nothing when the confirm is declined", async () => {
+      const calls = installFetchMock({
+        "/api/feeds": () =>
+          json([
+            { id: "f-6", url: "https://ex.com/b.xml", title: "B", mode: "full",
+              paused: false, last_polled_at: null, episode_count: 1 },
+          ]),
+      });
+      const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(false);
+      render(withQuery(<FeedsPage />));
+      await waitFor(() => expect(screen.getByTestId("selective-f-6")).toBeInTheDocument());
+      await userEvent.click(screen.getByTestId("selective-f-6"));
+      expect(calls.find((c) => c.init?.method === "PATCH")).toBeUndefined();
+      confirmSpy.mockRestore();
     });
   });
 
