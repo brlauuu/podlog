@@ -23,7 +23,8 @@ describe("<GlobalChordShortcuts>", () => {
     ["p", "/podcasts"],
     ["a", "/ask"],
     ["m", "/meta-analysis"],
-    ["s", "/settings"],
+    ["s", "/search"],
+    ["t", "/settings"],
     ["d", "/docs"],
   ])("G %s navigates to %s", (target, path) => {
     render(<GlobalChordShortcuts />);

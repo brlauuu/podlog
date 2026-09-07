@@ -25,6 +25,7 @@ fresh empty `Unreleased` is left at the top.
 - The About page no longer renames the browser tab to a stray line of the release notes. A changelog entry that mentioned a bare `<title>` in prose was turned into a real title element by the Markdown renderer and hoisted into the page head; head-only elements are now stripped from rendered Markdown on both the About and Docs pages, and the entry is escaped. ([#1059](https://github.com/brlauuu/podlog/issues/1059))
 
 ### Minor changes
+- `G` `S` now jumps to the Search page, and Settings moves to `G` `T`. That is the one chord whose meaning changed; every other one is unchanged. Press `?` on any page for the full list. ([#1061](https://github.com/brlauuu/podlog/issues/1061))
 - Podlog has a landing page at [brlauuu.github.io/podlog](https://brlauuu.github.io/podlog/): what it is, what it needs, what it deliberately does not do, the two walkthrough recordings, and the four install commands. It lives in `site/` and is published by a GitHub Pages workflow on every release, reading the version from `VERSION` so it cannot drift. ([#1056](https://github.com/brlauuu/podlog/issues/1056))
 - Two short walkthrough recordings, a fresh install and an update from 1.0.1 to 1.1.0, now live in `docs/walkthroughs/` and are linked from the README, the guide index and the updating page. They are made against a throwaway install by scripts kept next to them, so they can be redone after a release that changes either flow. ([#1039](https://github.com/brlauuu/podlog/issues/1039))
 

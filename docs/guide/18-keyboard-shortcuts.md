@@ -16,7 +16,8 @@ Two-key chords jump to top-level pages from anywhere. Press <kbd>G</kbd>, then w
 | <kbd>G</kbd> <kbd>P</kbd> | Podcasts (`/podcasts`) |
 | <kbd>G</kbd> <kbd>A</kbd> | Ask (`/ask`) |
 | <kbd>G</kbd> <kbd>M</kbd> | Meta-analysis (`/meta-analysis`) |
-| <kbd>G</kbd> <kbd>S</kbd> | Settings (`/settings`) |
+| <kbd>G</kbd> <kbd>S</kbd> | Search (`/search`) |
+| <kbd>G</kbd> <kbd>T</kbd> | Settings (`/settings`) |
 | <kbd>G</kbd> <kbd>D</kbd> | Docs (`/docs`) |
 
 If you hold a modifier key (<kbd>Ctrl</kbd>, <kbd>Cmd</kbd>, <kbd>Alt</kbd>) the chord is cancelled, so your normal browser shortcuts (<kbd>Cmd</kbd>+<kbd>G</kbd> find-next, etc.) still work.
