@@ -40,7 +40,7 @@ podlog/
 ├── .node-version                   # Node version for local dev
 ├── .nvmrc                          # Node version for nvm users
 ├── .github/                        # GitHub Actions workflows (ci, ci-full-unit, ci-slow, changelog, release, publish-images, pages)
-├── site/                           # Landing page (plain HTML/CSS) published to GitHub Pages by pages.yml (#1056)
+├── site/                           # Landing page (plain HTML/CSS) published to GitHub Pages by pages.yml (#1056, #1063)
 ├── issues/                         # Local issue drafts / notes
 ├── backups/                        # Daily DB dumps + rsync audio snapshots (gitignored)
 ├── notebooks/                      # Jupyter exploration notebooks (gitignored bind mount)

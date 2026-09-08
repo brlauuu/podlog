@@ -1,9 +1,16 @@
-# Landing page (#1056): publishes site/ to GitHub Pages.
+# Landing page (#1056, redesigned in #1063): publishes site/ to GitHub Pages.
 #
-# The page is plain HTML and CSS with no build step. Two things are assembled
-# at deploy time so the page cannot drift from the product: the version is
-# read from the repo-root VERSION file (#936: the only place a version lives)
-# and the walkthrough recordings are copied from docs/walkthroughs/ (#1039).
+# The page is plain HTML and CSS with no build step. Four values are assembled
+# at deploy time so the page cannot drift from the product:
+#
+#   __VERSION__   the repo-root VERSION file (#936: the only place a version lives)
+#   __RELEASED__  the date the matching vX.Y.Z tag was created, which the page
+#                 compares against the browser's clock to decide whether to
+#                 show the "new release" banner. Deciding that here would pin
+#                 the banner open, because the page is rebuilt only when a
+#                 release or a site edit happens.
+#   __STARS__     star count at deploy, refreshed live by the page's own script
+#   __FORKS__     fork count at deploy, likewise
 #
 # Runs on every push to main that touches an input, and on release tags, so
 # the published page always shows the newest release.
@@ -15,7 +22,6 @@ on:
     paths:
       - "site/**"
       - "VERSION"
-      - "docs/walkthroughs/*.webm"
       - ".github/workflows/pages.yml"
     tags:
       - "v*"
@@ -40,18 +46,54 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Tags are needed to date the release the banner announces.
+          fetch-depth: 0
 
       - name: Assemble the site
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          rm -rf _site && mkdir -p _site/media
+          rm -rf _site && mkdir -p _site
           cp -R site/. _site/
-          cp docs/walkthroughs/install.webm docs/walkthroughs/update.webm _site/media/
+
           VERSION="$(tr -d '[:space:]' < VERSION)"
-          DATE="$(date -u +%Y-%m-%d)"
-          sed -i "s/__VERSION__/$VERSION/g; s/__DEPLOYED__/$DATE/g" _site/index.html
-          grep -q "__VERSION__" _site/index.html && { echo "placeholder left in page"; exit 1; }
-          ls -la _site _site/media
+
+          # Creation date of the tag for this VERSION. Absent when VERSION has
+          # been bumped on main but not yet tagged; an empty value simply means
+          # the page shows no banner, which is the right answer at that point.
+          RELEASED="$(git for-each-ref --format='%(creatordate:short)' "refs/tags/v${VERSION}")"
+
+          # Counts as of this deploy. The page refreshes them client-side, so
+          # a failure here costs freshness, not the deploy.
+          STARS=""
+          FORKS=""
+          if REPO_JSON="$(gh api "repos/${GITHUB_REPOSITORY}" 2>/dev/null)"; then
+            STARS="$(printf '%s' "$REPO_JSON" | jq -r '.stargazers_count // empty')"
+            FORKS="$(printf '%s' "$REPO_JSON" | jq -r '.forks_count // empty')"
+          else
+            echo "note: repo metadata unavailable; star and fork counts left to the page"
+          fi
+
+          sed -i \
+            -e "s/__VERSION__/${VERSION}/g" \
+            -e "s/__RELEASED__/${RELEASED}/g" \
+            -e "s/__STARS__/${STARS}/g" \
+            -e "s/__FORKS__/${FORKS}/g" \
+            _site/index.html
+
+          # Any placeholder left behind means a substitution above was renamed
+          # or dropped. Written as an if-block on purpose: `grep -q ... && ...`
+          # as the last command of a `set -e` script fails the step on the
+          # success path, because grep exits 1 when it finds nothing.
+          if grep -o '__[A-Z_]\{2,\}__' _site/index.html; then
+            echo "placeholder left in page"
+            exit 1
+          fi
+
+          echo "version=${VERSION} released=${RELEASED:-none} stars=${STARS:-?} forks=${FORKS:-?}"
+          ls -la _site
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
