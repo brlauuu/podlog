@@ -86,6 +86,17 @@ describe("NotificationSettings", () => {
     });
   });
 
+  // #1067: jsdom does no layout, so this pins the classes that produce the
+  // 2x2 grid on phones rather than the rendered geometry.
+  it("lays the four tabs out as a two-column grid below md (#1067)", async () => {
+    render(<NotificationSettings />);
+    const list = await screen.findByRole("tablist");
+    expect(screen.getAllByRole("tab")).toHaveLength(4);
+    expect(list).toHaveClass("grid", "grid-cols-2", "w-full", "md:inline-flex", "md:w-auto");
+    expect(list).not.toHaveClass("flex-wrap");
+    expect(list).not.toHaveClass("inline-flex");
+  });
+
   it("shows telegram fields in Notifications tab (default)", async () => {
     render(<NotificationSettings />);
     await waitFor(() => {

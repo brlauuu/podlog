@@ -202,8 +202,10 @@ export default function NotificationSettings() {
 
       <Tabs defaultValue="notifications">
         {/* #989: h-10 inline-flex kept four triggers on one unwrappable row,
-            which overflowed below ~420px. Allowed to wrap instead. */}
-        <TabsList className="mb-6 h-auto flex-wrap">
+            which overflowed below ~420px. #1067: letting them wrap left
+            three on one row and a lone centred Backups below, so phones get
+            an even 2x2 grid instead. From md up it is the usual inline row. */}
+        <TabsList className="mb-6 grid h-auto w-full grid-cols-2 md:inline-flex md:w-auto">
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="inference">Inference</TabsTrigger>
           <TabsTrigger value="prompts">Prompts</TabsTrigger>

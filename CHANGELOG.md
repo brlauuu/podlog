@@ -21,6 +21,7 @@ fresh empty `Unreleased` is left at the top.
 ## Unreleased
 
 ### Fixes
+- On a phone, the four tabs on the Settings page now sit in an even two-by-two grid. They used to wrap three to a row with Backups stranded alone underneath. Wider screens are unchanged. ([#1067](https://github.com/brlauuu/podlog/issues/1067))
 - Browser tabs now say which page they are on: "Podlog | Search", "Podlog | Queue", the episode's title on an episode page, the podcast's title on a podcast page. ([#1059](https://github.com/brlauuu/podlog/issues/1059))
 - The About page no longer renames the browser tab to a stray line of the release notes. A changelog entry that mentioned a bare `<title>` in prose was turned into a real title element by the Markdown renderer and hoisted into the page head; head-only elements are now stripped from rendered Markdown on both the About and Docs pages, and the entry is escaped. ([#1059](https://github.com/brlauuu/podlog/issues/1059))
 
