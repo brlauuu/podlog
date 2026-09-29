@@ -287,3 +287,29 @@ describe("<FeedCard>", () => {
     });
   });
 });
+
+// #1066: on a phone the text column and the button row shared one line, the
+// buttons won, and the title was squeezed to nothing. jsdom does no layout,
+// so these pin the classes that stack the card below sm.
+describe("<FeedCard> mobile layout (#1066)", () => {
+  it("stacks text above the actions below sm, side by side from sm up", () => {
+    renderCard(makeFeed({ mode: "selective" }));
+    const content = screen.getByTestId("feed-card-content");
+    expect(content).toHaveClass("flex-col", "sm:flex-row", "sm:items-center");
+    expect(content).not.toHaveClass("items-center");
+  });
+
+  it("lets the action buttons wrap on a phone instead of claiming the row", () => {
+    renderCard(makeFeed({ mode: "selective" }));
+    const actions = screen.getByTestId("feed-card-actions");
+    expect(actions).toHaveClass("flex-wrap", "sm:flex-nowrap", "sm:shrink-0");
+    expect(actions).not.toHaveClass("shrink-0");
+  });
+
+  it("wraps a long title on a phone rather than truncating it away", () => {
+    renderCard(makeFeed({ title: "A very long podcast title that will not fit" }));
+    const title = screen.getByText("A very long podcast title that will not fit");
+    expect(title).toHaveClass("break-words", "sm:truncate");
+    expect(title).not.toHaveClass("truncate");
+  });
+});

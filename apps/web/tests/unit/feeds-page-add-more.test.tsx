@@ -8,7 +8,7 @@
  * @jest-environment jsdom
  */
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -255,5 +255,88 @@ describe("/feeds — add-more flow", () => {
     await userEvent.click(screen.getByTestId("toggle-all"));
 
     await waitFor(() => expect(screen.getByTestId("selected")).toHaveTextContent("g-new"));
+  });
+});
+
+// #1066: closing the dialog while a feed was still loading did not cancel the
+// request. Its late response was written into whatever dialog was open next,
+// so feed B's picker showed feed A's episodes -- and would have posted them
+// to feed B.
+describe("/feeds — a preview abandoned mid-load (#1066)", () => {
+  const FEED_A = { ...FEED, id: "f-a", url: "https://ex.com/a.xml", title: "Show A" };
+  const FEED_B = { ...FEED, id: "f-b", url: "https://ex.com/b.xml", title: "Show B" };
+  const PREVIEW_A = { title: "Show A", episodes: [{ guid: "a-1", title: "From A", published_at: null, duration: null }] };
+  const PREVIEW_B = { title: "Show B", episodes: [{ guid: "b-1", title: "From B", published_at: null, duration: null }] };
+
+  function installSlowA() {
+    let releaseA: () => void = () => {};
+    const signals: Record<string, AbortSignal | undefined> = {};
+    global.fetch = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/feeds") return Promise.resolve(json([FEED_A, FEED_B]));
+      if (url.endsWith("/episodes/guids")) return Promise.resolve(json([]));
+      if (url.startsWith("/api/feeds/preview")) {
+        const isA = url.includes(encodeURIComponent(FEED_A.url));
+        signals[isA ? "a" : "b"] = init?.signal ?? undefined;
+        if (!isA) return Promise.resolve(json(PREVIEW_B));
+        // Deliberately ignores the abort: the guard must hold even when a
+        // response for an abandoned request still arrives.
+        return new Promise<Response>((resolve) => {
+          releaseA = () => resolve(json(PREVIEW_A));
+        });
+      }
+      return Promise.resolve(json({ error: "no mock" }, 500));
+    }) as unknown as typeof fetch;
+    return { signals, releaseA: () => releaseA() };
+  }
+
+  test("closing the dialog aborts the request that was loading", async () => {
+    const { signals } = installSlowA();
+    render(withQuery(<FeedsPage />));
+    await userEvent.click(await screen.findByTestId("add-more-f-a"));
+    await screen.findByText("Loading episodes...");
+    expect(signals.a).toBeDefined();
+    expect(signals.a!.aborted).toBe(false);
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(signals.a!.aborted).toBe(true);
+  });
+
+  test("a late response for the closed feed never reaches the next feed's picker", async () => {
+    const { releaseA } = installSlowA();
+    render(withQuery(<FeedsPage />));
+    await userEvent.click(await screen.findByTestId("add-more-f-a"));
+    await screen.findByText("Loading episodes...");
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click(screen.getByTestId("add-more-f-b"));
+    await screen.findByTestId("t-b-1");
+
+    await act(async () => {
+      releaseA();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("t-b-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("t-a-1")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent("Show B");
+  });
+
+  test("a late response after closing does not reopen or prefill the dialog", async () => {
+    const { releaseA } = installSlowA();
+    render(withQuery(<FeedsPage />));
+    await userEvent.click(await screen.findByTestId("add-more-f-a"));
+    await screen.findByText("Loading episodes...");
+    await userEvent.keyboard("{Escape}");
+
+    await act(async () => {
+      releaseA();
+      await Promise.resolve();
+    });
+    await userEvent.click(screen.getByRole("button", { name: /add feed/i }));
+
+    expect(screen.getByRole("dialog")).toHaveTextContent("Add RSS Feed");
+    expect(screen.queryByTestId("step2")).not.toBeInTheDocument();
   });
 });

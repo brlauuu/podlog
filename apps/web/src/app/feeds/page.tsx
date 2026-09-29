@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import {
@@ -42,7 +42,30 @@ export default function FeedsPage() {
 
   const { data: feeds = [], isLoading } = useQuery({ queryKey: ["feeds"], queryFn: fetchFeeds });
 
+  // #1066: the preview load in flight, if any. Closing the dialog used to
+  // leave it running, and its late response was written into whichever
+  // dialog was open by then -- feed B's picker showed feed A's episodes and
+  // would have posted them to feed B. Aborting frees the browser's request;
+  // the identity check is what guarantees a response that arrives anyway is
+  // dropped.
+  const previewRequest = useRef<AbortController | null>(null);
+
+  function cancelPreview() {
+    previewRequest.current?.abort();
+    previewRequest.current = null;
+    setPreviewLoading(false);
+  }
+
+  function beginPreview(): AbortController {
+    cancelPreview();
+    const controller = new AbortController();
+    previewRequest.current = controller;
+    setPreviewLoading(true);
+    return controller;
+  }
+
   function resetModal() {
+    cancelPreview();
     setShowAddModal(false);
     setNewUrl("");
     setAddMode("test");
@@ -113,21 +136,26 @@ export default function FeedsPage() {
     setAddMoreFeed(feed);
     setShowAddModal(true);
     setAddError(null);
-    setPreviewLoading(true);
+    const request = beginPreview();
     try {
       const [data, existing] = await Promise.all([
-        fetchPreview(feed.url),
-        fetchFeedEpisodeGuids(feed.id),
+        fetchPreview(feed.url, request.signal),
+        fetchFeedEpisodeGuids(feed.id, request.signal),
       ]);
+      if (previewRequest.current !== request) return;
       const existingSet = new Set(existing);
       setPreview(data);
       setExistingGuids(existingSet);
       setSelectedGuids(new Set(existingSet));
       setPreviewStep(true);
     } catch (err: unknown) {
+      if (previewRequest.current !== request) return;
       setAddError(err instanceof Error ? err.message : "Failed to load feed preview");
     } finally {
-      setPreviewLoading(false);
+      if (previewRequest.current === request) {
+        previewRequest.current = null;
+        setPreviewLoading(false);
+      }
     }
   }
 
@@ -215,15 +243,20 @@ export default function FeedsPage() {
       return;
     }
     if (addMode === "selective" && !previewStep) {
-      setPreviewLoading(true);
+      const request = beginPreview();
       try {
-        const data = await fetchPreview(newUrl.trim());
+        const data = await fetchPreview(newUrl.trim(), request.signal);
+        if (previewRequest.current !== request) return;
         setPreview(data);
         setPreviewStep(true);
       } catch (err: unknown) {
+        if (previewRequest.current !== request) return;
         setAddError(err instanceof Error ? err.message : "Failed to load feed preview");
       } finally {
-        setPreviewLoading(false);
+        if (previewRequest.current === request) {
+          previewRequest.current = null;
+          setPreviewLoading(false);
+        }
       }
       return;
     }
