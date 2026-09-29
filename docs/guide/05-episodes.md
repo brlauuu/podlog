@@ -41,7 +41,7 @@ GET /api/episodes/<episode-id>/transcript?format=txt
 GET /api/episodes/<episode-id>/transcript?format=md
 ```
 
-The episode id is on the episode page (the copy button next to the title). From Telegram, `/transcript <title words>` sends the file to the chat; see [Notifications](09-notifications.md#telegram-bot-commands).
+The episode id is on the episode page (the copy button next to the title). From Telegram, `/transcript <title words>` sends the file to the chat, for accounts on the bot's allowed list; see [Notifications](09-notifications.md#telegram-bot-commands).
 
 ## Reprocessing an Episode
 

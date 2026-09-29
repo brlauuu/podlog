@@ -43,7 +43,7 @@ The dropdown is populated from **names you have confirmed**, not raw `SPEAKER_00
 
 ## Asking from Telegram
 
-With bot commands enabled (see [Notifications](09-notifications.md#telegram-bot-commands)), `/ask <question>` runs the same retrieval and generation from a Telegram chat, with the configured default model and no feed scope. The reply streams into a single message that the bot keeps editing, and ends with the sources. One question is answered at a time.
+With bot commands enabled and your Telegram account on the allowed list (see [Notifications](09-notifications.md#telegram-bot-commands)), `/ask <question>` runs the same retrieval and generation from a Telegram chat, with the configured default model and no feed scope. The reply streams into a single message that the bot keeps editing, and ends with the sources. One question is answered at a time.
 
 ## Prerequisites
 

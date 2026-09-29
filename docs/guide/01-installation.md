@@ -133,7 +133,7 @@ The "same network" address is the one to use from a phone or another computer. R
 
 The address comes from DHCP and can change when your router or machine restarts. Reserve it in your router if you want it stable.
 
-If you missed it scrolling past, the same address is shown under **Settings → Access from another device**, with the same warning. That panel is empty when Podlog is reachable from this machine only.
+If you missed it scrolling past, the same address is shown under **Settings → Access from another device**, with the same warning. The Telegram bot gives it too: send `/address` from an account on the allowed list (see [Notifications](09-notifications.md#telegram-bot-commands)). That panel is empty when Podlog is reachable from this machine only.
 
 ### Optional: Remote-Inference Profile
 
@@ -205,7 +205,9 @@ The remaining boundary is doing real work, so two changes would break it:
 
 If you need either, treat adding authentication as a prerequisite rather than a follow-up. See [issue #960](https://github.com/brlauuu/podlog/issues/960) for the options that were considered.
 
-**The Telegram bot is the one surface that reaches past your network.** If you list user IDs under Allowed user IDs (see [Notifications](09-notifications.md#telegram-bot-commands)), those people can query Podlog from anywhere through Telegram. The bot is off until that list is non-empty, refuses everyone not on it, and every command it accepts is read-only — it can report what the queue is doing, not change anything. What you are trusting is those Telegram accounts: whoever holds one of them, including someone who has taken it over, can read what the bot can read.
+**The Telegram bot is the one surface that reaches past your network.** If you list user IDs under Allowed user IDs (see [Notifications](09-notifications.md#telegram-bot-commands)), those people can use Podlog from anywhere through Telegram. **An account has to be on that list before the bot will do anything for it.** The bot is off until the list is non-empty and refuses everyone not on it; the single exception is `/whoami`, which tells any sender their own numeric ID and nothing else, so that a new person can find the number you need to add them.
+
+A listed account can read: the queue, search results, Ask AI answers, whole transcripts, and the address Podlog is reachable at on your network (`/address`). It can also make one change: `/addfeed` adds a podcast source, which starts downloading and transcribing it. Nothing the bot accepts deletes or reprocesses an episode, changes a setting, or touches a backup. What you are trusting is those Telegram accounts: whoever holds one of them, including someone who has taken it over, can do everything in this paragraph.
 
 **Your API keys live in `.env`** — Fireworks, pyannote, Telegram, SMTP. It is gitignored. The settings API masks them on read, but anyone who can read the file has them outright.
 

@@ -13,6 +13,7 @@ Everything runs on your own hardware, inside Docker. There is no cloud account t
 - **Queue dashboard** with per-stage status, error classification, and automatic retries for transient failures.
 - **Speaker management** — automatic labels from pyannote, name suggestions from spaCy NER, and a web UI to rename or merge speakers.
 - **Notifications** on Telegram or email when episodes finish processing, with optional daily or weekly digest mode.
+- **Telegram bot** that answers commands from a chat: search, Ask AI, transcripts, queue status and adding a source. It is off by default and answers only the Telegram accounts you put on its allowed list.
 
 ## Privacy
 
