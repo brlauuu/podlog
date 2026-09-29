@@ -44,10 +44,19 @@ export default function FeedCard({
 }: FeedCardProps) {
   return (
     <Card className="hover:bg-accent/30 transition-colors">
-      <CardContent className="p-4 flex items-center justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium truncate">{feed.title ?? feed.url}</p>
+      {/* #1066: one row at every width let the buttons take the line and
+          squeeze the text to a sliver on a phone -- the title vanished.
+          Below sm the text sits above the actions; from sm up it is the
+          original single row. */}
+      <CardContent
+        data-testid="feed-card-content"
+        className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+      >
+        <div className="min-w-0 sm:flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="min-w-0 text-sm font-medium break-words sm:truncate">
+              {feed.title ?? feed.url}
+            </p>
             {feed.mode === "test" && (
               <Badge variant="outline" className="shrink-0 text-violet-700 border-violet-300 dark:text-violet-300 dark:border-violet-700 gap-1">
                 <FlaskConical size={10} />
@@ -75,7 +84,10 @@ export default function FeedCard({
               : "Never polled"}
           </p>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div
+          data-testid="feed-card-actions"
+          className="flex flex-wrap items-center gap-1 sm:flex-nowrap sm:shrink-0"
+        >
           {feed.mode === "selective" && onAddMore && (
             <Button
               variant="outline"

@@ -42,7 +42,7 @@ With bot commands enabled (see [Notifications](09-notifications.md#telegram-bot-
 
 ## Adding More Selective Episodes
 
-Selective feeds get an extra **Add episodes** button. It reopens the episode picker with everything you haven't ingested yet, so you can pull in a few more without promoting the whole back-catalog. The same filter box is available here, and episodes already in the feed stay greyed out and untouched — including when you use **Select all** on a filtered view.
+Selective feeds get an extra **Add episodes** button. It reopens the episode picker with everything you haven't ingested yet, so you can pull in a few more without promoting the whole back-catalog. The same filter box is available here, and episodes already in the feed stay greyed out and untouched — including when you use **Select all** on a filtered view. Closing the picker while a feed is still loading abandons that load, so opening another feed's picker always shows that feed's own episodes.
 
 ## Polling for New Episodes
 

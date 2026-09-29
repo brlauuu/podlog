@@ -9,8 +9,10 @@ export async function fetchFeeds(): Promise<Feed[]> {
   return resp.json();
 }
 
-export async function fetchPreview(url: string): Promise<FeedPreview> {
-  const resp = await fetch(`/api/feeds/preview?url=${encodeURIComponent(url)}`);
+// `signal` lets the page abandon a load the user closed the dialog on (#1066).
+export async function fetchPreview(url: string, signal?: AbortSignal): Promise<FeedPreview> {
+  const target = `/api/feeds/preview?url=${encodeURIComponent(url)}`;
+  const resp = signal ? await fetch(target, { signal }) : await fetch(target);
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(err.detail ?? "Failed to load feed preview");
@@ -18,8 +20,12 @@ export async function fetchPreview(url: string): Promise<FeedPreview> {
   return resp.json();
 }
 
-export async function fetchFeedEpisodeGuids(feedId: string): Promise<string[]> {
-  const resp = await fetch(`/api/feeds/${feedId}/episodes/guids`);
+export async function fetchFeedEpisodeGuids(
+  feedId: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const target = `/api/feeds/${feedId}/episodes/guids`;
+  const resp = signal ? await fetch(target, { signal }) : await fetch(target);
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(err.detail ?? "Failed to load existing episodes");
