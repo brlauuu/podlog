@@ -202,7 +202,7 @@ Delivery settings for pipeline notifications. Telegram credentials are shared wi
 | `TELEGRAM_CHAT_ID` | (unset) | Chat that receives done/failed notifications and health alerts. |
 | `WEB_INTERNAL_URL` | `http://web:3000` | Where the pipeline reaches the web app for the bot's `/search`. Only change it when running the pipeline natively outside compose. |
 | `PODLOG_LAN_URL` | (computed by `make up`) | The LAN address the bot uses to link search hits to episode pages, and the one it replies with to `/address`. Not a `.env` setting: `make up` detects it and passes it to the `web` and `pipeline` containers. Empty means the bot sends no links and `/address` reports that none is recorded. |
-| `TELEGRAM_ALLOWED_USER_IDS` | (unset) | Comma-separated numeric Telegram user IDs allowed to send the bot commands (`/queue`, `/help`, …). Empty means the bot never reads messages. See the [notifications guide](guide/09-notifications.md#telegram-bot-commands). |
+| `TELEGRAM_ALLOWED_USER_IDS` | (unset) | Comma-separated numeric Telegram user IDs allowed to send the bot commands. An account not listed here gets a refusal to everything except `/whoami`. Empty means the bot never reads messages. See the [notifications guide](guide/09-notifications.md#telegram-bot-commands). |
 
 ### SMTP
 

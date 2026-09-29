@@ -55,7 +55,7 @@ Tip: if you confirm a speaker name on an episode page, return to `/search` and t
 
 ## Searching from Telegram
 
-If you have enabled bot commands (see [Notifications](09-notifications.md#telegram-bot-commands)), `/search <words>` runs the same full-text search from a Telegram chat, five hits per page, using exactly the syntax above. It is the way to search Podlog from outside the home network.
+If you have enabled bot commands and your Telegram account is on the allowed list (see [Notifications](09-notifications.md#telegram-bot-commands)), `/search <words>` runs the same full-text search from a Telegram chat, five hits per page, using exactly the syntax above. It is the way to search Podlog from outside the home network.
 
 ## Exporting Results
 

@@ -38,7 +38,7 @@ Neither direction re-processes an episode that is already done, and neither dele
 
 ## Adding a Feed from Telegram
 
-With bot commands enabled (see [Notifications](09-notifications.md#telegram-bot-commands)), `/addfeed full <rss url>` or `/addfeed test <rss url>` adds a source from your phone, and `/addfeed selective <rss url>` lets you pick one of the five newest episodes. The bot replies with one line either way, so you know whether it worked. Anything more than that, such as several episodes or an older one, is done here.
+With bot commands enabled and your Telegram account on the allowed list (see [Notifications](09-notifications.md#telegram-bot-commands)), `/addfeed full <rss url>` or `/addfeed test <rss url>` adds a source from your phone, and `/addfeed selective <rss url>` lets you pick one of the five newest episodes. The bot replies with one line either way, so you know whether it worked. Anything more than that, such as several episodes or an older one, is done here.
 
 ## Adding More Selective Episodes
 

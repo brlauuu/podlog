@@ -41,7 +41,7 @@ In the browser, the queue page at `/queue` will show stage counts and be ready t
 Everything works with the defaults. These are the four tabs of `/settings`, in the order they tend to matter:
 
 1. **Inference** — local models by default. If you have a [Fireworks](19-inference-providers.md) key, this is where it goes, per pipeline step, with a **Test key** button. Decide this before your first big feed: switching later means re-processing to benefit.
-2. **Notifications** — a Telegram bot or email tells you when episodes finish or fail, and the Telegram bot can also [answer commands](09-notifications.md#telegram-bot-commands) from your phone once you list your user id under **Allowed user IDs**.
+2. **Notifications** — a Telegram bot or email tells you when episodes finish or fail, and the Telegram bot can also [answer commands](09-notifications.md#telegram-bot-commands) from your phone. It answers only accounts you have listed under **Allowed user IDs**, so add your own Telegram user id there first.
 3. **Backups** — nightly database dumps and audio snapshots are on by default; check the retention and where the files land. `make update` will refuse to run without a fresh dump, so keep this on.
 4. **Prompts** — the system prompts behind Ask AI. Leave them until you have asked a few questions and know what you want changed.
 

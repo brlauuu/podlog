@@ -20,11 +20,13 @@ The Notifications tab holds three sections: **Telegram**, **Email** and **Genera
 
 4. **Test:** Click **Send test message**. You should receive a message from your bot in Telegram.
 
+These four steps set up notifications only. The bot does not answer anyone yet, you included: accounts have to be put on the allowed list first, which is the next section.
+
 ## Telegram Bot Commands
 
 Notifications only go one way. You can also let the bot **answer commands**, which turns the chat into a small remote window into Podlog: check the queue from your phone without being on the home network, opening a port, or running a VPN. Podlog reaches Telegram from inside the Docker network by long-polling, so nothing inbound is exposed.
 
-This is the first part of Podlog that answers to someone other than "whoever is on the LAN", so it is **off until you say who may use it**:
+This is the first part of Podlog that answers to someone other than "whoever is on the LAN", so it is **off until you say who may use it**. Every Telegram account has to be on the allowed list before the bot will act on anything it sends. That includes your own account: receiving notifications does not put you on the list.
 
 1. In `/settings` → **Notifications** → **Telegram**, fill in **Allowed user IDs** with the numeric Telegram user IDs that may talk to the bot, comma-separated. Your own is the Chat ID from step 2 above. Save.
 2. Anyone else can find theirs by sending the bot `/whoami` — that is the one command that answers everybody, and it answers with nothing but the sender's own ID.

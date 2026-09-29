@@ -18,7 +18,7 @@
 
 ## 1. Problem Statement
 
-Podlog's web UI is reachable only on the LAN, by design (PRD-03, #960). Using it from a phone elsewhere means a VPN or exposing port 3000, both of which the security model advises against. Podlog already has a Telegram bot for outbound notifications (PRD-01 notifications, #91). Letting that bot answer commands gives remote, read-only access through Telegram's servers with nothing opened on the router, and without building a mobile app.
+Podlog's web UI is reachable only on the LAN, by design (PRD-03, #960). Using it from a phone elsewhere means a VPN or exposing port 3000, both of which the security model advises against. Podlog already has a Telegram bot for outbound notifications (PRD-01 notifications, #91). Letting that bot answer commands gives remote access (read-only apart from adding a source, see §2) through Telegram's servers with nothing opened on the router, and without building a mobile app.
 
 ## 2. Goals and Non-Goals
 

@@ -242,7 +242,7 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
-### RISK-12: Telegram Bot Is a Remote, Read-Only Surface Keyed on Telegram Accounts
+### RISK-12: Telegram Bot Is a Remote Surface Keyed on Telegram Accounts
 
 **Severity:** Medium
 **Component:** PRD-07 — Telegram bot (`app/services/telegram_bot.py`) — Issue #1034

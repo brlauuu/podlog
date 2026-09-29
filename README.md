@@ -34,6 +34,7 @@
 - **Queue dashboard** — per-stage status, error classification, auto-retry for transient failures, manual retry for the rest.
 - **Meta-Analysis dashboard** — speaker analytics across every feed at `/meta-analysis`: per-speaker minutes and word counts episode by episode, and a host-vs-guest talking-time delta, drawn from either confirmed names or high-confidence inferred ones.
 - **Notifications** — Telegram and email alerts when episodes finish or fail, with optional daily/weekly digest.
+- **Telegram bot** — search, ask, fetch a transcript, check the queue or add a source from a chat, from anywhere, with no port opened. Off by default; it answers only the Telegram accounts you put on its allowed list.
 - **Local-first** — no accounts, no cloud, no telemetry; optional Fireworks AI profile for users who prefer remote inference.
 
 

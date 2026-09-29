@@ -268,7 +268,7 @@ export function TelegramNotificationCard({
 
       <FieldGroup
         label="Allowed user IDs"
-        hint="Comma-separated numeric Telegram user IDs allowed to send the bot commands (/queue, /help). Leave empty to keep the bot receive-only. Anyone can send the bot /whoami to learn their ID once it is running."
+        hint="Comma-separated numeric Telegram user IDs allowed to send the bot commands. An account has to be listed here before the bot will answer it, yours included. Leave empty and the bot answers nobody; notifications still go out. Anyone can send the bot /whoami to learn their ID once it is running."
       >
         <input
           id="allowed-user-ids"
