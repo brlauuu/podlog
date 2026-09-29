@@ -102,11 +102,16 @@ HELP_TEXT = (
     "/transcript <episode> - send an episode's transcript as a file; "
     "episode id or title words, add md for Markdown\n"
     "/queue - what the pipeline is doing right now\n"
+    "/address - where to open Podlog on the home network (also /ip)\n"
     "/whoami - show your Telegram user id\n"
     "/help - this list\n"
     "\n"
     "Search syntax is the web app's: \"exact phrase\", -exclude, OR, speaker:Name.\n"
     "Links open only on the home network."
+)
+ADDRESS_UNKNOWN = (
+    "No address is recorded. Podlog was started without `make up`, "
+    "or access from the network is turned off."
 )
 SEARCH_USAGE = "Usage: /search <words>   (add p2, p3 ... for more pages)"
 SEARCH_UNAVAILABLE = "Search is unavailable right now: the web app did not answer."
@@ -201,6 +206,35 @@ def format_queue(snapshot: dict) -> str:
         if len(failed) > _QUEUE_LIST_MAX:
             lines.append(f"- +{len(failed) - _QUEUE_LIST_MAX} more")
     return _truncate("\n".join(lines), MAX_MESSAGE_CHARS)
+
+
+@dataclass(frozen=True)
+class AddressCommand:
+    """An /address the loop has to answer: the bot object holds the LAN URL."""
+
+    chat_id: int
+
+
+def format_address(lan_url: str | None) -> str:
+    """Reply for /address (#1068).
+
+    The address is the one `make up` computed on the host (PODLOG_LAN_URL);
+    the container cannot see the host's own, so it is as old as the last
+    start. The reply says so rather than presenting it as current.
+    """
+    base = (lan_url or "").strip().rstrip("/")
+    if not base:
+        return ADDRESS_UNKNOWN
+    return "\n".join(
+        [
+            "Podlog on the home network:",
+            base,
+            "",
+            "Recorded when Podlog started. Your router can change it; "
+            "if it does not open, run `make up` on the host.",
+            "There is no login: anyone who can reach that address has full control.",
+        ]
+    )
 
 
 @dataclass(frozen=True)
@@ -585,7 +619,15 @@ def handle_update(
     update: dict,
     allowlist: frozenset[int],
     db_factory: Callable[[], Session],
-) -> tuple[int, str] | SearchCommand | TranscriptCommand | AskCommand | FeedCommand | None:
+) -> (
+    tuple[int, str]
+    | AddressCommand
+    | SearchCommand
+    | TranscriptCommand
+    | AskCommand
+    | FeedCommand
+    | None
+):
     """Route one Telegram update to a reply.
 
     Returns `(chat_id, text)` to send, a `SearchCommand` / `TranscriptCommand`
@@ -628,6 +670,8 @@ def handle_update(
             return chat_id, format_queue(queue_snapshot(db))
         finally:
             db.close()
+    if command in ("/address", "/ip"):
+        return AddressCommand(chat_id)
     if command == "/search":
         parsed = parse_search_args(text)
         if parsed is None:
@@ -973,7 +1017,9 @@ class TelegramBot:
             return
         if reply is None:
             return
-        if isinstance(reply, SearchCommand):
+        if isinstance(reply, AddressCommand):
+            reply = (reply.chat_id, format_address(self._lan_url))
+        elif isinstance(reply, SearchCommand):
             reply = (reply.chat_id, await self._search(reply))
         elif isinstance(reply, TranscriptCommand):
             failure = await self._transcript(token, reply)

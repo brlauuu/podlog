@@ -39,6 +39,7 @@ Leave the field empty and the bot never reads a message; notifications keep work
 | `/transcript <episode>` | Sends the episode's transcript as a file, the same export as the episode page's Export button. `<episode>` is an episode id or a few words from the title; when several titles match you get a numbered list and reply `/transcript 2`. Add `md` for Markdown instead of plain text |
 | `/addfeed <full\|test\|selective> <rss url>` | Adds a podcast source, the same three modes as the Add Feed dialog. Full and test are one message: you get "Added <title>" or one line saying why it did not work (not a feed, unreachable, already present). Selective shows the five newest episodes and you reply `/addfeed <number>` to add exactly one; for more than one, or an older episode, use the Feeds page. This is the bot's only command that changes anything, and it is undone with one click on the Feeds page |
 | `/queue` | What the pipeline is doing: counts per state, the episode being processed and its stage, the next few pending, the latest failures |
+| `/address`, `/ip` | The address to open Podlog at from another device on the home network, the same one shown under Settings → Access from another device. It is the address `make up` detected when Podlog started, so if your router has since handed the machine a new one the reply is out of date until you run `make up` again. When no address was recorded the bot says so |
 | `/whoami` | Your numeric Telegram user ID (works for everyone) |
 | `/help`, `/start` | The command list |
 
