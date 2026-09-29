@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useUnsavedChanges } from "./UnsavedChanges";
 import {
   Dialog,
   DialogContent,
@@ -134,6 +135,18 @@ function RetentionEditor({
   // before the API rejects.
   const invalid =
     draft.daily === 0 && (draft.weekly > 0 || draft.monthly > 0);
+
+  useUnsavedChanges(
+    "backups",
+    { label: "Backups", dirty, saving, canSave: !invalid },
+    {
+      save: () => save(),
+      discard: () => {
+        setDraft(initial);
+        setError(null);
+      },
+    }
+  );
 
   async function save() {
     setError(null);

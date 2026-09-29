@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, Toast } from "./NotificationSettingsSections";
 import { SettingsSchema } from "@/lib/settings-schema";
@@ -8,6 +8,12 @@ import NotificationSection from "./NotificationSection";
 import RemoteInferenceSection from "./RemoteInferenceSection";
 import BackupsSection from "./BackupsSection";
 import PromptsSection from "./PromptsSection";
+import {
+  UnsavedChangesBar,
+  UnsavedChangesContext,
+  useLeaveWarning,
+  type UnsavedEntry,
+} from "./UnsavedChanges";
 
 const INFERENCE_FIELDS = new Set<keyof Settings>([
   "inference_provider",
@@ -39,6 +45,21 @@ const INFERENCE_FIELDS = new Set<keyof Settings>([
 
 export default function NotificationSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
+  // #1069: what the server last confirmed, so Discard has something to
+  // return to.
+  const [saved, setSaved] = useState<Settings | null>(null);
+  const [tab, setTab] = useState("notifications");
+  // Unsaved state reported by the tabs that keep their own drafts.
+  const [sectionEntries, setSectionEntries] = useState<Record<string, UnsavedEntry>>({});
+  const registerSection = useCallback((id: string, entry: UnsavedEntry | null) => {
+    setSectionEntries((prev) => {
+      if (!entry && !(id in prev)) return prev;
+      const next = { ...prev };
+      if (entry) next[id] = entry;
+      else delete next[id];
+      return next;
+    });
+  }, []);
   const [savingNotifications, setSavingNotifications] = useState(false);
   const [savingInference, setSavingInference] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -57,6 +78,7 @@ export default function NotificationSettings() {
         const parsed = SettingsSchema.safeParse(data);
         if (parsed.success) {
           setSettings(parsed.data);
+          setSaved(parsed.data);
           return;
         }
         // Drift between backend allowlist and frontend schema. Surface it
@@ -76,6 +98,12 @@ export default function NotificationSettings() {
     const id = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(id);
   }, [toast]);
+
+  const notificationsDirty = Object.keys(dirtyNotifications).length > 0;
+  const inferenceDirty = Object.keys(dirtyInference).length > 0;
+  const anyUnsaved =
+    notificationsDirty || inferenceDirty || Object.keys(sectionEntries).length > 0;
+  useLeaveWarning(anyUnsaved);
 
   if (shapeError) {
     return (
@@ -124,7 +152,11 @@ export default function NotificationSettings() {
       });
       if (resp.ok) {
         const updated = await resp.json();
-        setSettings(updated);
+        // The response is the whole settings row. Inference edits not yet
+        // saved are laid back over it, or they would vanish from the form
+        // while still being counted as unsaved.
+        setSettings({ ...updated, ...dirtyInference });
+        setSaved(updated);
         setDirtyNotifications({});
         setToast({ message: "Settings saved", type: "success" });
       } else {
@@ -149,7 +181,8 @@ export default function NotificationSettings() {
       });
       if (resp.ok) {
         const updated = await resp.json();
-        setSettings(updated);
+        setSettings({ ...updated, ...dirtyNotifications });
+        setSaved(updated);
         setDirtyInference({});
         if (updated.fireworks_key_warning) {
           setToast({ message: updated.fireworks_key_warning, type: "error" });
@@ -188,11 +221,52 @@ export default function NotificationSettings() {
     }
   }
 
-  const actionButtonClass =
-    "px-5 py-2 max-md:min-h-11 rounded-md bg-action text-action-foreground text-sm font-medium hover:bg-action/90 disabled:opacity-50";
+  /** Put the named fields back to what the server last confirmed. */
+  function revert(fields: Partial<Settings>) {
+    if (!saved) return;
+    const restored = Object.fromEntries(
+      Object.keys(fields).map((key) => [key, saved[key as keyof Settings]])
+    );
+    setSettings((prev) => (prev ? ({ ...prev, ...restored } as Settings) : prev));
+  }
+
+  const entries: UnsavedEntry[] = [
+    ...(notificationsDirty
+      ? [
+          {
+            label: "Notifications",
+            saving: savingNotifications,
+            canSave: true,
+            save: handleSaveNotifications,
+            discard: () => {
+              revert(dirtyNotifications);
+              setDirtyNotifications({});
+            },
+          },
+        ]
+      : []),
+    ...(inferenceDirty
+      ? [
+          {
+            label: "Inference",
+            saving: savingInference,
+            canSave: true,
+            save: handleSaveInference,
+            discard: () => {
+              revert(dirtyInference);
+              setDirtyInference({});
+            },
+          },
+        ]
+      : []),
+    ...["prompts", "backups"].flatMap((id) =>
+      sectionEntries[id] ? [sectionEntries[id]] : []
+    ),
+  ];
 
   return (
-    <div>
+    // Room at the bottom so the bar never covers the last field.
+    <div className={entries.length > 0 ? "pb-24" : undefined}>
       <div className="mb-5">
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -200,7 +274,7 @@ export default function NotificationSettings() {
         </p>
       </div>
 
-      <Tabs defaultValue="notifications">
+      <Tabs value={tab} onValueChange={setTab}>
         {/* #989: h-10 inline-flex kept four triggers on one unwrappable row,
             which overflowed below ~420px. #1067: letting them wrap left
             three on one row and a lone centred Backups below, so phones get
@@ -219,38 +293,27 @@ export default function NotificationSettings() {
             onTest={handleTest}
             testing={testing}
           />
-          <div className="flex gap-3 mt-8 mb-4">
-            <button
-              className={actionButtonClass}
-              onClick={handleSaveNotifications}
-              disabled={savingNotifications || Object.keys(dirtyNotifications).length === 0}
-            >
-              {savingNotifications ? "Saving..." : "Save"}
-            </button>
-          </div>
         </TabsContent>
 
         <TabsContent value="inference">
           <RemoteInferenceSection settings={settings} onChange={handleChange} />
-          <div className="flex gap-3 mt-8 mb-4">
-            <button
-              className={actionButtonClass}
-              onClick={handleSaveInference}
-              disabled={savingInference || Object.keys(dirtyInference).length === 0}
-            >
-              {savingInference ? "Saving..." : "Save"}
-            </button>
-          </div>
         </TabsContent>
 
-        <TabsContent value="prompts">
-          <PromptsSection />
-        </TabsContent>
+        {/* #1069: Prompts and Backups hold their drafts themselves, so
+            unmounting them on a tab switch silently threw unsaved edits
+            away. They stay mounted and are hidden instead. */}
+        <UnsavedChangesContext.Provider value={registerSection}>
+          <TabsContent value="prompts" forceMount hidden={tab !== "prompts"}>
+            <PromptsSection />
+          </TabsContent>
 
-        <TabsContent value="backups">
-          <BackupsSection />
-        </TabsContent>
+          <TabsContent value="backups" forceMount hidden={tab !== "backups"}>
+            <BackupsSection />
+          </TabsContent>
+        </UnsavedChangesContext.Provider>
       </Tabs>
+
+      <UnsavedChangesBar entries={entries} />
 
       {toast && <Toast message={toast.message} type={toast.type} />}
     </div>

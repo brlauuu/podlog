@@ -14,7 +14,7 @@ export function Toast({
 }) {
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm text-white shadow-lg ${
+      className={`fixed bottom-24 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm text-white shadow-lg ${
         type === "success" ? "bg-green-600" : "bg-red-600"
       }`}
     >
