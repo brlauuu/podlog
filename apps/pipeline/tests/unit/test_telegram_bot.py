@@ -1378,3 +1378,61 @@ class TestAddfeedLoop:
 
     async def test_help_mentions_addfeed(self):
         assert "/addfeed" in HELP_TEXT
+
+
+# --- /address (#1068) ---------------------------------------------------------
+
+
+class TestFormatAddress:
+    def test_gives_the_url_on_its_own_line(self):
+        text = tb.format_address(LAN + "/")
+        assert LAN in text.splitlines()
+
+    def test_says_it_can_be_stale_and_that_there_is_no_login(self):
+        text = tb.format_address(LAN)
+        assert "when Podlog started" in text
+        assert "no login" in text
+
+    @pytest.mark.parametrize("missing", [None, "", "   "])
+    def test_no_address_is_said_plainly_not_invented(self, missing):
+        text = tb.format_address(missing)
+        assert text == tb.ADDRESS_UNKNOWN
+        assert "http" not in text
+
+
+class TestAddressRouting:
+    @pytest.mark.parametrize("cmd", ["/address", "/ip", "/IP", "/address@PodlogBot"])
+    def test_returns_command_for_the_loop(self, cmd):
+        reply = handle_update(_msg(cmd, chat_id=-8), frozenset({1}), MagicMock)
+        assert reply == tb.AddressCommand(chat_id=-8)
+
+    def test_unlisted_user_is_refused(self):
+        assert handle_update(_msg("/address", user_id=9), frozenset({1}), MagicMock) == (9, REFUSAL_TEXT)
+
+    def test_help_lists_it(self):
+        assert "/address" in HELP_TEXT
+
+
+class TestAddressLoop:
+    async def test_replies_with_the_configured_address(self, sleeps):
+        tg = _Telegram([[_msg("/address")]])
+        bot = _bot_with_web(tg, _Web(), sleeps)
+        await bot.poll_once(wait=True)
+        sends = tg.calls("sendMessage")
+        assert len(sends) == 1
+        assert sends[0]["chat_id"] == 1
+        assert sends[0]["text"] == tb.format_address(LAN)
+
+    async def test_without_an_address_says_so(self, sleeps):
+        tg = _Telegram([[_msg("/ip")]])
+        bot = _bot_with_web(tg, _Web(), sleeps, lan_url=None)
+        await bot.poll_once(wait=True)
+        assert tg.calls("sendMessage")[0]["text"] == tb.ADDRESS_UNKNOWN
+
+    async def test_unlisted_user_never_sees_the_address(self, sleeps):
+        tg = _Telegram([[_msg("/address", user_id=9)]])
+        bot = _bot_with_web(tg, _Web(), sleeps)
+        await bot.poll_once(wait=True)
+        texts = [s["text"] for s in tg.calls("sendMessage")]
+        assert texts == [REFUSAL_TEXT]
+        assert all(LAN not in t for t in texts)
