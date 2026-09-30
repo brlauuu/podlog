@@ -18,6 +18,7 @@
  * nothing when there is no page above them, so they still render alone.
  */
 import { createContext, useContext, useEffect, useRef } from "react";
+import { setLeaveGuard } from "@/lib/leaveGuard";
 
 export interface UnsavedEntry {
   /** Tab name, as shown in the tab strip. */
@@ -81,8 +82,10 @@ const LEAVE_MESSAGE = "You have unsaved changes in Settings. Leave without savin
  * document, ahead of the router; next/link skips a click that is already
  * default-prevented.
  *
- * Not covered: keyboard shortcuts that navigate (G then a letter) call the
- * router directly and pass through unasked.
+ * Keyboard shortcuts that navigate call the router directly, so they ask
+ * through `confirmLeave` instead; the guard installed here is what answers.
+ *
+ * Not covered: the browser's back button.
  */
 export function useLeaveWarning(dirty: boolean) {
   useEffect(() => {
@@ -111,9 +114,11 @@ export function useLeaveWarning(dirty: boolean) {
 
     window.addEventListener("beforeunload", onBeforeUnload);
     document.addEventListener("click", onClick, true);
+    setLeaveGuard(() => window.confirm(LEAVE_MESSAGE));
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
       document.removeEventListener("click", onClick, true);
+      setLeaveGuard(null);
     };
   }, [dirty]);
 }

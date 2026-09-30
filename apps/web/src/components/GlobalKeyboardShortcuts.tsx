@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { useKeyboardShortcut } from "@/lib/useKeyboardShortcut";
+import { confirmLeave } from "@/lib/leaveGuard";
 
 /**
  * Page-agnostic keyboard shortcuts (#702).
@@ -29,7 +30,7 @@ export default function GlobalKeyboardShortcuts() {
         input.select();
         return;
       }
-      router.push("/search");
+      if (confirmLeave("/search")) router.push("/search");
     },
     [router],
   );
