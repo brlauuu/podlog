@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { useChordShortcut } from "@/lib/useChordShortcut";
+import { confirmLeave } from "@/lib/leaveGuard";
 
 /**
  * Two-key navigation chords (#704): press ``G``, then within ~1s a
@@ -14,20 +15,23 @@ import { useChordShortcut } from "@/lib/useChordShortcut";
 export default function GlobalChordShortcuts() {
   const router = useRouter();
 
-  const map = useMemo(
-    () => ({
-      h: () => router.push("/"),
-      q: () => router.push("/queue"),
-      f: () => router.push("/feeds"),
-      p: () => router.push("/podcasts"),
-      a: () => router.push("/ask"),
-      m: () => router.push("/meta-analysis"),
-      s: () => router.push("/search"),
-      t: () => router.push("/settings"),
-      d: () => router.push("/docs"),
-    }),
-    [router],
-  );
+  const map = useMemo(() => {
+    // A page with unsaved changes gets to object first (#1069).
+    const go = (path: string) => () => {
+      if (confirmLeave(path)) router.push(path);
+    };
+    return {
+      h: go("/"),
+      q: go("/queue"),
+      f: go("/feeds"),
+      p: go("/podcasts"),
+      a: go("/ask"),
+      m: go("/meta-analysis"),
+      s: go("/search"),
+      t: go("/settings"),
+      d: go("/docs"),
+    };
+  }, [router]);
 
   useChordShortcut({ prefix: "g", map });
 

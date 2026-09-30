@@ -43,7 +43,7 @@ Nothing on `/settings` saves itself. As soon as you change something, a bar appe
 
 The bar stays put while you scroll and while you move between tabs, so an edit on one tab is not forgotten when you open another. If a change cannot be saved as it stands (a backup retention of daily 0 with weekly or monthly above 0, say), the bar says which tab to fix and Save waits until you do.
 
-Leaving with changes pending asks first: reloading or closing the tab, and clicking a link to another page, both prompt before anything is lost. Navigating with a keyboard shortcut (<kbd>G</kbd> then a letter) does not ask.
+Leaving with changes pending asks first: reloading or closing the tab, clicking a link to another page, and navigating with a keyboard shortcut (<kbd>G</kbd> then a letter, or <kbd>/</kbd> on a page without a search box) all prompt before anything is lost. The browser's back button does not.
 
 Saving is deliberate rather than automatic because these tabs hold API keys and passwords typed a character at a time, the bot's allowed list, and provider switches that change how the next episode is processed and what it costs.
 
