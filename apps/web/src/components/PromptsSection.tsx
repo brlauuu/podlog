@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useUnsavedChanges } from "./UnsavedChanges";
 
 interface PromptItem {
   key: string;
@@ -26,8 +27,12 @@ export default function PromptsSection() {
   // them (prompts === null for both) stranded the user on "Loading..."
   // forever, because the error toast renders below the null-guard return.
   const [loadError, setLoadError] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
 
-  async function load() {
+  // #1069: `settled` names the prompts whose drafts are now stored (or
+  // reset) and can be dropped. Clearing every draft on each reload threw
+  // away the unsaved text of all the other prompts whenever one was saved.
+  async function load(settled: string[] = []) {
     try {
       const resp = await fetch("/api/prompts", { cache: "no-store" });
       // A non-OK response still parses, so without this check an error body
@@ -35,7 +40,11 @@ export default function PromptsSection() {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       setPrompts(data.prompts ?? []);
-      setDrafts({});
+      setDrafts((prev) => {
+        const next = { ...prev };
+        settled.forEach((key) => delete next[key]);
+        return next;
+      });
       setLoadError(false);
       // Drop a stale "Failed to load prompts" toast so it can't hover over
       // the list it just contradicted. Callers that toast after load()
@@ -78,7 +87,7 @@ export default function PromptsSection() {
         setToast({ message: err.detail || "Save failed", type: "error" });
         return;
       }
-      await load();
+      await load([p.key]);
       setToast({ message: "Prompt saved", type: "success" });
     } catch {
       setToast({ message: "Network error", type: "error" });
@@ -99,7 +108,7 @@ export default function PromptsSection() {
         setToast({ message: err.detail || "Reset failed", type: "error" });
         return;
       }
-      await load();
+      await load([p.key]);
       setToast({ message: "Reset to default", type: "success" });
     } catch {
       setToast({ message: "Network error", type: "error" });
@@ -107,6 +116,57 @@ export default function PromptsSection() {
       setBusyKey(null);
     }
   }
+
+  const edited = (prompts ?? []).filter(
+    (p) => drafts[p.key] !== undefined && drafts[p.key] !== p.value
+  );
+
+  // #1069: the floating bar's Save. Stops at the first failure and keeps
+  // every draft, so nothing typed is lost to a save that did not happen.
+  async function saveAll() {
+    if (edited.some((p) => !drafts[p.key].trim())) {
+      setToast({ message: "Prompt cannot be empty", type: "error" });
+      return;
+    }
+    setSavingAll(true);
+    const stored: string[] = [];
+    try {
+      for (const p of edited) {
+        const resp = await fetch(`/api/prompts/${encodeURIComponent(p.key)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ value: drafts[p.key] }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          setToast({ message: err.detail || "Save failed", type: "error" });
+          if (stored.length > 0) await load(stored);
+          return;
+        }
+        stored.push(p.key);
+      }
+      await load(stored);
+      setToast({
+        message: stored.length === 1 ? "Prompt saved" : "Prompts saved",
+        type: "success",
+      });
+    } catch {
+      setToast({ message: "Network error", type: "error" });
+    } finally {
+      setSavingAll(false);
+    }
+  }
+
+  useUnsavedChanges(
+    "prompts",
+    {
+      label: "Prompts",
+      dirty: edited.length > 0,
+      saving: savingAll || busyKey !== null,
+      canSave: true,
+    },
+    { save: saveAll, discard: () => setDrafts({}) }
+  );
 
   if (prompts === null) {
     if (loadError) {
@@ -143,7 +203,7 @@ export default function PromptsSection() {
         const draft = drafts[p.key];
         const current = draft ?? p.value;
         const dirty = draft !== undefined && draft !== p.value;
-        const busy = busyKey === p.key;
+        const busy = busyKey === p.key || savingAll;
         return (
           <div key={p.key} className="border rounded-md p-4 space-y-3">
             <div className="flex items-start justify-between gap-3">
@@ -202,7 +262,7 @@ export default function PromptsSection() {
 
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 px-4 py-2 rounded-md shadow-lg text-sm ${
+          className={`fixed bottom-24 right-6 z-50 px-4 py-2 rounded-md shadow-lg text-sm ${
             toast.type === "success"
               ? "bg-green-600 text-white"
               : "bg-destructive text-destructive-foreground"

@@ -235,22 +235,70 @@ describe("NotificationSettings", () => {
     expect(keyInput.type).toBe("password");
   });
 
-  it("Notifications Save button is disabled when no changes", async () => {
-    render(<NotificationSettings />);
-    await waitFor(() => screen.getByLabelText(/bot token/i));
-    const saveButtons = screen.getAllByRole("button", { name: /save/i });
-    expect(saveButtons[0]).toBeDisabled();
-  });
-
-  it("Remote Inference Save button is disabled when no changes", async () => {
+  // #1069: Save moved from the foot of each tab into a floating bar that
+  // exists only while something is unsaved.
+  it("offers nothing to save on either tab when no changes were made (#1069)", async () => {
     const user = userEvent.setup();
     render(<NotificationSettings />);
-    const inferenceTab = await screen.findByRole("tab", { name: "Inference" });
-    await user.click(inferenceTab);
-    // After clicking Remote Inference tab, the Save button should be visible and disabled (no changes made)
+    await screen.findByLabelText(/bot token/i);
+    expect(screen.queryByRole("region", { name: /unsaved changes/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Inference" }));
+    await screen.findByText(/pyannote/i, undefined, { timeout: 2000 }).catch(() => null);
+    expect(screen.queryByRole("region", { name: /unsaved changes/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the bar after an edit and keeps it when the tab is changed (#1069)", async () => {
+    const user = userEvent.setup();
+    render(<NotificationSettings />);
+    await user.type(await screen.findByLabelText(/bot token/i), "123:ABC");
+
+    const bar = await screen.findByRole("region", { name: /unsaved changes/i });
+    expect(bar).toHaveTextContent("Unsaved changes in Notifications");
+
+    await user.click(screen.getByRole("tab", { name: "Backups" }));
+    expect(screen.getByRole("region", { name: /unsaved changes/i })).toHaveTextContent(
+      "Unsaved changes in Notifications"
+    );
+  });
+
+  it("Discard puts the field back and sends nothing (#1069)", async () => {
+    const user = userEvent.setup();
+    render(<NotificationSettings />);
+    const chat = (await screen.findByLabelText(/chat id/i)) as HTMLInputElement;
+    const before = chat.value;
+    await user.type(chat, "999");
+    expect(chat.value).toBe(`${before}999`);
+
+    await user.click(await screen.findByRole("button", { name: "Discard" }));
+
+    expect((screen.getByLabelText(/chat id/i) as HTMLInputElement).value).toBe(before);
+    expect(screen.queryByRole("region", { name: /unsaved changes/i })).not.toBeInTheDocument();
+    expect(
+      mockFetch.mock.calls.some((c: [string, RequestInit?]) => c[1]?.method === "PUT")
+    ).toBe(false);
+  });
+
+  it("one Save stores edits made on two tabs (#1069)", async () => {
+    const user = userEvent.setup();
+    render(<NotificationSettings />);
+    await user.type(await screen.findByLabelText(/chat id/i), "42");
+    await user.click(screen.getByRole("tab", { name: "Inference" }));
+    await user.type(await screen.findByPlaceholderText("fw_..."), "fw_key");
+
+    const bar = await screen.findByRole("region", { name: /unsaved changes/i });
+    expect(bar).toHaveTextContent("Unsaved changes in Notifications and Inference");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
     await waitFor(() => {
-      const saveBtn = screen.getByRole("button", { name: /save/i });
-      expect(saveBtn).toBeDisabled();
+      const bodies = mockFetch.mock.calls
+        .filter((c: [string, RequestInit?]) => c[1]?.method === "PUT")
+        .map((c: [string, RequestInit?]) => JSON.parse(c[1]!.body as string));
+      expect(bodies).toHaveLength(2);
+      expect(bodies[0]).toEqual({ telegram_chat_id: "42" });
+      expect(bodies[1]).toEqual({ fireworks_api_key: "fw_key" });
     });
   });
 

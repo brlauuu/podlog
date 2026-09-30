@@ -34,6 +34,21 @@ New episodes use the new model. To re-transcribe existing episodes, use the Repr
 | `ARCHIVE_AUDIO` | `true` | Set `false` to skip audio archival and save disk space |
 | `AUDIO_ARCHIVE_BITRATE` | `64k` | Increase to `128k` for higher audio quality |
 
+## Saving Changes on the Settings Page
+
+Nothing on `/settings` saves itself. As soon as you change something, a bar appears at the bottom of the window saying **Unsaved changes** and naming the tabs involved, with two buttons:
+
+- **Save** stores every pending change, across all the tabs named.
+- **Discard** puts every changed field back to what was last saved.
+
+The bar stays put while you scroll and while you move between tabs, so an edit on one tab is not forgotten when you open another. If a change cannot be saved as it stands (a backup retention of daily 0 with weekly or monthly above 0, say), the bar says which tab to fix and Save waits until you do.
+
+Leaving with changes pending asks first: reloading or closing the tab, and clicking a link to another page, both prompt before anything is lost. Navigating with a keyboard shortcut (<kbd>G</kbd> then a letter) does not ask.
+
+Saving is deliberate rather than automatic because these tabs hold API keys and passwords typed a character at a time, the bot's allowed list, and provider switches that change how the next episode is processed and what it costs.
+
+The **Prompts** and **Backups** tabs also keep a Save button next to each thing you can edit, for saving one item on its own.
+
 ## When Do Changes Take Effect?
 
 - **Worker settings** (model, batch size, compute type): after `docker compose restart worker`
