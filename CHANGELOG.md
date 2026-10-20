@@ -20,6 +20,8 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+## 1.3.0 — 2026-10-20
+
 ### Minor changes
 - The home page now shows what was processed in the last 7 days, in a slim roller under the Search, Ask and Explore buttons. Each card has the podcast's artwork, the podcast and episode names, the date the episode was published, and a green dot when it finished or a red one when something went wrong. Click a card to open the episode. Three show at a time and the list rolls slowly when there are more; hover over it to stop it and scroll. When nothing was processed that week it is not shown. ([#1079](https://github.com/brlauuu/podlog/issues/1079))
 
