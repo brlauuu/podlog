@@ -29,3 +29,15 @@ export function formatDateTime(input: DateInput): string {
   if (!d) return "";
   return `${formatDate(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
+
+/**
+ * Short DD/MM for a glance-sized slot, with /YYYY added only when the date
+ * is not in the current year (#1079): a backlog episode processed this week
+ * can have been published years ago.
+ */
+export function formatDayMonth(input: DateInput, now: Date = new Date()): string {
+  const d = toDate(input);
+  if (!d) return "";
+  const dayMonth = `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`;
+  return d.getFullYear() === now.getFullYear() ? dayMonth : `${dayMonth}/${d.getFullYear()}`;
+}

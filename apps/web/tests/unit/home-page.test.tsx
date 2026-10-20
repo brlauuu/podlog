@@ -11,6 +11,11 @@ jest.mock("next/link", () => {
   );
 });
 
+// The roller fetches on mount; it has its own suite (recent-activity.test.tsx).
+jest.mock("@/components/RecentActivity", () => {
+  return () => <div data-testid="recent-activity" />;
+});
+
 import HomePage from "@/app/page";
 
 describe("HomePage issue 274", () => {
@@ -96,5 +101,11 @@ describe("HomePage issue 274", () => {
     expect(root.className).toContain("items-center");
     expect(root.className).not.toContain("min-h-[calc(100dvh-4rem)]");
     expect(root.className).not.toContain("pt-16");
+  });
+
+  test("shows this week's roller below the button row (issue #1079)", () => {
+    render(<HomePage />);
+    const buttonRow = screen.getByRole("link", { name: "Search" }).parentElement as HTMLElement;
+    expect(buttonRow.nextElementSibling).toBe(screen.getByTestId("recent-activity"));
   });
 });

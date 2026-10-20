@@ -2,6 +2,7 @@
 Queue management API.
 
 GET   /api/queue                         Queue dashboard snapshot
+GET   /api/queue/recent                  Episodes finished or failed in the last N days
 POST  /api/queue/{episode_id}/retry      Retry a failed/stuck/done job
 
 The queue dashboard read (GET /api/queue) lives in the pipeline so that
@@ -10,13 +11,17 @@ HTTP contract. Web's /api/queue route is a thin proxy (#555).
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Episode, Job
 from app.services.pipeline_commands import enqueue_episode_ingest
-from app.services.queue_snapshot import TASK_TO_STATUS, queue_snapshot  # noqa: F401 -- re-exported
+from app.services.queue_snapshot import (  # noqa: F401 -- TASK_TO_STATUS re-exported
+    TASK_TO_STATUS,
+    queue_snapshot,
+    recent_activity,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -40,6 +45,17 @@ def get_queue(db: Session = Depends(get_db)) -> dict:
     share it (#1034); the response shape is unchanged.
     """
     return queue_snapshot(db)
+
+
+@router.get("/queue/recent")
+def get_recent(
+    days: int = Query(7, ge=1, le=30), db: Session = Depends(get_db)
+) -> list[dict]:
+    """Episodes that finished or failed in the last `days` days, newest first.
+
+    Feeds the home-page roller (#1079); see `recent_activity` for what counts.
+    """
+    return recent_activity(db, days=days)
 
 
 @router.post("/queue/{episode_id}/retry", status_code=202)

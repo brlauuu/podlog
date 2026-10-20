@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Search, BrainCircuit, Book } from "lucide-react";
+import RecentActivity from "@/components/RecentActivity";
 
 export default function HomePage() {
   return (
@@ -56,6 +57,9 @@ export default function HomePage() {
           Explore
         </Link>
       </div>
+
+      {/* #1079: what was processed this week; renders nothing when empty. */}
+      <RecentActivity />
     </div>
   );
 }

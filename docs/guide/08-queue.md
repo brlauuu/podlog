@@ -65,6 +65,15 @@ An episode may appear as **Stuck** if it's not in a done/failed state but has no
 
 Stuck episodes are visible in the queue UI under the "Stuck" filter. They can be reprocessed from the episode detail page. The worker also sweeps for stranded episodes periodically and re-enqueues them.
 
+## This Week on the Home Page
+
+The home page shows a short roller under the Search, Ask and Explore buttons listing the episodes processed in the last 7 days, newest first. Each card shows the podcast's artwork, the podcast name, the episode title, a dot and the date the episode was published. Click a card to open the episode.
+
+- A **green** dot means the episode finished, including episodes that turned out to have no speech.
+- A **red** dot means something went wrong: the episode failed, or it is stuck (see above). The Queue page has the details and the Retry button.
+
+Three cards show at a time. With more than three the list rolls slowly on its own; hold the pointer over it (or touch it on a phone) to stop it and scroll by hand. If your device asks for reduced motion it does not roll on its own, but you can still scroll it. When nothing was processed in the last 7 days the roller is not shown at all.
+
 ## Zombie Detection
 
 The worker monitors running jobs and marks them as failed if they exceed expected processing time (configurable via `ZOMBIE_TIMEOUT_MULTIPLIER` and `ZOMBIE_REALTIME_FACTOR`). This catches jobs that stall due to OOM kills or container issues. Zombie jobs are marked as `SYSTEM_ERROR` and can be retried.

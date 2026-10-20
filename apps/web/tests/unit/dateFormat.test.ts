@@ -1,4 +1,4 @@
-import { formatDate, formatDateTime } from "@/lib/dateFormat";
+import { formatDate, formatDateTime, formatDayMonth } from "@/lib/dateFormat";
 
 describe("formatDate", () => {
   it("formats an ISO date string as DD/MM/YYYY", () => {
@@ -30,5 +30,22 @@ describe("formatDateTime", () => {
 
   it("returns empty string for null", () => {
     expect(formatDateTime(null)).toBe("");
+  });
+});
+
+describe("formatDayMonth (#1079)", () => {
+  const now = new Date(2026, 9, 20);
+
+  it("omits the year for a date in the current year", () => {
+    expect(formatDayMonth(new Date(2026, 9, 5), now)).toBe("05/10");
+  });
+
+  it("adds the year for a date in another year", () => {
+    expect(formatDayMonth(new Date(2019, 2, 14), now)).toBe("14/03/2019");
+  });
+
+  it("returns empty string for null / invalid", () => {
+    expect(formatDayMonth(null, now)).toBe("");
+    expect(formatDayMonth("not a date", now)).toBe("");
   });
 });

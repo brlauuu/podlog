@@ -170,6 +170,8 @@ Failed jobs show a collapsible error detail panel with the full traceback (toggl
 
 **Done episodes:** Completed episodes are collapsed into an expandable "Done (N)" disclosure section at the bottom of the table. Expanding it reveals the full list sorted by completion time descending.
 
+**Home-page roller (#1079):** the home page shows the episodes that finished or failed in the last 7 days, under the three quick-link buttons and no wider than them. The read is `GET /api/queue/recent?days=7` on the pipeline (`services/queue_snapshot.py::recent_activity`), proxied by the web app's `/api/queue/recent`, for the same ownership reason as the dashboard read (#555). Two outcomes only: `done` (statuses `done` and `no_speech`, timed by `processed_at`) and `failed` (status `failed` or stuck by the dashboard's rule, timed by `updated_at`). Each card shows the feed artwork, podcast name, episode title, a green or red dot and the publish date, and links to the episode. Three cards are visible; with more than three the list rolls continuously and wraps endlessly, and hover, focus or touch stop it so it can be scrolled by hand. It does not auto-roll under `prefers-reduced-motion`, sits still with three or fewer entries, and renders nothing with none. It is read once on page load, not polled.
+
 **Removed from earlier design:**
 - Worker warm-up banner — model warm-up is brief and does not warrant a persistent UI element.
 - Retry countdown timer — replaced by the N/M retry count display; the countdown added visual noise with minimal user value.
