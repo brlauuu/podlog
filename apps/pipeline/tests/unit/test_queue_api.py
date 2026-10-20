@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from app.api.queue import NON_RETRYABLE, TASK_TO_STATUS, get_queue, retry_job
+from app.api.queue import NON_RETRYABLE, TASK_TO_STATUS, get_queue, get_recent, retry_job
 from app.models import Episode, Job
 
 
@@ -382,3 +382,32 @@ class TestTaskToStatusMap:
         # so a raw task name leaking through (e.g. "chunk") stands out.
         for task, status in TASK_TO_STATUS.items():
             assert status.endswith("ing"), f"{task} -> {status}"
+
+
+class TestGetRecent:
+    """#1079: the home-page roller's read. The SQL is covered against a real
+    database in tests/integration/services/test_recent_activity.py."""
+
+    def test_passes_days_and_limit_and_returns_rows(self):
+        db = MagicMock()
+        row = {"episode_id": "ep-1", "title": "T", "outcome": "done"}
+        db.execute.return_value.all.return_value = [SimpleNamespace(_mapping=row)]
+
+        payload = get_recent(days=3, db=db)
+
+        assert payload == [row]
+        params = db.execute.call_args.args[1]
+        assert params == {"days": 3, "limit": 50}
+
+    def test_days_is_bounded(self):
+        from fastapi.testclient import TestClient
+        from app.database import get_db
+        from app.main import app
+
+        app.dependency_overrides[get_db] = lambda: MagicMock()
+        try:
+            client = TestClient(app)
+            assert client.get("/api/queue/recent?days=0").status_code == 422
+            assert client.get("/api/queue/recent?days=31").status_code == 422
+        finally:
+            app.dependency_overrides.pop(get_db, None)

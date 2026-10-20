@@ -184,3 +184,52 @@ def queue_snapshot(db: Session) -> dict:
     }
 
 
+
+
+RECENT_ACTIVITY_LIMIT = 50
+
+
+def recent_activity(db: Session, days: int = 7) -> list[dict]:
+    """Episodes that finished or went wrong in the last `days` days (#1079).
+
+    Feeds the roller on the home page. Two outcomes only, because the card
+    shows one green or red dot:
+
+    - ``done``: status ``done`` or ``no_speech`` -- terminal and not a
+      malfunction, the same grouping as the dashboard's done bucket (#968).
+      Timed by ``processed_at``, which archive stamps once; ``updated_at``
+      moves on any later write to the row.
+    - ``failed``: status ``failed``, or stuck -- an in-flight status with no
+      pending or picked job left to advance it, the dashboard's stuck rule.
+      Timed by ``updated_at``, the last time anything happened to it.
+    """
+    stmt = text(
+        """
+        SELECT * FROM (
+          SELECT
+            e.id            AS episode_id,
+            e.title,
+            e.published_at,
+            f.title         AS feed_title,
+            f.image_url     AS feed_image_url,
+            CASE WHEN e.status IN ('done', 'no_speech') THEN 'done' ELSE 'failed' END
+                            AS outcome,
+            CASE WHEN e.status IN ('done', 'no_speech')
+                 THEN COALESCE(e.processed_at, e.updated_at)
+                 ELSE e.updated_at END
+                            AS finished_at
+          FROM episodes e
+          LEFT JOIN feeds f ON f.id = e.feed_id
+          WHERE e.status IN ('done', 'no_speech', 'failed')
+             OR NOT EXISTS (
+               SELECT 1 FROM job_queue jq
+               WHERE jq.episode_id = e.id AND jq.status IN ('pending', 'picked')
+             )
+        ) recent
+        WHERE finished_at >= now() - make_interval(days => :days)
+        ORDER BY finished_at DESC
+        LIMIT :limit
+        """
+    )
+    params = {"days": days, "limit": RECENT_ACTIVITY_LIMIT}
+    return [dict(row._mapping) for row in db.execute(stmt, params).all()]
