@@ -20,6 +20,8 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+## 1.3.2 — 2026-10-21
+
 ### Fixes
 
 - The home page no longer jumps when this week's processed episodes appear. The logo and buttons stay exactly where they are with nothing to show, and the list fades in underneath them; on a short screen it continues below the edge and the page scrolls, rather than pulling the logo up. The list also arrives sooner: the query behind it took about 300 ms, nearly all of it PostgreSQL compiling a query that runs in under 2 ms, because one condition made the database badly overestimate its cost, and it now answers in a couple of milliseconds. Also removed a few hundred pixels of blank scroll space below the home page that the list's hidden screen-reader labels had added. ([#1086](https://github.com/brlauuu/podlog/issues/1086))
