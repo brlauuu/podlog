@@ -24,6 +24,7 @@ PYSEC-2026-2288
 PYSEC-2026-2289
 PYSEC-2026-2290
 CVE-2026-9856
+PYSEC-2026-4174
 # lightning 2.6.5 -- no fix in any release
 PYSEC-2026-3624
 # nltk 3.10.3 -- reported "through 3.10.3" by pip-audit's feed; parser/tagger

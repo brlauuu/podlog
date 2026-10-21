@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- Refreshed the pipeline lock to clear 21 security advisories the dependency audit started reporting on 2026-10-20 against packages already in the lock: `aiohttp` 3.14.3 → 3.14.5, `pillow` 12.3.0 → 13.0.0, `urllib3` 2.7.0 → 2.8.0, `multidict` 6.7.1 → 7.1.0 (with `yarl` 1.24.5 → 1.25.1) and `certifi` 2026.7.22 → 2026.10.19. All are transitive and needed no constraint changes. The one remaining new finding, in `transformers`, concerns `generate()`'s custom-code loader, which Podlog never calls, and its fix needs transformers 5.x, which WhisperX still blocks; it is triaged in `pyproject.toml` and added to the audit's ignore list, so the audit is green again. ([#1082](https://github.com/brlauuu/podlog/issues/1082))
+
 ## 1.3.0 — 2026-10-20
 
 ### Minor changes

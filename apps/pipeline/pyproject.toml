@@ -66,13 +66,14 @@ tiktoken = "^0.13.0"
 # lock, which is what made its advisories visible for the first time.
 #
 # ---------------------------------------------------------------------------
-# CVE triage, 2026-08-19 (#951), extended 2026-09-06 (#1033). Every finding
+# CVE triage, 2026-08-19 (#951), extended 2026-09-06 (#1033) and
+# 2026-10-21 (#1082). Every finding
 # the audit still reports is listed here, and every id here is also in
 # `audit-ignore.txt`, which the CI audit job passes to pip-audit as
 # --ignore-vuln so the job is red only for a finding nobody has triaged. Add
 # an id to that file only after adding its line here.
 #
-# As of 2026-09-06 the ignored set is 15 ids: torch 8, transformers 5,
+# As of 2026-10-21 the ignored set is 16 ids: torch 8, transformers 6,
 # lightning 1, nltk 1. NONE can be resolved by a version bump today, and for
 # all but the nltk one the reason is a single package.
 #
@@ -94,7 +95,7 @@ tiktoken = "^0.13.0"
 #     torch CVE-2025-3001    same
 #   These are pip-audit matching conservatively, not real exposure.
 #
-#   REAL, BLOCKED BY whisperx (8)
+#   REAL, BLOCKED BY whisperx (9)
 #     torch        PYSEC-2025-203/204/206   fixed in 2.9.0
 #     torch        PYSEC-2026-2286          fixed in 2.10.0
 #     transformers PYSEC-2025-217           fixed in 5.0.0
@@ -102,6 +103,13 @@ tiktoken = "^0.13.0"
 #     transformers PYSEC-2026-2289          fixed in 5.3.0
 #     transformers PYSEC-2026-2290          fixed after 5.2.0
 #     transformers CVE-2026-9856            fixed in 5.10.0 (new 2026-09, #1033)
+#     transformers PYSEC-2026-4174          (CVE-2026-80047) affects <=5.8.1,
+#                                           no fix version listed (new 2026-10,
+#                                           #1082). load_custom_generate()
+#                                           caches remote code before the
+#                                           trust_remote_code check; Podlog
+#                                           never calls generate() or
+#                                           custom_generate, so unreachable.
 #
 #   NO FIX IN ANY RELEASE (3)
 #     torch     PYSEC-2026-139   affects everything <=2.10.0; local-only attack
@@ -130,6 +138,15 @@ tiktoken = "^0.13.0"
 #                  were unreachable; the unpickler / downloader / artifact-
 #                  path ones needed a tampered nltk data directory on the
 #                  worker volume, a local attack, not podcast audio.
+#
+#   RESOLVED (#1082, 2026-10-21) -- lock refresh, no constraint changes
+#     aiohttp 3.14.3 -> 3.14.5        8 advisories (via fsspec)
+#     pillow 12.3.0 -> 13.0.0         8 advisories (via matplotlib,
+#                                     torchvision; neither caps pillow)
+#     urllib3 2.7.0 -> 2.8.0          3 advisories (via requests)
+#     multidict 6.7.1 -> 7.1.0        1 advisory (via aiohttp, yarl;
+#                                     yarl 1.24.5 -> 1.25.1 with it)
+#     certifi 2026.7.22 -> 2026.10.19 1 advisory
 #
 # Reachability. Every real finding requires loading an attacker-controlled
 # model or checkpoint: torch's weights_only unpickler, lightning's
