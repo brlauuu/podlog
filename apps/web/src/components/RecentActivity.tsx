@@ -24,6 +24,8 @@ const SECONDS_PER_CARD = 4;
 const TOUCH_RESUME_MS = 3000;
 
 const FADE = "linear-gradient(transparent, #000 22%, #000 78%, transparent)";
+// The list arrives after the page has rendered; ease it in rather than pop (#1086).
+const APPEAR = "animate-in fade-in-0 duration-300 motion-reduce:animate-none";
 
 /**
  * Home-page roller of episodes finished or failed in the last 7 days (#1079).
@@ -53,7 +55,7 @@ export default function RecentActivity() {
   if (items.length === 0) return null;
   if (items.length <= VISIBLE_ROWS) {
     return (
-      <ul aria-label="Processed this week" className="w-full max-w-[280px] sm:max-w-[420px]">
+      <ul aria-label="Processed this week" className={`w-full max-w-[280px] sm:max-w-[420px] ${APPEAR}`}>
         {items.map((ep) => (
           <li key={ep.episode_id}>
             <Card ep={ep} />
@@ -143,7 +145,7 @@ function Roller({ items }: { items: RecentEpisode[] }) {
     <div
       ref={ref}
       data-testid="recent-activity-roller"
-      className="w-full max-w-[280px] sm:max-w-[420px] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className={`w-full max-w-[280px] sm:max-w-[420px] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${APPEAR}`}
       style={{ height: ROW_HEIGHT * VISIBLE_ROWS, maskImage: FADE, WebkitMaskImage: FADE }}
     >
       {[0, 1, 2].map((copy) => (
@@ -171,7 +173,10 @@ function Card({ ep, tabIndex }: { ep: RecentEpisode; tabIndex?: number }) {
     <Link
       href={`/episodes/${ep.episode_id}`}
       tabIndex={tabIndex}
-      className="flex items-center gap-3 px-2 rounded-lg hover:bg-accent transition-colors"
+      // relative: contains the sr-only status label, which is absolutely
+      // positioned. Without it the labels escaped the roller's scroll box and
+      // stretched the home page by a few hundred pixels of blank scroll (#1086).
+      className="relative flex items-center gap-3 px-2 rounded-lg hover:bg-accent transition-colors"
       style={{ height: ROW_HEIGHT }}
     >
       {ep.feed_image_url ? (

@@ -202,6 +202,13 @@ def recent_activity(db: Session, days: int = 7) -> list[dict]:
     - ``failed``: status ``failed``, or stuck -- an in-flight status with no
       pending or picked job left to advance it, the dashboard's stuck rule.
       Timed by ``updated_at``, the last time anything happened to it.
+
+    The stuck test is ``NOT IN``, not ``NOT EXISTS`` (#1086). Under an ``OR``
+    the planner cannot turn ``NOT EXISTS`` into an anti-join and costs it as
+    a per-row subplan: ~500k for 1k episodes, past ``jit_above_cost``, so
+    every call spent ~300ms JIT-compiling a query that runs in ~2ms. The
+    hashed ``NOT IN`` costs ~1.5k and returns the same rows, because
+    ``job_queue.episode_id`` is NOT NULL.
     """
     stmt = text(
         """
@@ -221,9 +228,9 @@ def recent_activity(db: Session, days: int = 7) -> list[dict]:
           FROM episodes e
           LEFT JOIN feeds f ON f.id = e.feed_id
           WHERE e.status IN ('done', 'no_speech', 'failed')
-             OR NOT EXISTS (
-               SELECT 1 FROM job_queue jq
-               WHERE jq.episode_id = e.id AND jq.status IN ('pending', 'picked')
+             OR e.id NOT IN (
+               SELECT jq.episode_id FROM job_queue jq
+               WHERE jq.status IN ('pending', 'picked')
              )
         ) recent
         WHERE finished_at >= now() - make_interval(days => :days)

@@ -97,15 +97,32 @@ describe("HomePage issue 274", () => {
     const { container } = render(<HomePage />);
     const root = container.firstElementChild as HTMLElement;
 
-    expect(root.className).toContain("my-auto");
+    // #1086: centred between two equal growing spacers filling the main
+    // area (HomeLayout), which replaced my-auto so the recent list can sit
+    // below without moving it.
+    expect(root.className).toContain("flex-1");
+    expect(root.className).toContain("flex-col");
     expect(root.className).toContain("items-center");
     expect(root.className).not.toContain("min-h-[calc(100dvh-4rem)]");
     expect(root.className).not.toContain("pt-16");
   });
 
-  test("shows this week's roller below the button row (issue #1079)", () => {
-    render(<HomePage />);
-    const buttonRow = screen.getByRole("link", { name: "Search" }).parentElement as HTMLElement;
-    expect(buttonRow.nextElementSibling).toBe(screen.getByTestId("recent-activity"));
+  test("shows this week's roller in its own row below the logo and buttons (issues #1079, #1086)", () => {
+    const { container } = render(<HomePage />);
+    const root = container.firstElementChild as HTMLElement;
+    const heroRow = screen.getByTestId("home-hero");
+    const recentRow = screen.getByTestId("home-recent-row");
+
+    // The list arrives after load. Sharing a block with the logo and buttons
+    // re-centred them and made them jump (#1086). It now goes in the lower of
+    // two spacers; how that holds them still is HomeLayout's own suite.
+    const topSpacer = screen.getByTestId("home-top-spacer");
+    expect(topSpacer.parentElement).toBe(root);
+    expect(topSpacer.nextElementSibling).toBe(heroRow);
+    expect(heroRow.nextElementSibling).toBe(recentRow);
+    expect(recentRow.parentElement).toBe(root);
+    expect(recentRow).toContainElement(screen.getByTestId("recent-activity"));
+    expect(heroRow).not.toContainElement(screen.getByTestId("recent-activity"));
+    expect(heroRow).toContainElement(screen.getAllByRole("img", { name: "Podlog" })[0]);
   });
 });

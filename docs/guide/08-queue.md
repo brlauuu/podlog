@@ -74,6 +74,8 @@ The home page shows a short roller under the Search, Ask and Explore buttons lis
 
 Three cards show at a time. With more than three the list rolls slowly on its own; hold the pointer over it (or touch it on a phone) to stop it and scroll by hand. If your device asks for reduced motion it does not roll on its own, but you can still scroll it. When nothing was processed in the last 7 days the roller is not shown at all.
 
+The roller never moves the logo or the buttons: they stay exactly where they are when there is nothing to show, and the roller fades in underneath them. On a short screen it continues below the bottom edge and the page scrolls a little.
+
 ## Zombie Detection
 
 The worker monitors running jobs and marks them as failed if they exceed expected processing time (configurable via `ZOMBIE_TIMEOUT_MULTIPLIER` and `ZOMBIE_REALTIME_FACTOR`). This catches jobs that stall due to OOM kills or container issues. Zombie jobs are marked as `SYSTEM_ERROR` and can be retried.
