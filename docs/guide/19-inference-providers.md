@@ -1,5 +1,7 @@
 # Inference Providers
 
+> **Being removed (#1092).** Podlog is becoming fully self-hosted, and remote inference is going away. Fireworks retired its audio API in June 2026, so remote transcription no longer works at all. Settings no longer accepts a remote provider, and on upgrade Podlog switches any remote step back to local and deletes the stored Fireworks and pyannote.ai API keys. You do not need to do anything. This page will be removed in a later release.
+
 Podlog's pipeline has two heavy ML stages — **transcription** and **diarization** — and each can run either locally or against a paid cloud provider. This page lays out the options side by side so you can pick what fits your hardware, budget, and privacy preferences.
 
 If you're new to Podlog, the defaults are all-local: no API keys, no data leaves your machine, no cost. You can stay on the defaults forever. The remote options exist for users whose hardware is the bottleneck or who want better non-English accuracy.
