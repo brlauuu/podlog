@@ -29,6 +29,25 @@ def _stored_after(db) -> dict:
     return json.loads(db.query.return_value.filter.return_value.first.return_value.value)
 
 
+def _fields_set(fields: set[str]):
+    """Pretend exactly ``fields`` came from env or .env.
+
+    Pydantic adds a field to model_fields_set whenever it is assigned, and
+    patch.object assigns -- so other test modules leave it polluted.
+    """
+    return patch.object(
+        type(remote_retirement.settings),
+        "model_fields_set",
+        new_callable=lambda: property(lambda self: fields),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _nothing_from_env():
+    with _fields_set(set()):
+        yield
+
+
 @pytest.fixture(autouse=True)
 def _no_provenance():
     with patch.object(remote_retirement.embed_provenance, "read_state", return_value=None) as m:
@@ -140,13 +159,8 @@ class TestEmbeddingModelPin:
     def test_respects_a_model_chosen_in_env(self, _no_provenance):
         _no_provenance.return_value = {"model": "BAAI/bge-small-en-v1.5", "dim": 384}
         db = _mock_db({})
-        fields_set = remote_retirement.settings.model_fields_set | {"embedding_model"}
 
-        with patch.object(
-            type(remote_retirement.settings),
-            "model_fields_set",
-            new_callable=lambda: property(lambda self: fields_set),
-        ):
+        with _fields_set({"embedding_model"}):
             assert remote_retirement.retire_remote_settings(db) == []
 
     def test_ignores_a_recorded_model_outside_the_allowlist(self, _no_provenance):
@@ -166,12 +180,7 @@ class TestEmbeddingModelPin:
 
 class TestRetiredEnvVars:
     def test_names_retired_vars_that_are_set(self):
-        fields_set = {"diarization_provider", "fireworks_api_key", "hf_token"}
-        with patch.object(
-            type(remote_retirement.settings),
-            "model_fields_set",
-            new_callable=lambda: property(lambda self: fields_set),
-        ):
+        with _fields_set({"diarization_provider", "fireworks_api_key", "hf_token"}):
             assert remote_retirement.retired_env_vars_set() == [
                 "DIARIZATION_PROVIDER",
                 "FIREWORKS_API_KEY",
