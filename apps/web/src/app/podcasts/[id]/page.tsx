@@ -2,11 +2,12 @@ import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { FlaskConical, ExternalLink } from "lucide-react";
+import { FlaskConical, ExternalLink, ListChecks, Pause } from "lucide-react";
 import pool from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import EpisodesList, { type EnrichedEpisode } from "@/components/EpisodesList";
+import PodcastFeedControls from "@/components/PodcastFeedControls";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +17,14 @@ interface Feed {
   description: string | null;
   image_url: string | null;
   website_url: string | null;
+  url: string;
   mode: string;
+  paused: boolean;
 }
 
 async function getFeed(id: string): Promise<Feed | null> {
   const result = await pool.query(
-    "SELECT id, title, description, image_url, website_url, mode FROM feeds WHERE id = $1",
+    "SELECT id, title, description, image_url, website_url, url, mode, paused FROM feeds WHERE id = $1",
     [id]
   );
   return result.rows[0] ?? null;
@@ -121,6 +124,18 @@ export default async function PodcastPage({ params }: { params: Promise<{ id: st
                       Test
                     </Badge>
                   )}
+                  {feed.mode === "selective" && (
+                    <Badge variant="outline" className="text-sky-700 border-sky-300 dark:text-sky-300 dark:border-sky-700 gap-1">
+                      <ListChecks size={12} />
+                      Selective
+                    </Badge>
+                  )}
+                  {feed.paused && (
+                    <Badge variant="outline" className="text-amber-700 border-amber-300 dark:text-amber-300 dark:border-amber-700 gap-1">
+                      <Pause size={12} />
+                      Paused
+                    </Badge>
+                  )}
                 </div>
 
                 {feed.website_url && (
@@ -140,6 +155,8 @@ export default async function PodcastPage({ params }: { params: Promise<{ id: st
                     {feed.description}
                   </p>
                 )}
+
+                <PodcastFeedControls feed={feed} />
               </div>
             </div>
           </CardContent>

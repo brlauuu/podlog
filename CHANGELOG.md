@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+
+- A podcast's page now has its feed's controls, so you no longer have to go through Sources → Manage feeds to change it. A Selective feed shows **Add episodes** and **Promote to Full**; a Test or Full feed shows **Make selective**, poll now and pause/resume. The page also shows the Selective and Paused badges. Removing a feed stays on the feeds list. ([#1090](https://github.com/brlauuu/podlog/issues/1090))
+
 ## 1.3.2 — 2026-10-21
 
 ### Fixes

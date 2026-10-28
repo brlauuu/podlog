@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-02 — Search Web Application  
-**Version:** 1.6
+**Version:** 1.7
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.7 — `/podcasts/{id}` carries the feed's own management actions (§5.3, #1090).
 - v1.6 — Updated tech stack row to Next.js 16 (matches `apps/web/package.json`).
 - v1.5 — Marked document status as Active and removed stale non-goal note claiming semantic/vector search was out of scope.
 - v1.4 — Added Ask AI (RAG) documentation (§5.10): retrieval pipeline, key parameters (TOP_K, SIMILARITY_THRESHOLD), model options, source filtering, speaker attribution, citation rendering, error handling.
@@ -115,6 +116,7 @@ The backend serves archived audio files via a Next.js API route: `GET /api/audio
 
 - `/podcasts` — grid of all registered podcasts with cover art, episode count, last processed date.
 - `/podcasts/{id}` — episode list for a podcast, sorted by published date descending, with processing status badge per episode. Episodes with `has_diarization = false` display a "No speaker labels" badge alongside their status.
+- `/podcasts/{id}` also shows the feed's mode (Test / Selective) and Paused badges, and the same management actions as its card on `/feeds` — Add episodes, Promote to Full, Make selective, Poll now, Pause/Resume, under the same mode rules and confirmations (#1090). Remove feed is deliberately left to `/feeds`, since it deletes the page being viewed. Both pages share one implementation (`FeedActions`, `useFeedActions`, `AddEpisodesDialog`), so the two cannot drift apart.
 - `/episodes/{id}` — full transcript view for a single episode: scrollable list of segments, each showing timestamp, speaker label, and text. Includes a search-within-episode input. If `has_diarization = false`, a banner at the top of the page reads: *"Speaker labels unavailable — diarization failed: [reason]"* with a muted style to avoid alarming the user.
 
 ### 5.4 Speaker Label Management
