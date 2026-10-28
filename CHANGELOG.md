@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- Refreshed the pipeline lock to clear 5 security advisories the dependency audit started reporting on 2026-10-28 against packages already in the lock: `filelock` 3.32.2 → 4.2.4 (3 advisories), `opentelemetry-api` 1.44.0 → 1.45.1 (with the rest of the OpenTelemetry packages) and `setuptools` 84.0.0 → 84.2.1. All are transitive and needed no constraint changes, so the audit is green again. ([#1097](https://github.com/brlauuu/podlog/issues/1097))
+
 ## 1.3.2 — 2026-10-21
 
 ### Fixes
