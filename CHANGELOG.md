@@ -2,7 +2,7 @@
 
 All notable changes to Podlog are documented here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html). From 1.0.0 onward a major bump means something you have to act on — a removed or renamed setting, a migration that cannot be undone by restoring the previous backup, or a newly required external service. The `0.x` sections below predate that promise.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Podlog stays on 1.x until a ground-up rebuild; that is what a 2.0 would mean. A release that removes or renames something you configured is a minor release, and its entry says what, if anything, you have to do. The `0.x` sections below predate 1.0.
 
 Each release section groups changes as:
 
@@ -19,6 +19,8 @@ fresh empty `Unreleased` is left at the top.
 -->
 
 ## Unreleased
+
+## 1.4.0 — 2026-10-29
 
 ### Major changes
 
