@@ -60,44 +60,22 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `RECURRING_HOST_THRESHOLD` | `0.8` | Fraction of that window a speaker must appear in to be treated as a recurring host (0.0–1.0). |
 | `FEED_SPEAKER_CACHE_RECENCY_DAYS` | `365` | How long a user-supplied speaker rename stays eligible for reuse across episodes of the same feed. `0` disables the recency cutoff. |
 
-## Fireworks Provider
+## Embedding Model
 
 | Variable | Default | Description |
 |---|---|---|
-| `INFERENCE_PROVIDER` | `local` | Runtime provider for transcription/diarization stages. `local` keeps current behavior. `fireworks` uses remote Fireworks audio inference. |
-| `FIREWORKS_API_KEY` | (unset) | Required when `INFERENCE_PROVIDER=fireworks`. |
-| `FIREWORKS_AUDIO_BASE_URL` | `https://audio-turbo.api.fireworks.ai` | Base URL for Fireworks audio API. |
-| `FIREWORKS_STT_MODEL` | `whisper-v3-turbo` | Fireworks speech-to-text model ID. Matches the single option in the Settings → Inference transcription dropdown. |
-| `FIREWORKS_STT_DIARIZE` | `true` | Request speaker diarization metadata from Fireworks transcription API. |
-| `FIREWORKS_CHAT_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks OpenAI-compatible chat completions used by Ask generation. |
-| `FIREWORKS_CHAT_MODEL` | `accounts/fireworks/models/gpt-oss-20b` | Fireworks chat model used when `RAG_PROVIDER=fireworks` for Ask generation. The Settings UI exposes a curated dropdown of currently-deployed models; this env var supplies the default. |
-| `RAG_PROVIDER` | `local` | Issue #608: dedicated provider for the Ask / RAG step. Decoupled from `INFERENCE_PROVIDER` (transcription) so enabling Fireworks for transcription does not silently send retrieved transcript chunks to Fireworks for answer generation. Set to `fireworks` to opt in. |
-| `FIREWORKS_STT_COST_PER_MINUTE_USD` | `0.006` | Cost estimate assumption used for per-episode observability (`estimated_cost_usd = billed_minutes * rate`). |
-| `EMBEDDING_PROVIDER` | `local` | Runtime provider for query + segment/chunk embeddings. **`fireworks` is non-functional** — see the note below. |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local sentence-transformers model used when `EMBEDDING_PROVIDER=local`. Restricted to two tested values, `all-MiniLM-L6-v2` and `BAAI/bge-small-en-v1.5` — the field used to be free text and was passed straight to the model loader, which downloads whatever HuggingFace repo you name (#951). Must match the model your existing embeddings were built with — see the warning below. |
-| `FIREWORKS_EMBEDDING_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Base URL for Fireworks embeddings API. Retained for when/if Fireworks restores the endpoint. |
-| `FIREWORKS_EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Fireworks embedding model. Currently unreachable — the model was retired upstream. |
-
-> **Remote embedding is unavailable (issue #944).** Fireworks retired its
-> serverless embeddings API: every model on `/inference/v1/embeddings` returns
-> `503 no healthy upstream`, including model names that do not exist, so the
-> request never reaches model resolution. The only embedding model Fireworks
-> still serves is 4096-dimensional, and the `segments.embedding` column is
-> `vector(384)`, so it is not a drop-in replacement. Embeddings run locally
-> even under the remote-inference profile; the model is small and CPU-only, so
-> this costs little. The setting is still accepted so existing configurations
-> do not fail validation, but selecting it will fail every embed job.
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Local sentence-transformers model for query and segment/chunk embeddings. Restricted to two tested values, `all-MiniLM-L6-v2` and `BAAI/bge-small-en-v1.5` — the field used to be free text and was passed straight to the model loader, which downloads whatever HuggingFace repo you name (#951). Editable at runtime under **Settings → Inference**. Must match the model your existing embeddings were built with — see the warning below. |
 
 > **Changing `EMBEDDING_MODEL` on an existing install is blocked (issue #945).**
 > `all-MiniLM-L6-v2` and `BAAI/bge-small-en-v1.5` are both 384-dimensional but
 > live in different vector spaces, so the dimension check passes, the write
 > succeeds, and nothing warns — while similarity between old and new rows
 > becomes meaningless. The model that produced the corpus is now recorded on
-> first embed, and a later mismatch is refused rather than written. If your
-> embeddings were previously generated through Fireworks, set
-> `EMBEDDING_MODEL=BAAI/bge-small-en-v1.5` to keep using them; running that
-> model locally reproduces the same vectors exactly. Changing the model
-> deliberately means re-embedding the corpus.
+> first embed, and a later mismatch is refused rather than written. An
+> install whose embeddings came from the retired Fireworks path was built with
+> `BAAI/bge-small-en-v1.5`; on startup Podlog pins that model when you never
+> chose one, and running it locally reproduces the same vectors exactly.
+> Changing the model deliberately means re-embedding the corpus.
 
 #### Inspecting and verifying embedding provenance
 
@@ -116,19 +94,25 @@ with an explanatory error, and query embedding returns non-200, which the web
 app degrades into keyword-only search rather than returning meaningless
 semantic results.
 
-## pyannote Cloud Provider (Issue #516)
+## Removed: remote inference (#1092)
 
-Paid hosted diarization from pyannote.ai. Optional; the default is the free local `community-1` model. See the full [pyannote Cloud guide](guide/13-pyannote-cloud.md) for setup and billing details.
+Podlog used to offer Fireworks AI (transcription, Ask generation, embeddings)
+and pyannote.ai (diarization) as paid remote alternatives. Both were removed;
+every stage now runs on your own machine. These variables no longer do
+anything:
 
-| Variable | Default | Description |
-|---|---|---|
-| `DIARIZATION_PROVIDER` | `local` | `local` uses the free local pyannote model; `precision2` routes diarization to pyannote.ai's cloud API. |
-| `PYANNOTE_API_KEY` | (unset) | Required when `DIARIZATION_PROVIDER=precision2`. Generate at [dashboard.pyannote.ai](https://dashboard.pyannote.ai). |
-| `PYANNOTE_CLOUD_BASE_URL` | `https://api.pyannote.ai/v1` | Base URL for the pyannote.ai REST API. |
-| `PYANNOTE_CLOUD_MODEL` | `precision-2` | Cloud model name sent on each request. `precision-2` or `community-1`. |
-| `PYANNOTE_CLOUD_COST_PER_SECOND_USD` | `0.0` | Your per-second rate (check your pyannote.ai dashboard). Leave at `0.0` to skip cost estimates — diarization still runs, but `pyannote_cloud_cost_usd` will be `0` and the episode cost chip shows `$—`. Billed seconds have a 20-second per-request minimum. |
+`INFERENCE_PROVIDER`, `DIARIZATION_PROVIDER`, `RAG_PROVIDER`,
+`EMBEDDING_PROVIDER`, `FIREWORKS_API_KEY`, `FIREWORKS_AUDIO_BASE_URL`,
+`FIREWORKS_STT_MODEL`, `FIREWORKS_STT_DIARIZE`, `FIREWORKS_CHAT_BASE_URL`,
+`FIREWORKS_CHAT_MODEL`, `FIREWORKS_STT_COST_PER_MINUTE_USD`,
+`FIREWORKS_EMBEDDING_BASE_URL`, `FIREWORKS_EMBEDDING_MODEL`,
+`PYANNOTE_API_KEY`, `PYANNOTE_CLOUD_BASE_URL`, `PYANNOTE_CLOUD_MODEL`,
+`PYANNOTE_CLOUD_COST_PER_SECOND_USD`.
 
-`INFERENCE_PROVIDER=fireworks` takes precedence — Fireworks transcription returns diarization metadata inline, so `DIARIZATION_PROVIDER` is ignored when Fireworks is enabled.
+If any are still in your `.env`, the worker and pipeline log one warning naming
+them at startup; delete them (`make env-diff` lists them too). Settings stored
+from the old Settings UI, API keys included, are deleted automatically on the
+first start after upgrading. Nothing else needs doing.
 
 ### Ask / RAG Model Selection
 
@@ -137,40 +121,17 @@ Ask AI uses the model selected in the `/ask` page UI and sends it with each requ
 - For local Ask mode, `OLLAMA_URL` controls the Ollama endpoint that serves the selected model.
 - The Ask page and per-episode chat popup default to `qwen2.5:3b` unless you choose another option. The full list is `qwen2.5:3b`, `phi3:mini`, and `gemma3n:e4b` — all pulled by `make ollama-pull`.
 - Each model runs with a bounded `num_ctx` (8K–16K) to keep CPU prefill fast. The dropdown shows both the configured value and the model's maximum context.
-- When `RAG_PROVIDER=fireworks`, `FIREWORKS_CHAT_MODEL` provides the default Ask model for remote generation. The Ask page renders a curated dropdown of currently-deployed Fireworks chat models; the configured value is used as the default selection. (Note: this is independent of `INFERENCE_PROVIDER` — see Issue #608.)
 
-### Deployment profiles
+### Starting the stack
 
-- Local-first profile (default): `docker compose up -d` or `make up`
-  - Starts `db`, `pipeline`, `worker`, `web`, `ollama` and `backup` — six services.
-- Remote-inference profile: `docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d` or `make up-remote`
-  - Starts `db`, `pipeline`, `worker`, `web` and `backup` — five services.
-  - Applies `INFERENCE_PROVIDER=fireworks` to pipeline + worker. It deliberately does **not** set `EMBEDDING_PROVIDER`: remote embedding is unavailable (see above), so embeddings run locally even in this profile.
-  - Does not start `ollama` unless explicitly requested with profile `local-ask`.
+`docker compose up -d` or `make up` starts `db`, `pipeline`, `worker`, `web`,
+`ollama` and `backup` — six services. `/api/health` reports `OK` only when
+Ollama is reachable, since Ask depends on it.
 
-Health behavior:
-- In Fireworks mode, `/api/health` does not require live Ollama reachability for overall `OK` status.
+### Embedding model switching and backfill
 
-### Fireworks retry policy
-
-When Fireworks mode is enabled, Podlog applies automatic retries for transient transcription failures:
-
-- Retryable: network/connect/timeouts, HTTP `429`, and HTTP `5xx`
-- HTTP access errors: HTTP `4xx` from Fireworks map to `HTTP_ACCESS` and are retried, because Fireworks returns 4xx for conditions that clear. This differs from a 4xx on a podcast audio URL, which is terminal.
-- Backoff: `RETRY_BACKOFF_BASE * 2^(attempt-1)` (for example `30s`, `60s`, `120s` with defaults)
-- Attempts: capped by `RETRY_MAX`
-
-### Fireworks observability assumptions
-
-- Per-episode Fireworks usage/cost is persisted on the episode row after successful remote transcription.
-- Billed audio seconds are estimated from transcript segment end-times (fallback: episode duration).
-- Cost is estimated (not reconciled billing): `fireworks_audio_minutes * FIREWORKS_STT_COST_PER_MINUTE_USD`.
-
-### Embedding provider switching and backfill
-
-- Existing vectors are not auto-migrated when switching embedding provider/model.
-- If you switch embedding provider/model, run chunk/embedding backfill so query and stored vectors are generated by the same model family.
-- If Fireworks embedding dimensions differ from Podlog's expected 384, embedding writes fail with a clear error.
+- Existing vectors are not auto-migrated when switching embedding model.
+- If you switch embedding model, run chunk/embedding backfill so query and stored vectors are generated by the same model.
 
 ## Health Monitoring
 

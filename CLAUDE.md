@@ -28,7 +28,6 @@ When making decisions, reference PRD sections (e.g. "per PRD-01 §5.4") rather t
 ```
 podlog/
 ├── docker-compose.yml              # Production-like local stack (7 services; explore is opt-in via profile)
-├── docker-compose.remote.yml       # Overlay for remote-inference (Fireworks) profile
 ├── docker-compose.test.yml         # Test stack (db_test, mock_rss, pipeline_test, web_test, test runner)
 ├── .env.example                    # All config vars documented
 ├── Makefile                        # make up / down / build / test / etc.
@@ -63,7 +62,7 @@ podlog/
 │   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis, backups, explore, prompts)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
 │   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, embed_provenance, speaker_turns, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, pipeline_commands, timing_labels, prompts, backup_files, backup_settings, queue_snapshot, telegram_bot, preflight, remote_retirement)
-│   │   ├── alembic/                # Database migrations (22 versions)
+│   │   ├── alembic/                # Database migrations (23 versions)
 │   │   └── tests/                  # unit, integration, e2e
 │   ├── web/                        # Next.js 16 (App Router)
 │   │   ├── Dockerfile              # Production image (standalone output)
@@ -118,7 +117,7 @@ make ci-local          # Run every blocking CI check locally, using CI's own com
 make shell-db          # Open psql shell
 ```
 
-`make up` builds from source and starts db, pipeline, worker, ollama, web, and backup (6 services). `make up-release` starts the published GHCR images instead, without building (#937); `make update` moves an install to a new version, draining the queue and forcing a backup first. `make up` passes `--pull never` on purpose — the services carry an `image:` pointing at GHCR, so without it a plain `up` would pull the released image rather than running your working copy; `explore` is opt-in via the `explore` compose profile (`make explore`). Exposed ports: web on `0.0.0.0:3000` (reachable from the LAN, deliberately); db (:5432), pipeline API (:8000) and ollama (:11434) are bound to `127.0.0.1` only (#952), as `explore` (:8888) already was. Host tooling keeps working — `scripts/healthcheck.py`, `make backfill` and the guides all use `localhost` — and containers reach each other by service name over the compose network, not through these mappings.
+`make up` starts db, pipeline, worker, ollama, web, and backup (6 services) from local images. It builds an image only when none exists locally — an existing image is started as-is even if the source changed since, so run `make build` (or `docker compose build <service>`) after code changes. `make up-release` starts the published GHCR images instead, without building (#937); `make update` moves an install to a new version, draining the queue and forcing a backup first. `make up` passes `--pull never` on purpose — the services carry an `image:` pointing at GHCR, so without it a plain `up` would pull the released image rather than starting your local build; `explore` is opt-in via the `explore` compose profile (`make explore`). Exposed ports: web on `0.0.0.0:3000` (reachable from the LAN, deliberately); db (:5432), pipeline API (:8000) and ollama (:11434) are bound to `127.0.0.1` only (#952), as `explore` (:8888) already was. Host tooling keeps working — `scripts/healthcheck.py`, `make backfill` and the guides all use `localhost` — and containers reach each other by service name over the compose network, not through these mappings.
 
 ## Conventions
 
@@ -151,7 +150,7 @@ make shell-db          # Open psql shell
   | Notification settings, digest, healthcheck, `apps/pipeline/app/services/telegram_bot.py` | `docs/guide/09-notifications.md`, and the Security model in `docs/guide/01-installation.md` if what the bot can do changes |
   | Timings, image sizes, storage figures | `docs/guide/11-hardware.md`, `docs/hardware.md` |
   | `apps/pipeline/app/services/rag.py`, `apps/web/src/lib/rag-models.ts` | `docs/guide/12-rag-search.md` |
-  | `apps/pipeline/app/services/remote_retirement.py`, remote-provider leftovers (#1092) | `docs/guide/13-pyannote-cloud.md`, `docs/guide/19-inference-providers.md` (both removed in #1092's last PR) |
+  | `apps/pipeline/app/services/remote_retirement.py`, remote-provider leftovers (#1092) | `docs/configuration.md` (the "Removed: remote inference" section) |
   | `apps/web/src/app/meta-analysis` | `docs/guide/14-meta-analysis.md` |
   | `apps/explore`, notebooks | `docs/guide/15-explore.md` |
   | `apps/backup`, `apps/pipeline/app/services/backup_files.py` | `docs/guide/16-backups.md` |

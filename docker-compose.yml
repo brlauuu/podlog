@@ -65,8 +65,8 @@ services:
     # section in docs/guide/01-installation.md before you do.
     #
     # The pipeline API has no authentication, and
-    # every write endpoint -- settings (which holds the Fireworks and pyannote
-    # keys), backfill, retry, upload, feed CRUD -- was open to anything that
+    # every write endpoint -- settings (which holds the Telegram and SMTP
+    # credentials), backfill, retry, upload, feed CRUD -- was open to anything that
     # could route here. Removing the mapping entirely was considered and
     # rejected: scripts/healthcheck.py, `make backfill` and two user guides all
     # call http://localhost:8000. Loopback keeps those working while dropping

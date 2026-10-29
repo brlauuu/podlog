@@ -17,7 +17,7 @@ _pipeline_model: Optional[str] = None
 def _resolve_model() -> str:
     """Resolve the active pyannote model — runtime DB override beats env default.
 
-    The DB-backed setting is populated by the Settings → Remote Inference UI
+    The DB-backed setting is populated by the Settings → Inference UI
     (#681). Falls back to ``settings.pyannote_model`` (env var) when no
     override exists or when the DB session can't be opened.
     """

@@ -1,6 +1,6 @@
 # Ask AI (RAG Search)
 
-Ask natural language questions and get answers drawn from your transcript library, powered by either local Ollama or Fireworks remote chat inference. Ask AI is live at `/ask`.
+Ask natural language questions and get answers drawn from your transcript library, powered by a local Ollama model. Ask AI is live at `/ask`.
 
 ## How It Works
 
@@ -34,11 +34,9 @@ The dropdown is populated from **names you have confirmed**, not raw `SPEAKER_00
 
 ## Architecture
 
-- **Provider-routed generation** — local [Ollama](https://ollama.ai) by default, optional Fireworks remote mode. Configured in **Settings → Inference → Pipeline Steps → RAG / Ask** via the dedicated `rag_provider` flag (Issue #608).
-- **Local-first default** — no external API calls unless you explicitly flip the RAG step to remote. Enabling Fireworks for transcription does **not** silently route Ask through Fireworks.
+- **Local generation** — answers come from [Ollama](https://ollama.ai) on your own machine; retrieved transcript chunks never leave it. The default model is set under **Settings → Inference**.
 - **Streaming responses** — answers appear word-by-word via server-sent events.
-- **Model selection (local)** — `qwen2.5:3b` (default), `phi3:mini`, `gemma3n:e4b`. Each runs with a bounded `num_ctx` (8K–16K) for fast CPU prefill.
-- **Model selection (remote)** — a curated list of Fireworks chat models: **OpenAI gpt-oss 20B** (fast), **OpenAI gpt-oss 120B** (balanced), **GLM 5.1** (quality). Pick one in Settings; the Ask page dropdown re-renders with the active provider's list and migrates a stale `localStorage` value automatically. Fireworks retires serverless models on a regular cadence, so this list moves — it lives in `apps/web/src/lib/rag-models.ts` and is the only place it needs changing.
+- **Model selection** — `qwen2.5:3b` (default), `phi3:mini`, `gemma3n:e4b`. Each runs with a bounded `num_ctx` (8K–16K) for fast CPU prefill. The list lives in `apps/web/src/lib/rag-models.ts`.
 - **Additional RAM:** ~2 GB when the local LLM is active (auto-unloaded when idle).
 
 ## Asking from Telegram
@@ -48,21 +46,17 @@ With bot commands enabled and your Telegram account on the allowed list (see [No
 ## Prerequisites
 
 The Ask AI feature requires:
-- Either:
-  - local Ollama service running (`make up` profile), or
-  - Fireworks remote mode for RAG configured in Settings → Inference → RAG / Ask (or `RAG_PROVIDER=fireworks` and `FIREWORKS_API_KEY` in `.env`)
+- The `ollama` service running (part of the default stack)
 - At least one episode fully processed through the embed stage (segments need vector embeddings)
-- If using local mode: a pulled Ollama model (for example: `make ollama-pull`)
+- A pulled Ollama model (for example: `make ollama-pull`)
 
 ## Troubleshooting
 
 - **"Ollama not available"** — Check that the ollama container is running: `docker compose ps ollama`
 - **Slow first response** — The model loads into memory on first query; subsequent queries are faster
 - **Model not available** — Pull the model first (`make ollama-pull`) or select one that already exists in Ollama
-- **"Fireworks provider is not configured"** — Save a Fireworks API key in Settings or set `FIREWORKS_API_KEY` in `.env`
-- **"Fireworks model '<path>' not found or not deployed"** — The configured chat model has been deprecated by Fireworks. Open Settings → Inference → RAG / Ask and pick a model from the curated dropdown.
 - **Poor answer quality** — Try a larger model in the Ask page model selector, or ensure more episodes are processed so the retrieval pool is larger.
 
 ---
 
-**Next:** [pyannote Cloud Diarization](13-pyannote-cloud.md) | **Back:** [Hardware & Performance](11-hardware.md) | **Home:** [Guide](README.md)
+**Next:** [Meta-Analysis Dashboard](14-meta-analysis.md) | **Back:** [Hardware & Performance](11-hardware.md) | **Home:** [Guide](README.md)

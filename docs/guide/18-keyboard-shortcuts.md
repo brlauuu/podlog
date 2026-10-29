@@ -70,4 +70,4 @@ If you have suggestions for additional bindings, open an issue on the repository
 
 ---
 
-**Next:** [Inference Providers](19-inference-providers.md) | **Back:** [Troubleshooting](17-troubleshooting.md) | **Home:** [Guide](README.md)
+**Next:** [Updating](20-updating.md) | **Back:** [Troubleshooting](17-troubleshooting.md) | **Home:** [Guide](README.md)

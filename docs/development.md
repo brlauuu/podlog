@@ -5,7 +5,6 @@
 ```
 podlog/
 ├── docker-compose.yml              # default profile: db, pipeline, worker, ollama, web, backup
-├── docker-compose.remote.yml       # remote-inference override (no ollama)
 ├── .env.example                    # All config vars documented
 ├── Makefile                        # make up / down / build / test / etc.
 ├── apps/
@@ -163,13 +162,10 @@ The README shows live status badges for each lane.
 
 ```
 # Stack lifecycle
-make up                 Start all services (default profile)
-make up-remote          Start the remote-inference (Fireworks) profile, no Ollama
-make down               Stop the default-profile stack
-make down-remote        Stop the remote-inference profile stack
+make up                 Start all services from local images (builds only missing ones)
+make down               Stop the stack
 make build              Rebuild all Docker images (reads version from VERSION)
 make logs               Follow logs for all services
-make logs-remote        Follow logs for the remote-inference profile stack
 make migrate            Run database migrations (also runs on pipeline startup)
 
 # Tests

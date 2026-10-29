@@ -1,6 +1,8 @@
-.PHONY: up up-release update env-diff image-digests up-remote down down-remote build logs logs-remote test test-unit test-healthcheck test-e2e ci-local migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs backup-now backup-list restore-db restore-audio
+.PHONY: up up-release update env-diff image-digests down build logs test test-unit test-healthcheck test-e2e ci-local migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs backup-now backup-list restore-db restore-audio
 
-up:             ## Start full stack (builds from source)
+up:             ## Start full stack from local images (builds only missing ones; `make build` first after code changes)
+	@# compose builds an image only when none exists locally. An existing image
+	@# is started as-is, even if the source has changed since it was built.
 	@# --pull never (#937 phase 2). Once services carry an `image:` pointing at
 	@# GHCR, a plain `up` tries the registry FIRST and only builds when the pull
 	@# fails. The published images are public, so as soon as a version tag
@@ -37,17 +39,8 @@ up-release:     ## Start from published images without building (see PODLOG_VERS
 	PODLOG_LAN_URL="$$(bash scripts/print-access.sh --url-only)" docker compose up -d --no-build
 	@bash scripts/print-access.sh
 
-up-remote:      ## Start remote-inference profile (Fireworks providers, no Ollama)
-	@# See the note in `up` -- the same pinned-image requirement applies.
-	@docker compose pull db 2>/dev/null || true
-	PODLOG_LAN_URL="$$(bash scripts/print-access.sh --url-only)" docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d --pull never
-	@bash scripts/print-access.sh
-
 down:           ## Stop all services
 	docker compose down
-
-down-remote:    ## Stop remote-inference profile stack
-	docker compose -f docker-compose.yml -f docker-compose.remote.yml down
 
 # Does not copy VERSION into apps/pipeline/ any more (#936): the pipeline gets
 # it at runtime from the ./VERSION:/app/VERSION:ro bind mount, web bakes it
@@ -58,9 +51,6 @@ build:          ## Rebuild all images (reads version from VERSION file)
 
 logs:           ## Follow logs for all services
 	docker compose logs -f
-
-logs-remote:    ## Follow logs for remote-inference profile stack
-	docker compose -f docker-compose.yml -f docker-compose.remote.yml logs -f
 
 migrate:        ## Run database migrations manually (also runs on pipeline startup)
 	docker compose exec pipeline alembic upgrade head

@@ -109,7 +109,7 @@ curl -s http://localhost:8000/api/health | python3 -m json.tool
 > **This only works from the machine running Podlog.** The database, pipeline
 > API and Ollama are bound to `127.0.0.1` so they are not reachable from other
 > devices on your network — the pipeline API has no authentication and its
-> settings endpoint holds your Fireworks and pyannote keys. The web UI on port
+> settings endpoint holds your Telegram and SMTP credentials. The web UI on port
 > 3000 *is* reachable from the LAN, so you can still browse Podlog from a phone
 > or another computer. To change either, edit the `ports:` entries in
 > `docker-compose.yml`.

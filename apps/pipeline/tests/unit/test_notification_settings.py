@@ -216,25 +216,8 @@ class TestSaveNotificationSettings:
             mock_settings.smtp_use_tls = False
             mock_settings.notification_frequency = "immediate"
             mock_settings.health_check_notifications_enabled = True
-            mock_settings.inference_provider = "local"
-            mock_settings.fireworks_api_key = None
-            mock_settings.fireworks_audio_base_url = ""
-            mock_settings.fireworks_stt_model = ""
-            mock_settings.fireworks_stt_diarize = True
-            mock_settings.fireworks_chat_base_url = ""
-            mock_settings.fireworks_chat_model = ""
-            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
-            mock_settings.embedding_provider = "local"
             mock_settings.embedding_model = ""
-            mock_settings.fireworks_embedding_base_url = ""
-            mock_settings.fireworks_embedding_model = ""
-            mock_settings.diarization_provider = "local"
-            mock_settings.pyannote_api_key = None
-            mock_settings.pyannote_cloud_base_url = ""
-            mock_settings.pyannote_cloud_model = ""
-            mock_settings.pyannote_cloud_cost_per_second_usd = 0.0
             mock_settings.pyannote_model = "pyannote/speaker-diarization-community-1"
-            mock_settings.rag_provider = "local"
             mock_settings.rag_local_model = "qwen2.5:3b"
 
             result = save_notification_settings(

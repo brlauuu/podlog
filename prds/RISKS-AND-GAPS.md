@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** RISKS-AND-GAPS
-**Version:** 1.6
+**Version:** 1.7
 **Status:** Living document — update as risks are resolved or new ones are identified  
 **How to use:** When a risk is mitigated or a gap is closed, move it to the Resolved section at the bottom with a note on how it was addressed. Add new entries as they are discovered during development.
 
 **Changelog:**
+- v1.7 — Remote inference removed (#1092); Podlog is fully self-hosted. RISK-08 (remote provider availability / rate limits) and RISK-11 (audio egress to pyannote.ai, and the stored `pyannote_api_key`) moved to Resolved: no stage calls a third-party inference service, and stored provider settings and API keys are deleted at startup by `app/services/remote_retirement.py`.
 - v1.6 — Added RISK-11 (audio egress to third party when `DIARIZATION_PROVIDER=precision2`). Documented as the accepted cost of offering pyannote.ai cloud diarization; local remains the free, no-egress default. VERSION bumped to 0.3.0.
 - v1.5 — RISK-04 and GAP-04 (word-level alignment) moved to Resolved. WhisperX CTranslate2 + wav2vec2 word-level alignment is the default transcription stack per PRD-01 §5.4.
 
@@ -184,18 +185,9 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
-### RISK-08: Remote Inference Provider Availability / Rate Limits
+### ~~RISK-08: Remote Inference Provider Availability / Rate Limits~~ → Resolved in v1.7
 
-**Severity:** Medium  
-**Component:** PRD-01 — Inference provider mode (`fireworks`)  
-**Description:** When `INFERENCE_PROVIDER=fireworks`, transcription/diarization depends on external API availability, quotas, and rate limits. Bursty backfills may hit provider-side throttling and transient failures.  
-**Mitigation:**
-1. Keep `local` as the default provider and documented fallback mode.
-2. Surface provider errors through existing episode failure/error-class paths.
-3. Prefer gradual ramp-up for large backfills; avoid assuming infinite throughput.
-4. Keep provider settings editable via DB-backed Settings UI and env vars for quick rollback to local mode.
-
-**Status:** Active risk accepted in v1.4.
+*Moved to Part 4: Resolved Items.*
 
 ---
 
@@ -227,18 +219,9 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ---
 
-### RISK-11: Audio Egress to Third Party via pyannote Cloud
+### ~~RISK-11: Audio Egress to Third Party via pyannote Cloud~~ → Resolved in v1.7
 
-**Severity:** Medium
-**Component:** PRD-01 — Diarization provider (`precision2` / pyannote.ai cloud) — Issue #516
-**Description:** When `DIARIZATION_PROVIDER=precision2`, Podlog uploads the episode's audio to pyannote.ai (`https://api.pyannote.ai/v1/media/input` → presigned PUT) so the cloud can diarize it. This is a genuine data-egress event: audio leaves the user's machine and lives on pyannote.ai's infrastructure until their 24-hour retention window expires. For users with regulated, confidential, or sensitive content this is meaningfully different from the default local-only behavior.
-**Mitigation:**
-1. `DIARIZATION_PROVIDER` defaults to `local` — users must explicitly opt into cloud; nothing ships that way.
-2. The Settings UI's "What is pyannote cloud (Precision-2)?" collapsible and the `docs/guide/13-pyannote-cloud.md` guide both call out the egress in the "Data retention and privacy" section.
-3. `pyannote_api_key` is treated as a secret: masked on read (`mask_sensitive`), never logged, and stored in the DB settings row (not committed to env files by default).
-4. Errors from the cloud provider are classified (`TRANSIENT_NETWORK` / `HTTP_ACCESS`) and fall into the same graceful-failure contract as local diarization failures (PRD-01 §5.5) — a cloud outage does not block the rest of the pipeline.
-
-**Status:** Active risk accepted in v0.3.0 as the cost of offering the feature; local remains the free and no-egress default.
+*Moved to Part 4: Resolved Items.*
 
 ---
 
@@ -323,3 +306,5 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 | RISK-04 | Diarization alignment quality (segment-level mis-attribution) | WhisperX with wav2vec2 word-level alignment shipped (see PRD-01 §5.4); `apps/pipeline/app/services/whisper.py` + `alignment.py` implement word-level speaker assignment | v1.5 |
 | GAP-04 | Word-level alignment not implemented | WhisperX CTranslate2 + wav2vec2 word-level timestamps align transcript words against pyannote segments, replacing majority-overlap at the segment level | v1.5 |
 | GAP-N/A | Meta-analysis stale-flag race drops recompute signal | `set_stale` writes a UUID token; `recompute_and_store` captures the token before `compute_snapshot` and only clears it if the token is unchanged — concurrent `set_stale` during compute keeps the flag stale. TS `setMetaAnalysisStale` mirrors the token write. | v0.2.0 |
+| RISK-08 | Remote inference provider availability / rate limits (Fireworks) | No longer applicable — remote inference removed in #1092; transcription, diarization, embeddings and Ask all run locally, so no stage depends on a third-party API's availability, quotas or rate limits | v1.7 |
+| RISK-11 | Audio egress to pyannote.ai (`DIARIZATION_PROVIDER=precision2`) and storage of `pyannote_api_key` | No longer applicable — pyannote.ai diarization removed in #1092; audio never leaves the host. `app/services/remote_retirement.py` deletes stored provider settings and API keys (`pyannote_api_key`, `fireworks_api_key`, …) at worker and pipeline API startup, and warns about retired env vars still set | v1.7 |

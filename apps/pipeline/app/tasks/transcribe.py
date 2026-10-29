@@ -74,17 +74,7 @@ def transcribe_episode(episode_id: str) -> str:
                 str(wav_path), model_name=settings.whisper_model
             )
             transcribe_secs = round(time.monotonic() - t0, 1)
-            # Clears figures a pre-#1092 Fireworks run left on a re-processed
-            # episode. The columns themselves go in #1092's last PR.
-            update_episode(
-                db,
-                episode_id,
-                transcribe_duration_secs=transcribe_secs,
-                fireworks_audio_secs=None,
-                fireworks_audio_minutes=None,
-                fireworks_stt_cost_per_minute_usd=None,
-                fireworks_stt_cost_usd=None,
-            )
+            update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
         finally:
             # MANDATORY: unload Whisper before pyannote can be loaded (PRD-01 S5.4)
             _unload_whisper()
