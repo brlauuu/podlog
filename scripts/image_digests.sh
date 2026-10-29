@@ -26,7 +26,7 @@ for ref in $IMAGES; do
 
   # Every digest this repo is pinned at, across all compose files.
   pinned=$(grep -rhoE "image: ${repo}@sha256:[0-9a-f]{64}" \
-    docker-compose.yml docker-compose.test.yml docker-compose.remote.yml 2>/dev/null \
+    docker-compose.yml docker-compose.test.yml 2>/dev/null \
     | sed 's/.*@//' | sort -u)
 
   if [ -z "$pinned" ]; then

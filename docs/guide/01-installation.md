@@ -58,17 +58,11 @@ HF_TOKEN=hf_your_token_here
 
 Everything else has sensible defaults. See [Configuration](10-configuration.md) for tuning options.
 
-If you want remote Fireworks inference mode, also set:
-
-```bash
-FIREWORKS_API_KEY=fw_your_key_here
-```
-
 ## Start
 
 ```bash
 make up-release   # pull the published images and start, no build
-make ollama-pull  # the local models Ask AI offers (once, ~12 GB); skip if you will use Fireworks
+make ollama-pull  # the local models Ask AI offers (once, ~12 GB)
 ```
 
 `make up-release` prints where to reach Podlog when it finishes:
@@ -81,13 +75,11 @@ Podlog is running.
 
 Open **http://localhost:3000** — you should see the Podlog home page with quick links to Search and Ask. The search page itself is at `/search`.
 
-Ask AI needs a language model. With the default local setup that is an Ollama model, and nothing pulls it for you: until `make ollama-pull` has run, the first question fails with "Model not available". It fetches the three models the Ask page offers, about 12 GB in total; to start with only the default one (1.9 GB):
+Ask AI needs a language model. That is an Ollama model, and nothing pulls it for you: until `make ollama-pull` has run, the first question fails with "Model not available". It fetches the three models the Ask page offers, about 12 GB in total; to start with only the default one (1.9 GB):
 
 ```bash
 docker compose exec ollama ollama pull qwen2.5:3b
 ```
-
-Fireworks users configure a key under Settings → Inference instead and can skip the pull.
 
 Which build `make up-release` gets is set by `PODLOG_VERSION` in `.env`:
 
@@ -126,8 +118,10 @@ command if anything fails. See [Updating](20-updating.md) for what each step
 protects against, channels, rollback and the amd64-only note.
 
 `make up` and `make up-release` are deliberately separate: `make up` never
-contacts the registry, and `make up-release` never builds, so neither can
-surprise you with the other's cost.
+pulls Podlog's own images, and `make up-release` never builds, so neither can
+surprise you with the other's cost. `make up` builds an image only when none
+exists locally; after changing code, run `make build` first or it starts the
+old one.
 
 The "same network" address is the one to use from a phone or another computer. Read the [Security model](#security-model) below before you use it: anyone who can reach that address has full control, with no login. If no LAN address is shown, either your machine has no network route or you have bound the web service to loopback — either way Podlog is reachable from this machine only.
 
@@ -135,25 +129,14 @@ The address comes from DHCP and can change when your router or machine restarts.
 
 If you missed it scrolling past, the same address is shown under **Settings → Access from another device**, with the same warning. The Telegram bot gives it too: send `/address` from an account on the allowed list (see [Notifications](09-notifications.md#telegram-bot-commands)). That panel is empty when Podlog is reachable from this machine only.
 
-### Optional: Remote-Inference Profile
-
-Use this when you want Fireworks-backed inference and no local Ollama container:
-
-```bash
-make up-remote
-```
-
-This runs `docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d`.
-
 ## What's Running
 
-Podlog starts these containers by profile:
+Podlog starts these containers:
 
 | Profile | Services |
 |---|---|
-| **Local-first (`make up`)** | `web`, `pipeline`, `worker`, `db`, `ollama`, `backup` |
-| **Remote-inference (`make up-remote`)** | `web`, `pipeline`, `worker`, `db`, `backup` (no `ollama`) |
-| **Explore (opt-in, `make explore`)** | adds `explore` (Jupyter) to whichever profile is running |
+| **Default (`make up` / `make up-release`)** | `web`, `pipeline`, `worker`, `db`, `ollama`, `backup` |
+| **Explore (opt-in, `make explore`)** | adds `explore` (Jupyter) |
 
 Service details:
 
@@ -163,7 +146,7 @@ Service details:
 | **pipeline** | 8000 | this machine only | FastAPI control plane — feed management, health |
 | **worker** | — | — | Processes episodes: download, transcribe, diarize, chunk, embed, infer, archive |
 | **db** | 5432 | this machine only | PostgreSQL 15 with pgvector for FTS + semantic search |
-| **ollama** | 11434 | this machine only | Local Ask AI generation provider (local-first profile) |
+| **ollama** | 11434 | this machine only | Ask AI answer generation |
 | **backup** | — | — | Nightly DB dump + audio archive snapshot into `./backups/` (see [Backups](16-backups.md)) |
 
 No Redis, no Celery — the job queue is PostgreSQL-backed.
@@ -209,18 +192,15 @@ If you need either, treat adding authentication as a prerequisite rather than a 
 
 A listed account can read: the queue, search results, Ask AI answers, whole transcripts, and the address Podlog is reachable at on your network (`/address`). It can also make one change: `/addfeed` adds a podcast source, which starts downloading and transcribing it. Nothing the bot accepts deletes or reprocesses an episode, changes a setting, or touches a backup. What you are trusting is those Telegram accounts: whoever holds one of them, including someone who has taken it over, can do everything in this paragraph.
 
-**Your API keys live in `.env`** — Fireworks, pyannote, Telegram, SMTP. It is gitignored. The settings API masks them on read, but anyone who can read the file has them outright.
+**Your secrets live in `.env`** — the Postgres password and Hugging Face token, plus Telegram and SMTP credentials if you set them there. It is gitignored. The settings API masks them on read, but anyone who can read the file has them outright.
 
 ## Common Commands
 
 ```bash
 make up              # Start all services
-make up-remote       # Start Fireworks remote-inference profile
 make down            # Stop all services
-make down-remote     # Stop Fireworks remote-inference profile
 make build           # Rebuild Docker images
 make logs            # Follow logs for all services
-make logs-remote     # Follow logs for remote-inference profile
 make shell-db        # Open a psql shell
 make test-unit       # Run pipeline unit tests + healthcheck script tests
 make health-install  # Install health monitoring cron job (every 15 min)

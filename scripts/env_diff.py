@@ -8,8 +8,8 @@ Run directly, or as part of `make update`:
 
 WHY THIS NEVER WRITES
 
-`.env` holds the operator's secrets -- Postgres password, Fireworks and
-pyannote API keys, Telegram tokens. A tool that edits it during an update is
+`.env` holds the operator's secrets -- Postgres password, Hugging Face
+token, Telegram tokens. A tool that edits it during an update is
 one bug away from truncating them, and a backup of the database does not
 bring them back. So this reports and exits; applying anything is the
 operator's keystroke.

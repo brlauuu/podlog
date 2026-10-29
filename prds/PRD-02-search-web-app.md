@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-02 — Search Web Application  
-**Version:** 1.7
+**Version:** 1.8
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.8 — Remote inference removed (#1092). §5.11 no longer lists a remote-inference cost panel; the provider processing-speed chart and every cost figure are gone from the web app. Ask runs on Ollama only.
 - v1.7 — `/podcasts/{id}` carries the feed's own management actions (§5.3, #1090).
 - v1.6 — Updated tech stack row to Next.js 16 (matches `apps/web/package.json`).
 - v1.5 — Marked document status as Active and removed stale non-goal note claiming semantic/vector search was out of scope.
@@ -248,7 +249,7 @@ Configured context (`num_ctx`) is kept well below each model's maximum to keep p
 
 ### 5.11 Meta-Analysis Dashboard
 
-The `/meta-analysis` page offers cross-feed analytics: length, cadence, speaker share, words-per-minute, token footprint, remote-inference cost, and processing-time distribution. Users browse nine Recharts panels with a per-feed filter bar, an expand-to-modal affordance on each card, and a stale indicator.
+The `/meta-analysis` page offers cross-feed analytics: length, cadence, speaker share, words-per-minute, token footprint, and processing-time distribution. (The remote-inference cost panel and the per-provider processing-speed chart were removed in #1092.) Users browse nine Recharts panels with a per-feed filter bar, an expand-to-modal affordance on each card, and a stale indicator.
 
 **Snapshot cache.** The nine panels are backed by a single JSONB `MetaAnalysisSnapshot` row (`id = 1`) holding `per_feed`, `per_episode`, `per_speaker`, `timeline_monthly`, and `coverage` aggregates. Computing it requires scanning every `Segment` and `Chunk`, so the dashboard never recomputes on page load — it reads the cached snapshot and reports its `computed_at` timestamp to the user.
 
@@ -552,7 +553,7 @@ const { playEpisode } = useAudioPlayer();
 - Keyboard navigation of search results
 - Export transcript as `.txt` from episode page (`.srt` is **not** implemented — exports are Markdown/plain text only)
 - "Copy timestamp link" button
-- Meta-Analysis dashboard (`/meta-analysis`) aggregating cross-feed metrics — coverage, episode length, WPM, turn density, host/guest share, tokens, processing time, and cost per feed (Issue #521; see §5.11)
+- Meta-Analysis dashboard (`/meta-analysis`) aggregating cross-feed metrics — coverage, episode length, WPM, turn density, host/guest share, tokens, and processing time per feed (Issue #521; see §5.11). The cost-per-feed aggregate was removed in #1092
 
 ### V2 (Phase 3)
 - **Authentication:** NextAuth.js + JWT, invite-only

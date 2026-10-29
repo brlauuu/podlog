@@ -9,7 +9,7 @@ Podlog ships with a daily backup service that runs automatically as part of the 
 | `podlog_postgres_data` | All transcripts, segments, chunks, embeddings, queue state, speaker name confirmations | **Yes** — daily `pg_dump` | Manually-confirmed speaker names + embeddings are expensive/impossible to regenerate |
 | `podlog_audio_data` (`/data/audio/archive`) | Compressed archived episodes (~29 MB per audio-hour) | **Yes** — daily incremental rsync | RSS feeds drop old episodes; original audio can't be re-downloaded |
 | `podlog_audio_data` (`/data/audio/raw`) | Raw downloads, deleted after archive | No | Intermediate; archive contains the same content compressed |
-| `podlog_transcript_data` | Intermediate WhisperX/Fireworks artifacts | No | Cleaned up after each episode finishes; reproducible |
+| `podlog_transcript_data` | Intermediate WhisperX artifacts | No | Cleaned up after each episode finishes; reproducible |
 | `podlog_model_cache`, `podlog_ollama_data` | Downloaded ML models | No | Re-downloadable from HuggingFace / Ollama |
 
 ## Where backups land

@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.6
+**Version:** 1.8
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.8 — Remote inference removed (#1092); Podlog is fully self-hosted. §5.4 and §5.5 now describe local WhisperX and local pyannote only: the Fireworks transcription mode, the pyannote.ai `precision-2` diarization mode, `DIARIZATION_PROVIDER` / `INFERENCE_PROVIDER` routing and the per-episode cost estimates are gone. The Fireworks Ask/RAG provider added in v1.7 is gone too; Ask runs on Ollama only. Stored remote settings and provider API keys are deleted at startup by `app/services/remote_retirement.py`. The historical cost/minutes columns on `episodes` remain in the database pending a drop decision; nothing populates or displays them any more (a re-transcription clears them to NULL).
 - v1.7 — §5.10 RAG inference is no longer Ollama-only: the Fireworks AI provider was added in #608 with a curated chat-model list (Qwen2.5 7B Instruct, Llama 3.1 70B Instruct, Qwen2.5 72B Instruct). Provider selection is per-environment via the `inference_provider` setting; local Ollama remains the default for both new installs and existing upgrades.
 - v1.6 — §5.5 extended with the pyannote cloud (`precision-2`) provider option (issue #516). Provider routing precedence documented: Fireworks STT diarization metadata wins over `DIARIZATION_PROVIDER`. Cost estimate persistence (`episodes.pyannote_cloud_cost_usd`) and the 20-second per-request minimum billing floor are called out.
 - v1.5 — §5.2 retry copy corrected to match code: backoff formula is `RETRY_BACKOFF_BASE * 2^(attempt-1)` (30s → 60s → 120s), and HTTP 4xx is clarified as classified `HTTP_ACCESS` with retry (not "non-transient and retried").
@@ -18,7 +19,7 @@
 
 ## 1. Problem Statement
 
-Podcast listeners who want to search, reference, or revisit specific moments in long-form audio have no reliable way to do so. Published transcripts are rare, inaccurate, or not searchable. This pipeline solves the upstream half of the problem: automatically fetching podcast episodes from RSS feeds, transcribing them with a state-of-the-art speech-to-text model, labeling speakers, and storing timestamped transcripts in a queryable database — local-first by default, with optional remote inference provider support.
+Podcast listeners who want to search, reference, or revisit specific moments in long-form audio have no reliable way to do so. Published transcripts are rare, inaccurate, or not searchable. This pipeline solves the upstream half of the problem: automatically fetching podcast episodes from RSS feeds, transcribing them with a state-of-the-art speech-to-text model, labeling speakers, and storing timestamped transcripts in a queryable database — entirely on the user's own machine.
 
 ---
 
@@ -31,7 +32,7 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 - Store transcripts with word-level timestamps in a searchable database
 - Archive compressed audio files locally as backup
 - Provide visibility into queue progress and errors
-- Run entirely in Docker in local-first mode; allow optional remote inference provider configuration
+- Run entirely in Docker on the user's own machine; no stage calls a remote inference service (#1092)
 
 ### Non-Goals (for this PRD)
 - Named speaker identification (deferred to post-MVP UI feature)
@@ -91,11 +92,7 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 
 ### 5.4 Transcription (Speech-to-Text)
 
-> See [`docs/guide/19-inference-providers.md`](../docs/guide/19-inference-providers.md) for the user-facing setup walkthrough comparing local and remote options for both transcription and diarization, plus a list of providers evaluated and rejected.
-
-- Provider modes:
-  - `local` (default): WhisperX with CTranslate2 backend + wav2vec2 word-level alignment, optimized for CPU inference.
-  - `fireworks` (optional): Fireworks `/v1/audio/transcriptions` API with `verbose_json` response.
+- Engine: WhisperX with CTranslate2 backend + wav2vec2 word-level alignment, optimized for CPU inference. The optional Fireworks transcription mode was removed in #1092; episodes it transcribed keep their transcripts.
 - Default model: `large-v3-turbo` (configurable via `WHISPER_MODEL` env var: tiny|base|small|medium|large-v3|large-v3-turbo).
 - The model is downloaded once and cached in a persistent Docker volume.
 - **Memory management:** Whisper is loaded into memory for transcription and **explicitly unloaded** (removed from memory and `gc.collect()` called) before pyannote is loaded for diarization. The two models must never be resident in memory simultaneously. This is mandatory on CPU-only machines to avoid OOM.
@@ -106,10 +103,9 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 
 ### 5.5 Speaker Diarization
 
-- Local mode library: `pyannote/speaker-diarization-community-1` from HuggingFace (configurable via `PYANNOTE_MODEL`).
-- Requires a HuggingFace access token set via environment variable `HF_TOKEN` for local mode. The user must accept the pyannote model license on HuggingFace.com independently.
-- Fireworks mode uses diarization metadata returned by Fireworks transcription responses when enabled.
-- pyannote cloud mode (`DIARIZATION_PROVIDER=precision2`) routes diarization to pyannote.ai's hosted `precision-2` model via their REST API (issue #516). Audio is uploaded to pyannote.ai temporary storage, a diarization job is submitted, and the worker polls until completion. Precedence: Fireworks transcription (which carries its own diarization metadata) beats `DIARIZATION_PROVIDER`; otherwise `DIARIZATION_PROVIDER` selects `local` vs `precision2`. Cost is estimated per-episode as `billed_secs * PYANNOTE_CLOUD_COST_PER_SECOND_USD` with a 20-second per-request minimum and persisted in `episodes.pyannote_cloud_cost_usd`.
+- Library: `pyannote/speaker-diarization-community-1` from HuggingFace (configurable via `PYANNOTE_MODEL`), run locally.
+- Requires a HuggingFace access token set via environment variable `HF_TOKEN`. The user must accept the pyannote model license on HuggingFace.com independently.
+- The remote diarization options (Fireworks transcription metadata, pyannote.ai `precision-2`) were removed in #1092.
 - Diarization produces speaker-labeled time segments: `{ speaker: "SPEAKER_00", start: 12.4, end: 18.1 }`.
 - **Alignment strategy:** Transcript segments and diarization segments are aligned by majority overlap. For each transcript segment, the speaker whose time range overlaps the most with that segment's duration is assigned as the speaker label. In the event of an exact tie, the speaker label from the earlier-starting segment is used.
 - Speaker labels are stored as `SPEAKER_00`, `SPEAKER_01`, etc. Renaming to human names is handled in the web UI (PRD-02).
@@ -424,8 +420,7 @@ GET    /api/explore/status                 Jupyter explore container status (opt
 - Chunking and embedding pipeline tasks
 - Notification system (email, Telegram)
 - Zombie job detection
-- pyannote.ai Precision-2 cloud diarization as an alternative to local pyannote, selected via `DIARIZATION_PROVIDER=precision2` (Issue #516; see RISKS-AND-GAPS RISK-11)
-- Fireworks AI remote-inference profile (`make up-remote`) for users who prefer remote Whisper/LLM over a local Ollama container
+- Remote inference (pyannote.ai Precision-2 diarization, Issue #516; Fireworks AI transcription/Ask/embeddings and the `make up-remote` profile) — shipped, then removed in #1092; Podlog is fully self-hosted
 - Feed pause/resume — stop polling without deleting, via `PATCH /api/feeds/{feed_id}` with `paused` (migration `020_add_feed_paused_column.py`); paused feeds also reject manual polls (Issue #743)
 - Step down to selective — the same `PATCH` accepts `mode: "selective"` for a test or full feed, paused or not: polling stops for good, everything ingested stays, `paused` is cleared, and further episodes arrive through `POST /api/feeds/{feed_id}/episodes`. Promotion to full stays on `POST /api/feeds` (Issue #1045)
 

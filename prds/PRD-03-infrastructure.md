@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-03 — Infrastructure & DevOps  
-**Version:** 1.5
+**Version:** 1.6
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.6 — Remote inference removed (#1092); Podlog is fully self-hosted. `docker-compose.remote.yml` and the `up-remote` / `down-remote` / `logs-remote` Makefile targets are gone, as is the optional inference-provider block in `.env.example` (`INFERENCE_PROVIDER`, `FIREWORKS_*`). Those env vars, if still set, are ignored and named in a startup warning by `app/services/remote_retirement.py`.
 - v1.5 — Repo tree counts refreshed (12 Alembic migrations, 13 shadcn/ui components). Removed stale references to `api/wizard/` (retired in #361). Test-stack snippet now uses `pgvector/pgvector:pg15` to match the actual compose file. Removed the "web_test disabled" note — `web_test` and `pipeline_test` are both live in `docker-compose.test.yml`. Makefile section extended with `up-remote`, `down-remote`, `logs-remote`, `backfill`, `version`, `env-check`, `deps-outdated`, `test-healthcheck`. CI/CD section replaced with the current three-workflow split (`ci.yml`, `ci-full-unit.yml`, `ci-slow.yml`). Added `Dockerfile.test` to the web repo tree. `.env.example` retry comment corrected to `30s → 60s → 120s`.
 - v1.4 — Added optional Fireworks inference provider configuration (env + DB-backed Settings UI overrides). Updated `.env.example` with inference-provider variables. Updated web navigation from Notifications page to broader Settings page.
 - v1.3 — Major update to match actual implementation: Celery/Redis/Flower/Beat removed; PostgreSQL-backed job queue with worker.py. Redis service and volumes removed from docker-compose. Single Dockerfile replaced by Dockerfile.control and Dockerfile.worker. Repo structure updated with actual files (removed scheduler.py, celery_app.py, SearchBar.tsx, SpeakerLabel.tsx; added worker.py and current component list). Test stack updated (no redis_test). License corrected to O'Saasy. Makefile updated with all current targets. Ollama service added. .env.example updated to match actual vars.
@@ -388,13 +389,6 @@ DISK_HEADROOM_BYTES=2147483648     # 2 GB minimum free space before download sta
 # ── Ollama (RAG) ─────────────────────────────────────────
 OLLAMA_URL=http://ollama:11434     # Ollama API endpoint for LLM inference
 
-# ── Inference provider (optional) ───────────────────────
-# INFERENCE_PROVIDER=local          # local | fireworks
-# FIREWORKS_API_KEY=
-# FIREWORKS_AUDIO_BASE_URL=https://audio-turbo.api.fireworks.ai
-# FIREWORKS_STT_MODEL=whisper-v3-large
-# FIREWORKS_STT_DIARIZE=true
-
 # ── Optional overrides ────────────────────────────────────
 # DATABASE_URL=postgresql://postgres:changeme@db:5432/podlog
 ```
@@ -404,7 +398,7 @@ OLLAMA_URL=http://ollama:11434     # Ollama API endpoint for LLM inference
 ## 5. Makefile
 
 ```makefile
-.PHONY: up up-remote down down-remote build logs logs-remote test test-unit \
+.PHONY: up down build logs test test-unit \
         test-healthcheck test-e2e test-integration migrate \
         shell-db shell-pipeline shell-web web ollama-pull \
         health-check health-install health-uninstall \
@@ -413,23 +407,14 @@ OLLAMA_URL=http://ollama:11434     # Ollama API endpoint for LLM inference
 up:               ## Start full stack
 	docker compose up -d
 
-up-remote:        ## Start remote-inference profile (Fireworks providers, no Ollama)
-	docker compose -f docker-compose.yml -f docker-compose.remote.yml up -d
-
 down:             ## Stop all services
 	docker compose down
-
-down-remote:      ## Stop remote-inference profile stack
-	docker compose -f docker-compose.yml -f docker-compose.remote.yml down
 
 build:            ## Rebuild all images (reads version from VERSION file)
 	docker compose build --build-arg APP_VERSION=$$(cat VERSION)
 
 logs:             ## Follow logs for all services
 	docker compose logs -f
-
-logs-remote:      ## Follow logs for remote-inference profile stack
-	docker compose -f docker-compose.yml -f docker-compose.remote.yml logs -f
 
 migrate:          ## Run database migrations manually (also runs on pipeline startup)
 	docker compose exec pipeline alembic upgrade head

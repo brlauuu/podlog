@@ -223,7 +223,7 @@ python3 scripts/env_diff.py || true   # advisory: never blocks an update
 # not optional.
 say "Restarting"
 # PODLOG_LAN_URL has to be set on the `up` that creates the container, exactly
-# as the `up`, `up-release` and `up-remote` Makefile targets do. Restarting
+# as the `up` and `up-release` Makefile targets do. Restarting
 # without it leaves the web container holding an empty value, which blanks the
 # LAN address panel in Settings (#1012) for anyone browsing from the machine
 # itself -- the case that feature exists for. The update printed the address

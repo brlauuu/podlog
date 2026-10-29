@@ -26,16 +26,16 @@
 
 - **Audio ingestion** — pull episodes from RSS feeds (full, selective, or test mode) or upload audio files (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.opus`, `.aac`, `.wma`, `.webm`, `.mp4`) directly from the web UI.
 - **Speech-to-text** — WhisperX with `large-v3-turbo` by default, tunable down to `tiny` for low-RAM machines.
-- **Speaker diarization** — pyannote `speaker-diarization-community-1` assigns `SPEAKER_NN` labels locally (free), with an optional paid cloud upgrade to pyannote.ai's higher-accuracy `precision-2` model; spaCy NER proposes real names from episode metadata, and you can rename or merge speakers in the UI.
+- **Speaker diarization** — pyannote `speaker-diarization-community-1` assigns `SPEAKER_NN` labels locally (free); spaCy NER proposes real names from episode metadata, and you can rename or merge speakers in the UI.
 - **Hybrid search** — full-text keyword search (`"exact phrase"`, `OR`, `-exclude`) combined with pgvector semantic similarity, merged via Reciprocal Rank Fusion.
 - **Persistent audio player** — click any timestamp to play; the player keeps going while you navigate other pages.
-- **Ask AI (RAG)** — ask natural-language questions and get streamed, citation-backed answers drawn from your transcript library (local Ollama by default, Fireworks optional).
+- **Ask AI (RAG)** — ask natural-language questions and get streamed, citation-backed answers drawn from your transcript library (a local Ollama model).
 - **Export** — download search results or full transcripts as Markdown or plain text, or open a print-friendly view (`/search/print`) for the browser's print-to-PDF flow.
 - **Queue dashboard** — per-stage status, error classification, auto-retry for transient failures, manual retry for the rest.
 - **Meta-Analysis dashboard** — speaker analytics across every feed at `/meta-analysis`: per-speaker minutes and word counts episode by episode, and a host-vs-guest talking-time delta, drawn from either confirmed names or high-confidence inferred ones.
 - **Notifications** — Telegram and email alerts when episodes finish or fail, with optional daily/weekly digest.
 - **Telegram bot** — search, ask, fetch a transcript, check the queue or add a source from a chat, from anywhere, with no port opened. Off by default; it answers only the Telegram accounts you put on its allowed list.
-- **Local-first** — no accounts, no cloud, no telemetry; optional Fireworks AI profile for users who prefer remote inference.
+- **Fully self-hosted** — no accounts, no cloud, no telemetry; every model runs on your own machine.
 
 
 ## Quick Start
@@ -53,7 +53,7 @@ nano .env
 # 3. Start from published images — no build
 make up-release
 
-# 4. Pull the local models Ask AI offers (once; ~12 GB for all three). Skip if you will use Fireworks.
+# 4. Pull the local models Ask AI offers (once; ~12 GB for all three).
 make ollama-pull
 ```
 
@@ -78,25 +78,13 @@ make up
 make ollama-pull   # local models for Ask AI, once (~12 GB)
 ```
 
-`make up` never contacts the registry, so it always runs the code in your
-working copy — including changes you have just made.
+`make up` never pulls Podlog images from the registry, so it runs what you
+built locally. It only builds an image that does not exist yet, though: after
+changing code, run `make build` before `make up`, or it starts the old image.
 
 Open **http://localhost:3000**. From the navbar you can reach Search (`/search`), Ask (`/ask`), Sources (`/podcasts`, where you add feeds or upload audio), Queue (`/queue`), Meta-Analysis (`/meta-analysis`), Settings (`/settings`), Docs (`/docs`) and About (`/about`).
 
 > **First run:** The worker downloads Whisper and pyannote model weights (~3 GB). Jobs are queued during this phase and start processing once models are cached.
-
-### Remote-Inference Profile (Optional)
-
-If you want Fireworks-backed inference and no local `ollama` container:
-
-```bash
-# ensure FIREWORKS_API_KEY is set in .env
-make up-remote
-```
-
-This uses `docker-compose.remote.yml` on top of the default compose file.
-
-For a side-by-side comparison of the local and remote options for both transcription and diarization — including a decision matrix and a list of providers we evaluated but didn't ship — see [docs/guide/19-inference-providers.md](docs/guide/19-inference-providers.md).
 
 ### Prerequisites
 
@@ -148,7 +136,7 @@ For a side-by-side comparison of the local and remote options for both transcrip
                         └──────────────────────────────────────────────┘
 ```
 
-Default profile: 6 containers (`db`, `pipeline`, `worker`, `ollama`, `web`, `backup`). Remote-inference profile: 5 containers (Ollama is disabled unless you opt in with the `local-ask` Compose profile). A seventh service, `explore` (Jupyter), is opt-in via `make explore`. No Redis, no Celery — the job queue is PostgreSQL-backed using `FOR UPDATE SKIP LOCKED`.
+Default profile: 6 containers (`db`, `pipeline`, `worker`, `ollama`, `web`, `backup`). A seventh service, `explore` (Jupyter), is opt-in via `make explore`. No Redis, no Celery — the job queue is PostgreSQL-backed using `FOR UPDATE SKIP LOCKED`.
 
 ## Configuration
 
@@ -181,12 +169,9 @@ See [docs/configuration.md](docs/configuration.md) for the full list of all envi
 
 ```bash
 make up              # Start all services
-make up-remote       # Start Fireworks remote-inference profile
 make down            # Stop all services
-make down-remote     # Stop Fireworks remote-inference profile
 make build           # Rebuild Docker images
 make logs            # Follow logs for all services
-make logs-remote     # Follow logs for remote-inference profile
 make test-unit       # Run pipeline unit tests + healthcheck script tests
 make shell-db        # Open psql shell
 make health-install  # Install health monitoring cron (every 15 min)
@@ -199,7 +184,7 @@ make help            # List all available commands
 |---|---|---|
 | [WhisperX](https://github.com/m-bain/whisperX) | Whisper large-v3-turbo + CTranslate2 | Speech-to-text transcription |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | CTranslate2 backend | Fast CPU inference for Whisper |
-| [pyannote](https://github.com/pyannote/pyannote-audio) | `speaker-diarization-community-1` (local) or `precision-2` (pyannote.ai cloud) | Speaker labeling and separation |
+| [pyannote](https://github.com/pyannote/pyannote-audio) | `speaker-diarization-community-1` | Speaker labeling and separation |
 | [sentence-transformers](https://www.sbert.net/) | all-MiniLM-L6-v2 | Semantic search embeddings (384-dim) |
 | [pgvector](https://github.com/pgvector/pgvector) | PostgreSQL vector extension | Approximate nearest neighbor search |
 | [Next.js](https://nextjs.org/) 16.2.4 | App Router, React Server Components | Web UI |
@@ -221,7 +206,6 @@ Agents:
 Platforms:
 
 - [Omnara](https://omnara.cc)
-- [Fireworks AI](https://fireworks.ai) (optional remote inference for Podlog)
 
 ## License
 
