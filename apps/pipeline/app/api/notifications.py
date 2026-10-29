@@ -75,19 +75,6 @@ def post_test(body: TestRequest, db: Session = Depends(get_db)):
             return JSONResponse(status_code=502, content={"error": str(e)})
 
 
-@router.post("/pyannote/test")
-def post_pyannote_test():
-    """Retired with pyannote.ai cloud diarization (#1092).
-
-    Kept as an explicit 410 until the Settings page drops its Test button, so
-    a click explains itself instead of failing with a bare 404.
-    """
-    return JSONResponse(
-        status_code=410,
-        content={"error": "pyannote.ai cloud diarization is no longer supported."},
-    )
-
-
 def send_test_telegram(bot_token: str, chat_id: str) -> None:
     """Send a test message via Telegram Bot API."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")

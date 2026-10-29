@@ -10,9 +10,6 @@ const FALLBACK = {
   estimates: {
     transcription_minutes_per_hour: null,
     embedding_seconds_per_hour: null,
-    remote_transcription_minutes_per_hour: 3,
-    remote_embedding_seconds_per_hour: 5,
-    remote_cost_per_hour_usd: 0.36,
   },
 };
 

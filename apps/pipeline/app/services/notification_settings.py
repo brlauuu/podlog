@@ -35,31 +35,6 @@ _FIELDS = [
     "pyannote_model",
 ]
 
-# Remote-inference keys the Settings page still parses (#1092). Its schema
-# requires them, so GET answers with fixed local-only values until the web
-# removal drops them on both sides. Never stored, never read by a task.
-_RETIRED_WEB_FIELDS = {
-    "inference_provider": "local",
-    "embedding_provider": "local",
-    "diarization_provider": "local",
-    "rag_provider": "local",
-    "fireworks_api_key": None,
-    "fireworks_audio_base_url": "",
-    "fireworks_stt_model": "",
-    "fireworks_stt_diarize": False,
-    "fireworks_chat_base_url": "",
-    "fireworks_chat_model": "",
-    "fireworks_stt_cost_per_minute_usd": 0.0,
-    "fireworks_embedding_base_url": "",
-    "fireworks_embedding_model": "",
-    "pyannote_api_key": None,
-    "pyannote_cloud_base_url": "",
-    "pyannote_cloud_model": "",
-    "pyannote_cloud_cost_per_second_usd": 0.0,
-    "fireworks_configured": False,
-    "pyannote_cloud_configured": False,
-}
-
 _SENSITIVE_FIELDS = {
     "telegram_bot_token",
     "smtp_password",
@@ -98,12 +73,6 @@ _VALID_EMBEDDING_MODELS = {
     "all-MiniLM-L6-v2",
     "BAAI/bge-small-en-v1.5",
 }
-_PROVIDER_FIELDS = (
-    "inference_provider",
-    "embedding_provider",
-    "diarization_provider",
-    "rag_provider",
-)
 _INFERENCE_FIELDS = {"rag_local_model"}
 _EMBEDDING_FIELDS = {"embedding_model"}
 _DIARIZATION_FIELDS = {"pyannote_model"}
@@ -168,7 +137,7 @@ def get_notification_settings(db: Session) -> dict:
         and merged.get("telegram_chat_id") is not None
     )
     merged["email_configured"] = bool(merged.get("notification_email_to"))
-    return {**_RETIRED_WEB_FIELDS, **merged}
+    return merged
 
 
 def save_notification_settings(db: Session, updates: dict) -> dict:
@@ -176,15 +145,6 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
 
     Raises ValueError for invalid values.
     """
-    # #1092: Podlog no longer offers remote inference, but the Settings page
-    # keeps its Remote switches until the web removal. Refusing a remote value
-    # tells the user so; storing it would be silently ignored.
-    for field in _PROVIDER_FIELDS:
-        if field in updates and updates[field] != "local":
-            raise ValueError(
-                f"{field} must be 'local': Podlog no longer offers remote inference, "
-                f"got '{updates[field]}'"
-            )
     if "notification_frequency" in updates:
         if updates["notification_frequency"] not in _VALID_FREQUENCIES:
             raise ValueError(
@@ -264,7 +224,7 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
         and merged.get("telegram_chat_id") is not None
     )
     merged["email_configured"] = bool(merged.get("notification_email_to"))
-    return {**_RETIRED_WEB_FIELDS, **merged}
+    return merged
 
 
 def mask_sensitive(settings_dict: dict) -> dict:

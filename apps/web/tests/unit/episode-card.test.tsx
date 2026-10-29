@@ -1,7 +1,6 @@
 /**
  * Tests for EpisodeCard's previously-uncovered branches (#822):
- * the ErrorPill HARD vs soft color choice, the PyannoteCloudCostTag
- * tooltip and "no cost" fallback, the ProcessingProgress step tracker,
+ * the ErrorPill HARD vs soft color choice, the ProcessingProgress step tracker,
  * and the delete-button click handler (preventDefault + stopPropagation
  * + onDelete invocation).
  *
@@ -42,9 +41,6 @@ function _ep(overrides: Partial<EnrichedEpisode> = {}): EnrichedEpisode {
     transcribe_duration_secs: 60,
     diarize_duration_secs: 30,
     inference_provider_used: "local",
-    fireworks_audio_minutes: null,
-    fireworks_stt_cost_usd: null,
-    pyannote_cloud_cost_usd: null,
     audio_file_size_bytes: 4_000_000,
     speaker_count: 2,
     speaker_name_tags: [],
@@ -77,47 +73,6 @@ describe("EpisodeCard — ErrorPill color branches", () => {
     );
     const pill = screen.getByText(/transient network/i);
     expect(pill.className).toMatch(/bg-amber/);
-  });
-});
-
-describe("EpisodeCard — PyannoteCloudCostTag", () => {
-  it("renders cost dollars when cost > 0", () => {
-    render(
-      <EpisodeCard
-        episode={_ep({ pyannote_cloud_cost_usd: 0.45 })}
-        expandedError={false}
-        onToggleError={() => {}}
-      />
-    );
-    expect(screen.getByText("pyannote cloud: $0.45")).toBeInTheDocument();
-  });
-
-  it("renders em-dash when cost is 0", () => {
-    render(
-      <EpisodeCard
-        episode={_ep({ pyannote_cloud_cost_usd: 0 })}
-        expandedError={false}
-        onToggleError={() => {}}
-      />
-    );
-    // Cost = 0 → label is "—"
-    expect(screen.getByText("pyannote cloud: —")).toBeInTheDocument();
-  });
-
-  it("shows tooltip on mouse-enter and hides on mouse-leave", () => {
-    render(
-      <EpisodeCard
-        episode={_ep({ pyannote_cloud_cost_usd: 0.12 })}
-        expandedError={false}
-        onToggleError={() => {}}
-      />
-    );
-    const tag = screen.getByText("pyannote cloud: $0.12").parentElement!;
-    fireEvent.mouseEnter(tag);
-    // Tooltip text is visible after enter
-    expect(screen.getByText(/precision-2/i)).toBeInTheDocument();
-    fireEvent.mouseLeave(tag);
-    expect(screen.queryByText(/precision-2/i)).not.toBeInTheDocument();
   });
 });
 

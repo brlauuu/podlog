@@ -22,11 +22,6 @@ export interface Episode {
   diarize_duration_secs: number | null;
   diarize_step_durations: Record<string, number> | null;
   inference_provider_used: string | null;
-  fireworks_audio_secs: number | null;
-  fireworks_audio_minutes: number | null;
-  fireworks_stt_cost_per_minute_usd: number | null;
-  fireworks_stt_cost_usd: number | null;
-  pyannote_cloud_cost_usd: number | null;
   audio_file_size_bytes: number | null;
   audio_url: string | null;
   audio_local_path: string | null;

@@ -25,7 +25,7 @@ jest.mock("next/link", () => {
 
 import AskPage from "@/app/ask/page";
 
-function makeFetch(ragProvider: "local" | "fireworks") {
+function makeFetch(settings: Record<string, unknown> = {}) {
   return jest.fn((url: string) => {
     if (url === "/api/feeds") {
       return Promise.resolve({ json: async () => [] } as Response);
@@ -37,21 +37,21 @@ function makeFetch(ragProvider: "local" | "fireworks") {
     }
     if (url === "/api/notifications/settings") {
       return Promise.resolve({
-        json: async () => ({ rag_provider: ragProvider }),
+        json: async () => settings,
       } as Response);
     }
     return Promise.resolve({ json: async () => ({}) } as Response);
   }) as jest.Mock;
 }
 
-describe("Ask page provider-aware dropdown (#608 PR 3)", () => {
+describe("Ask page model dropdown", () => {
   beforeEach(() => {
     sessionStorage.clear();
     localStorage.clear();
   });
 
-  test("renders Ollama models when rag_provider is local", async () => {
-    global.fetch = makeFetch("local");
+  test("offers only Ollama models", async () => {
+    global.fetch = makeFetch();
     render(<AskPage />);
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith("/api/notifications/settings"));
@@ -65,26 +65,15 @@ describe("Ask page provider-aware dropdown (#608 PR 3)", () => {
     expect(screen.queryByText(/\(remote\)/i)).toBeNull();
   });
 
-  test("renders Fireworks chat models when rag_provider is fireworks", async () => {
-    global.fetch = makeFetch("fireworks");
+  // #1092: a browser that used the retired Fireworks toggle still has a
+  // Fireworks model stored. It must not reach the dropdown as an empty value.
+  test("replaces a remembered Fireworks model with the configured local model", async () => {
+    localStorage.setItem("podlog-ask-model", "accounts/fireworks/models/gpt-oss-120b");
+    global.fetch = makeFetch({ rag_local_model: "phi3:mini" });
     render(<AskPage />);
 
-    // Wait for the dropdown to contain Fireworks paths.
-    await waitFor(() => {
-      const select = screen.getByLabelText(/model:/i) as HTMLSelectElement;
-      const optionValues = Array.from(select.options).map((o) => o.value);
-      expect(
-        optionValues.some((v) => v.startsWith("accounts/fireworks/models/")),
-      ).toBe(true);
-    });
-
-    // Remote tag is shown next to the dropdown.
-    expect(screen.getByText(/\(remote\)/i)).toBeInTheDocument();
-
-    // None of the options are Ollama-style names.
     const select = screen.getByLabelText(/model:/i) as HTMLSelectElement;
-    const optionValues = Array.from(select.options).map((o) => o.value);
-    expect(optionValues.every((v) => v.startsWith("accounts/"))).toBe(true);
+    await waitFor(() => expect(select.value).toBe("phi3:mini"));
   });
 
   test("applies backend rag_local_model on a fresh browser when no localStorage preference is set (#637)", async () => {
@@ -172,22 +161,4 @@ describe("Ask page provider-aware dropdown (#608 PR 3)", () => {
     expect(select.value).toBe("qwen2.5:3b");
   });
 
-  test("migrates a stale localStorage Ollama name when provider is fireworks", async () => {
-    // Simulate the bug case: user's localStorage has `phi3:mini` from a
-    // previous local session, but rag_provider is now fireworks.
-    localStorage.setItem("podlog-ask-model", "phi3:mini");
-    global.fetch = makeFetch("fireworks");
-    render(<AskPage />);
-
-    await waitFor(() => {
-      const select = screen.getByLabelText(/model:/i) as HTMLSelectElement;
-      // The selected value is now a Fireworks path, not the stale Ollama name.
-      expect(select.value).toMatch(/^accounts\/fireworks\/models\//);
-    });
-
-    // localStorage was overwritten with the new Fireworks default.
-    expect(localStorage.getItem("podlog-ask-model")).toMatch(
-      /^accounts\/fireworks\/models\//,
-    );
-  });
 });

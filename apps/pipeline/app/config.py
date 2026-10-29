@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     # recent correction. 0 disables the cutoff.
     feed_speaker_cache_recency_days: int = Field(default=365, ge=0)
 
-    # Hardware profile override for cost estimates (Issue #322)
+    # Hardware profile override for processing-time estimates (Issue #322)
     hardware_profile: str | None = None
 
     # Default local Ollama model for the Ask / RAG feature (Issue #637).

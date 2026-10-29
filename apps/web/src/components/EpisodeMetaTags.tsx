@@ -24,9 +24,6 @@ interface EpisodeMetaTagsProps {
   diarizeDurationSecs: number | null;
   diarizeStepDurations: Record<string, number> | null;
   inferenceProviderUsed: string | null;
-  fireworksSttCostUsd: number | null;
-  fireworksAudioMinutes: number | null;
-  pyannoteCloudCostUsd: number | null;
   audioFileSizeBytes: number | null;
   episodeId: string;
 }
@@ -66,17 +63,13 @@ function Tag({ children, className }: { children: React.ReactNode; className?: s
   );
 }
 
-function ProviderTag({ provider }: { provider: string | null }) {
-  const isRemote = provider === "fireworks";
+// Episodes transcribed through Fireworks before #1092 keep a small marker;
+// everything since runs locally, so local needs no tag.
+function RemoteProvenanceTag({ provider }: { provider: string | null }) {
+  if (provider !== "fireworks") return null;
   return (
-    <Tag
-      className={
-        isRemote
-          ? "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200"
-          : "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200"
-      }
-    >
-      {isRemote ? "Remote inference" : "Local inference"}
+    <Tag className="bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+      Transcribed remotely
     </Tag>
   );
 }
@@ -114,72 +107,6 @@ function StatusTag({ status }: { status: string }) {
   );
 }
 
-function PyannoteCloudCostTag({ costUsd }: { costUsd: number }) {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const label = costUsd > 0 ? `$${costUsd.toFixed(2)}` : "—";
-
-  return (
-    <div
-      className="relative inline-flex items-center"
-      onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
-    >
-      <Tag className="bg-muted text-muted-foreground cursor-default">
-        pyannote cloud: {label}
-      </Tag>
-      {showTooltip && (
-        <div className="absolute z-50 bottom-full mb-1 left-1/2 -translate-x-1/2 w-64 p-2 rounded-md bg-card text-card-foreground text-xs shadow-md border">
-          <div className="font-medium mb-1">pyannote cloud (Precision-2)</div>
-          {costUsd > 0 ? (
-            <div>Estimated cost: ${costUsd.toFixed(4)}</div>
-          ) : (
-            <div>
-              Cost estimate unavailable — set your per-second rate in
-              Settings &gt; Inference to show an estimate here. Actual billing
-              is on your pyannote.ai dashboard.
-            </div>
-          )}
-          <div className="mt-1 text-muted-foreground">
-            Billed in seconds with a 20-second per-request minimum.
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FireworksCostTag({
-  costUsd,
-  audioMinutes,
-}: {
-  costUsd: number;
-  audioMinutes: number | null;
-}) {
-  const [showTooltip, setShowTooltip] = useState(false);
-
-  return (
-    <div
-      className="relative inline-flex items-center"
-      onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
-    >
-      <Tag className="bg-muted text-muted-foreground cursor-default">
-        Fireworks STT: ${costUsd.toFixed(2)}
-      </Tag>
-      {showTooltip && (
-        <div className="absolute z-50 bottom-full mb-1 left-1/2 -translate-x-1/2 w-48 p-2 rounded-md bg-card text-card-foreground text-xs shadow-md border">
-          <div className="font-medium mb-1">Fireworks STT Details</div>
-          {audioMinutes != null && <div>Audio: {audioMinutes.toFixed(1)} min</div>}
-          <div>Cost: ${costUsd.toFixed(4)}</div>
-          {audioMinutes != null && audioMinutes > 0 && (
-            <div>Rate: ${(costUsd / audioMinutes).toFixed(4)}/min</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function EpisodeMetaTags({
   status,
   publishedAt,
@@ -190,9 +117,6 @@ export default function EpisodeMetaTags({
   diarizeDurationSecs,
   diarizeStepDurations,
   inferenceProviderUsed,
-  fireworksSttCostUsd,
-  fireworksAudioMinutes,
-  pyannoteCloudCostUsd,
   audioFileSizeBytes,
   episodeId,
 }: EpisodeMetaTagsProps) {
@@ -236,7 +160,7 @@ export default function EpisodeMetaTags({
           </Tag>
         )}
 
-        <ProviderTag provider={inferenceProviderUsed} />
+        <RemoteProvenanceTag provider={inferenceProviderUsed} />
 
         {transcribeDurationSecs != null && (
           <Tag>Transcribed: {formatTimestamp(transcribeDurationSecs)}</Tag>
@@ -253,17 +177,6 @@ export default function EpisodeMetaTags({
               stepsExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />
             )}
           </button>
-        )}
-
-        {inferenceProviderUsed === "fireworks" && fireworksSttCostUsd != null && (
-          <FireworksCostTag
-            costUsd={fireworksSttCostUsd}
-            audioMinutes={fireworksAudioMinutes}
-          />
-        )}
-
-        {pyannoteCloudCostUsd != null && (
-          <PyannoteCloudCostTag costUsd={pyannoteCloudCostUsd} />
         )}
       </div>
 

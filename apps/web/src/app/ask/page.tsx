@@ -16,10 +16,7 @@ import SpeakerFilter from "@/components/SpeakerFilter";
 import {
   RAG_MODELS,
   DEFAULT_RAG_MODEL,
-  FIREWORKS_CHAT_MODELS,
-  DEFAULT_FIREWORKS_CHAT_MODEL,
   formatModelOption,
-  type RagModel,
 } from "@/lib/rag-models";
 
 interface Feed {
@@ -34,26 +31,17 @@ interface CoverageStats {
 }
 
 type StreamStatus = "idle" | "connecting" | "streaming" | "done" | "error";
-type RagProvider = "local" | "fireworks";
-
-function modelsFor(provider: RagProvider): RagModel[] {
-  return provider === "fireworks" ? FIREWORKS_CHAT_MODELS : RAG_MODELS;
+function isOffered(model: string | null | undefined): model is string {
+  return !!model && RAG_MODELS.some((m) => m.value === model);
 }
 
-function defaultModelFor(provider: RagProvider): string {
-  return provider === "fireworks" ? DEFAULT_FIREWORKS_CHAT_MODEL : DEFAULT_RAG_MODEL;
-}
-
-function getStoredModel(provider: RagProvider): string {
-  // Issue #608: when the active provider's model list changes (toggled in
-  // Settings, or curated list updated), a stale localStorage entry would
-  // render an empty dropdown and 404 on submit. Migrate to the provider's
-  // default whenever the stored value isn't in the current list.
-  if (typeof window === "undefined") return defaultModelFor(provider);
+function getStoredModel(): string {
+  // Issue #608: a stale localStorage entry -- a model dropped from the
+  // curated list, or a Fireworks model from before #1092 -- would render an
+  // empty dropdown and fail on submit. Fall back to the default instead.
+  if (typeof window === "undefined") return DEFAULT_RAG_MODEL;
   const stored = localStorage.getItem("podlog-ask-model");
-  const list = modelsFor(provider);
-  if (stored && list.some((m) => m.value === stored)) return stored;
-  return defaultModelFor(provider);
+  return isOffered(stored) ? stored : DEFAULT_RAG_MODEL;
 }
 
 export default function AskPage() {
@@ -67,10 +55,10 @@ export default function AskPage() {
     return "idle";
   });
   const [errorMsg, setErrorMsg] = useState(initialSnapshot?.errorMsg || "");
-  const [ragProvider, setRagProvider] = useState<RagProvider>("local");
-  const [model, setModel] = useState(
-    initialSnapshot?.model || getStoredModel("local"),
-  );
+  const [model, setModel] = useState(() => {
+    const snapshotModel = initialSnapshot?.model;
+    return isOffered(snapshotModel) ? snapshotModel : getStoredModel();
+  });
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [feedsLoading, setFeedsLoading] = useState(true);
   // #696: scope retrieval to one speaker across every feed and episode.
@@ -94,10 +82,9 @@ export default function AskPage() {
   const { playEpisode } = useAudioPlayer();
 
   // Capture the user's stored per-session preference at mount, before any
-  // effect runs. We re-validate it against the active provider's model list
-  // inside the settings fetch (rather than just checking presence), so a
-  // stale wrong-provider value doesn't mask the "no valid preference" case
-  // (#637).
+  // effect runs. We re-validate it against the model list inside the
+  // settings fetch (rather than just checking presence), so a stale value
+  // doesn't mask the "no valid preference" case (#637).
   const storedModelAtMount = useRef<string | null>(
     typeof window !== "undefined"
       ? localStorage.getItem("podlog-ask-model")
@@ -118,35 +105,18 @@ export default function AskPage() {
     localStorage.setItem("podlog-ask-model", model);
   }, [model]);
 
-  // Fetch the active rag_provider once on mount. If it doesn't match the
-  // current model's list, snap to that provider's default (#608).
-  // Also use the backend rag_local_model as the default for local RAG when
-  // no per-session localStorage preference is set (#637).
+  // Use the backend rag_local_model as the default when no valid
+  // per-session localStorage preference is set (#637).
   useEffect(() => {
     let cancelled = false;
     fetch("/api/notifications/settings")
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        const provider: RagProvider =
-          data.rag_provider === "fireworks" ? "fireworks" : "local";
-        setRagProvider(provider);
-        const list = modelsFor(provider);
-        const storedAtMount = storedModelAtMount.current;
-        const userHadValidPreference = !!(
-          storedAtMount && list.some((m) => m.value === storedAtMount)
-        );
-        if (!userHadValidPreference) {
-          // No valid per-session preference for the active provider —
-          // prefer the backend default (local) or the active provider's
-          // default (fireworks).
-          const backendDefault =
-            provider === "local" &&
-            data.rag_local_model &&
-            list.some((m: RagModel) => m.value === data.rag_local_model)
-              ? data.rag_local_model
-              : getStoredModel(provider);
-          setModel(backendDefault);
+        if (!isOffered(storedModelAtMount.current)) {
+          setModel(
+            isOffered(data.rag_local_model) ? data.rag_local_model : getStoredModel(),
+          );
         }
       })
       .catch(() => {
@@ -372,20 +342,12 @@ export default function AskPage() {
                 onChange={(e) => setModel(e.target.value)}
                 className="min-w-0 max-w-full truncate text-sm border border-input rounded-md px-2 py-1 max-md:min-h-11 bg-background text-foreground"
               >
-                {modelsFor(ragProvider).map((m) => (
+                {RAG_MODELS.map((m) => (
                   <option key={m.value} value={m.value}>
                     {formatModelOption(m)}
                   </option>
                 ))}
               </select>
-              {ragProvider === "fireworks" && (
-                <span
-                  className="text-xs text-muted-foreground"
-                  title="RAG/Ask is configured to use Fireworks AI in Settings → Remote Inference → RAG / Ask."
-                >
-                  (remote)
-                </span>
-              )}
             </div>
 
             {/* Source filter */}

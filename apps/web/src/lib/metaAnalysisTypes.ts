@@ -10,8 +10,6 @@ export interface PerFeed {
   total_words: number;
   total_tokens_segments: number;
   total_tokens_chunks: number;
-  total_cost_usd: number;
-  total_audio_minutes: number;
   inferred_host_name: string | null;
 }
 
@@ -27,10 +25,6 @@ export interface PerEpisode {
   turn_count: number;
   wpm: number;
   host_share: number | null;
-  fireworks_cost_usd: number | null;
-  transcribe_duration_secs: number | null;
-  diarize_duration_secs: number | null;
-  inference_provider_used: "fireworks" | "local" | null;
 }
 
 export interface PerSpeaker {

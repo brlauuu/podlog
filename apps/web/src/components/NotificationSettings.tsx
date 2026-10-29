@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, Toast } from "./NotificationSettingsSections";
 import { SettingsSchema } from "@/lib/settings-schema";
 import NotificationSection from "./NotificationSection";
-import RemoteInferenceSection from "./RemoteInferenceSection";
+import InferenceSection from "./InferenceSection";
 import BackupsSection from "./BackupsSection";
 import PromptsSection from "./PromptsSection";
 import {
@@ -15,31 +15,12 @@ import {
   type UnsavedEntry,
 } from "./UnsavedChanges";
 
+// Every field the Inference tab edits. A missing one sent its edits to
+// dirtyNotifications, so the Inference-tab Save button (which only flushes
+// dirtyInference) was a silent no-op (#688).
 const INFERENCE_FIELDS = new Set<keyof Settings>([
-  "inference_provider",
-  "fireworks_api_key",
-  "fireworks_audio_base_url",
-  "fireworks_stt_model",
-  "fireworks_stt_diarize",
-  "fireworks_chat_base_url",
-  "fireworks_chat_model",
-  "fireworks_stt_cost_per_minute_usd",
-  // RAG / Ask provider (Issue #608)
-  "rag_provider",
   "rag_local_model",
-  // Embedding provider
-  "embedding_provider",
   "embedding_model",
-  "fireworks_embedding_base_url",
-  "fireworks_embedding_model",
-  // Diarization (Issue #688) — without these, edits to diarization fields
-  // landed in dirtyNotifications, so the Inference-tab Save button (which
-  // only flushes dirtyInference) was a silent no-op.
-  "diarization_provider",
-  "pyannote_api_key",
-  "pyannote_cloud_base_url",
-  "pyannote_cloud_model",
-  "pyannote_cloud_cost_per_second_usd",
   "pyannote_model",
 ]);
 
@@ -184,10 +165,6 @@ export default function NotificationSettings() {
         setSettings({ ...updated, ...dirtyNotifications });
         setSaved(updated);
         setDirtyInference({});
-        if (updated.fireworks_key_warning) {
-          setToast({ message: updated.fireworks_key_warning, type: "error" });
-          return;
-        }
         setToast({ message: "Settings saved", type: "success" });
       } else {
         const err = await resp.json();
@@ -270,7 +247,7 @@ export default function NotificationSettings() {
       <div className="mb-5">
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Configure notifications and remote inference providers.
+          Configure notifications, models, prompts and backups.
         </p>
       </div>
 
@@ -296,7 +273,7 @@ export default function NotificationSettings() {
         </TabsContent>
 
         <TabsContent value="inference">
-          <RemoteInferenceSection settings={settings} onChange={handleChange} />
+          <InferenceSection settings={settings} onChange={handleChange} />
         </TabsContent>
 
         {/* #1069: Prompts and Backups hold their drafts themselves, so

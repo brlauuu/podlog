@@ -115,9 +115,8 @@ describe("DocsAskBubble (#990)", () => {
     expect(JSON.parse(init.body as string).question).toBe("how do I add a feed?");
   });
 
-  it("does not pin a model, so Settings decides the provider and model", async () => {
-    // The pipeline resolves: rag_provider picks local vs Fireworks, then
-    // rag_local_model / fireworks_chat_model picks the model. Sending a
+  it("does not pin a model, so Settings decides the model", async () => {
+    // The pipeline resolves the model from rag_local_model. Sending a
     // model here wins over `model or runtime.get("rag_local_model")` in
     // api/ask.py, silently ignoring the operator's configured local model.
     mockAsk(`event: done\ndata: {}\n\n`);

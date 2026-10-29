@@ -43,9 +43,6 @@ async function getUploadedEpisodes(): Promise<{
        COALESCE(e.retry_max, 3) AS retry_max,
        e.transcribe_duration_secs, e.diarize_duration_secs,
        e.inference_provider_used,
-       e.fireworks_audio_minutes,
-       e.fireworks_stt_cost_usd,
-       e.pyannote_cloud_cost_usd,
        e.created_at,
        COALESCE(agg.speaker_count, 0)::int AS speaker_count,
        COALESCE(sn_agg.speaker_name_tags, '[]'::json) AS speaker_name_tags

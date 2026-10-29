@@ -1,8 +1,8 @@
-"""Hardware detection and performance profile matching for cost estimates.
+"""Hardware detection and performance profile matching for time estimates.
 
 Reads /proc/cpuinfo and /proc/meminfo to identify local hardware, then maps
 to a known performance profile. Used by the Settings UI to show estimated
-local vs remote processing times.
+processing times.
 """
 import logging
 import re
@@ -46,10 +46,6 @@ HARDWARE_PROFILES: dict[str, dict] = {
         "embedding_factor": 10,
     },
 }
-
-# Remote processing estimates (Fireworks AI)
-REMOTE_TRANSCRIPTION_FACTOR = 0.05  # ~3 min per 60 min audio
-REMOTE_EMBEDDING_FACTOR = 5  # ~5 seconds per hour of chunked audio
 
 
 def _check_gpu() -> str | None:
@@ -134,32 +130,15 @@ def get_hardware_profile() -> dict | None:
     return _match_profile(hw)
 
 
-def estimate_processing_times(profile: dict | None, cost_per_minute: float) -> dict:
-    """Estimate local and remote processing times for a 60-minute episode.
+def estimate_processing_times(profile: dict | None) -> dict:
+    """Estimate local processing times for a 60-minute episode.
 
-    Args:
-        profile: Hardware profile dict (or None if detection failed)
-        cost_per_minute: Remote STT cost in USD per minute of audio
-
-    Returns dict with local and remote estimates.
+    Both figures are None when no hardware profile matched.
     """
-    remote_transcription = round(REMOTE_TRANSCRIPTION_FACTOR * 60, 1)
-    remote_cost = round(cost_per_minute * 60, 2)
-    remote_embedding = REMOTE_EMBEDDING_FACTOR
-
     if profile is None:
-        return {
-            "transcription_minutes_per_hour": None,
-            "embedding_seconds_per_hour": None,
-            "remote_transcription_minutes_per_hour": remote_transcription,
-            "remote_embedding_seconds_per_hour": remote_embedding,
-            "remote_cost_per_hour_usd": remote_cost,
-        }
+        return {"transcription_minutes_per_hour": None, "embedding_seconds_per_hour": None}
 
     return {
         "transcription_minutes_per_hour": round(profile["transcription_factor"] * 60, 1),
         "embedding_seconds_per_hour": profile["embedding_factor"],
-        "remote_transcription_minutes_per_hour": remote_transcription,
-        "remote_embedding_seconds_per_hour": remote_embedding,
-        "remote_cost_per_hour_usd": remote_cost,
     }

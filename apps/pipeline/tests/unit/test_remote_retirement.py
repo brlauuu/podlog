@@ -6,7 +6,7 @@ import pytest
 
 from app.models import SystemState
 from app.services import remote_retirement
-from app.services.notification_settings import SETTINGS_KEY, save_notification_settings
+from app.services.notification_settings import SETTINGS_KEY
 
 
 def _mock_db(stored: dict | None = None):
@@ -224,27 +224,3 @@ class TestRunAtStartup:
         assert "retired_env_vars_set" in warn.call_args[0][0]
         assert "FIREWORKS_API_KEY" in warn.call_args[0][1]
 
-
-class TestSaveRejectsRemoteProviders:
-    @pytest.mark.parametrize(
-        "field,value",
-        [
-            ("inference_provider", "fireworks"),
-            ("diarization_provider", "precision2"),
-            ("rag_provider", "fireworks"),
-            ("embedding_provider", "fireworks"),
-        ],
-    )
-    def test_rejects_remote_value(self, field, value):
-        db = _mock_db(None)
-
-        with pytest.raises(ValueError, match="no longer offers remote inference"):
-            save_notification_settings(db, {field: value})
-        db.commit.assert_not_called()
-
-    def test_accepts_local(self):
-        db = _mock_db(None)
-
-        result = save_notification_settings(db, {"inference_provider": "local"})
-
-        assert result["inference_provider"] == "local"
