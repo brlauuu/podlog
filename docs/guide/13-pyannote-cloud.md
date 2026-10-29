@@ -1,5 +1,7 @@
 # pyannote Cloud Diarization (Precision-2)
 
+> **Being removed (#1092).** Podlog is becoming fully self-hosted, and remote inference is going away. Fireworks retired its audio API in June 2026, so remote transcription no longer works at all. Settings no longer accepts a remote provider, and on upgrade Podlog switches any remote step back to local and deletes the stored Fireworks and pyannote.ai API keys. You do not need to do anything. This page will be removed in a later release.
+
 Podlog's diarization step (labeling *who* spoke *when*) has two provider options:
 
 | Provider | Model | Runs on | Cost |

@@ -10,7 +10,8 @@ from fastapi.responses import JSONResponse
 from app.api import ask, backfill, backups, feeds, episodes, queue, health, embed, explore, notifications, hardware, meta_analysis, prompts
 from app.services.events import bus
 from app.services.digest import register_notification_handlers
-from app.services import telegram_bot
+from app.database import SessionLocal
+from app.services import remote_retirement, telegram_bot
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,7 +44,11 @@ async def lifespan(_app: FastAPI):
 
     The loop idles (no network calls) until a bot token and a non-empty
     allowlist are configured, so this is a no-op on a fresh install.
+
+    Also switches an upgraded install off remote inference (#1092) before
+    serving requests. That call logs its failures rather than raising.
     """
+    await asyncio.to_thread(remote_retirement.run_at_startup, SessionLocal)
     task = asyncio.create_task(telegram_bot.run_forever(), name="telegram-bot")
     try:
         yield

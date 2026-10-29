@@ -20,12 +20,17 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Major changes
+
+- Podlog no longer offers remote inference: transcription, diarization, embeddings and Ask AI all run on your own machine. Fireworks retired the audio API that remote transcription used, so it had been failing every episode since 2026-10-20, and pyannote.ai goes too so that no audio or transcript leaves your machine. When the pipeline starts after this upgrade, any step still set to a remote provider is switched back to local, and the stored Fireworks and pyannote.ai API keys are deleted. Each change is logged once. If no embedding model was ever chosen, Podlog now uses the model your existing embeddings were built with, so installs that embedded through Fireworks keep working. Settings now refuses remote providers, and any leftover remote variables in `.env` are named in a startup warning: delete them. Nothing else needs doing. ([#1092](https://github.com/brlauuu/podlog/issues/1092))
+
 ### Minor changes
 
 - A podcast's page now has its feed's controls, so you no longer have to go through Sources → Manage feeds to change it. A Selective feed shows **Add episodes** and **Promote to Full**; a Test or Full feed shows **Make selective**, poll now and pause/resume. The page also shows the Selective and Paused badges. Removing a feed stays on the feeds list. ([#1090](https://github.com/brlauuu/podlog/issues/1090))
 
 ### Fixes
 
+- The embedding model picker in Settings can be used again. It had been locked along with the unavailable Remote switch, so an install whose embeddings were built with `BAAI/bge-small-en-v1.5` could not select it, though the page told you to. ([#1092](https://github.com/brlauuu/podlog/issues/1092))
 - Refreshed the pipeline lock to clear 5 security advisories the dependency audit started reporting on 2026-10-28 against packages already in the lock: `filelock` 3.32.2 → 4.2.4 (3 advisories), `opentelemetry-api` 1.44.0 → 1.45.1 (with the rest of the OpenTelemetry packages) and `setuptools` 84.0.0 → 84.2.1. All are transitive and needed no constraint changes, so the audit is green again. ([#1097](https://github.com/brlauuu/podlog/issues/1097))
 
 ## 1.3.2 — 2026-10-21

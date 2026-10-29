@@ -174,6 +174,47 @@ describe("PipelineStepCards — handleModelChange", () => {
   });
 });
 
+describe("PipelineStepCards — model picker availability (#1092)", () => {
+  function selects() {
+    render(
+      <PipelineStepCards
+        settings={makeSettings({ embedding_model: "BAAI/bge-small-en-v1.5" })}
+        hwInfo={null}
+        onChange={jest.fn()}
+        onRequireApiKey={jest.fn()}
+      />
+    );
+    return screen.getAllByTestId("model-select");
+  }
+
+  it("keeps the embedding model picker usable although remote embedding is unavailable", () => {
+    expect(selects()[3]).not.toBeDisabled();
+  });
+
+  it("saves the embedding model a bge-small corpus needs", () => {
+    const onChange = jest.fn();
+    render(
+      <PipelineStepCards
+        settings={makeSettings()}
+        hwInfo={null}
+        onChange={onChange}
+        onRequireApiKey={jest.fn()}
+      />
+    );
+    fireEvent.change(screen.getAllByTestId("model-select")[3], {
+      target: { value: "BAAI/bge-small-en-v1.5" },
+    });
+    expect(onChange).toHaveBeenCalledWith("embedding_model", "BAAI/bge-small-en-v1.5");
+  });
+
+  it("disables a picker with no setting to save", () => {
+    // transcription (local, no modelField) and speaker inference (no fields).
+    const all = selects();
+    expect(all[0]).toBeDisabled();
+    expect(all[2]).toBeDisabled();
+  });
+});
+
 describe("PipelineStepCards — StepHelpContent", () => {
   it("renders per-step help content with hardware estimates", () => {
     const hwInfo = {

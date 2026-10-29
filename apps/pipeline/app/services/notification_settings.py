@@ -72,9 +72,6 @@ _NULLABLE_FIELDS = {
 }
 
 _VALID_FREQUENCIES = {"immediate", "daily", "weekly"}
-_VALID_INFERENCE_PROVIDERS = {"local", "fireworks"}
-_VALID_EMBEDDING_PROVIDERS = {"local", "fireworks"}
-_VALID_DIARIZATION_PROVIDERS = {"local", "precision2"}
 # Curated list of local pyannote diarization models (#681). Restrict to
 # tested IDs so users don't end up with cryptic load failures from typos
 # or unsupported variants.
@@ -98,7 +95,12 @@ _VALID_EMBEDDING_MODELS = {
     "all-MiniLM-L6-v2",
     "BAAI/bge-small-en-v1.5",
 }
-_VALID_RAG_PROVIDERS = {"local", "fireworks"}
+_PROVIDER_FIELDS = (
+    "inference_provider",
+    "embedding_provider",
+    "diarization_provider",
+    "rag_provider",
+)
 _INFERENCE_FIELDS = {
     "inference_provider",
     "fireworks_api_key",
@@ -197,6 +199,14 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
 
     Raises ValueError for invalid values.
     """
+    # #1092: remote inference is being removed. Startup switches stored remote
+    # values back to local; refusing them here keeps them from coming back.
+    for field in _PROVIDER_FIELDS:
+        if field in updates and updates[field] != "local":
+            raise ValueError(
+                f"{field} must be 'local': Podlog no longer offers remote inference, "
+                f"got '{updates[field]}'"
+            )
     if "notification_frequency" in updates:
         if updates["notification_frequency"] not in _VALID_FREQUENCIES:
             raise ValueError(
@@ -207,24 +217,6 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
         port = updates["smtp_port"]
         if not isinstance(port, int) or port < 1 or port > 65535:
             raise ValueError(f"smtp_port must be a positive integer (1-65535), got {port!r}")
-    if "inference_provider" in updates:
-        if updates["inference_provider"] not in _VALID_INFERENCE_PROVIDERS:
-            raise ValueError(
-                f"inference_provider must be one of {_VALID_INFERENCE_PROVIDERS}, "
-                f"got '{updates['inference_provider']}'"
-            )
-    if "embedding_provider" in updates:
-        if updates["embedding_provider"] not in _VALID_EMBEDDING_PROVIDERS:
-            raise ValueError(
-                f"embedding_provider must be one of {_VALID_EMBEDDING_PROVIDERS}, "
-                f"got '{updates['embedding_provider']}'"
-            )
-    if "rag_provider" in updates:
-        if updates["rag_provider"] not in _VALID_RAG_PROVIDERS:
-            raise ValueError(
-                f"rag_provider must be one of {_VALID_RAG_PROVIDERS}, "
-                f"got '{updates['rag_provider']}'"
-            )
     if "fireworks_stt_cost_per_minute_usd" in updates:
         rate = updates["fireworks_stt_cost_per_minute_usd"]
         if (
@@ -236,12 +228,6 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
                 "fireworks_stt_cost_per_minute_usd must be a non-negative number"
             )
         updates["fireworks_stt_cost_per_minute_usd"] = float(rate)
-    if "diarization_provider" in updates:
-        if updates["diarization_provider"] not in _VALID_DIARIZATION_PROVIDERS:
-            raise ValueError(
-                f"diarization_provider must be one of {_VALID_DIARIZATION_PROVIDERS}, "
-                f"got '{updates['diarization_provider']}'"
-            )
     if "embedding_model" in updates:
         if updates["embedding_model"] not in _VALID_EMBEDDING_MODELS:
             raise ValueError(

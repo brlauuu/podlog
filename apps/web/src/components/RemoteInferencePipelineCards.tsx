@@ -152,6 +152,10 @@ export function PipelineStepCards({
           remote && step.remoteModelField ? step.remoteModels : step.localModels;
         const currentModel = getCurrentModel(settings, step);
         const disabled = !step.remoteAvailable;
+        // #1092: the model picker has its own rule. Tying it to the remote
+        // switch locked the embedding picker, which is the only way to match
+        // a bge-small corpus. Disable it only when there is nothing to save.
+        const modelDisabled = !(remote && step.remoteModelField) && !step.modelField;
         // #1005: keep a drifted value visible. Without an item matching the
         // Select's value, Radix renders an empty trigger -- so a model that
         // was retired upstream and one that simply is not on our list both
@@ -196,10 +200,10 @@ export function PipelineStepCards({
             <Select
               value={currentModel}
               onValueChange={(val) => handleModelChange(step, val)}
-              disabled={disabled}
+              disabled={modelDisabled}
             >
               <SelectTrigger
-                className={`w-full ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                className={`w-full ${modelDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <SelectValue />
               </SelectTrigger>
