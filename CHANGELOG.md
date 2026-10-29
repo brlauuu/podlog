@@ -20,6 +20,8 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+## 1.5.0 — 2026-10-29
+
 ### Minor changes
 
 - Podlog now tells you when the pipeline stops working, not just when one episode fails. If a stage fails 5 jobs in a row (retries count), or jobs have waited 24 hours with nothing finishing, you get one Telegram or email message naming the stage, the error class and the last error, and one more when it recovers. It goes out immediately even with a daily or weekly digest. An idle install with nothing to process never alerts. Change the thresholds, or turn either check off with `0`, with `PIPELINE_ALERT_FAILURE_STREAK` and `PIPELINE_ALERT_STALL_HOURS` in `.env`. This is the alert that would have caught the week of failed transcriptions before 1.4.0. ([#1099](https://github.com/brlauuu/podlog/issues/1099))
