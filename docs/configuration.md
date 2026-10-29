@@ -50,6 +50,15 @@ The worker monitors running jobs and marks them as failed if they exceed expecte
 | `ZOMBIE_TIMEOUT_MULTIPLIER` | `2.0` | A job is marked zombie after running longer than `expected_time x multiplier`. With default settings, a 1-hour episode times out after 3 hours. |
 | `ZOMBIE_MIN_TIMEOUT_MINUTES` | `60` | Minimum timeout floor in minutes. Prevents very short episodes from having unreasonably short timeouts. |
 
+## Pipeline Alerts
+
+The worker checks every 15 minutes for a pipeline that keeps failing or has stopped moving, and sends one alert through your notification channels, then one more when it recovers. Alerts go out immediately, even when you chose a daily or weekly digest. See [Notifications](guide/09-notifications.md#pipeline-alerts).
+
+| Variable | Default | Description |
+|---|---|---|
+| `PIPELINE_ALERT_FAILURE_STREAK` | `5` | Alert when one stage has failed this many jobs in a row since its last success. Each retry is its own job, so one episode retried 3 times counts 4. `0` turns the check off. |
+| `PIPELINE_ALERT_STALL_HOURS` | `24` | Alert when jobs have waited longer than this and no job has finished in that time. An empty queue never alerts. `0` turns the check off. |
+
 ## Speaker Inference
 
 | Variable | Default | Description |

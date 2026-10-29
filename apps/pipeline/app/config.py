@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     zombie_timeout_multiplier: float = 2.0  # zombie after 2× expected runtime
     zombie_min_timeout_minutes: int = 60  # floor when audio duration is unknown
 
+    # Pipeline alerts (#1099): one notification when a stage keeps failing or
+    # the queue stops moving, and one when it recovers. 0 turns a check off.
+    pipeline_alert_failure_streak: int = 5  # failed jobs in a row at one stage
+    pipeline_alert_stall_hours: int = 24  # work waiting, nothing finished, this long
+
     # Ollama (RAG — issue #115)
     ollama_url: str = "http://ollama:11434"
 

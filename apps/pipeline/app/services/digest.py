@@ -8,7 +8,11 @@ from app.database import SessionLocal
 from app.services.notification_settings import get_notification_settings
 from app.models import NotificationLog, SystemState
 from app.services.events import Event, EventBus
-from app.services.notification_events import EpisodeDoneEvent, EpisodeFailedEvent
+from app.services.notification_events import (
+    EpisodeDoneEvent,
+    EpisodeFailedEvent,
+    PipelineAlertEvent,
+)
 from app.services.digest_formatters import format_digest_html, format_digest_telegram
 from app.services.notification_runtime import (
     compute_avg_duration,
@@ -368,5 +372,11 @@ def register_notification_handlers(bus: EventBus) -> None:
             log_event(event, mark_sent=True)
             _send_immediate(event, ns)
 
+    def _handle_pipeline_alert(event: Event) -> None:
+        # Always immediate (#1099): a digest would hold "transcribe keeps
+        # failing" for up to a week, which is the silence this alert ends.
+        _send_immediate(event, _get_settings())
+
     bus.subscribe(EpisodeDoneEvent, _handle_done)
     bus.subscribe(EpisodeFailedEvent, _handle_failed)
+    bus.subscribe(PipelineAlertEvent, _handle_pipeline_alert)

@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.8
+**Version:** 1.9
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.9 — §5.9 adds pipeline alerts (#1099): a worker periodic task sends one notification when a stage fails `PIPELINE_ALERT_FAILURE_STREAK` jobs in a row (default 5, retries counted) or when jobs wait longer than `PIPELINE_ALERT_STALL_HOURS` (default 24) with no job finishing, and one more on recovery. Added both variables to §14.
 - v1.8 — Remote inference removed (#1092); Podlog is fully self-hosted. §5.4 and §5.5 now describe local WhisperX and local pyannote only: the Fireworks transcription mode, the pyannote.ai `precision-2` diarization mode, `DIARIZATION_PROVIDER` / `INFERENCE_PROVIDER` routing and the per-episode cost estimates are gone. The Fireworks Ask/RAG provider added in v1.7 is gone too; Ask runs on Ollama only. Stored remote settings and provider API keys are deleted at startup by `app/services/remote_retirement.py`. Migration 022 drops the Fireworks usage/cost columns and `pyannote_cloud_cost_usd` from `episodes`; `inference_provider_used` stays so episodes transcribed remotely before the removal keep their "Transcribed remotely" tag.
 - v1.7 — §5.10 RAG inference is no longer Ollama-only: the Fireworks AI provider was added in #608 with a curated chat-model list (Qwen2.5 7B Instruct, Llama 3.1 70B Instruct, Qwen2.5 72B Instruct). Provider selection is per-environment via the `inference_provider` setting; local Ollama remains the default for both new installs and existing upgrades.
 - v1.6 — §5.5 extended with the pyannote cloud (`precision-2`) provider option (issue #516). Provider routing precedence documented: Fireworks STT diarization metadata wins over `DIARIZATION_PROVIDER`. Cost estimate persistence (`episodes.pyannote_cloud_cost_usd`) and the 20-second per-request minimum billing floor are called out.
@@ -167,6 +168,10 @@ The flat file is always written on successful transcription, regardless of diari
 
 - When a job is in retry state, the queue dashboard shows: `"Retrying (2/3) — HTTP 403"` with the next scheduled retry time.
 - Failed jobs retain their full error traceback in the database.
+- **Pipeline alerts (#1099).** Per-episode failure notices cannot show that a whole stage is failing: from 2026-10-20 to 2026-10-28 every transcription failed as a retried `TRANSIENT_NETWORK` error and nobody noticed for a week. `app/services/pipeline_alerts.py` runs as a worker periodic task every 15 minutes and sends one notification (Telegram/email, immediately even in digest mode) when either holds, then one *recovered* notice when it clears:
+  - **Failure streak:** a stage has `PIPELINE_ALERT_FAILURE_STREAK` (default 5) failed `job_queue` rows since its last `done` row. Each retry is its own row, so retries count.
+  - **Stall:** pending or running jobs older than `PIPELINE_ALERT_STALL_HOURS` (default 24) and no `done` job picked in that window. An empty queue never stalls. `job_queue` has no finish timestamp, so "last progress" is the `picked_at` of the newest done job.
+  - What was already sent is kept under the `pipeline_alerts` key in `system_state`. `0` disables either check. A stopped worker cannot run the check; the host health check (`scripts/healthcheck.py`) covers that case.
 
 ### 5.10 Scheduler
 
@@ -491,5 +496,7 @@ FEED_POLL_INTERVAL_HOURS=24
 RETRY_MAX=3                        # Max auto-retries for transient failures (default: 3)
 RETRY_BACKOFF_BASE=30              # Base backoff seconds; actual = base * 2^(attempt-1)
 DISK_HEADROOM_BYTES=2147483648     # 2 GB minimum free space before download starts (GAP-06)
+PIPELINE_ALERT_FAILURE_STREAK=5    # Alert after this many failed jobs in a row at one stage; 0 = off (#1099)
+PIPELINE_ALERT_STALL_HOURS=24      # Alert when jobs wait this long with nothing finishing; 0 = off (#1099)
 OLLAMA_URL=http://ollama:11434     # Ollama API endpoint for LLM inference
 ```

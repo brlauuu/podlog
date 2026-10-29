@@ -61,7 +61,7 @@ podlog/
 │   │   │   ├── worker.py           # Background job worker + feed polling loop
 │   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis, backups, explore, prompts)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
-│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, embed_provenance, speaker_turns, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, pipeline_commands, timing_labels, prompts, backup_files, backup_settings, queue_snapshot, telegram_bot, preflight, remote_retirement)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, embed_provenance, speaker_turns, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, pipeline_commands, timing_labels, prompts, backup_files, backup_settings, queue_snapshot, telegram_bot, preflight, remote_retirement, pipeline_alerts)
 │   │   ├── alembic/                # Database migrations (23 versions)
 │   │   └── tests/                  # unit, integration, e2e
 │   ├── web/                        # Next.js 16 (App Router)
@@ -147,7 +147,7 @@ make shell-db          # Open psql shell
   | `apps/pipeline/app/services/inference.py`, `tasks/infer.py`, speaker UI | `docs/guide/06-speakers.md` |
   | `apps/web/src/components/AudioPlayer.tsx` | `docs/guide/07-audio-playback.md` |
   | `apps/pipeline/app/api/queue.py`, `apps/web/src/lib/queueStatus.ts` | `docs/guide/08-queue.md` |
-  | Notification settings, digest, healthcheck, `apps/pipeline/app/services/telegram_bot.py` | `docs/guide/09-notifications.md`, and the Security model in `docs/guide/01-installation.md` if what the bot can do changes |
+  | Notification settings, digest, healthcheck, `apps/pipeline/app/services/telegram_bot.py`, `apps/pipeline/app/services/pipeline_alerts.py` | `docs/guide/09-notifications.md`, and the Security model in `docs/guide/01-installation.md` if what the bot can do changes |
   | Timings, image sizes, storage figures | `docs/guide/11-hardware.md`, `docs/hardware.md` |
   | `apps/pipeline/app/services/rag.py`, `apps/web/src/lib/rag-models.ts` | `docs/guide/12-rag-search.md` |
   | `apps/pipeline/app/services/remote_retirement.py`, remote-provider leftovers (#1092) | `docs/configuration.md` (the "Removed: remote inference" section) |

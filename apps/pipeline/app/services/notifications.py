@@ -1,13 +1,19 @@
 """Notification events, queue estimation, and delivery handlers."""
 import httpx
 import logging
+import re
 import smtplib
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from html import escape
 
 from app.services.events import Event
-from app.services.notification_events import EpisodeDoneEvent, EpisodeFailedEvent
+from app.services.notification_events import (
+    EpisodeDoneEvent,
+    EpisodeFailedEvent,
+    PipelineAlertEvent,
+)
 from app.services.notification_runtime import (
     compute_avg_duration,
     compute_avg_processing_stats,
@@ -22,6 +28,7 @@ __all__ = [
     "Event",
     "EpisodeDoneEvent",
     "EpisodeFailedEvent",
+    "PipelineAlertEvent",
     "compute_avg_duration",
     "compute_avg_processing_stats",
     "estimate_queue_status",
@@ -314,6 +321,53 @@ def format_failed_telegram(event: EpisodeFailedEvent) -> str:
     )
 
 
+def _alert_title(event: PipelineAlertEvent) -> str:
+    if event.recovered:
+        return "Pipeline recovered"
+    return "Pipeline stalled" if event.kind == "stall" else "Stage keeps failing"
+
+
+def format_alert_html(event: PipelineAlertEvent) -> str:
+    color = "#16a34a" if event.recovered else "#dc2626"
+    rows = []
+    for idx, (label, value) in enumerate(event.details or []):
+        row_bg = ' style="background: #f9f9f9;"' if idx % 2 else ""
+        rows.append(
+            f"""\
+    <tr{row_bg}><td style="padding: 6px 12px; color: #666;">{escape(label)}</td>
+        <td style="padding: 6px 12px;">{escape(value)}</td></tr>"""
+        )
+    rows_html = "\n".join(rows)
+    return f"""\
+<html>
+<body style="font-family: -apple-system, Arial, sans-serif; color: #222; max-width: 520px; margin: 0 auto; padding: 16px;">
+  <h2 style="color: {color}; margin-bottom: 4px;">{_alert_title(event)}</h2>
+  <p style="margin-top: 4px;">{escape(event.headline)}</p>
+  <table style="border-collapse: collapse; width: 100%; margin-top: 12px;">
+{rows_html}
+  </table>
+  <hr style="margin-top: 24px; border: none; border-top: 1px solid #eee;">
+  <p style="font-size: 12px; color: #999;">Sent by Podlog</p>
+</body>
+</html>"""
+
+
+def format_alert_telegram(event: PipelineAlertEvent) -> str:
+    # Values go in code spans, where legacy Markdown parses nothing else, so an
+    # error message full of underscores or asterisks cannot break the send.
+    # A backtick would end the span early, so those are swapped out.
+    icon = "✅" if event.recovered else "⚠️"
+    # Outside a code span, legacy Markdown takes backslash escapes, which keeps
+    # TRANSIENT_NETWORK readable instead of opening an italic run.
+    headline = re.sub(r"([_*`\[])", r"\\\1", event.headline)
+    lines = [f"*{icon} {_alert_title(event)}*", "", headline]
+    if event.details:
+        lines.append("")
+        for label, value in event.details:
+            lines.append(f"*{label}:* `{value.replace('`', chr(39))}`")
+    return "\n".join(lines)
+
+
 def send_email(
     event: Event,
     to_addr: str,
@@ -331,6 +385,9 @@ def send_email(
     elif isinstance(event, EpisodeFailedEvent):
         subject = f"❌ Podlog: {event.episode_title} failed"
         html = format_failed_html(event)
+    elif isinstance(event, PipelineAlertEvent):
+        subject = f"Podlog: {event.headline}"
+        html = format_alert_html(event)
     else:
         logger.warning('"action": "email_unknown_event", "type": "%s"', type(event).__name__)
         return
@@ -361,6 +418,8 @@ def send_telegram(
         text = format_done_telegram(event)
     elif isinstance(event, EpisodeFailedEvent):
         text = format_failed_telegram(event)
+    elif isinstance(event, PipelineAlertEvent):
+        text = format_alert_telegram(event)
     else:
         logger.warning('"action": "telegram_unknown_event", "type": "%s"', type(event).__name__)
         return

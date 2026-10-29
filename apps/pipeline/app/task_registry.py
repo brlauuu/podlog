@@ -61,6 +61,7 @@ PERIODIC_TASKS: list[PeriodicTask] = [
     PeriodicTask("prune_superseded_failed_jobs", "app.tasks.cleanup:prune_superseded_failed_jobs", 24 * 60 * 60),
     PeriodicTask("reconcile_speaker_turns", "app.tasks.cleanup:reconcile_speaker_turns", 60 * 60),
     PeriodicTask("send_digest", "app.services.digest:send_digest_if_due", 15 * 60),
+    PeriodicTask("check_pipeline_alerts", "app.services.pipeline_alerts:check_pipeline_alerts", 15 * 60),
 ]
 
 
