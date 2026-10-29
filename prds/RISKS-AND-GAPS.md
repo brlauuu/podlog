@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** RISKS-AND-GAPS
-**Version:** 1.7
+**Version:** 1.8
 **Status:** Living document — update as risks are resolved or new ones are identified  
 **How to use:** When a risk is mitigated or a gap is closed, move it to the Resolved section at the bottom with a note on how it was addressed. Add new entries as they are discovered during development.
 
 **Changelog:**
+- v1.8 — Added a resolved gap: no alert when a stage keeps failing or the queue stops moving. Pipeline alerts (#1099) close it.
 - v1.7 — Remote inference removed (#1092); Podlog is fully self-hosted. RISK-08 (remote provider availability / rate limits) and RISK-11 (audio egress to pyannote.ai, and the stored `pyannote_api_key`) moved to Resolved: no stage calls a third-party inference service, and stored provider settings and API keys are deleted at startup by `app/services/remote_retirement.py`.
 - v1.6 — Added RISK-11 (audio egress to third party when `DIARIZATION_PROVIDER=precision2`). Documented as the accepted cost of offering pyannote.ai cloud diarization; local remains the free, no-egress default. VERSION bumped to 0.3.0.
 - v1.5 — RISK-04 and GAP-04 (word-level alignment) moved to Resolved. WhisperX CTranslate2 + wav2vec2 word-level alignment is the default transcription stack per PRD-01 §5.4.
@@ -308,3 +309,4 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 | GAP-N/A | Meta-analysis stale-flag race drops recompute signal | `set_stale` writes a UUID token; `recompute_and_store` captures the token before `compute_snapshot` and only clears it if the token is unchanged — concurrent `set_stale` during compute keeps the flag stale. TS `setMetaAnalysisStale` mirrors the token write. | v0.2.0 |
 | RISK-08 | Remote inference provider availability / rate limits (Fireworks) | No longer applicable — remote inference removed in #1092; transcription, diarization, embeddings and Ask all run locally, so no stage depends on a third-party API's availability, quotas or rate limits | v1.7 |
 | RISK-11 | Audio egress to pyannote.ai (`DIARIZATION_PROVIDER=precision2`) and storage of `pyannote_api_key` | No longer applicable — pyannote.ai diarization removed in #1092; audio never leaves the host. `app/services/remote_retirement.py` deletes stored provider settings and API keys (`pyannote_api_key`, `fireworks_api_key`, …) at worker and pipeline API startup, and warns about retired env vars still set | v1.7 |
+| GAP-N/A | No alert when a stage keeps failing or the queue stops moving (transcription failed silently 2026-10-20 → 10-28) | Worker periodic task `app/services/pipeline_alerts.py` (#1099): one notification for a failure streak at one stage or a stalled queue, one on recovery; thresholds `PIPELINE_ALERT_FAILURE_STREAK` / `PIPELINE_ALERT_STALL_HOURS` | v1.8 |

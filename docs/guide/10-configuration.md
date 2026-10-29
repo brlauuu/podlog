@@ -58,7 +58,7 @@ The **Prompts** and **Backups** tabs also keep a Save button next to each thing 
 
 ## Full Reference
 
-For the complete list of all environment variables including retry logic, zombie detection, and speaker inference settings, see [docs/configuration.md](../configuration.md).
+For the complete list of all environment variables including retry logic, zombie detection, pipeline alerts, and speaker inference settings, see [docs/configuration.md](../configuration.md).
 
 ---
 

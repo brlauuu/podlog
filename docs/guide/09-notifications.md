@@ -108,6 +108,19 @@ Configure how often you receive success notifications (failures are always sent 
 
 Set the frequency in the **General** section of the Notifications tab.
 
+## Pipeline Alerts
+
+A failure notice tells you one episode failed. It can't tell you that *every* episode is failing. Pipeline alerts cover that: the worker checks every 15 minutes, and sends one message when either of these happens:
+
+- **A stage keeps failing.** One stage (download, transcribe, diarize, …) has failed 5 jobs in a row since it last succeeded. Retries count, because each attempt is its own job. The message names the stage, the error class and the last error, e.g. *transcribe: 5 consecutive failures (TRANSIENT_NETWORK)*.
+- **The queue stopped moving.** Jobs have been waiting for more than 24 hours and no job has finished in that time. An idle install with nothing to process never alerts.
+
+When the stage succeeds again, or jobs start finishing, you get one *recovered* message, and the alert is armed again. Nothing repeats in between, however long the problem lasts.
+
+Alerts use the same Telegram and email settings as the rest of this page, and go out immediately even with a daily or weekly digest. With neither channel configured, the worker still writes each alert to its log (`"action": "pipeline_alert"`).
+
+To change the thresholds, or turn a check off with `0`, set `PIPELINE_ALERT_FAILURE_STREAK` and `PIPELINE_ALERT_STALL_HOURS` in `.env` (see [Configuration](../configuration.md#pipeline-alerts)). They run inside the worker, so if the worker itself is down, the [Health Monitoring](#health-monitoring) script below is what tells you.
+
 ## Health Monitoring
 
 Podlog includes a host-level health check script that monitors all services and sends Telegram alerts when something goes down (or recovers). It runs via cron on the host machine — not inside Docker — so it can detect when Docker services themselves are unhealthy.

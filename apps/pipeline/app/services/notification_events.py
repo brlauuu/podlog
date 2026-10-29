@@ -48,3 +48,17 @@ class EpisodeFailedEvent(Event):
     avg_total_secs: float | None = None
     avg_duration_secs: float | None = None
     processing_factor: float | None = None
+
+
+@dataclass
+class PipelineAlertEvent(Event):
+    """A stage that keeps failing, or a queue that stopped moving (#1099).
+
+    Built by services/pipeline_alerts.py, which decides what to say; the
+    formatters in notifications.py only lay out ``headline`` and ``details``.
+    """
+    kind: str = ""  # "failure_streak" | "stall"
+    stage: str | None = None
+    recovered: bool = False
+    headline: str = ""
+    details: list[tuple[str, str]] | None = None
