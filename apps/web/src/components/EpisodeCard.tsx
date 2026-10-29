@@ -50,6 +50,22 @@ const LANGUAGE_FLAGS: Record<string, string> = {
   hr: "🇭🇷", bg: "🇧🇬", sk: "🇸🇰", sl: "🇸🇮",
 };
 
+// #1098: role='other' rows carry an empty display_name by design (#703), and
+// one person can be named on two speaker labels. Drop the blanks and show each
+// name once (confirmed if any of its rows is), so names are unique React keys.
+function visibleSpeakerTags(tags: SpeakerNameTag[] | undefined): SpeakerNameTag[] {
+  const byName = new Map<string, SpeakerNameTag>();
+  for (const tag of tags ?? []) {
+    const name = tag.display_name?.trim();
+    if (!name) continue;
+    const seen = byName.get(name);
+    byName.set(name, seen
+      ? { ...seen, confirmed_by_user: seen.confirmed_by_user || tag.confirmed_by_user }
+      : { ...tag, display_name: name });
+  }
+  return [...byName.values()];
+}
+
 function formatDuration(secs: number): string {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
@@ -154,7 +170,8 @@ export default function EpisodeCard({
   const isFailed = ep.status === "failed";
   const lang = ep.language?.toLowerCase() ?? "";
   const flag = LANGUAGE_FLAGS[lang];
-  const hasSpeakerNames = ep.speaker_name_tags?.length > 0;
+  const speakerTags = visibleSpeakerTags(ep.speaker_name_tags);
+  const hasSpeakerNames = speakerTags.length > 0;
 
   async function handleDeleteClick(e: React.MouseEvent) {
     e.preventDefault();
@@ -239,7 +256,7 @@ export default function EpisodeCard({
       {/* Speaker name tags — row 2 (only when names are known) */}
       {hasSpeakerNames && (
         <div className="flex flex-wrap items-center gap-1.5 mt-1.5 relative z-10 pointer-events-none">
-          {ep.speaker_name_tags.map((sn) => (
+          {speakerTags.map((sn) => (
             <Tag
               key={sn.display_name}
               className={

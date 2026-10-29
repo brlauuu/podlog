@@ -163,3 +163,68 @@ describe("EpisodeCard — error details toggle", () => {
     expect(screen.getByText("an explanatory error message")).toBeInTheDocument();
   });
 });
+
+// #1098: speaker_names rows with role='other' carry an empty display_name by
+// design (#703), and one person can be named on two speaker labels. The card
+// used to key tags on display_name, so both cases collided (React duplicate-key
+// errors) and the blank rows rendered as empty tags.
+describe("EpisodeCard — speaker name tags (#1098)", () => {
+  const tag = (display_name: string, confirmed_by_user = false) => ({
+    display_name,
+    inferred: !confirmed_by_user,
+    confirmed_by_user,
+  });
+
+  let consoleError: jest.SpyInstance;
+  beforeEach(() => {
+    consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => consoleError.mockRestore());
+
+  function keyWarnings() {
+    return consoleError.mock.calls.filter((args) =>
+      args.some((a) => typeof a === "string" && a.includes("same key")),
+    );
+  }
+
+  it("drops blank names and shows a repeated name once, without key warnings", () => {
+    const { container } = render(
+      <EpisodeCard
+        episode={_ep({
+          speaker_name_tags: [tag(""), tag(""), tag("  "), tag("Ana"), tag("Ana"), tag("Ben")],
+        })}
+        expandedError={false}
+        onToggleError={() => {}}
+      />,
+    );
+    expect(screen.getAllByText("Ana")).toHaveLength(1);
+    expect(screen.getAllByText("Ben")).toHaveLength(1);
+    const tagRow = screen.getByText("Ana").parentElement!;
+    expect(tagRow.children).toHaveLength(2);
+    expect(keyWarnings()).toEqual([]);
+    expect(container.textContent).not.toContain("2 speakers");
+  });
+
+  it("marks a repeated name confirmed when any of its rows is confirmed", () => {
+    render(
+      <EpisodeCard
+        episode={_ep({ speaker_name_tags: [tag("Ana"), tag("Ana", true)] })}
+        expandedError={false}
+        onToggleError={() => {}}
+      />,
+    );
+    expect(screen.getByText("Ana").className).toContain("bg-blue-100");
+  });
+
+  it("falls back to the speaker count when every name is blank", () => {
+    render(
+      <EpisodeCard
+        episode={_ep({ speaker_count: 3, speaker_name_tags: [tag(""), tag("")] })}
+        expandedError={false}
+        onToggleError={() => {}}
+      />,
+    );
+    expect(screen.getByText("3 speakers")).toBeInTheDocument();
+    expect(keyWarnings()).toEqual([]);
+  });
+});
