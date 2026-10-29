@@ -36,34 +36,8 @@ class TestEffectiveModelName:
             == "all-MiniLM-L6-v2"
         )
 
-    def test_fireworks_provider_uses_fireworks_model(self):
-        assert (
-            prov.effective_model_name(
-                {
-                    "embedding_provider": "fireworks",
-                    "embedding_model": "all-MiniLM-L6-v2",
-                    "fireworks_embedding_model": "BAAI/bge-small-en-v1.5",
-                }
-            )
-            == "BAAI/bge-small-en-v1.5"
-        )
-
-    def test_same_model_across_providers_is_the_same_identity(self):
-        remote = prov.effective_model_name(
-            {
-                "embedding_provider": "fireworks",
-                "fireworks_embedding_model": "BAAI/bge-small-en-v1.5",
-            }
-        )
-        local = prov.effective_model_name(
-            {"embedding_provider": "local", "embedding_model": "BAAI/bge-small-en-v1.5"}
-        )
-        assert remote == local
-
     def test_falls_back_to_settings_when_runtime_is_empty(self):
-        with patch.object(prov.settings, "embedding_provider", "local"), patch.object(
-            prov.settings, "embedding_model", "from-settings"
-        ):
+        with patch.object(prov.settings, "embedding_model", "from-settings"):
             assert prov.effective_model_name(None) == "from-settings"
 
 

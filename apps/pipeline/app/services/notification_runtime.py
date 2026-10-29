@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from app.models import Episode
 from app.services.events import bus
 from app.services.notification_events import EpisodeDoneEvent, EpisodeFailedEvent
-from app.services.notification_settings import get_runtime_inference_settings
 
 
 def compute_avg_processing_stats(
@@ -92,10 +91,9 @@ def estimate_queue_status(
 
     The rate is the duration-weighted average of the 10 most recent completed
     episodes. If ``provider`` is set, the sample is restricted to episodes
-    processed by that inference provider so the ETA reflects the active
-    setting (a queue that will run on Fireworks shouldn't be estimated from
-    slow local-CPU history, and vice versa). Falls back to all-providers
-    when there is no provider-matching history yet.
+    processed by that inference provider, so a local queue is not estimated
+    from the much faster Fireworks history of episodes from before #1092.
+    Falls back to all-providers when there is no provider-matching history yet.
     """
     remaining = (
         db.query(Episode)
@@ -170,7 +168,7 @@ def emit_episode_done_event(db: Session, episode: Episode) -> None:
     runs don't skew the average shown next to a slow local run (or vice versa).
     """
     provider = episode.inference_provider_used
-    active_provider = get_runtime_inference_settings(db).get("inference_provider")
+    active_provider = "local"  # the only provider since #1092
     remaining, estimated, _ = estimate_queue_status(db, provider=active_provider)
     avg_t, avg_d, avg_total = compute_avg_processing_stats(db, provider=provider)
     avg_dur = compute_avg_duration(db, provider=provider)
@@ -211,7 +209,7 @@ def emit_episode_failed_event(
 ) -> None:
     """Emit EpisodeFailedEvent using runtime queue/average stats."""
     provider = episode.inference_provider_used
-    active_provider = get_runtime_inference_settings(db).get("inference_provider")
+    active_provider = "local"  # the only provider since #1092
     remaining, estimated, _ = estimate_queue_status(db, provider=active_provider)
     avg_t, avg_d, avg_total = compute_avg_processing_stats(db, provider=provider)
     avg_dur = compute_avg_duration(db, provider=provider)

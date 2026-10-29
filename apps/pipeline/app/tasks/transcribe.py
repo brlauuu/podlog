@@ -1,17 +1,13 @@
 """
-Transcription task -- PRD-01 S5.3, S5.4, Issue #222
+Transcription task -- PRD-01 S5.3, S5.4
 
-- Local provider path:
-  - Converts audio to 16kHz mono WAV (ffmpeg)
-  - Transcribes with Whisper model from config
-  - Explicitly unloads Whisper before returning
-- Fireworks provider path:
-  - Sends source audio directly to Fireworks transcription API
-- Both paths persist segments and queue diarization.
+- Converts audio to 16kHz mono WAV (ffmpeg)
+- Transcribes with Whisper model from config
+- Explicitly unloads Whisper before returning
+- Persists segments and queues diarization
 
-Failures (FireworksTranscriptionError, MemoryError, network errors, etc.)
-propagate to the worker loop, which classifies and decides retry vs
-terminal (#641 / #653).
+Failures (MemoryError, ffmpeg errors, etc.) propagate to the worker loop,
+which classifies and decides retry vs terminal (#641 / #653).
 """
 import gc
 import logging
@@ -21,11 +17,8 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
-from app.services.notification_settings import get_runtime_inference_settings
 from app.tasks.helpers import update_episode
 from app.tasks.transcribe_helpers import (
-    compute_fireworks_cost,
-    estimate_fireworks_usage,
     persist_transcription_artifacts,
     remove_artifacts,
 )
@@ -34,18 +27,10 @@ from app import job_queue
 logger = logging.getLogger(__name__)
 
 
-def _load_fireworks_service():
-    """Import Fireworks service lazily so local mode has no dependency edge."""
-    from app.services import fireworks_audio
-
-    return fireworks_audio
-
-
 def transcribe_episode(episode_id: str) -> str:
     db = SessionLocal()
     queued_next = False
     alignment_path = Path(settings.transcript_dir) / f"{episode_id}.whisperx.json"
-    fireworks_path = Path(settings.transcript_dir) / f"{episode_id}.fireworks.json"
     try:
         episode = db.query(Episode).filter(Episode.id == episode_id).first()
         if not episode or not episode.audio_local_path:
@@ -66,108 +51,54 @@ def transcribe_episode(episode_id: str) -> str:
         segments_data: list[dict] = []
         language = "unknown"
         aligned_result: dict | None = None
-        fireworks_result: dict | None = None
 
         # Defensive cleanup of stale artifacts from previous failed attempts.
-        remove_artifacts(alignment_path, fireworks_path)
+        remove_artifacts(alignment_path)
 
-        runtime = get_runtime_inference_settings(db)
-        provider = runtime.get("inference_provider") or "local"
-        update_episode(db, episode_id, inference_provider_used=provider)
-        if provider == "fireworks":
-            fireworks_audio = _load_fireworks_service()
+        # Remote transcription was removed in #1092; every episode is local.
+        update_episode(db, episode_id, inference_provider_used="local")
 
-            api_key = runtime.get("fireworks_api_key")
-            if not api_key:
-                raise RuntimeError(
-                    "Fireworks inference provider selected but FIREWORKS_API_KEY is missing"
-                )
-            audio_file_size_bytes = audio_path.stat().st_size if audio_path.exists() else None
-            update_episode(db, episode_id, audio_file_size_bytes=audio_file_size_bytes)
+        # Step 1: convert to 16kHz mono WAV. ffmpeg failures propagate
+        # to the worker as SYSTEM_ERROR (#653).
+        wav_path = audio_path.with_suffix(".wav")
+        _convert_to_wav(audio_path, wav_path)
+
+        # Step 2: transcribe (local WhisperX). MemoryError → OOM
+        # is classified by the worker. Whisper is ALWAYS unloaded
+        # afterwards via the finally clause (PRD-01 S5.4).
+        try:
+            from app.services.whisper import transcribe
+
             t0 = time.monotonic()
-            # FireworksTranscriptionError carries retryable + error_class metadata;
-            # the worker's _classify_for_retry reads those, so we just let it propagate.
-            segments_data, language, fireworks_result = fireworks_audio.transcribe(
-                str(audio_path),
-                api_key=api_key,
-                audio_base_url=runtime.get("fireworks_audio_base_url")
-                or settings.fireworks_audio_base_url,
-                model_name=runtime.get("fireworks_stt_model") or settings.fireworks_stt_model,
-                diarize=bool(runtime.get("fireworks_stt_diarize", True)),
+            segments_data, language, aligned_result = transcribe(
+                str(wav_path), model_name=settings.whisper_model
             )
             transcribe_secs = round(time.monotonic() - t0, 1)
-            audio_secs = estimate_fireworks_usage(segments_data, episode.duration_secs)
-            runtime_rate = runtime.get("fireworks_stt_cost_per_minute_usd")
-            configured_rate = (
-                runtime_rate
-                if runtime_rate is not None
-                else settings.fireworks_stt_cost_per_minute_usd
-            )
-            stt_rate = float(configured_rate if configured_rate is not None else 0.0)
-            audio_minutes, stt_cost_usd = compute_fireworks_cost(audio_secs, stt_rate)
-
+            # Clears figures a pre-#1092 Fireworks run left on a re-processed
+            # episode. The columns themselves go in #1092's last PR.
             update_episode(
                 db,
                 episode_id,
                 transcribe_duration_secs=transcribe_secs,
-                fireworks_audio_secs=round(audio_secs, 1),
-                fireworks_audio_minutes=audio_minutes,
-                fireworks_stt_cost_per_minute_usd=stt_rate,
-                fireworks_stt_cost_usd=stt_cost_usd,
+                fireworks_audio_secs=None,
+                fireworks_audio_minutes=None,
+                fireworks_stt_cost_per_minute_usd=None,
+                fireworks_stt_cost_usd=None,
             )
-            logger.info(
-                '"action": "fireworks_transcribe_observability", "episode_id": "%s", '
-                '"audio_secs": %.1f, "audio_minutes": %.3f, "stt_rate_usd_per_min": %.6f, '
-                '"stt_cost_usd": %.4f',
-                episode_id,
-                audio_secs,
-                audio_minutes,
-                stt_rate,
-                stt_cost_usd,
-            )
-        else:
-            # Step 1: convert to 16kHz mono WAV. ffmpeg failures propagate
-            # to the worker as SYSTEM_ERROR (#653).
-            wav_path = audio_path.with_suffix(".wav")
-            _convert_to_wav(audio_path, wav_path)
-
-            # Step 2: transcribe (local WhisperX). MemoryError → OOM
-            # is classified by the worker. Whisper is ALWAYS unloaded
-            # afterwards via the finally clause (PRD-01 S5.4).
-            try:
-                from app.services.whisper import transcribe
-
-                t0 = time.monotonic()
-                segments_data, language, aligned_result = transcribe(
-                    str(wav_path), model_name=settings.whisper_model
-                )
-                transcribe_secs = round(time.monotonic() - t0, 1)
-                update_episode(
-                    db,
-                    episode_id,
-                    transcribe_duration_secs=transcribe_secs,
-                    fireworks_audio_secs=None,
-                    fireworks_audio_minutes=None,
-                    fireworks_stt_cost_per_minute_usd=None,
-                    fireworks_stt_cost_usd=None,
-                )
-            finally:
-                # MANDATORY: unload Whisper before pyannote can be loaded (PRD-01 S5.4)
-                _unload_whisper()
-                if wav_path.exists():
-                    update_episode(db, episode_id, audio_file_size_bytes=wav_path.stat().st_size)
-                    wav_path.unlink()
+        finally:
+            # MANDATORY: unload Whisper before pyannote can be loaded (PRD-01 S5.4)
+            _unload_whisper()
+            if wav_path.exists():
+                update_episode(db, episode_id, audio_file_size_bytes=wav_path.stat().st_size)
+                wav_path.unlink()
 
         # Step 2b: save alignment/transcript data for diarization
         try:
             out_dir = Path(settings.transcript_dir)
             out_dir.mkdir(parents=True, exist_ok=True)
-            if aligned_result is not None or fireworks_result is not None:
+            if aligned_result is not None:
                 persist_transcription_artifacts(
-                    settings.transcript_dir,
-                    episode_id,
-                    aligned_result=aligned_result,
-                    fireworks_result=fireworks_result,
+                    settings.transcript_dir, episode_id, aligned_result=aligned_result
                 )
         except Exception as exc:
             logger.warning(
@@ -222,7 +153,7 @@ def transcribe_episode(episode_id: str) -> str:
     finally:
         if not queued_next:
             # If we failed before enqueueing diarize, remove intermediate artifacts.
-            remove_artifacts(alignment_path, fireworks_path)
+            remove_artifacts(alignment_path)
         db.close()
 
 

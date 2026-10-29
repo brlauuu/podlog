@@ -66,12 +66,6 @@ class TestCheckHfAccess:
 
 
 class TestDiarizationPreflight:
-    def test_skipped_for_cloud_provider(self):
-        with patch.object(preflight, "get_runtime_diarization_settings", return_value={"diarization_provider": "precision2"}), \
-             patch.object(preflight, "check_hf_access") as chk:
-            r = diarization_preflight(MagicMock())
-        assert r.status == "SKIPPED"
-        chk.assert_not_called()
 
     def test_uses_runtime_model_and_env_token(self):
         with patch.object(preflight, "get_runtime_diarization_settings", return_value={"diarization_provider": "local", "pyannote_model": "pyannote/speaker-diarization-3.1"}), \
@@ -91,7 +85,6 @@ class TestDiarizationPreflight:
 
     def test_settings_lookup_failure_falls_back_to_env(self):
         with patch.object(preflight, "get_runtime_diarization_settings", side_effect=RuntimeError("db")), \
-             patch.object(preflight.settings, "diarization_provider", "local"), \
              patch.object(preflight, "check_hf_access", return_value=PreflightResult("OK", "fine")) as chk:
             assert diarization_preflight().status == "OK"
         chk.assert_called_once()

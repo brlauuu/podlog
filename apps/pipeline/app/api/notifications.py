@@ -12,7 +12,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.database import get_db
 from app.services.notification_settings import (
     get_notification_settings,
@@ -29,14 +28,6 @@ class TestRequest(BaseModel):
     channel: Literal["telegram", "email"]
 
 
-class PyannoteTestRequest(BaseModel):
-    """#933. `api_key` is optional: the settings UI masks a stored key on read
-    (abc***xyz), so an untouched field submits a masked value, not the real
-    one. Empty or masked means "test what is saved"."""
-
-    api_key: str | None = None
-
-
 @router.get("/notifications/settings")
 def get_settings(db: Session = Depends(get_db)):
     s = get_notification_settings(db)
@@ -50,18 +41,7 @@ def put_settings(body: dict = Body(...), db: Session = Depends(get_db)):
     except ValueError as e:
         return JSONResponse(status_code=422, content={"error": str(e)})
 
-    response = mask_sensitive(result)
-
-    # Validate Fireworks API key if it was updated with a non-empty value
-    if body.get("fireworks_api_key") and body["fireworks_api_key"].strip():
-        from app.services.hardware import validate_fireworks_key
-
-        if not validate_fireworks_key(body["fireworks_api_key"]):
-            response["fireworks_key_warning"] = (
-                "Fireworks API key could not be validated -- check that it's correct."
-            )
-
-    return response
+    return mask_sensitive(result)
 
 
 @router.post("/notifications/test")
@@ -96,46 +76,15 @@ def post_test(body: TestRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/pyannote/test")
-def post_pyannote_test(body: PyannoteTestRequest, db: Session = Depends(get_db)):
-    """Verify a pyannote cloud API key against GET /v1/test (#933).
+def post_pyannote_test():
+    """Retired with pyannote.ai cloud diarization (#1092).
 
-    Mirrors POST /notifications/test. Without this, an invalid key fails
-    silently at save time and only surfaces as a 401 once a diarization job
-    runs -- after the episode has already been downloaded and transcribed.
-
-    The base URL is read from settings and never from the request. That is
-    deliberate: the request carries a secret, and taking the destination from
-    the caller would let it be pointed at an arbitrary host.
+    Kept as an explicit 410 until the Settings page drops its Test button, so
+    a click explains itself instead of failing with a bare 404.
     """
-    from app.services.pyannote_cloud import verify_api_key
-
-    s = get_notification_settings(db)
-    base_url = s.get("pyannote_cloud_base_url") or settings.pyannote_cloud_base_url
-
-    candidate = (body.api_key or "").strip()
-    if not candidate or "***" in candidate:
-        # Untouched (masked) or omitted -- fall back to the stored key.
-        candidate = (s.get("pyannote_api_key") or "").strip()
-
-    if not candidate:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "No pyannote API key to test. Enter a key, or save one first."},
-        )
-
-    if verify_api_key(candidate, base_url):
-        logger.info('"action": "pyannote_key_test", "result": "valid"')
-        return {"ok": True}
-
-    logger.info('"action": "pyannote_key_test", "result": "rejected"')
     return JSONResponse(
-        status_code=502,
-        content={
-            "error": (
-                "pyannote.ai rejected this key, or could not be reached. "
-                "Check the key at dashboard.pyannote.ai."
-            )
-        },
+        status_code=410,
+        content={"error": "pyannote.ai cloud diarization is no longer supported."},
     )
 
 

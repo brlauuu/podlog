@@ -64,17 +64,28 @@ class TestRetireRemoteSettings:
             ("embedding_provider", "fireworks"),
         ],
     )
-    def test_stored_remote_provider_becomes_local(self, field, remote):
-        db = _mock_db({field: remote})
+    def test_stored_remote_provider_is_deleted(self, field, remote):
+        db = _mock_db({field: remote, "telegram_chat_id": "1"})
 
         changed = remote_retirement.retire_remote_settings(db)
 
-        assert field in changed
-        assert _stored_after(db)[field] == "local"
+        assert changed == [field]
+        assert _stored_after(db) == {"telegram_chat_id": "1"}
         db.commit.assert_called_once()
 
-    def test_logs_one_warning_per_coerced_provider(self):
-        db = _mock_db({"inference_provider": "fireworks", "rag_provider": "fireworks"})
+    def test_stored_local_provider_is_deleted_too(self):
+        # Nothing reads provider settings any more, whatever their value.
+        db = _mock_db({"inference_provider": "local"})
+
+        assert remote_retirement.retire_remote_settings(db) == ["inference_provider"]
+        assert _stored_after(db) == {}
+
+    def test_logs_one_warning_per_provider_that_was_remote(self):
+        db = _mock_db({
+            "inference_provider": "fireworks",
+            "rag_provider": "fireworks",
+            "embedding_provider": "local",
+        })
 
         with patch.object(remote_retirement.logger, "warning") as warn:
             remote_retirement.retire_remote_settings(db)
@@ -86,18 +97,6 @@ class TestRetireRemoteSettings:
             "inference_provider",
             "rag_provider",
         ]
-
-    def test_remote_provider_from_env_is_overridden_in_storage(self):
-        # A leftover INFERENCE_PROVIDER=fireworks in .env must not win: the
-        # stored value overrides env, so "local" has to be written, not just
-        # the stored key removed.
-        db = _mock_db(None)
-
-        with patch.object(remote_retirement.settings, "inference_provider", "fireworks"):
-            changed = remote_retirement.retire_remote_settings(db)
-
-        assert changed == ["inference_provider"]
-        assert _stored_after(db) == {"inference_provider": "local"}
 
     def test_deletes_stored_keys_and_remote_only_fields(self):
         db = _mock_db(
@@ -125,7 +124,7 @@ class TestRetireRemoteSettings:
         assert "fw_secret_value" not in logged
 
     def test_leaves_local_settings_untouched(self):
-        db = _mock_db({"inference_provider": "local", "embedding_model": "all-MiniLM-L6-v2"})
+        db = _mock_db({"embedding_model": "all-MiniLM-L6-v2", "rag_local_model": "qwen2.5:3b"})
 
         assert remote_retirement.retire_remote_settings(db) == []
         db.commit.assert_not_called()
@@ -179,12 +178,22 @@ class TestEmbeddingModelPin:
 
 
 class TestRetiredEnvVars:
-    def test_names_retired_vars_that_are_set(self):
-        with _fields_set({"diarization_provider", "fireworks_api_key", "hf_token"}):
-            assert remote_retirement.retired_env_vars_set() == [
-                "DIARIZATION_PROVIDER",
-                "FIREWORKS_API_KEY",
-            ]
+    def test_names_retired_vars_that_are_set(self, monkeypatch):
+        monkeypatch.setenv("DIARIZATION_PROVIDER", "local")
+        monkeypatch.setenv("FIREWORKS_API_KEY", "fw_x")
+        monkeypatch.setenv("HF_TOKEN", "hf_x")
+
+        found = remote_retirement.retired_env_vars_set()
+
+        assert "DIARIZATION_PROVIDER" in found
+        assert "FIREWORKS_API_KEY" in found
+        assert "HF_TOKEN" not in found
+
+    def test_empty_when_none_are_set(self, monkeypatch):
+        for field in remote_retirement.RETIRED_FIELDS:
+            monkeypatch.delenv(field.upper(), raising=False)
+
+        assert remote_retirement.retired_env_vars_set() == []
 
 
 class TestRunAtStartup:

@@ -29,15 +29,6 @@ class Settings(BaseSettings):
     # pyannote diarization model (gated on HuggingFace — user must accept license)
     pyannote_model: str = "pyannote/speaker-diarization-community-1"
 
-    # pyannote.ai precision-2 cloud provider (Issue #516)
-    diarization_provider: Literal["local", "precision2"] = "local"
-    pyannote_api_key: str | None = None
-    pyannote_cloud_base_url: str = "https://api.pyannote.ai/v1"
-    pyannote_cloud_model: str = "precision-2"
-    # pyannote.ai bills in seconds with a 20s per-request minimum. Check the
-    # dashboard for your tier's rate; default 0 means "no cost estimate".
-    pyannote_cloud_cost_per_second_usd: float = 0.0
-
     # Whisper (WhisperX / CTranslate2 backend)
     whisper_model: str = "large-v3-turbo"
     whisper_compute_type: str = "int8"
@@ -93,30 +84,6 @@ class Settings(BaseSettings):
     # Hardware profile override for cost estimates (Issue #322)
     hardware_profile: str | None = None
 
-    # Inference provider routing (Issue #222)
-    inference_provider: Literal["local", "fireworks"] = "local"
-    fireworks_api_key: str | None = None
-    fireworks_audio_base_url: str = "https://audio-turbo.api.fireworks.ai"
-    fireworks_stt_model: str = "whisper-v3-turbo"
-    fireworks_stt_diarize: bool = True
-    fireworks_chat_base_url: str = "https://api.fireworks.ai/inference/v1"
-    # Aligned with the curated dropdown in apps/web/src/lib/rag-models.ts
-    # (DEFAULT_FIREWORKS_CHAT_MODEL). Fireworks deprecates serverless
-    # models on a regular cadence — `llama-v3p1-8b-instruct` (#608),
-    # `qwen2p5-7b-instruct` (#636), then `qwen3-8b` (May 2026 notice)
-    # have all been retired. Existing installs with FIREWORKS_CHAT_MODEL
-    # set explicitly in .env keep their value; only no-override installs
-    # are auto-upgraded.
-    fireworks_chat_model: str = "accounts/fireworks/models/gpt-oss-20b"
-    # Cost estimate input for observability (Issue #261).
-    # Keep this explicit because provider pricing can change.
-    fireworks_stt_cost_per_minute_usd: float = 0.006
-
-    # RAG/Ask provider routing (Issue #608). Decoupled from inference_provider
-    # so enabling Fireworks for transcription does not silently send retrieved
-    # transcript chunks to Fireworks for answer generation. Default `local`
-    # preserves existing behavior on upgrade.
-    rag_provider: Literal["local", "fireworks"] = "local"
     # Default local Ollama model for the Ask / RAG feature (Issue #637).
     # Must match one of the values in apps/web/src/lib/rag-models.ts::RAG_MODELS.
     rag_local_model: str = "qwen2.5:3b"
@@ -129,11 +96,8 @@ class Settings(BaseSettings):
     backup_retention_weekly: int = 4
     backup_retention_monthly: int = 12
 
-    # Embedding provider routing (Issue #258)
-    embedding_provider: Literal["local", "fireworks"] = "local"
+    # Local embedding model (#951 allowlist in notification_settings.py)
     embedding_model: str = "all-MiniLM-L6-v2"
-    fireworks_embedding_base_url: str = "https://api.fireworks.ai/inference/v1"
-    fireworks_embedding_model: str = "BAAI/bge-small-en-v1.5"
 
     # LLM system prompts (Issue #643). Build-time defaults; the `prompt_settings`
     # table holds optional UI overrides. The "Reset to default" button in the

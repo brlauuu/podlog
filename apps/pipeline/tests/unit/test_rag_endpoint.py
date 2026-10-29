@@ -87,38 +87,34 @@ class TestAskEndpoint:
 
         assert captured["model"] == "phi3:mini"
 
-    def test_fireworks_provider_skips_local_model_check(self):
-        mock_chunks = [make_chunk()]
-        runtime = {
-            # Issue #608: RAG/Ask uses its own provider flag now.
-            "rag_provider": "fireworks",
-            "fireworks_api_key": "fw_test",
-            "fireworks_chat_base_url": "https://api.fireworks.ai/inference/v1",
-            "fireworks_chat_model": "accounts/fireworks/models/llama-v3p1-8b-instruct",
-        }
+    def test_fireworks_model_path_falls_back_to_the_local_model(self):
+        # #1092: an Ask page that remembers the retired remote toggle can still
+        # send "accounts/..."; Ollama cannot serve it, so the configured local
+        # model answers instead of a "not available" error.
+        runtime = {"rag_local_model": "phi3:mini"}
+        captured = {}
+
+        async def fake_stream(*args, **kwargs):
+            captured["model"] = kwargs.get("model")
+            yield "ok"
 
         with (
-            patch("app.api.ask.check_model_available", new_callable=AsyncMock, return_value=False) as mock_check,
+            patch("app.api.ask.check_model_available", new_callable=AsyncMock, return_value=True) as avail,
             patch("app.api.ask.get_runtime_inference_settings", return_value=runtime),
-            patch("app.api.ask.retrieve_chunks", return_value=mock_chunks),
+            patch("app.api.ask.retrieve_chunks", return_value=[make_chunk()]),
             patch("app.api.ask.get_prompt", return_value="SYSTEM"),
             patch("app.api.ask.build_prompt", return_value=[{"role": "user", "content": "test"}]),
             patch("app.api.ask.chunks_to_sources", return_value=[{"chunk_id": 1}]),
-            patch("app.api.ask.stream_response") as mock_stream,
+            patch("app.api.ask.stream_response", side_effect=fake_stream),
         ):
-            async def fake_stream(*args, **kwargs):
-                yield "remote"
-                yield " answer"
-
-            mock_stream.return_value = fake_stream()
-
-            resp = client.post("/api/ask", json={"question": "What was discussed?"})
-            events = parse_sse(resp.text)
-            tokens = [e["data"]["content"] for e in events if e["event"] == "token"]
-
+            resp = client.post(
+                "/api/ask",
+                json={"question": "q", "model": "accounts/fireworks/models/gpt-oss-120b"},
+            )
             assert resp.status_code == 200
-            assert "".join(tokens) == "remote answer"
-            mock_check.assert_not_called()
+
+        assert captured["model"] == "phi3:mini"
+        avail.assert_awaited_once_with("phi3:mini")
 
 
 class TestAskHistory:

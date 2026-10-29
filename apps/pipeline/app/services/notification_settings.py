@@ -5,7 +5,6 @@ Settings are stored as a JSON blob in the system_state table under the key
 the corresponding env var value from config.py.
 """
 import json
-import math
 import logging
 import re
 
@@ -31,33 +30,39 @@ _FIELDS = [
     "smtp_use_tls",
     "notification_frequency",
     "health_check_notifications_enabled",
-    "inference_provider",
-    "fireworks_api_key",
-    "fireworks_audio_base_url",
-    "fireworks_stt_model",
-    "fireworks_stt_diarize",
-    "fireworks_chat_base_url",
-    "fireworks_chat_model",
-    "fireworks_stt_cost_per_minute_usd",
-    "rag_provider",
     "rag_local_model",
-    "embedding_provider",
     "embedding_model",
-    "fireworks_embedding_base_url",
-    "fireworks_embedding_model",
-    "diarization_provider",
-    "pyannote_api_key",
-    "pyannote_cloud_base_url",
-    "pyannote_cloud_model",
-    "pyannote_cloud_cost_per_second_usd",
     "pyannote_model",
 ]
+
+# Remote-inference keys the Settings page still parses (#1092). Its schema
+# requires them, so GET answers with fixed local-only values until the web
+# removal drops them on both sides. Never stored, never read by a task.
+_RETIRED_WEB_FIELDS = {
+    "inference_provider": "local",
+    "embedding_provider": "local",
+    "diarization_provider": "local",
+    "rag_provider": "local",
+    "fireworks_api_key": None,
+    "fireworks_audio_base_url": "",
+    "fireworks_stt_model": "",
+    "fireworks_stt_diarize": False,
+    "fireworks_chat_base_url": "",
+    "fireworks_chat_model": "",
+    "fireworks_stt_cost_per_minute_usd": 0.0,
+    "fireworks_embedding_base_url": "",
+    "fireworks_embedding_model": "",
+    "pyannote_api_key": None,
+    "pyannote_cloud_base_url": "",
+    "pyannote_cloud_model": "",
+    "pyannote_cloud_cost_per_second_usd": 0.0,
+    "fireworks_configured": False,
+    "pyannote_cloud_configured": False,
+}
 
 _SENSITIVE_FIELDS = {
     "telegram_bot_token",
     "smtp_password",
-    "fireworks_api_key",
-    "pyannote_api_key",
 }
 
 _NULLABLE_FIELDS = {
@@ -67,8 +72,6 @@ _NULLABLE_FIELDS = {
     "notification_email_to",
     "smtp_user",
     "smtp_password",
-    "fireworks_api_key",
-    "pyannote_api_key",
 }
 
 _VALID_FREQUENCIES = {"immediate", "daily", "weekly"}
@@ -101,33 +104,9 @@ _PROVIDER_FIELDS = (
     "diarization_provider",
     "rag_provider",
 )
-_INFERENCE_FIELDS = {
-    "inference_provider",
-    "fireworks_api_key",
-    "fireworks_audio_base_url",
-    "fireworks_stt_model",
-    "fireworks_stt_diarize",
-    "fireworks_chat_base_url",
-    "fireworks_chat_model",
-    "fireworks_stt_cost_per_minute_usd",
-    "rag_provider",
-    "rag_local_model",
-}
-_EMBEDDING_FIELDS = {
-    "embedding_provider",
-    "embedding_model",
-    "fireworks_api_key",
-    "fireworks_embedding_base_url",
-    "fireworks_embedding_model",
-}
-_DIARIZATION_FIELDS = {
-    "diarization_provider",
-    "pyannote_api_key",
-    "pyannote_cloud_base_url",
-    "pyannote_cloud_model",
-    "pyannote_cloud_cost_per_second_usd",
-    "pyannote_model",
-}
+_INFERENCE_FIELDS = {"rag_local_model"}
+_EMBEDDING_FIELDS = {"embedding_model"}
+_DIARIZATION_FIELDS = {"pyannote_model"}
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 
@@ -189,9 +168,7 @@ def get_notification_settings(db: Session) -> dict:
         and merged.get("telegram_chat_id") is not None
     )
     merged["email_configured"] = bool(merged.get("notification_email_to"))
-    merged["fireworks_configured"] = bool(merged.get("fireworks_api_key"))
-    merged["pyannote_cloud_configured"] = bool(merged.get("pyannote_api_key"))
-    return merged
+    return {**_RETIRED_WEB_FIELDS, **merged}
 
 
 def save_notification_settings(db: Session, updates: dict) -> dict:
@@ -199,8 +176,9 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
 
     Raises ValueError for invalid values.
     """
-    # #1092: remote inference is being removed. Startup switches stored remote
-    # values back to local; refusing them here keeps them from coming back.
+    # #1092: Podlog no longer offers remote inference, but the Settings page
+    # keeps its Remote switches until the web removal. Refusing a remote value
+    # tells the user so; storing it would be silently ignored.
     for field in _PROVIDER_FIELDS:
         if field in updates and updates[field] != "local":
             raise ValueError(
@@ -217,17 +195,6 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
         port = updates["smtp_port"]
         if not isinstance(port, int) or port < 1 or port > 65535:
             raise ValueError(f"smtp_port must be a positive integer (1-65535), got {port!r}")
-    if "fireworks_stt_cost_per_minute_usd" in updates:
-        rate = updates["fireworks_stt_cost_per_minute_usd"]
-        if (
-            not isinstance(rate, (int, float))
-            or not math.isfinite(float(rate))
-            or float(rate) < 0
-        ):
-            raise ValueError(
-                "fireworks_stt_cost_per_minute_usd must be a non-negative number"
-            )
-        updates["fireworks_stt_cost_per_minute_usd"] = float(rate)
     if "embedding_model" in updates:
         if updates["embedding_model"] not in _VALID_EMBEDDING_MODELS:
             raise ValueError(
@@ -240,17 +207,6 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
                 f"pyannote_model must be one of {sorted(_VALID_PYANNOTE_LOCAL_MODELS)}, "
                 f"got '{updates['pyannote_model']}'"
             )
-    if "pyannote_cloud_cost_per_second_usd" in updates:
-        rate = updates["pyannote_cloud_cost_per_second_usd"]
-        if (
-            not isinstance(rate, (int, float))
-            or not math.isfinite(float(rate))
-            or float(rate) < 0
-        ):
-            raise ValueError(
-                "pyannote_cloud_cost_per_second_usd must be a non-negative number"
-            )
-        updates["pyannote_cloud_cost_per_second_usd"] = float(rate)
 
     # Normalize empty/whitespace strings to None for nullable fields
     for key in list(updates.keys()):
@@ -308,9 +264,7 @@ def save_notification_settings(db: Session, updates: dict) -> dict:
         and merged.get("telegram_chat_id") is not None
     )
     merged["email_configured"] = bool(merged.get("notification_email_to"))
-    merged["fireworks_configured"] = bool(merged.get("fireworks_api_key"))
-    merged["pyannote_cloud_configured"] = bool(merged.get("pyannote_api_key"))
-    return merged
+    return {**_RETIRED_WEB_FIELDS, **merged}
 
 
 def mask_sensitive(settings_dict: dict) -> dict:
@@ -344,12 +298,7 @@ def get_runtime_embedding_settings(db: Session | None = None) -> dict:
 
 
 def get_runtime_diarization_settings(db: Session | None = None) -> dict:
-    """Resolve diarization-provider settings for task execution.
-
-    Controls local vs. pyannote.ai cloud routing (Issue #516). Orthogonal to
-    ``inference_provider`` — Fireworks mode takes precedence and uses its own
-    word-level diarization metadata regardless of this setting.
-    """
+    """Resolve diarization settings (the local pyannote model) for task execution."""
     if db is None:
         base = _env_defaults()
     else:

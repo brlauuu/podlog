@@ -68,7 +68,7 @@ class TestTranscription:
         db_session.refresh(sample_episode)
         assert sample_episode.language == "en"
 
-    def test_fireworks_rerun_replaces_segments_idempotently(
+    def test_rerun_replaces_segments_idempotently(
         self, db_session, sample_episode, tmp_path
     ):
         """A re-run of transcribe_episode replaces segments from a prior attempt
@@ -106,28 +106,17 @@ class TestTranscription:
         def _run_once():
             with (
                 patch(
-                    "app.services.fireworks_audio.transcribe",
-                    return_value=(ok_segments, "en", {"segments": ok_segments, "words": []}),
+                    "app.services.whisper.transcribe",
+                    return_value=(ok_segments, "en", {"segments": ok_segments}),
                 ),
-                patch(
-                    "app.tasks.transcribe.get_runtime_inference_settings",
-                    return_value={
-                        "inference_provider": "fireworks",
-                        "fireworks_api_key": "fw_test",
-                        "fireworks_audio_base_url": "https://audio-turbo.api.fireworks.ai",
-                        "fireworks_stt_model": "whisper-v3-large",
-                        "fireworks_stt_diarize": True,
-                        "fireworks_stt_cost_per_minute_usd": 0.006,
-                    },
-                ),
+                patch("app.tasks.transcribe._convert_to_wav"),
+                patch("app.tasks.transcribe._unload_whisper"),
                 patch("app.tasks.transcribe.SessionLocal", return_value=db_session),
                 patch("app.tasks.transcribe.settings") as mock_settings,
                 patch("app.tasks.transcribe.job_queue.enqueue") as mock_enqueue,
             ):
                 mock_settings.transcript_dir = str(tmp_path / "transcripts")
-                mock_settings.fireworks_stt_model = "whisper-v3-large"
-                mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
-                mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
+                mock_settings.whisper_model = "large-v3-turbo"
 
                 from app.tasks.transcribe import transcribe_episode
 

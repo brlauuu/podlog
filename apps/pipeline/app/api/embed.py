@@ -147,12 +147,6 @@ async def embed_verify(req: VerifyRequest, db: Session = Depends(get_db)):
 def _embed_bypassing_guard(texts: list[str], runtime: dict) -> list[list[float]]:
     from app.services import embed as embed_mod
 
-    provider = embed_mod._runtime_value(
-        runtime, "embedding_provider", embed_mod.settings.embedding_provider
-    )
-    if provider == "fireworks":
-        return embed_mod._embed_texts_fireworks(texts, runtime)
-
     model_name = embed_mod._runtime_value(
         runtime, "embedding_model", embed_mod.settings.embedding_model
     )

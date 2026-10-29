@@ -35,32 +35,11 @@ class TestIsPrewarmDone:
 
 
 class TestMain:
-    @patch("app.tasks.prewarm._set_prewarm_done")
-    @patch("app.tasks.prewarm._runtime_inference_provider", return_value="fireworks")
-    @patch("app.config.settings")
-    def test_skips_local_model_downloads_when_fireworks_provider(
-        self, mock_settings, _mock_provider, mock_set
-    ):
-        mock_settings.model_cache_dir = "/tmp/models"
-        mock_settings.whisper_model = "large-v3-turbo"
-
-        with (
-            patch("app.services.whisper.load_model") as mock_whisper_load,
-            patch("app.services.pyannote.load_pipeline") as mock_pyannote_load,
-        ):
-            from app.tasks.prewarm import main
-
-            main()
-
-        mock_whisper_load.assert_not_called()
-        mock_pyannote_load.assert_not_called()
-        mock_set.assert_called_once()
 
     @patch("app.tasks.prewarm._set_prewarm_done")
-    @patch("app.tasks.prewarm._runtime_inference_provider", return_value="local")
     @patch("app.tasks.prewarm._is_prewarm_done", return_value=True)
     @patch("app.config.settings")
-    def test_skips_when_already_done(self, mock_settings, mock_check, _mock_provider, mock_set):
+    def test_skips_when_already_done(self, mock_settings, mock_check, mock_set):
         mock_settings.model_cache_dir = "/tmp/models"
 
         with patch("pathlib.Path.exists", return_value=True):
@@ -71,10 +50,9 @@ class TestMain:
         mock_set.assert_not_called()
 
     @patch("app.tasks.prewarm._set_prewarm_done")
-    @patch("app.tasks.prewarm._runtime_inference_provider", return_value="local")
     @patch("app.tasks.prewarm._is_prewarm_done", return_value=False)
     @patch("app.config.settings")
-    def test_loads_and_unloads_models(self, mock_settings, mock_check, _mock_provider, mock_set):
+    def test_loads_and_unloads_models(self, mock_settings, mock_check, mock_set):
         mock_settings.model_cache_dir = "/tmp/models"
         mock_settings.whisper_model = "large-v3-turbo"
 
@@ -91,10 +69,9 @@ class TestMain:
 
         mock_set.assert_called_once()
 
-    @patch("app.tasks.prewarm._runtime_inference_provider", return_value="local")
     @patch("app.tasks.prewarm._is_prewarm_done", return_value=False)
     @patch("app.config.settings")
-    def test_whisper_failure_exits(self, mock_settings, mock_check, _mock_provider):
+    def test_whisper_failure_exits(self, mock_settings, mock_check):
         mock_settings.model_cache_dir = "/tmp/models"
         mock_settings.whisper_model = "large-v3-turbo"
 
@@ -108,10 +85,9 @@ class TestMain:
             main()
 
     @patch("app.tasks.prewarm._set_prewarm_done")
-    @patch("app.tasks.prewarm._runtime_inference_provider", return_value="local")
     @patch("app.tasks.prewarm._is_prewarm_done", return_value=False)
     @patch("app.config.settings")
-    def test_pyannote_failure_is_non_fatal(self, mock_settings, mock_check, _mock_provider, mock_set):
+    def test_pyannote_failure_is_non_fatal(self, mock_settings, mock_check, mock_set):
         mock_settings.model_cache_dir = "/tmp/models"
         mock_settings.whisper_model = "large-v3-turbo"
 
@@ -127,52 +103,6 @@ class TestMain:
             main()
 
         mock_set.assert_called_once()
-
-
-class TestRuntimeInferenceProvider:
-    """Cover _runtime_inference_provider lookup branches (#822)."""
-
-    @patch("app.database.SessionLocal")
-    @patch("app.services.notification_settings.get_runtime_inference_settings",
-           return_value={"inference_provider": "fireworks"})
-    def test_returns_runtime_override_when_valid(self, _mock_settings, mock_sl):
-        db = MagicMock()
-        mock_sl.return_value = db
-        from app.tasks.prewarm import _runtime_inference_provider
-        assert _runtime_inference_provider() == "fireworks"
-
-    @patch("app.database.SessionLocal")
-    @patch("app.services.notification_settings.get_runtime_inference_settings",
-           return_value={"inference_provider": "unknown"})
-    def test_invalid_runtime_value_falls_back_to_env(self, _mock_settings, mock_sl):
-        # Avoid touching config attribute on the real settings object —
-        # rebind at the module so the fallback reads our value.
-        from app.config import settings
-        with patch.object(settings, "inference_provider", "local"):
-            db = MagicMock()
-            mock_sl.return_value = db
-            from app.tasks.prewarm import _runtime_inference_provider
-            assert _runtime_inference_provider() == "local"
-
-    @patch("app.database.SessionLocal")
-    @patch("app.services.notification_settings.get_runtime_inference_settings",
-           return_value={})
-    def test_no_override_falls_back_to_env(self, _mock_settings, mock_sl):
-        from app.config import settings
-        with patch.object(settings, "inference_provider", "fireworks"):
-            db = MagicMock()
-            mock_sl.return_value = db
-            from app.tasks.prewarm import _runtime_inference_provider
-            assert _runtime_inference_provider() == "fireworks"
-
-    def test_db_error_falls_back_to_env(self):
-        from app.config import settings
-        with (
-            patch("app.database.SessionLocal", side_effect=RuntimeError("db down")),
-            patch.object(settings, "inference_provider", "local"),
-        ):
-            from app.tasks.prewarm import _runtime_inference_provider
-            assert _runtime_inference_provider() == "local"
 
 
 class TestSetPrewarmDone:
