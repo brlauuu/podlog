@@ -282,16 +282,6 @@ class TestSaveNotificationSettings:
 
         assert result["rag_local_model"] == "phi3:mini"
 
-    def test_rejects_negative_fireworks_cost_rate(self):
-        db = _mock_db(stored_json=None)
-        with pytest.raises(ValueError, match="fireworks_stt_cost_per_minute_usd"):
-            save_notification_settings(db, {"fireworks_stt_cost_per_minute_usd": -0.1})
-
-    def test_rejects_negative_pyannote_cloud_cost_rate(self):
-        db = _mock_db(stored_json=None)
-        with pytest.raises(ValueError, match="pyannote_cloud_cost_per_second_usd"):
-            save_notification_settings(db, {"pyannote_cloud_cost_per_second_usd": -0.01})
-
     def test_empty_string_normalized_to_none(self):
         stored = json.dumps({"notification_email_to": "user@example.com"})
         db = _mock_db(stored_json=stored)
@@ -427,112 +417,73 @@ class TestMaskSensitive:
         assert result["telegram_bot_token"] is None
         assert result["smtp_password"] is None
 
-    def test_masks_fireworks_api_key(self):
-        s = {"fireworks_api_key": "fw_test_1234567890"}
-        result = mask_sensitive(s)
-        assert result["fireworks_api_key"] != "fw_test_1234567890"
-        assert "***" in result["fireworks_api_key"]
+class TestRuntimeSettings:
+    """#1092: each runtime getter returns only its local setting."""
 
-    def test_masks_pyannote_api_key(self):
-        s = {"pyannote_api_key": "pn_test_1234567890"}
-        result = mask_sensitive(s)
-        assert result["pyannote_api_key"] != "pn_test_1234567890"
-        assert "***" in result["pyannote_api_key"]
-        assert result["pyannote_api_key"].startswith("pn_")
-        assert result["pyannote_api_key"].endswith("890")
-
-
-class TestRuntimeInferenceSettings:
-    def test_uses_db_override_when_present(self):
-        stored = json.dumps({
+    def test_inference_settings_hold_only_the_ask_model(self):
+        db = _mock_db(stored_json=json.dumps({
+            "rag_local_model": "gemma4:e4b",
             "inference_provider": "fireworks",
             "fireworks_api_key": "fw_abc",
-            "fireworks_chat_model": "accounts/fireworks/models/llama-v3p1-8b-instruct",
-        })
-        db = _mock_db(stored_json=stored)
-        with patch("app.services.notification_settings.settings") as mock_settings:
-            mock_settings.inference_provider = "local"
-            mock_settings.fireworks_api_key = None
-            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
-            mock_settings.fireworks_stt_model = "whisper-v3-large"
-            mock_settings.fireworks_stt_diarize = True
-            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
-            mock_settings.fireworks_chat_base_url = "https://api.fireworks.ai/inference/v1"
-            mock_settings.fireworks_chat_model = "accounts/fireworks/models/llama-v3p1-8b-instruct"
-            result = get_runtime_inference_settings(db)
-        assert result["inference_provider"] == "fireworks"
-        assert result["fireworks_api_key"] == "fw_abc"
-        assert result["fireworks_chat_model"] == "accounts/fireworks/models/llama-v3p1-8b-instruct"
+        }))
+        assert get_runtime_inference_settings(db) == {"rag_local_model": "gemma4:e4b"}
 
-    def test_uses_env_defaults_without_db(self):
-        with patch("app.services.notification_settings.settings") as mock_settings:
-            mock_settings.inference_provider = "local"
-            mock_settings.fireworks_api_key = None
-            mock_settings.fireworks_audio_base_url = "https://audio-turbo.api.fireworks.ai"
-            mock_settings.fireworks_stt_model = "whisper-v3-large"
-            mock_settings.fireworks_stt_diarize = True
-            mock_settings.fireworks_stt_cost_per_minute_usd = 0.006
-            mock_settings.fireworks_chat_base_url = "https://api.fireworks.ai/inference/v1"
-            mock_settings.fireworks_chat_model = "accounts/fireworks/models/llama-v3p1-8b-instruct"
-            result = get_runtime_inference_settings(None)
-        assert result["inference_provider"] == "local"
+    def test_embedding_settings_hold_only_the_model(self):
+        db = _mock_db(stored_json=json.dumps({
+            "embedding_model": "BAAI/bge-small-en-v1.5",
+            "embedding_provider": "fireworks",
+        }))
+        assert get_runtime_embedding_settings(db) == {"embedding_model": "BAAI/bge-small-en-v1.5"}
 
-
-class TestRuntimeEmbeddingSettings:
-    def test_uses_db_override_when_present(self):
-        stored = json.dumps({"embedding_provider": "fireworks", "fireworks_api_key": "fw_abc"})
-        db = _mock_db(stored_json=stored)
-        with patch("app.services.notification_settings.settings") as mock_settings:
-            mock_settings.embedding_provider = "local"
-            mock_settings.embedding_model = "all-MiniLM-L6-v2"
-            mock_settings.fireworks_api_key = None
-            mock_settings.fireworks_embedding_base_url = "https://api.fireworks.ai/inference/v1"
-            mock_settings.fireworks_embedding_model = "BAAI/bge-small-en-v1.5"
-            result = get_runtime_embedding_settings(db)
-        assert result["embedding_provider"] == "fireworks"
-        assert result["fireworks_api_key"] == "fw_abc"
-
-    def test_uses_env_defaults_without_db(self):
-        with patch("app.services.notification_settings.settings") as mock_settings:
-            mock_settings.embedding_provider = "local"
-            mock_settings.embedding_model = "all-MiniLM-L6-v2"
-            mock_settings.fireworks_api_key = None
-            mock_settings.fireworks_embedding_base_url = "https://api.fireworks.ai/inference/v1"
-            mock_settings.fireworks_embedding_model = "BAAI/bge-small-en-v1.5"
-            result = get_runtime_embedding_settings(None)
-        assert result["embedding_provider"] == "local"
-
-
-class TestRuntimeDiarizationSettings:
-    def test_uses_db_override_when_present(self):
-        stored = json.dumps({
+    def test_diarization_settings_hold_only_the_local_model(self):
+        db = _mock_db(stored_json=json.dumps({
+            "pyannote_model": "pyannote/speaker-diarization-3.1",
             "diarization_provider": "precision2",
             "pyannote_api_key": "pn_abc",
-            "pyannote_cloud_model": "precision-2",
-            "pyannote_cloud_cost_per_second_usd": 0.001,
-        })
-        db = _mock_db(stored_json=stored)
-        with patch("app.services.notification_settings.settings") as mock_settings:
-            mock_settings.diarization_provider = "local"
-            mock_settings.pyannote_api_key = None
-            mock_settings.pyannote_cloud_base_url = "https://api.pyannote.ai/v1"
-            mock_settings.pyannote_cloud_model = "precision-2"
-            mock_settings.pyannote_cloud_cost_per_second_usd = 0.0
-            result = get_runtime_diarization_settings(db)
-        assert result["diarization_provider"] == "precision2"
-        assert result["pyannote_api_key"] == "pn_abc"
-        assert result["pyannote_cloud_cost_per_second_usd"] == 0.001
+        }))
+        assert get_runtime_diarization_settings(db) == {
+            "pyannote_model": "pyannote/speaker-diarization-3.1"
+        }
 
-    def test_uses_env_defaults_without_db(self):
+    def test_env_defaults_without_db(self):
         with patch("app.services.notification_settings.settings") as mock_settings:
-            mock_settings.diarization_provider = "local"
-            mock_settings.pyannote_api_key = None
-            mock_settings.pyannote_cloud_base_url = "https://api.pyannote.ai/v1"
-            mock_settings.pyannote_cloud_model = "precision-2"
-            mock_settings.pyannote_cloud_cost_per_second_usd = 0.0
-            result = get_runtime_diarization_settings(None)
-        assert result["diarization_provider"] == "local"
+            mock_settings.embedding_model = "all-MiniLM-L6-v2"
+            assert get_runtime_embedding_settings(None) == {"embedding_model": "all-MiniLM-L6-v2"}
+
+
+class TestRetiredWebFields:
+    """#1092: the Settings page parses remote keys until the web removal."""
+
+    def test_get_answers_with_fixed_local_values(self):
+        result = get_notification_settings(_mock_db(stored_json=None))
+
+        for field in ("inference_provider", "embedding_provider", "diarization_provider",
+                      "rag_provider"):
+            assert result[field] == "local"
+        assert result["fireworks_api_key"] is None
         assert result["pyannote_api_key"] is None
+        assert result["fireworks_configured"] is False
+        assert result["pyannote_cloud_configured"] is False
+
+    def test_stored_remote_values_never_leak_through(self):
+        # A blob from before the upgrade still holds them until the startup
+        # cleanup runs; GET must not report a remote provider or a key.
+        stored = json.dumps({
+            "inference_provider": "fireworks",
+            "fireworks_api_key": "fw_secret_value",
+        })
+        result = get_notification_settings(_mock_db(stored_json=stored))
+
+        assert result["inference_provider"] == "local"
+        assert result["fireworks_api_key"] is None
+
+    def test_save_ignores_remote_only_fields(self):
+        db = _mock_db(stored_json=None)
+
+        save_notification_settings(db, {"fireworks_api_key": "fw_x", "smtp_host": "mail"})
+
+        written = json.loads(db.add.call_args[0][0].value)
+        assert written == {"smtp_host": "mail"}
 
 
 class TestTelegramAllowedUserIds:

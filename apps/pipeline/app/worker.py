@@ -77,26 +77,19 @@ def _classify_for_retry(exc: Exception) -> tuple[bool, str]:
 
     Order matters:
 
-    1. Typed errors carrying ``retryable: bool`` and ``error_class: str``
-       attributes (e.g. ``FireworksTranscriptionError``) win — those
-       classes know more about their own failure modes than we do here.
-    2. ``MemoryError`` is terminal ``OOM``. This used to live in the
+    1. ``MemoryError`` is terminal ``OOM``. This used to live in the
        per-task handlers in transcribe.py.
-    3. ``httpx.HTTPStatusError`` 5xx/429 is retryable ``TRANSIENT_NETWORK``;
+    2. ``httpx.HTTPStatusError`` 5xx/429 is retryable ``TRANSIENT_NETWORK``;
        4xx is terminal ``HTTP_ACCESS`` — a 404 or 403 isn't going to
        resolve on retry, so failing fast saves bandwidth and gives the
        user a clear signal.
-    4. Known transient exception types or message-substring matches
+    3. Known transient exception types or message-substring matches
        map to retryable ``TRANSIENT_NETWORK``.
-    5. Anything else is terminal ``SYSTEM_ERROR``.
-    """
-    retryable = getattr(exc, "retryable", None)
-    error_class = getattr(exc, "error_class", None)
-    if isinstance(retryable, bool):
-        if isinstance(error_class, str):
-            return (retryable, error_class)
-        return (retryable, "TRANSIENT_NETWORK" if retryable else "SYSTEM_ERROR")
+    4. Anything else is terminal ``SYSTEM_ERROR``.
 
+    The typed-error override that let the Fireworks and pyannote.ai services
+    set their own ``retryable`` went with them (#1092).
+    """
     if isinstance(exc, MemoryError):
         return (False, "OOM")
 

@@ -103,40 +103,22 @@ async def _stream_ask(
     db = SessionLocal()
     try:
         runtime = get_runtime_inference_settings(db)
-        # Issue #608: RAG/Ask routing reads its own dedicated provider flag,
-        # decoupled from inference_provider (which controls transcription).
-        provider = runtime.get("rag_provider") or "local"
         # Issue #637: when the caller doesn't supply a model, fall back to the
-        # admin-configured rag_local_model (local) or fireworks_chat_model
-        # (fireworks), then to the hardcoded DEFAULT_MODEL.
-        if provider == "local":
-            resolved_model = model or runtime.get("rag_local_model") or DEFAULT_MODEL
-        else:
-            resolved_model = model or DEFAULT_MODEL
-        if provider == "fireworks" and not (
-            isinstance(resolved_model, str) and resolved_model.startswith("accounts/")
-        ):
-            # Caller sent an Ollama-style name (legacy dropdown shipped only
-            # Ollama models pre-#608). Fall back to the configured Fireworks
-            # chat model. PR 3 makes the Ask page send valid Fireworks paths
-            # directly.
-            resolved_model = runtime.get("fireworks_chat_model") or resolved_model
+        # admin-configured rag_local_model, then to the hardcoded DEFAULT_MODEL.
+        # #1092: a Fireworks model path ("accounts/...") can still arrive from an
+        # Ask page that remembers the retired remote toggle; Ollama cannot serve
+        # it, so it gets the local default instead of a "not available" error.
+        if model and model.startswith("accounts/"):
+            model = None
+        resolved_model = model or runtime.get("rag_local_model") or DEFAULT_MODEL
 
-        if provider == "local" and not await check_model_available(resolved_model, runtime=runtime):
+        if not await check_model_available(resolved_model):
             yield _sse_event(
                 "error",
                 {"message": f"Model '{resolved_model}' is not available. Run: make ollama-pull"},
             )
             yield _sse_event("done", {})
             return
-        if provider == "fireworks" and not runtime.get("fireworks_api_key"):
-            yield _sse_event(
-                "error",
-                {"message": "Fireworks provider is not configured. Save FIREWORKS_API_KEY first."},
-            )
-            yield _sse_event("done", {})
-            return
-
         if context:
             # #990: the caller supplied the passages, so there is nothing to
             # retrieve. The web app does that, being the only container with
@@ -197,7 +179,7 @@ async def _stream_ask(
                 history=capped_history,
             )
 
-        async for token in stream_response(messages, model=resolved_model, runtime=runtime):
+        async for token in stream_response(messages, model=resolved_model):
             yield _sse_event("token", {"content": token})
 
         yield _sse_event("done", {})

@@ -17,8 +17,6 @@ for. Both are cheap to test up front:
 Rules:
 - Never blocks anything. Diarization failure stays non-fatal (PRD-01 S5.5);
   this only says so earlier.
-- SKIPPED when the diarization provider is the pyannote cloud (`precision2`):
-  no HuggingFace access is needed then.
 - UNKNOWN when HuggingFace cannot be reached: an offline install must not
   look broken.
 - Cached for PREFLIGHT_TTL_SECS so the health endpoint's polling does not
@@ -44,7 +42,7 @@ HF_API = "https://huggingface.co"
 PREFLIGHT_TTL_SECS = 300
 TIMEOUT_SECS = 10
 
-Status = Literal["OK", "FAILED", "UNKNOWN", "SKIPPED"]
+Status = Literal["OK", "FAILED", "UNKNOWN"]
 
 
 @dataclass(frozen=True)
@@ -123,12 +121,8 @@ def diarization_preflight(db: Session | None = None, *, force: bool = False) -> 
         runtime = get_runtime_diarization_settings(db)
     except Exception:
         runtime = {}
-    provider = runtime.get("diarization_provider") or settings.diarization_provider
-    if provider == "precision2":
-        result = PreflightResult("SKIPPED", "Cloud diarization (pyannote.ai) needs no HuggingFace access.")
-    else:
-        model = runtime.get("pyannote_model") or settings.pyannote_model
-        result = check_hf_access(settings.hf_token, model)
+    model = runtime.get("pyannote_model") or settings.pyannote_model
+    result = check_hf_access(settings.hf_token, model)
     _cache = (now, result)
     return result
 

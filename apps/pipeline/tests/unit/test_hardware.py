@@ -7,7 +7,6 @@ from app.services.hardware import (
     detect_hardware,
     get_hardware_profile,
     estimate_processing_times,
-    validate_fireworks_key,
     HARDWARE_PROFILES,
 )
 
@@ -105,22 +104,3 @@ class TestEstimateProcessingTimes:
         assert estimates["embedding_seconds_per_hour"] is None
         assert estimates["remote_cost_per_hour_usd"] == pytest.approx(0.36, rel=0.01)
 
-
-class TestValidateFireworksKey:
-    def test_returns_true_on_success(self):
-        with patch("httpx.get") as mock_get:
-            mock_get.return_value.status_code = 200
-            result = validate_fireworks_key("fw_test_key")
-        assert result is True
-
-    def test_returns_false_on_auth_failure(self):
-        with patch("httpx.get") as mock_get:
-            mock_get.return_value.status_code = 401
-            result = validate_fireworks_key("fw_bad_key")
-        assert result is False
-
-    def test_returns_false_on_network_error(self):
-        with patch("httpx.get") as mock_get:
-            mock_get.side_effect = Exception("Connection refused")
-            result = validate_fireworks_key("fw_test_key")
-        assert result is False

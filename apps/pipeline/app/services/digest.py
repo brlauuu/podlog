@@ -79,7 +79,7 @@ class DigestItem:
 class ProviderAverages:
     """Averages scoped to episodes processed by a single inference provider."""
 
-    provider: str  # "local", "fireworks", etc.
+    provider: str  # "local", or "fireworks" for episodes from before #1092
     avg_transcribe_secs: float | None = None
     avg_diarize_secs: float | None = None
     avg_total_secs: float | None = None
@@ -186,7 +186,7 @@ def send_digest_if_due(now: datetime | None = None) -> None:
             _update_last_sent(db, state_row, now)
             return
 
-        active_provider = ns.get("inference_provider")
+        active_provider = "local"  # the only provider since #1092
         remaining, estimated, factor = estimate_queue_status(db, provider=active_provider)
         avg_t, avg_d, avg_total = compute_avg_processing_stats(db)
         avg_dur = compute_avg_duration(db)

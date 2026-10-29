@@ -345,45 +345,6 @@ class TestClassifyForRetry:
     """Issue #653: richer classification including typed metadata, MemoryError,
     and HTTPStatusError."""
 
-    def test_typed_exception_with_retryable_metadata_wins(self):
-        """An exception carrying ``retryable`` and ``error_class`` attrs (e.g.
-        FireworksTranscriptionError) overrides everything else."""
-        from app.worker import _classify_for_retry
-
-        class TypedError(RuntimeError):
-            def __init__(self, msg, retryable, error_class):
-                super().__init__(msg)
-                self.retryable = retryable
-                self.error_class = error_class
-
-        retryable, ec = _classify_for_retry(
-            TypedError("bad upload", retryable=True, error_class="FIREWORKS_UPLOAD_REJECTED")
-        )
-        assert (retryable, ec) == (True, "FIREWORKS_UPLOAD_REJECTED")
-
-        retryable, ec = _classify_for_retry(
-            TypedError("permanent denial", retryable=False, error_class="HTTP_ACCESS")
-        )
-        assert (retryable, ec) == (False, "HTTP_ACCESS")
-
-    def test_typed_exception_without_error_class_falls_back_to_generic(self):
-        """Defensive: a typed error that sets ``retryable`` but forgot
-        ``error_class`` still classifies sensibly."""
-        from app.worker import _classify_for_retry
-
-        class HalfTyped(RuntimeError):
-            def __init__(self, msg, retryable):
-                super().__init__(msg)
-                self.retryable = retryable
-                # no error_class
-
-        assert _classify_for_retry(HalfTyped("blip", retryable=True)) == (
-            True, "TRANSIENT_NETWORK"
-        )
-        assert _classify_for_retry(HalfTyped("dead", retryable=False)) == (
-            False, "SYSTEM_ERROR"
-        )
-
     def test_memory_error_is_terminal_oom(self):
         """transcribe.py used to mark this OOM internally; worker takes over."""
         from app.worker import _classify_for_retry

@@ -273,17 +273,6 @@ class TestProviderRoutingOnTheContextPath:
         assert got == "phi3:mini"
 
     @pytest.mark.asyncio
-    async def test_unpinned_uses_the_configured_fireworks_model(self):
-        got = await self._resolved_model(
-            {
-                "rag_provider": "fireworks",
-                "fireworks_api_key": "fw-key",
-                "fireworks_chat_model": "accounts/fireworks/models/llama-v3p1-70b",
-            }
-        )
-        assert got == "accounts/fireworks/models/llama-v3p1-70b"
-
-    @pytest.mark.asyncio
     async def test_a_pinned_model_overrides_the_configured_one(self):
         """This is the trap the bubble avoids by sending no model."""
         got = await self._resolved_model(

@@ -163,22 +163,3 @@ def estimate_processing_times(profile: dict | None, cost_per_minute: float) -> d
         "remote_embedding_seconds_per_hour": remote_embedding,
         "remote_cost_per_hour_usd": remote_cost,
     }
-
-
-def validate_fireworks_key(api_key: str) -> bool:
-    """Validate a Fireworks API key by making a lightweight API call.
-
-    Returns True if the key appears valid, False otherwise.
-    """
-    import httpx
-
-    try:
-        resp = httpx.get(
-            "https://api.fireworks.ai/inference/v1/models",
-            headers={"Authorization": f"Bearer {api_key}"},
-            timeout=10,
-        )
-        return resp.status_code == 200
-    except Exception:
-        logger.warning('"action": "fireworks_key_validation_failed"')
-        return False

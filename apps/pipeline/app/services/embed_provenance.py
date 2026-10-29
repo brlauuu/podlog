@@ -9,10 +9,10 @@ populations is meaningless. Measured on real data: re-embedding a segment's own
 text with the wrong 384-dim model scores ~0.33 against its stored vector,
 against 1.0000 for the right one.
 
-The key is the **model name**, not the provider. Both providers served the same
-underlying model, so a Fireworks-to-local switch on the same model name is
-correctly seen as compatible (that is the #944 recovery path), while an
-all-MiniLM/bge-small swap is incompatible whichever provider produced it.
+The key is the **model name**, not who ran it. Fireworks served the same
+bge-small model Podlog runs locally, so a corpus embedded remotely before #1092
+stays compatible with the same model name run locally (the #944 recovery
+path), while an all-MiniLM/bge-small swap is always incompatible.
 
 One global record rather than a per-row column: a mixed corpus is the thing
 being prevented, not a state worth modelling, and a column would cost a
@@ -42,21 +42,10 @@ class EmbeddingModelMismatch(RuntimeError):
 
 
 def effective_model_name(runtime: dict[str, Any] | None = None) -> str:
-    """The model identity in play, whichever provider is selected.
-
-    Deliberately provider-agnostic: what matters for vector-space compatibility
-    is which model produced the numbers, not who ran it.
-    """
-
-    def _value(key: str, default: Any) -> Any:
-        if runtime is not None and runtime.get(key) is not None:
-            return runtime[key]
-        return default
-
-    provider = _value("embedding_provider", settings.embedding_provider)
-    if provider == "fireworks":
-        return str(_value("fireworks_embedding_model", settings.fireworks_embedding_model))
-    return str(_value("embedding_model", settings.embedding_model))
+    """The configured embedding model: runtime settings first, then env."""
+    if runtime is not None and runtime.get("embedding_model") is not None:
+        return str(runtime["embedding_model"])
+    return str(settings.embedding_model)
 
 
 def read_state(db: Session) -> dict[str, Any] | None:

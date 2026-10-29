@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Supports local-only operation or remote inference via Fireworks AI. Production runs in Docker Compose; development can run services natively (see `docs/development.md`).
+Podlog is a self-hosted podcast transcription and search app. It downloads episodes from RSS feeds, transcribes them with Whisper, labels speakers with pyannote, and provides a web UI to search across all transcripts. Fully self-hosted: every stage runs on the user's own machine (remote inference was removed in #1092). Production runs in Docker Compose; development can run services natively (see `docs/development.md`).
 
 **Phase:** Core pipeline is operational. Episodes are being ingested, transcribed, diarized, chunked, and archived. The repo has an active automated test suite and Alembic migration history. Web UI serves search, queue dashboard, feed management, and an Ask AI feature.
 
@@ -62,7 +62,7 @@ podlog/
 │   │   │   ├── worker.py           # Background job worker + feed polling loop
 │   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis, backups, explore, prompts)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
-│   │   │   └── services/           # Business logic (rss, whisper, pyannote, pyannote_cloud, alignment, chunking, embed, embed_provenance, speaker_turns, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, fireworks_audio, pipeline_commands, timing_labels, prompts, backup_files, backup_settings, queue_snapshot, telegram_bot, preflight, remote_retirement)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, embed_provenance, speaker_turns, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, pipeline_commands, timing_labels, prompts, backup_files, backup_settings, queue_snapshot, telegram_bot, preflight, remote_retirement)
 │   │   ├── alembic/                # Database migrations (22 versions)
 │   │   └── tests/                  # unit, integration, e2e
 │   ├── web/                        # Next.js 16 (App Router)
@@ -89,8 +89,8 @@ Agent-tool metadata (`.agents/`, `.superpowers/`, `.omx/`, `.claude/`, `.worktre
 | Pipeline API | FastAPI (Python 3.11–3.13) | Internal API consumed by web app |
 | Task queue | PostgreSQL-backed job queue | Sequential processing (concurrency=1) to avoid OOM |
 | Transcription | WhisperX (CTranslate2 backend), default `large-v3-turbo` | Explicit unload before diarization — mandatory |
-| Diarization | `pyannote/speaker-diarization-community-1` local (override via `PYANNOTE_MODEL`) or pyannote.ai cloud `precision-2` (`DIARIZATION_PROVIDER=precision2`, Issue #516) | Requires HF_TOKEN for local or `PYANNOTE_API_KEY` for cloud; graceful failure path |
-| LLM inference | Ollama (local) or Fireworks AI (remote) | RAG-based Ask AI feature; provider selected via `inference_provider` config; model selected in Ask UI per request |
+| Diarization | `pyannote/speaker-diarization-community-1`, local (override via `PYANNOTE_MODEL`) | Requires HF_TOKEN; graceful failure path |
+| LLM inference | Ollama (local) | RAG-based Ask AI feature; model selected in Ask UI per request, defaulting to `rag_local_model` |
 | Database | PostgreSQL 15 (pgvector/pgvector:pg15) | FTS via `to_tsvector` + GIN index, vector HNSW index |
 | ORM | SQLAlchemy 2.0 + Alembic | Migrations auto-run on pipeline startup |
 | Web app | Next.js 16 (App Router) | `output: 'standalone'` for Docker |
@@ -103,7 +103,7 @@ Agent-tool metadata (`.agents/`, `.superpowers/`, `.omx/`, `.claude/`, `.worktre
 - **Whisper and pyannote never in memory simultaneously.** Whisper is explicitly unloaded (+ `gc.collect()`) before pyannote loads. This is mandatory on CPU-only machines. See PRD-01 §5.4.
 - **Web app reads DB directly for search** but proxies to the pipeline API for feed management, queue retries, and health checks.
 - **Audio serving has path traversal protection.** The `/api/audio/[episodeId]/[filename]` route strips path separators and validates the resolved path stays within allowed audio directories (`/data/audio/archive/` and `/data/audio/raw/`).
-- **Error classification drives retry logic.** Auto-retry is decided by the `transient` flag from `worker.py::_classify_for_retry`, not by the class name: `TRANSIENT_NETWORK` retries (up to 3x with exponential backoff); `DISK_FULL`, `OOM` and `SYSTEM_ERROR` fail immediately. `HTTP_ACCESS` is terminal from the generic classifier (a 4xx on a podcast audio URL will not resolve on retry) but retryable when raised by the Fireworks or pyannote-cloud services, whose typed errors set `retryable=True` and win at step 1.
+- **Error classification drives retry logic.** Auto-retry is decided by the `transient` flag from `worker.py::_classify_for_retry`, not by the class name: `TRANSIENT_NETWORK` retries (up to 3x with exponential backoff); `DISK_FULL`, `OOM` and `SYSTEM_ERROR` fail immediately. `HTTP_ACCESS` is terminal (a 4xx on a podcast audio URL will not resolve on retry). The typed-error override that let the Fireworks and pyannote.ai services mark their own errors retryable went with them (#1092).
 - **Diarization failure is non-fatal.** If pyannote fails, the transcript is still written with `speaker_label = NULL` and `has_diarization = false`.
 
 ## How to Run
@@ -129,7 +129,7 @@ make shell-db          # Open psql shell
   - Pipeline: `pytest` — unit tests mock DB/models, integration tests use a real test DB.
   - Web: `jest` + `@testing-library/react` for unit, `playwright` for e2e.
 - **PRD references:** When implementing a feature, cite the PRD section (e.g. "per PRD-02 §5.6") in code comments only where the requirement is non-obvious.
-- **Security model (#960, #988):** Podlog assumes a single trusted host **on a trusted network**. The pipeline API has **no authentication** — every write endpoint (settings, which holds the Fireworks/pyannote keys; feed CRUD; upload; retry; backfill; backup deletion) is open to anything that can reach port 8000. Binding db/pipeline/ollama to `127.0.0.1` (#952) protects port 8000 *directly*, but **the web app is an unauthenticated write proxy to it** — there is no `middleware.ts` and no auth check anywhere in `apps/web`, and 23 mutating routes under `apps/web/src/app/api/` forward straight through. So the effective trust boundary is the **LAN**, not the host: anyone who can reach `:3000` can delete feeds, episodes and backups. Do not describe LAN exposure as read-only browsing. Two changes break what boundary remains and require adding auth first: re-publishing db/pipeline/ollama to `0.0.0.0`, or moving the `web` container to a different host. Documented in `docs/guide/01-installation.md`; options weighed in #960.
+- **Security model (#960, #988):** Podlog assumes a single trusted host **on a trusted network**. The pipeline API has **no authentication** — every write endpoint (settings, which holds the Telegram and SMTP credentials; feed CRUD; upload; retry; backfill; backup deletion) is open to anything that can reach port 8000. Binding db/pipeline/ollama to `127.0.0.1` (#952) protects port 8000 *directly*, but **the web app is an unauthenticated write proxy to it** — there is no `middleware.ts` and no auth check anywhere in `apps/web`, and 23 mutating routes under `apps/web/src/app/api/` forward straight through. So the effective trust boundary is the **LAN**, not the host: anyone who can reach `:3000` can delete feeds, episodes and backups. Do not describe LAN exposure as read-only browsing. Two changes break what boundary remains and require adding auth first: re-publishing db/pipeline/ollama to `0.0.0.0`, or moving the `web` container to a different host. Documented in `docs/guide/01-installation.md`; options weighed in #960.
 - **Per-change obligations (#991):** Three things are expected of every PR. They live together here because they are one habit, not three.
 
   1. **CHANGELOG.** A one-line entry under `## Unreleased` for user-visible behaviour, grouped Major / Minor / Fixes / Internal. Enforced by `.github/workflows/changelog.yml`; the escape hatch is the `no-changelog` label.
@@ -151,7 +151,7 @@ make shell-db          # Open psql shell
   | Notification settings, digest, healthcheck, `apps/pipeline/app/services/telegram_bot.py` | `docs/guide/09-notifications.md`, and the Security model in `docs/guide/01-installation.md` if what the bot can do changes |
   | Timings, image sizes, storage figures | `docs/guide/11-hardware.md`, `docs/hardware.md` |
   | `apps/pipeline/app/services/rag.py`, `apps/web/src/lib/rag-models.ts` | `docs/guide/12-rag-search.md` |
-  | `apps/pipeline/app/services/pyannote_cloud.py`, diarization providers | `docs/guide/13-pyannote-cloud.md`, `docs/guide/19-inference-providers.md` |
+  | `apps/pipeline/app/services/remote_retirement.py`, remote-provider leftovers (#1092) | `docs/guide/13-pyannote-cloud.md`, `docs/guide/19-inference-providers.md` (both removed in #1092's last PR) |
   | `apps/web/src/app/meta-analysis` | `docs/guide/14-meta-analysis.md` |
   | `apps/explore`, notebooks | `docs/guide/15-explore.md` |
   | `apps/backup`, `apps/pipeline/app/services/backup_files.py` | `docs/guide/16-backups.md` |
@@ -220,10 +220,10 @@ If the resolved version is still ≤ 7.37.x, the block stands and the audit find
 - Alembic migration history is maintained under `apps/pipeline/alembic/versions/`
 - shadcn/ui component set is installed and used in the web app
 - Docs tab for user documentation
-- RAG-based Ask AI feature via Ollama (local) or Fireworks AI (remote)
+- RAG-based Ask AI feature via Ollama
 - Speaker merge/rename UI
 - Notification settings
-- pyannote.ai Precision-2 cloud diarization as an alternative to local pyannote (Issue #516)
+- Remote inference (Fireworks, pyannote.ai) removed; Podlog is fully self-hosted (#1092)
 - Meta-Analysis dashboard aggregating cross-feed metrics (Issue #521)
 - CI enforces coverage thresholds: pipeline `--cov-fail-under=82` in `ci-full-unit.yml`, web `coverageThreshold` in `jest.config.js`
 

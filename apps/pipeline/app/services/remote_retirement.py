@@ -1,20 +1,18 @@
-"""Switch an upgraded install off remote inference (#1092).
+"""Clean an upgraded install's leftovers from remote inference (#1092).
 
-Podlog is becoming fully self-hosted. Removing the remote code only fixes fresh
-installs: an existing deployment keeps its choices in the
-``notification_settings`` blob, which overrides env, so a stored
-``inference_provider=fireworks`` would keep routing to a provider that no
-longer exists. This runs once per process start, in both the worker and the
-pipeline API, and is idempotent:
+Podlog is fully self-hosted: nothing reads a provider setting or a remote API
+key any more. An existing deployment still has them in the
+``notification_settings`` blob, though, including API keys that should not sit
+in the database once nothing uses them. This runs once per process start, in
+both the worker and the pipeline API, and is idempotent:
 
-- stored remote provider values become ``local`` (written, not deleted, so a
-  leftover ``INFERENCE_PROVIDER=fireworks`` in .env cannot take over again);
-- stored API keys and other remote-only fields are deleted;
+- stored provider settings and every remote-only field (API keys included) are
+  deleted, with a warning naming each provider that was still remote;
 - an embedding model nobody chose is pinned to the one that built the corpus,
   because the Fireworks path embedded with ``BAAI/bge-small-en-v1.5`` while the
   local default is ``all-MiniLM-L6-v2``, and the provenance guard (#945) would
   otherwise fail every embed job;
-- env vars that are going away are named in one warning.
+- env vars that no longer do anything are named in one warning.
 
 Nothing here may block startup: every failure is logged and swallowed.
 """
@@ -23,17 +21,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import SystemState
 from app.services import embed_provenance
-from app.services.notification_settings import (
-    SETTINGS_KEY,
-    _VALID_EMBEDDING_MODELS,
-    get_notification_settings,
-)
+from app.services.notification_settings import SETTINGS_KEY, _VALID_EMBEDDING_MODELS
 
 logger = logging.getLogger(__name__)
 
@@ -62,13 +57,17 @@ REMOTE_ONLY_FIELDS = (
     "pyannote_cloud_cost_per_second_usd",
 )
 
-# Settings fields whose env vars are removed by #1092.
-RETIRED_ENV_FIELDS = (*REMOTE_PROVIDER_VALUES, *REMOTE_ONLY_FIELDS)
+RETIRED_FIELDS = (*REMOTE_PROVIDER_VALUES, *REMOTE_ONLY_FIELDS)
 
 
 def retired_env_vars_set() -> list[str]:
-    """Names of retired env vars that are still set (from the environment or .env)."""
-    return sorted(f.upper() for f in RETIRED_ENV_FIELDS if f in settings.model_fields_set)
+    """Names of retired env vars still present in the process environment.
+
+    Read from ``os.environ`` because the config fields that used to parse them
+    are gone. Under Docker that covers ``.env``, which compose loads with
+    ``env_file``; a natively run process reading ``.env`` itself is not covered.
+    """
+    return sorted(f.upper() for f in RETIRED_FIELDS if f.upper() in os.environ)
 
 
 def _embedding_model_to_pin(db: Session, stored: dict) -> str | None:
@@ -83,35 +82,30 @@ def _embedding_model_to_pin(db: Session, stored: dict) -> str | None:
 
 
 def retire_remote_settings(db: Session) -> list[str]:
-    """Rewrite stored settings so nothing routes to a remote provider.
+    """Delete every stored remote setting and pin the embedding model if needed.
 
     Returns the stored keys that changed, for tests and logging.
     """
-    effective = get_notification_settings(db)
     row = db.query(SystemState).filter(SystemState.key == SETTINGS_KEY).first()
     stored = json.loads(row.value) if row is not None else {}
-    changed: list[str] = []
 
     for field, remote_value in REMOTE_PROVIDER_VALUES.items():
-        if effective.get(field) == remote_value:
-            stored[field] = "local"
-            changed.append(field)
+        if stored.get(field) == remote_value:
             logger.warning(
                 '"action": "remote_provider_retired", "setting": "%s", "was": "%s", '
-                '"now": "local", "detail": "Podlog no longer offers remote inference '
-                '(issue #1092)."',
+                '"detail": "Podlog no longer offers remote inference; this step now runs '
+                'locally (issue #1092)."',
                 field,
                 remote_value,
             )
 
-    removed = [field for field in REMOTE_ONLY_FIELDS if field in stored]
-    for field in removed:
+    changed = [field for field in RETIRED_FIELDS if field in stored]
+    for field in changed:
         del stored[field]
-    changed.extend(removed)
-    if removed:
+    if changed:
         # Names only: some of these are API keys.
         logger.warning(
-            '"action": "remote_settings_deleted", "settings": %s', json.dumps(removed)
+            '"action": "remote_settings_deleted", "settings": %s', json.dumps(changed)
         )
 
     pinned = _embedding_model_to_pin(db, stored)
@@ -139,9 +133,9 @@ def run_at_startup(session_factory) -> None:
     retired_env = retired_env_vars_set()
     if retired_env:
         logger.warning(
-            '"action": "retired_env_vars_set", "vars": %s, "detail": "These settings '
-            'configure remote inference, which Podlog is removing. Delete them from .env '
-            '(issue #1092)."',
+            '"action": "retired_env_vars_set", "vars": %s, "detail": "These configured '
+            'remote inference, which Podlog no longer offers, and are ignored. Delete them '
+            'from .env (issue #1092)."',
             json.dumps(retired_env),
         )
     try:
