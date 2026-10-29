@@ -109,9 +109,6 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
             diarizeDurationSecs={episode.diarize_duration_secs}
             diarizeStepDurations={episode.diarize_step_durations}
             inferenceProviderUsed={episode.inference_provider_used}
-            fireworksSttCostUsd={episode.fireworks_stt_cost_usd}
-            fireworksAudioMinutes={episode.fireworks_audio_minutes}
-            pyannoteCloudCostUsd={episode.pyannote_cloud_cost_usd}
             audioFileSizeBytes={episode.audio_file_size_bytes}
             episodeId={episode.id}
           />

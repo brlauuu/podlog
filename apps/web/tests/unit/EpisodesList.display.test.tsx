@@ -42,39 +42,24 @@ describe("EpisodesList — display", () => {
     expect(screen.queryByText(/Processed in/)).not.toBeInTheDocument();
   });
 
-  it("renders Fireworks STT cost tag with correct format when provider is fireworks", () => {
-    render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
-    expect(screen.getByText(/Fireworks STT: \$0\.01/)).toBeInTheDocument();
-  });
-
-  it("does not render Fireworks STT cost tag when provider is not fireworks", () => {
+  // #1092: only episodes transcribed remotely before the removal carry a
+  // provenance tag; a local episode needs none.
+  it("tags only the remotely transcribed episode", () => {
     render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
 
-    // Only ep-1 is fireworks; ep-2 is local → exactly one tag
-    const fireworksTags = screen.getAllByText(/Fireworks STT/);
-    expect(fireworksTags.length).toBe(1);
-  });
-
-  it("renders local/remote inference tags with updated labels", () => {
-    render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
-
-    const remote = screen.getByText("Remote inference");
-    const local = screen.getByText("Local inference");
-
-    expect(remote).toBeInTheDocument();
-    expect(local).toBeInTheDocument();
+    const remote = screen.getByText("Transcribed remotely");
     expect(remote).toHaveClass("bg-violet-100", "text-violet-800");
-    expect(local).toHaveClass("bg-teal-100", "text-teal-800");
+    expect(screen.getAllByText("Transcribed remotely")).toHaveLength(1);
+    expect(screen.queryByText(/Local inference|Remote inference/)).toBeNull();
   });
 
-  it("renders local inference tag when provider is missing", () => {
+  it("renders no provenance tag when the provider is missing", () => {
     const episodesWithoutProvider: EnrichedEpisode[] = [
       makeEpisode({ id: "ep-no-provider", inference_provider_used: null }),
     ];
 
     render(<EpisodesList episodes={episodesWithoutProvider} feedId="feed-1" />);
-    expect(screen.getByText("Local inference")).toBeInTheDocument();
-    expect(screen.queryByText("Remote inference")).not.toBeInTheDocument();
+    expect(screen.queryByText("Transcribed remotely")).not.toBeInTheDocument();
   });
 
   it("renders confirmed speakers in blue and non-confirmed speakers in orange", () => {
@@ -102,25 +87,6 @@ describe("EpisodesList — display", () => {
     const episodeIds = reprocessButtons.map((btn) => btn.getAttribute("data-episode-id"));
     expect(episodeIds).toContain("ep-1");
     expect(episodeIds).toContain("ep-2");
-  });
-
-  it("shows Fireworks STT Details tooltip on hover", () => {
-    render(<EpisodesList episodes={mockEpisodes} feedId="feed-1" />);
-
-    const fireworksTag = screen.getByText(/Fireworks STT: \$0\.01/);
-
-    expect(screen.queryByText(/Fireworks STT Details/)).not.toBeInTheDocument();
-
-    fireEvent.mouseEnter(fireworksTag);
-
-    expect(screen.getByText(/Fireworks STT Details/)).toBeInTheDocument();
-    expect(screen.getByText(/Audio:/)).toBeInTheDocument();
-    expect(screen.getByText(/Cost:/)).toBeInTheDocument();
-    expect(screen.getByText(/Rate:/)).toBeInTheDocument();
-
-    fireEvent.mouseLeave(fireworksTag);
-
-    expect(screen.queryByText(/Fireworks STT Details/)).not.toBeInTheDocument();
   });
 
   it("does not render transcribe/diarize tags when duration is 0 or null", () => {

@@ -578,17 +578,14 @@ class TestPerEpisode:
         result = agg._per_episode(db)
         assert result[0]["published_at"] is None
 
-    def test_fireworks_cost_passes_through_when_set(self):
-        eps = [_ep_row(id="ep1", fireworks_stt_cost_usd=0.0042)]
+    def test_carries_no_cost_or_provider_fields(self):
+        # #1092: no money figures, and the provider-timing chart is gone.
+        eps = [_ep_row(id="ep1")]
         db = _FakeSession([eps, [], []])
         result = agg._per_episode(db)
-        assert result[0]["fireworks_cost_usd"] == pytest.approx(0.0042)
-
-    def test_fireworks_cost_none_passes_through_as_none(self):
-        eps = [_ep_row(id="ep1", fireworks_stt_cost_usd=None)]
-        db = _FakeSession([eps, [], []])
-        result = agg._per_episode(db)
-        assert result[0]["fireworks_cost_usd"] is None
+        for key in ("fireworks_cost_usd", "inference_provider_used",
+                    "transcribe_duration_secs", "diarize_duration_secs"):
+            assert key not in result[0]
 
     def test_no_segments_zero_words(self):
         eps = [_ep_row(id="ep1", duration_secs=600)]

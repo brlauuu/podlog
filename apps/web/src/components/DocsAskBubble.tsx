@@ -89,9 +89,7 @@ export default function DocsAskBubble() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           // No `model` on purpose (#990). The pipeline resolves it from
-          // Settings: rag_provider chooses local vs Fireworks, then
-          // rag_local_model / fireworks_chat_model chooses the model. Pinning
-          // one here would win over `model or runtime.get("rag_local_model")`
+          // Settings (rag_local_model). Pinning one here would win over `model or runtime.get("rag_local_model")`
           // in api/ask.py and silently ignore the configured local model.
           body: JSON.stringify({
             question: q,

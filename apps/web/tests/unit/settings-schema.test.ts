@@ -16,30 +16,11 @@ const validPayload = {
   smtp_use_tls: true,
   notification_frequency: "daily",
   health_check_notifications_enabled: true,
-  inference_provider: "local",
-  fireworks_api_key: null,
-  fireworks_audio_base_url: "https://api.fireworks.ai/inference/v1/audio",
-  fireworks_stt_model: "whisper-v3-turbo",
-  fireworks_stt_diarize: false,
-  fireworks_chat_base_url: "https://api.fireworks.ai/inference/v1",
-  fireworks_chat_model: "accounts/fireworks/models/llama-v3p3-70b-instruct",
-  fireworks_stt_cost_per_minute_usd: 0.0009,
-  embedding_provider: "local",
   embedding_model: "all-MiniLM-L6-v2",
-  fireworks_embedding_base_url: "https://api.fireworks.ai/inference/v1",
-  fireworks_embedding_model: "nomic-ai/nomic-embed-text-v1.5",
-  diarization_provider: "local",
-  pyannote_api_key: null,
-  pyannote_cloud_base_url: "https://api.pyannote.ai/v1",
-  pyannote_cloud_model: "precision-2",
   pyannote_model: "pyannote/speaker-diarization-community-1",
-  pyannote_cloud_cost_per_second_usd: 0.0006,
-  rag_provider: "local",
   rag_local_model: "qwen2.5:3b",
   telegram_configured: false,
   email_configured: false,
-  fireworks_configured: false,
-  pyannote_cloud_configured: false,
 };
 
 describe("SettingsSchema", () => {
@@ -81,16 +62,31 @@ describe("SettingsSchema", () => {
   });
 
   it("accepts null for nullable secret fields", () => {
-    const result = SettingsSchema.safeParse({ ...validPayload, fireworks_api_key: null });
+    const result = SettingsSchema.safeParse({ ...validPayload, smtp_password: null });
     expect(result.success).toBe(true);
   });
 
   it("accepts a string for nullable secret fields", () => {
     const result = SettingsSchema.safeParse({
       ...validPayload,
-      fireworks_api_key: "fw_test_key",
+      smtp_password: "secret",
     });
     expect(result.success).toBe(true);
+  });
+
+  // #1092: an older pipeline still answering with the remote keys must not
+  // break the page during an upgrade.
+  it("ignores the retired remote-inference keys", () => {
+    const result = SettingsSchema.safeParse({
+      ...validPayload,
+      inference_provider: "fireworks",
+      fireworks_api_key: "fw_x",
+      pyannote_cloud_configured: true,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect("fireworks_api_key" in result.data).toBe(false);
+    }
   });
 
   it("strips unknown keys (additive backend changes don't break the page)", () => {

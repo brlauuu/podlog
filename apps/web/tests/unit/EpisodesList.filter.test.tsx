@@ -40,8 +40,6 @@ const twoEpisodes: EnrichedEpisode[] = [
     transcribe_duration_secs: 90,
     diarize_duration_secs: 45,
     inference_provider_used: "local",
-    fireworks_audio_minutes: null,
-    fireworks_stt_cost_usd: null,
     speaker_count: 3,
   }),
 ];

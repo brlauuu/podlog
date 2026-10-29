@@ -102,15 +102,17 @@ def test_compute_snapshot_excludes_non_done_episodes(db_session):
     assert entry["avg_length_min"] == 10.0
 
 
-def test_compute_snapshot_per_feed_sums_cost_and_audio_minutes(db_session):
+def test_compute_snapshot_has_no_cost_figures(db_session):
+    # #1092: episodes from before the removal still carry Fireworks cost
+    # columns, but the snapshot reports no money.
     feed = _make_feed(db_session, "Podcast C")
     _make_episode(db_session, feed, fireworks_stt_cost_usd=0.12, fireworks_audio_minutes=10.0)
-    _make_episode(db_session, feed, fireworks_stt_cost_usd=0.08, fireworks_audio_minutes=5.0)
     snap = compute_snapshot(db_session)
 
     entry = next(f for f in snap["per_feed"] if f["title"] == "Podcast C")
-    assert entry["total_cost_usd"] == 0.20
-    assert entry["total_audio_minutes"] == 15.0
+    assert "total_cost_usd" not in entry
+    assert "total_audio_minutes" not in entry
+    assert all("fireworks_cost_usd" not in e for e in snap["per_episode"])
 
 
 def test_compute_snapshot_per_episode_counts_words_and_tokens(db_session):

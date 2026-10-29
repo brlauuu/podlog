@@ -155,26 +155,6 @@ class TestSaveNotificationSettings:
         with pytest.raises(ValueError, match="smtp_port"):
             save_notification_settings(db, {"smtp_port": -1})
 
-    def test_rejects_invalid_inference_provider(self):
-        db = _mock_db(stored_json=None)
-        with pytest.raises(ValueError, match="inference_provider"):
-            save_notification_settings(db, {"inference_provider": "cloud"})
-
-    def test_rejects_invalid_embedding_provider(self):
-        db = _mock_db(stored_json=None)
-        with pytest.raises(ValueError, match="embedding_provider"):
-            save_notification_settings(db, {"embedding_provider": "cloud"})
-
-    def test_rejects_invalid_diarization_provider(self):
-        db = _mock_db(stored_json=None)
-        with pytest.raises(ValueError, match="diarization_provider"):
-            save_notification_settings(db, {"diarization_provider": "cloud"})
-
-    def test_rejects_invalid_rag_provider(self):
-        db = _mock_db(stored_json=None)
-        with pytest.raises(ValueError, match="rag_provider"):
-            save_notification_settings(db, {"rag_provider": "openai"})
-
     @pytest.mark.parametrize(
         "model", ["all-MiniLM-L6-v2", "BAAI/bge-small-en-v1.5"]
     )
@@ -451,19 +431,16 @@ class TestRuntimeSettings:
             assert get_runtime_embedding_settings(None) == {"embedding_model": "all-MiniLM-L6-v2"}
 
 
-class TestRetiredWebFields:
-    """#1092: the Settings page parses remote keys until the web removal."""
+class TestNoRemoteFields:
+    """#1092: settings carry no remote-inference keys in either direction."""
 
-    def test_get_answers_with_fixed_local_values(self):
+    def test_get_has_no_remote_keys(self):
         result = get_notification_settings(_mock_db(stored_json=None))
 
-        for field in ("inference_provider", "embedding_provider", "diarization_provider",
-                      "rag_provider"):
-            assert result[field] == "local"
-        assert result["fireworks_api_key"] is None
-        assert result["pyannote_api_key"] is None
-        assert result["fireworks_configured"] is False
-        assert result["pyannote_cloud_configured"] is False
+        for key in ("inference_provider", "rag_provider", "fireworks_api_key",
+                    "pyannote_api_key", "fireworks_configured",
+                    "pyannote_cloud_configured"):
+            assert key not in result
 
     def test_stored_remote_values_never_leak_through(self):
         # A blob from before the upgrade still holds them until the startup
@@ -474,13 +451,16 @@ class TestRetiredWebFields:
         })
         result = get_notification_settings(_mock_db(stored_json=stored))
 
-        assert result["inference_provider"] == "local"
-        assert result["fireworks_api_key"] is None
+        assert "inference_provider" not in result
+        assert "fireworks_api_key" not in result
 
-    def test_save_ignores_remote_only_fields(self):
+    def test_save_ignores_remote_fields(self):
         db = _mock_db(stored_json=None)
 
-        save_notification_settings(db, {"fireworks_api_key": "fw_x", "smtp_host": "mail"})
+        save_notification_settings(
+            db,
+            {"fireworks_api_key": "fw_x", "inference_provider": "fireworks", "smtp_host": "mail"},
+        )
 
         written = json.loads(db.add.call_args[0][0].value)
         assert written == {"smtp_host": "mail"}

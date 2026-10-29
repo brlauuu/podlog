@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import ReprocessButton from "./ReprocessButton";
@@ -31,9 +30,6 @@ export interface EnrichedEpisode {
   transcribe_duration_secs: number | null;
   diarize_duration_secs: number | null;
   inference_provider_used: string | null;
-  fireworks_audio_minutes: number | null;
-  fireworks_stt_cost_usd: number | null;
-  pyannote_cloud_cost_usd: number | null;
   audio_file_size_bytes: number | null;
   speaker_count: number;
   speaker_name_tags: SpeakerNameTag[];
@@ -83,17 +79,13 @@ function StatusTag({ status }: { status: string }) {
   return <Tag className={colors[status] ?? colors.pending}>{label}</Tag>;
 }
 
-function ProviderTag({ provider }: { provider: string | null }) {
-  const isRemote = provider === "fireworks";
+// Episodes transcribed through Fireworks before #1092 keep a small marker;
+// everything since runs locally, so local needs no tag.
+function RemoteProvenanceTag({ provider }: { provider: string | null }) {
+  if (provider !== "fireworks") return null;
   return (
-    <Tag
-      className={
-        isRemote
-          ? "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200"
-          : "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200"
-      }
-    >
-      {isRemote ? "Remote inference" : "Local inference"}
+    <Tag className="bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200">
+      Transcribed remotely
     </Tag>
   );
 }
@@ -114,66 +106,6 @@ function ErrorPill({ errorClass }: { errorClass: string }) {
     : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300";
   const label = errorClass.replace(/_/g, " ").toLowerCase();
   return <Tag className={`capitalize ${color}`}>{label}</Tag>;
-}
-
-function PyannoteCloudCostTag({ costUsd }: { costUsd: number }) {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const label = costUsd > 0 ? `$${costUsd.toFixed(2)}` : "—";
-
-  return (
-    <div
-      className="relative inline-flex items-center pointer-events-auto"
-      onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
-    >
-      <Tag className="bg-muted text-muted-foreground cursor-default">
-        pyannote cloud: {label}
-      </Tag>
-      {showTooltip && (
-        <div className="absolute z-50 bottom-full mb-1 left-1/2 -translate-x-1/2 w-64 p-2 rounded-md bg-card text-card-foreground text-xs shadow-md border">
-          <div className="font-medium mb-1">pyannote cloud (Precision-2)</div>
-          {costUsd > 0 ? (
-            <div>Estimated cost: ${costUsd.toFixed(4)}</div>
-          ) : (
-            <div>
-              Cost estimate unavailable — set your per-second rate in
-              Settings &gt; Remote Inference to show an estimate here. Actual
-              billing is on your pyannote.ai dashboard.
-            </div>
-          )}
-          <div className="mt-1 text-muted-foreground">
-            Billed in seconds with a 20-second per-request minimum.
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FireworksCostTag({ costUsd, audioMinutes }: { costUsd: number; audioMinutes: number | null }) {
-  const [showTooltip, setShowTooltip] = useState(false);
-
-  return (
-    <div
-      className="relative inline-flex items-center pointer-events-auto"
-      onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
-    >
-      <Tag className="bg-muted text-muted-foreground cursor-default">
-        Fireworks STT: ${costUsd.toFixed(2)}
-      </Tag>
-      {showTooltip && (
-        <div className="absolute z-50 bottom-full mb-1 left-1/2 -translate-x-1/2 w-48 p-2 rounded-md bg-card text-card-foreground text-xs shadow-md border">
-          <div className="font-medium mb-1">Fireworks STT Details</div>
-          {audioMinutes != null && <div>Audio: {audioMinutes.toFixed(1)} min</div>}
-          <div>Cost: ${costUsd.toFixed(4)}</div>
-          {audioMinutes != null && audioMinutes > 0 && (
-            <div>Rate: ${(costUsd / audioMinutes).toFixed(4)}/min</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function ProcessingProgress({ status }: { status: string }) {
@@ -284,7 +216,7 @@ export default function EpisodeCard({
           </Tag>
         )}
 
-        <ProviderTag provider={ep.inference_provider_used} />
+        <RemoteProvenanceTag provider={ep.inference_provider_used} />
 
         {ep.status === "done" && ep.transcribe_duration_secs != null && ep.transcribe_duration_secs > 0 && (
           <Tag className="bg-muted text-muted-foreground">
@@ -296,17 +228,6 @@ export default function EpisodeCard({
           <Tag className="bg-muted text-muted-foreground">
             Diarized: {formatDuration(ep.diarize_duration_secs)}
           </Tag>
-        )}
-
-        {ep.inference_provider_used === "fireworks" && ep.fireworks_stt_cost_usd != null && (
-          <FireworksCostTag
-            costUsd={ep.fireworks_stt_cost_usd}
-            audioMinutes={ep.fireworks_audio_minutes}
-          />
-        )}
-
-        {ep.pyannote_cloud_cost_usd != null && (
-          <PyannoteCloudCostTag costUsd={ep.pyannote_cloud_cost_usd} />
         )}
 
         {/* Reprocess button - last item in tag row */}

@@ -51,12 +51,6 @@ def _per_feed(db: Session) -> list[dict[str, Any]]:
             func.count(Episode.id).label("episode_count"),
             func.avg(Episode.duration_secs).label("avg_secs"),
             func.stddev_samp(Episode.duration_secs).label("std_secs"),
-            func.coalesce(
-                func.sum(Episode.fireworks_stt_cost_usd), 0.0
-            ).label("total_cost_usd"),
-            func.coalesce(
-                func.sum(Episode.fireworks_audio_minutes), 0.0
-            ).label("total_audio_minutes"),
         )
         .join(Episode, Episode.feed_id == Feed.id)
         .where(Episode.status == "done")
@@ -70,8 +64,6 @@ def _per_feed(db: Session) -> list[dict[str, Any]]:
             "episode_count": r.episode_count,
             "avg_length_min": round(float(r.avg_secs or 0) / 60.0, 2),
             "std_length_min": round(float(r.std_secs or 0) / 60.0, 2),
-            "total_cost_usd": round(float(r.total_cost_usd or 0), 4),
-            "total_audio_minutes": round(float(r.total_audio_minutes or 0), 2),
             # Remaining fields filled in by later tasks; stub now to keep
             # the JSON shape stable.
             "total_words": 0,
@@ -105,10 +97,6 @@ def _per_episode(db: Session) -> list[dict[str, Any]]:
             Episode.feed_id,
             Episode.published_at,
             Episode.duration_secs,
-            Episode.fireworks_stt_cost_usd,
-            Episode.transcribe_duration_secs,
-            Episode.diarize_duration_secs,
-            Episode.inference_provider_used,
         ).where(Episode.status == "done", Episode.feed_id.isnot(None))
     ).all()
 
@@ -148,12 +136,6 @@ def _per_episode(db: Session) -> list[dict[str, Any]]:
             "turn_count": turn_count,
             "wpm": wpm,
             "host_share": None,  # filled in coverage block (task 8)
-            "fireworks_cost_usd": (
-                float(er.fireworks_stt_cost_usd) if er.fireworks_stt_cost_usd else None
-            ),
-            "transcribe_duration_secs": er.transcribe_duration_secs,
-            "diarize_duration_secs": er.diarize_duration_secs,
-            "inference_provider_used": er.inference_provider_used,
         })
     return out
 

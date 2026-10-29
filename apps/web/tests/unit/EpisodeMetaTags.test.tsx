@@ -20,9 +20,6 @@ const baseProps = {
   diarizeDurationSecs: 88,
   diarizeStepDurations: null,
   inferenceProviderUsed: null,
-  fireworksSttCostUsd: null,
-  fireworksAudioMinutes: null,
-  pyannoteCloudCostUsd: null,
   episodeId: "ep-123",
 };
 
@@ -84,35 +81,16 @@ describe("EpisodeMetaTags", () => {
     expect(screen.queryByText(/Fireworks STT/)).not.toBeInTheDocument();
   });
 
-  it("renders Fireworks STT cost tag when provider is fireworks", () => {
-    render(
-      <EpisodeMetaTags
-        {...baseProps}
-        inferenceProviderUsed="fireworks"
-        fireworksSttCostUsd={0.0312}
-        fireworksAudioMinutes={6.2}
-      />
-    );
-    expect(screen.getByText(/Fireworks STT: \$0\.03/)).toBeInTheDocument();
-  });
-
-  it("uses consistent chip sizing classes for standard, diarized, and Fireworks tags", () => {
-    render(
-      <EpisodeMetaTags
-        {...baseProps}
-        inferenceProviderUsed="fireworks"
-        fireworksSttCostUsd={0.0312}
-        fireworksAudioMinutes={6.2}
-      />
-    );
+  it("uses consistent chip sizing classes for standard, diarized, and provenance tags", () => {
+    render(<EpisodeMetaTags {...baseProps} inferenceProviderUsed="fireworks" />);
 
     const dateTag = screen.getByText(/2024/);
     const diarizedTag = screen.getByRole("button", { name: /Diarized:/ });
-    const fireworksTag = screen.getByText(/Fireworks STT: \$0\.03/);
+    const remoteTag = screen.getByText("Transcribed remotely");
 
     expect(dateTag).toHaveClass("inline-flex", "h-5", "items-center", "leading-none");
     expect(diarizedTag).toHaveClass("inline-flex", "h-5", "items-center", "leading-none");
-    expect(fireworksTag).toHaveClass("inline-flex", "h-5", "items-center", "leading-none");
+    expect(remoteTag).toHaveClass("inline-flex", "h-5", "items-center", "leading-none");
   });
 
   it("shows diarization step tags when Diarized tag is clicked", async () => {
@@ -167,16 +145,17 @@ describe("EpisodeMetaTags", () => {
     expect(screen.queryByText(/^EN$/)).toBeNull();
   });
 
-  it("renders Local inference provider tag by default", () => {
-    render(<EpisodeMetaTags {...baseProps} inferenceProviderUsed={null} />);
-    expect(screen.getByText(/Local inference/)).toBeInTheDocument();
+  // #1092: everything runs locally, so only the older remote episodes carry
+  // a provenance tag, and no episode shows a cost.
+  it.each([null, "local"])("renders no provider tag for provider %p", (provider) => {
+    render(<EpisodeMetaTags {...baseProps} inferenceProviderUsed={provider} />);
+    expect(screen.queryByText(/inference|remotely/i)).toBeNull();
   });
 
-  it("renders Remote inference tag when provider is fireworks", () => {
-    render(
-      <EpisodeMetaTags {...baseProps} inferenceProviderUsed="fireworks" />,
-    );
-    expect(screen.getByText(/Remote inference/)).toBeInTheDocument();
+  it("marks an episode transcribed remotely before #1092", () => {
+    render(<EpisodeMetaTags {...baseProps} inferenceProviderUsed="fireworks" />);
+    expect(screen.getByText("Transcribed remotely")).toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).toBeNull();
   });
 
   it("renders 'No labels' tag when done but no diarization", () => {

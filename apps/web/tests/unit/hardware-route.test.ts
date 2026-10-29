@@ -45,7 +45,11 @@ describe("GET /api/hardware", () => {
     const body = await resp.json();
     expect(body.hardware).toBeNull();
     expect(body.profile).toBeNull();
-    expect(body.estimates.remote_cost_per_hour_usd).toBe(0.36);
+    // #1092: no remote figures; the local ones are unknown without a pipeline.
+    expect(body.estimates).toEqual({
+      transcription_minutes_per_hour: null,
+      embedding_seconds_per_hour: null,
+    });
   });
 
   it("returns fallback with 502 when fetch throws", async () => {
@@ -56,6 +60,10 @@ describe("GET /api/hardware", () => {
     expect(resp.status).toBe(502);
     const body = await resp.json();
     expect(body.hardware).toBeNull();
-    expect(body.estimates.remote_transcription_minutes_per_hour).toBe(3);
+    // #1092: no remote figures; the local ones are unknown without a pipeline.
+    expect(body.estimates).toEqual({
+      transcription_minutes_per_hour: null,
+      embedding_seconds_per_hour: null,
+    });
   });
 });

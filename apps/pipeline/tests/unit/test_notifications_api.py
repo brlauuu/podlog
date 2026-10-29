@@ -71,15 +71,9 @@ class TestPutSettings:
 
 
 class TestRetiredPyannoteKeyTest:
-    def test_answers_410_without_calling_out(self):
-        # #1092: the Settings page keeps its Test button until the web removal.
-        with patch("httpx.Client") as client_cls, patch("httpx.get") as get:
-            resp = client.post("/api/pyannote/test", json={"api_key": "pn_x"})
-
-        assert resp.status_code == 410
-        assert "no longer supported" in resp.json()["error"]
-        client_cls.assert_not_called()
-        get.assert_not_called()
+    def test_endpoint_is_gone(self):
+        # #1092: removed with the Settings page's Test button.
+        assert client.post("/api/pyannote/test", json={}).status_code == 404
 
 
 class TestPostTest:

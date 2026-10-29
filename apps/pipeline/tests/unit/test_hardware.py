@@ -89,18 +89,19 @@ class TestGetHardwareProfile:
 
 
 class TestEstimateProcessingTimes:
-    def test_returns_estimates_for_known_profile(self):
+    def test_returns_local_estimates_for_known_profile(self):
         profile = HARDWARE_PROFILES["cpu-only-8core"]
-        estimates = estimate_processing_times(profile, cost_per_minute=0.006)
-        assert "transcription_minutes_per_hour" in estimates
-        assert "embedding_seconds_per_hour" in estimates
-        assert "remote_transcription_minutes_per_hour" in estimates
-        assert "remote_cost_per_hour_usd" in estimates
-        assert estimates["remote_cost_per_hour_usd"] == pytest.approx(0.36, rel=0.01)
+        estimates = estimate_processing_times(profile)
+        # #1092: local figures only -- no remote time, no cost.
+        assert set(estimates) == {"transcription_minutes_per_hour", "embedding_seconds_per_hour"}
+        assert estimates["transcription_minutes_per_hour"] == pytest.approx(
+            profile["transcription_factor"] * 60, rel=0.01
+        )
 
-    def test_returns_remote_only_when_no_profile(self):
-        estimates = estimate_processing_times(None, cost_per_minute=0.006)
-        assert estimates["transcription_minutes_per_hour"] is None
-        assert estimates["embedding_seconds_per_hour"] is None
-        assert estimates["remote_cost_per_hour_usd"] == pytest.approx(0.36, rel=0.01)
+    def test_returns_nulls_when_no_profile(self):
+        estimates = estimate_processing_times(None)
+        assert estimates == {
+            "transcription_minutes_per_hour": None,
+            "embedding_seconds_per_hour": None,
+        }
 
