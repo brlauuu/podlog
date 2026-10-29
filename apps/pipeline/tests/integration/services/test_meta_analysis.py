@@ -103,10 +103,9 @@ def test_compute_snapshot_excludes_non_done_episodes(db_session):
 
 
 def test_compute_snapshot_has_no_cost_figures(db_session):
-    # #1092: episodes from before the removal still carry Fireworks cost
-    # columns, but the snapshot reports no money.
+    # #1092: the snapshot reports no money, even for a remotely transcribed episode.
     feed = _make_feed(db_session, "Podcast C")
-    _make_episode(db_session, feed, fireworks_stt_cost_usd=0.12, fireworks_audio_minutes=10.0)
+    _make_episode(db_session, feed, inference_provider_used="fireworks")
     snap = compute_snapshot(db_session)
 
     entry = next(f for f in snap["per_feed"] if f["title"] == "Podcast C")

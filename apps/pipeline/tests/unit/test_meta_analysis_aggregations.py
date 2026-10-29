@@ -519,12 +519,11 @@ class TestHostSpeakerLabelForEpisode:
 
 
 def _ep_row(*, id="ep1", feed_id="f1", published_at=None, duration_secs=600,
-            fireworks_stt_cost_usd=None, transcribe_duration_secs=None,
+            transcribe_duration_secs=None,
             diarize_duration_secs=None, inference_provider_used=None):
     return SimpleNamespace(
         id=id, feed_id=feed_id, published_at=published_at,
         duration_secs=duration_secs,
-        fireworks_stt_cost_usd=fireworks_stt_cost_usd,
         transcribe_duration_secs=transcribe_duration_secs,
         diarize_duration_secs=diarize_duration_secs,
         inference_provider_used=inference_provider_used,

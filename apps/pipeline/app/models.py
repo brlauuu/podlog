@@ -124,15 +124,9 @@ class Episode(Base):
     diarize_duration_secs: Mapped[float | None] = mapped_column(Float)
     diarize_step_durations: Mapped[dict[str, float] | None] = mapped_column(JSONB)
 
-    # Remote inference observability (Issue #261)
+    # Which provider transcribed the episode (Issue #261). "fireworks" survives
+    # only on episodes from before remote inference was removed (#1092).
     inference_provider_used: Mapped[str | None] = mapped_column(Text)
-    fireworks_audio_secs: Mapped[float | None] = mapped_column(Float)
-    fireworks_audio_minutes: Mapped[float | None] = mapped_column(Float)
-    fireworks_stt_cost_per_minute_usd: Mapped[float | None] = mapped_column(Float)
-    fireworks_stt_cost_usd: Mapped[float | None] = mapped_column(Float)
-
-    # pyannote cloud (precision-2) observability (Issue #516)
-    pyannote_cloud_cost_usd: Mapped[float | None] = mapped_column(Float)
 
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
