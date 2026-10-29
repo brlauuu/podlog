@@ -1,6 +1,7 @@
 """Notification events, queue estimation, and delivery handlers."""
 import httpx
 import logging
+import re
 import smtplib
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
@@ -356,7 +357,10 @@ def format_alert_telegram(event: PipelineAlertEvent) -> str:
     # error message full of underscores or asterisks cannot break the send.
     # A backtick would end the span early, so those are swapped out.
     icon = "✅" if event.recovered else "⚠️"
-    lines = [f"*{icon} {_alert_title(event)}*", "", event.headline.replace("*", "").replace("_", " ")]
+    # Outside a code span, legacy Markdown takes backslash escapes, which keeps
+    # TRANSIENT_NETWORK readable instead of opening an italic run.
+    headline = re.sub(r"([_*`\[])", r"\\\1", event.headline)
+    lines = [f"*{icon} {_alert_title(event)}*", "", headline]
     if event.details:
         lines.append("")
         for label, value in event.details:

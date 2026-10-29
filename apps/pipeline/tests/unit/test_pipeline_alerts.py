@@ -79,9 +79,16 @@ def test_telegram_text_survives_markdown_in_errors():
     )
     text = format_alert_telegram(event)
     assert text.startswith("*⚠️ Stage keeps failing*")
+    assert "\ninfer: 5 consecutive failures (OOM)\n" in text
     assert "*Last error:* `No module named 'spacy_trf' in *site_packages*`" in text
     # Code spans balance, so Telegram's legacy Markdown parser accepts it.
     assert text.count("`") % 2 == 0
+
+
+def test_telegram_headline_escapes_markdown():
+    event = PipelineAlertEvent(kind="failure_streak", stage="transcribe",
+                               headline="transcribe: 5 consecutive failures (TRANSIENT_NETWORK)")
+    assert "(TRANSIENT\\_NETWORK)" in format_alert_telegram(event)
 
 
 def test_html_escapes_error_text():
