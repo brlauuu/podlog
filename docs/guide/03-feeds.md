@@ -36,6 +36,10 @@ You can change a feed's mode at any time, in either direction:
 
 Neither direction re-processes an episode that is already done, and neither deletes anything. Making a feed selective is the answer to a show that turned out to be chattier than you wanted: pausing stops the flood, but only going selective lets you keep picking the episodes you do want.
 
+## Managing a Feed from Its Podcast Page
+
+You don't have to go through **Sources → Manage feeds** for any of this. A podcast's own page shows the same buttons as its feed card, under the description: **Add episodes** and **Promote to Full** on a Selective feed, and **Make selective**, poll now and pause/resume on a Test or Full feed. They ask the same confirmations, and the page updates in place once they are done, so the new mode badge and any newly queued episodes show straight away. The page also shows the **Selective** and **Paused** badges, so you can see which buttons to expect. Removing a feed is only offered on the feeds list, since it would delete the page you are on.
+
 ## Adding a Feed from Telegram
 
 With bot commands enabled and your Telegram account on the allowed list (see [Notifications](09-notifications.md#telegram-bot-commands)), `/addfeed full <rss url>` or `/addfeed test <rss url>` adds a source from your phone, and `/addfeed selective <rss url>` lets you pick one of the five newest episodes. The bot replies with one line either way, so you know whether it worked. Anything more than that, such as several episodes or an older one, is done here.

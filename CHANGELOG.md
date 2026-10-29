@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+
+- A podcast's page now has its feed's controls, so you no longer have to go through Sources → Manage feeds to change it. A Selective feed shows **Add episodes** and **Promote to Full**; a Test or Full feed shows **Make selective**, poll now and pause/resume. The page also shows the Selective and Paused badges. Removing a feed stays on the feeds list. ([#1090](https://github.com/brlauuu/podlog/issues/1090))
+
 ### Fixes
 
 - Refreshed the pipeline lock to clear 5 security advisories the dependency audit started reporting on 2026-10-28 against packages already in the lock: `filelock` 3.32.2 → 4.2.4 (3 advisories), `opentelemetry-api` 1.44.0 → 1.45.1 (with the rest of the OpenTelemetry packages) and `setuptools` 84.0.0 → 84.2.1. All are transitive and needed no constraint changes, so the audit is green again. ([#1097](https://github.com/brlauuu/podlog/issues/1097))
