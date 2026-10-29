@@ -11,15 +11,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import AddEpisodesDialog from "@/components/AddEpisodesDialog";
 import FeedsListSection from "@/components/FeedsListSection";
+import { useFeedActions } from "@/lib/useFeedActions";
 import AddFeedStep1, { type AddMode } from "./_components/AddFeedStep1";
 import EpisodeSelectionStep from "./_components/EpisodeSelectionStep";
-import {
-  fetchFeedEpisodeGuids,
-  fetchFeeds,
-  fetchPreview,
-} from "./_lib/api";
+import { fetchFeeds, fetchPreview } from "./_lib/api";
 import type { Feed, FeedPreview } from "./_lib/types";
+
+// A new feed has no episodes yet, so nothing in its picker is locked.
+const NO_GUIDS = new Set<string>();
 
 export default function FeedsPage() {
   const queryClient = useQueryClient();
@@ -34,11 +35,9 @@ export default function FeedsPage() {
   const [selectedGuids, setSelectedGuids] = useState<Set<string>>(new Set());
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  // Issue #487: adding more episodes to an existing selective feed.
-  // When set, the dialog is reused in "add more" mode: preview is reloaded for
-  // the feed's URL, and already-ingested GUIDs are shown checked+disabled.
+  // Issue #487: the selective feed the "Add episodes" dialog is open for.
   const [addMoreFeed, setAddMoreFeed] = useState<Feed | null>(null);
-  const [existingGuids, setExistingGuids] = useState<Set<string>>(new Set());
+  const feedActions = useFeedActions();
 
   const { data: feeds = [], isLoading } = useQuery({ queryKey: ["feeds"], queryFn: fetchFeeds });
 
@@ -73,8 +72,6 @@ export default function FeedsPage() {
     setPreviewStep(false);
     setPreview(null);
     setSelectedGuids(new Set());
-    setAddMoreFeed(null);
-    setExistingGuids(new Set());
   }
 
   const addFeed = useMutation({
@@ -105,143 +102,10 @@ export default function FeedsPage() {
     onError: (err: Error) => setAddError(err.message),
   });
 
-  // Issue #487: add more episodes to an existing selective feed.
-  const addEpisodes = useMutation({
-    mutationFn: async ({
-      feedId,
-      selected_guids,
-    }: {
-      feedId: string;
-      selected_guids: string[];
-    }) => {
-      const resp = await fetch(`/api/feeds/${feedId}/episodes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selected_guids }),
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.detail ?? "Failed to add episodes");
-      }
-      return resp.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["feeds"] });
-      resetModal();
-    },
-    onError: (err: Error) => setAddError(err.message),
-  });
-
-  async function handleAddMore(feed: Feed) {
-    setAddMoreFeed(feed);
-    setShowAddModal(true);
-    setAddError(null);
-    const request = beginPreview();
-    try {
-      const [data, existing] = await Promise.all([
-        fetchPreview(feed.url, request.signal),
-        fetchFeedEpisodeGuids(feed.id, request.signal),
-      ]);
-      if (previewRequest.current !== request) return;
-      const existingSet = new Set(existing);
-      setPreview(data);
-      setExistingGuids(existingSet);
-      setSelectedGuids(new Set(existingSet));
-      setPreviewStep(true);
-    } catch (err: unknown) {
-      if (previewRequest.current !== request) return;
-      setAddError(err instanceof Error ? err.message : "Failed to load feed preview");
-    } finally {
-      if (previewRequest.current === request) {
-        previewRequest.current = null;
-        setPreviewLoading(false);
-      }
-    }
-  }
-
-  const promoteFeed = useMutation({
-    mutationFn: async ({ url }: { url: string }) => {
-      const resp = await fetch("/api/feeds", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, mode: "full" }),
-      });
-      if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.detail ?? "Failed to promote feed");
-      }
-      return resp.json();
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feeds"] }),
-  });
-
-  const pollFeed = useMutation({
-    mutationFn: async (id: string) => {
-      const resp = await fetch(`/api/feeds/${id}/poll`, { method: "POST" });
-      if (!resp.ok) throw new Error("Failed to poll feed");
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feeds"] }),
-    onError: (err: Error) => console.error("Poll feed error:", err.message),
-  });
-
-  // Issue #743: pause / resume ingestion for a feed.
-  const togglePause = useMutation({
-    mutationFn: async ({ id, paused }: { id: string; paused: boolean }) => {
-      const resp = await fetch(`/api/feeds/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paused }),
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.detail ?? "Failed to update feed");
-      }
-      return resp.json();
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feeds"] }),
-    onError: (err: Error) => console.error("Toggle pause error:", err.message),
-  });
-
-  // Issue #1045: step a test/full feed down to selective. Keeps everything
-  // ingested, stops automatic polling, unpauses (selective has no pause).
-  const convertToSelective = useMutation({
-    mutationFn: async (id: string) => {
-      const resp = await fetch(`/api/feeds/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "selective" }),
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.detail ?? "Failed to update feed");
-      }
-      return resp.json();
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feeds"] }),
-    onError: (err: Error) => console.error("Convert to selective error:", err.message),
-  });
-
-  const deleteFeed = useMutation({
-    mutationFn: async ({ id, deleteEpisodes }: { id: string; deleteEpisodes: boolean }) => {
-      await fetch(`/api/feeds/${id}?delete_episodes=${deleteEpisodes}`, { method: "DELETE" });
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["feeds"] }),
-  });
-
   // Issue #84: fetch episode list for selective mode before submitting.
-  // Issue #487: in "add more" mode, submit only the newly-picked GUIDs.
   async function handleAddOrPreview(e: React.FormEvent) {
     e.preventDefault();
     setAddError(null);
-    if (addMoreFeed) {
-      const newPicks = Array.from(selectedGuids).filter((g) => !existingGuids.has(g));
-      if (newPicks.length === 0) {
-        setAddError("Select at least one new episode to add.");
-        return;
-      }
-      addEpisodes.mutate({ feedId: addMoreFeed.id, selected_guids: newPicks });
-      return;
-    }
     if (addMode === "selective" && !previewStep) {
       const request = beginPreview();
       try {
@@ -268,8 +132,6 @@ export default function FeedsPage() {
   }
 
   function toggleGuid(guid: string) {
-    // Issue #487: already-ingested episodes are locked in add-more mode
-    if (addMoreFeed && existingGuids.has(guid)) return;
     setSelectedGuids((prev) => {
       const next = new Set(prev);
       if (next.has(guid)) next.delete(guid);
@@ -296,11 +158,7 @@ export default function FeedsPage() {
     // Array check, not a null check: wiring this callback straight to an
     // onClick hands it a MouseEvent, which `?? allGuids` would happily accept
     // and then crash on .filter.
-    const scope = Array.isArray(scopeGuids) ? scopeGuids : allGuids;
-    // Issue #487: never touch episodes the feed already has.
-    const togglable = addMoreFeed
-      ? scope.filter((g) => !existingGuids.has(g))
-      : scope;
+    const togglable = Array.isArray(scopeGuids) ? scopeGuids : allGuids;
     if (togglable.length === 0) return;
 
     const allTogglableSelected = togglable.every((g) => selectedGuids.has(g));
@@ -315,15 +173,7 @@ export default function FeedsPage() {
     });
   }
 
-  const dialogTitle = addMoreFeed
-    ? `Add episodes${
-        preview?.title
-          ? ` — ${preview.title}`
-          : addMoreFeed.title
-          ? ` — ${addMoreFeed.title}`
-          : ""
-      }`
-    : previewStep
+  const dialogTitle = previewStep
     ? `Select episodes${preview?.title ? ` — ${preview.title}` : ""}`
     : "Add RSS Feed";
 
@@ -345,19 +195,14 @@ export default function FeedsPage() {
             </Button>
           </DialogTrigger>
           <DialogContent
-            className={previewStep || addMoreFeed ? "max-w-2xl flex flex-col max-h-[90vh]" : undefined}
+            className={previewStep ? "max-w-2xl flex flex-col max-h-[90vh]" : undefined}
           >
             <DialogHeader>
               <DialogTitle>{dialogTitle}</DialogTitle>
             </DialogHeader>
 
-            {/* Loading state while fetching preview for add-more flow */}
-            {addMoreFeed && previewLoading && (
-              <p className="text-sm text-muted-foreground py-4">Loading episodes...</p>
-            )}
-
-            {/* Step 1: URL + mode (only when not in add-more flow) */}
-            {!previewStep && !addMoreFeed && (
+            {/* Step 1: URL + mode */}
+            {!previewStep && (
               <AddFeedStep1
                 url={newUrl}
                 onUrlChange={setNewUrl}
@@ -371,23 +216,19 @@ export default function FeedsPage() {
               />
             )}
 
-            {/* Step 2: Episode selection (selective add or add-more) */}
-            {(previewStep || addMoreFeed) && preview && (
+            {/* Step 2: Episode selection */}
+            {previewStep && preview && (
               <EpisodeSelectionStep
                 preview={preview}
                 selectedGuids={selectedGuids}
-                existingGuids={existingGuids}
-                addMoreMode={!!addMoreFeed}
+                existingGuids={NO_GUIDS}
+                addMoreMode={false}
                 error={addError}
-                submitting={addMoreFeed ? addEpisodes.isPending : addFeed.isPending}
+                submitting={addFeed.isPending}
                 onToggleGuid={toggleGuid}
                 onToggleAll={toggleAll}
                 onSubmit={handleAddOrPreview}
                 onBackOrCancel={() => {
-                  if (addMoreFeed) {
-                    resetModal();
-                    return;
-                  }
                   setPreviewStep(false);
                   setPreview(null);
                   setSelectedGuids(new Set());
@@ -399,49 +240,25 @@ export default function FeedsPage() {
         </Dialog>
       </div>
 
+      <AddEpisodesDialog
+        feed={addMoreFeed}
+        onClose={() => setAddMoreFeed(null)}
+        onAdded={() => queryClient.invalidateQueries({ queryKey: ["feeds"] })}
+      />
+
       <FeedsListSection
         isLoading={isLoading}
         feeds={feeds}
-        pollPendingId={
-          pollFeed.isPending && typeof pollFeed.variables === "string"
-            ? pollFeed.variables
-            : null
-        }
+        pollPendingId={feedActions.pollPendingId}
         onAddFirstFeed={() => setShowAddModal(true)}
-        onPromote={(url) => {
-          if (confirm("Promote this feed to full mode? All remaining episodes will be ingested.")) {
-            promoteFeed.mutate({ url });
-          }
-        }}
-        onPoll={(feedId) => pollFeed.mutate(feedId)}
-        onDelete={(feedId) => {
-          const deleteEps = confirm(
-            "Also delete all episodes and transcripts for this feed?"
-          );
-          deleteFeed.mutate({ id: feedId, deleteEpisodes: deleteEps });
-        }}
-        onAddMore={handleAddMore}
-        pausePendingId={
-          togglePause.isPending && togglePause.variables
-            ? togglePause.variables.id
-            : null
-        }
-        onTogglePause={(feedId, paused) =>
-          togglePause.mutate({ id: feedId, paused })
-        }
-        convertPendingId={
-          convertToSelective.isPending ? (convertToSelective.variables ?? null) : null
-        }
-        onConvertToSelective={(feedId) => {
-          if (
-            confirm(
-              "Stop ingesting new episodes automatically and pick them by hand instead? " +
-                "Everything already ingested stays."
-            )
-          ) {
-            convertToSelective.mutate(feedId);
-          }
-        }}
+        onPromote={feedActions.promote}
+        onPoll={feedActions.poll}
+        onDelete={feedActions.remove}
+        onAddMore={setAddMoreFeed}
+        pausePendingId={feedActions.pausePendingId}
+        onTogglePause={feedActions.togglePause}
+        convertPendingId={feedActions.convertPendingId}
+        onConvertToSelective={feedActions.convertToSelective}
       />
     </div>
   );
