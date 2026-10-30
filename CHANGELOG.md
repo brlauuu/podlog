@@ -20,6 +20,8 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+## 1.6.3 — 2026-10-30
+
 ### Fixes
 
 - Episodes transcribed with Whisper's own word timings (Serbian and other languages without an alignment model, new in 1.6.0) failed at transcription with `schema "np" does not exist`. They now save normally; retry any that failed this way.
