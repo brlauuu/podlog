@@ -20,6 +20,8 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+## 1.6.1 — 2026-10-30
+
 ### Internal
 
 - Pipeline unit tests no longer leak which settings were patched into the next test, so tests of the "set in env or left at default" logic no longer pass or fail depending on suite order (#1100). PRD-02's Meta-Analysis section now describes the three Plotly speaker charts the page actually has, and a PRD-01 changelog entry cites the right section.
