@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-02 — Search Web Application  
-**Version:** 1.8
+**Version:** 1.9
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.9 — §5.11 rewritten to describe the page as it is: three Plotly speaker charts (PRD-06), not nine Recharts panels; colours are host/guest palettes, not a per-feed hash; the tokens panel is gone.
 - v1.8 — Remote inference removed (#1092). §5.11 no longer lists a remote-inference cost panel; the provider processing-speed chart and every cost figure are gone from the web app. Ask runs on Ollama only.
 - v1.7 — `/podcasts/{id}` carries the feed's own management actions (§5.3, #1090).
 - v1.6 — Updated tech stack row to Next.js 16 (matches `apps/web/package.json`).
@@ -249,19 +250,19 @@ Configured context (`num_ctx`) is kept well below each model's maximum to keep p
 
 ### 5.11 Meta-Analysis Dashboard
 
-The `/meta-analysis` page offers cross-feed analytics: length, cadence, speaker share, words-per-minute, token footprint, and processing-time distribution. (The remote-inference cost panel and the per-provider processing-speed chart were removed in #1092.) Users browse nine Recharts panels with a per-feed filter bar, an expand-to-modal affordance on each card, and a stale indicator.
+The `/meta-analysis` page offers cross-feed speaker analytics, specified in PRD-06: per-speaker minutes per episode, per-speaker word count per episode, and host-vs-guest talking time per episode. Above the charts sit a coverage strip (feeds, episodes, queued or failed, podcasts missing a confirmed host), a per-feed filter bar, and a Confirmed / Inferred — HIGH source toggle; a stale indicator shows when the snapshot lags the data.
 
-**Snapshot cache.** The nine panels are backed by a single JSONB `MetaAnalysisSnapshot` row (`id = 1`) holding `per_feed`, `per_episode`, `per_speaker`, `timeline_monthly`, and `coverage` aggregates. Computing it requires scanning every `Segment` and `Chunk`, so the dashboard never recomputes on page load — it reads the cached snapshot and reports its `computed_at` timestamp to the user.
+**Snapshot cache.** The charts are backed by a single JSONB `MetaAnalysisSnapshot` row (`id = 1`) holding `per_feed`, `per_episode`, `per_speaker`, `timeline_monthly`, `coverage`, `per_episode_speaker`, and `episode_speaker_diff` aggregates. Computing it requires scanning every `Segment` and `Chunk`, so the dashboard never recomputes on page load — it reads the cached snapshot and reports its `computed_at` timestamp to the user.
 
 **Stale flag and recomputation.** A `system_state.meta_analysis_stale` row gates recomputation. Writers that change snapshot inputs (speaker renames, merges, and pipeline stages: ingest, transcribe, diarize, chunk, infer, archive, cleanup) call `set_stale`, which writes a fresh UUID token. The pipeline worker's idle hook (fires when the job queue drains) checks `is_stale` and, if set, invokes `recompute_and_store`. The user can also force a refresh via the `Refresh` button, which hits `/api/meta-analysis/refresh` and re-runs the recompute path under a PostgreSQL advisory lock (`pg_advisory_xact_lock('meta_analysis_refresh')`) to serialize concurrent refreshes.
 
 **Race-safe clear.** `recompute_and_store` captures the stale token before `compute_snapshot` and only clears the flag if the token is unchanged when compute finishes. If a concurrent writer called `set_stale` during compute, the token rotated, the conditional clear skips, and the flag stays stale so the next idle tick recomputes against the newer data. Prevents silent signal drop when a speaker rename lands mid-computation. Both the Python helpers (`apps/pipeline/app/services/meta_analysis.py`) and the TS counterpart (`apps/web/src/lib/metaAnalysisStale.ts`) write UUID tokens — they must stay in lockstep.
 
-**Charts.** All nine charts follow the same pattern: a pure `transform*` module produces display rows from the snapshot fragment, the chart component wraps Recharts in a `ResponsiveContainer`, and a Jest unit test covers the transform. Colors are assigned per feed via a 32-bit FNV-1a hash over the feed ID so the same podcast keeps the same color across panels and sessions. Each card renders inside a `ChartCard` with an expand-to-modal button for deep inspection.
+**Charts.** The three charts are Plotly figures (`charts/PlotlyChart.tsx`, themed by `usePlotlyTheme`). A pure module under `charts/transforms/` turns the snapshot fragment into display rows, and a Jest unit test covers it. Hosts are drawn as solid lines from a host palette and guests as dashed lines; clicking a point opens that episode. Each chart renders inside a `ChartCard` with an expand-to-modal button.
 
-**Missing-speaker drill-down.** The `Host vs guest share` card excludes feeds that lack any confirmed host and surfaces a count of excluded podcasts. Clicking the count opens a modal listing the affected feeds (episode count, diarized count, first/last diarized date), with a link to the podcast page so the user can rename speakers. Fixing a host triggers `setMetaAnalysisStale` via the speaker-merge route, and the dashboard shows `Refresh pending` until the next recompute.
+**Missing-speaker drill-down.** Host-vs-guest figures exclude feeds that lack any confirmed host, and the coverage strip shows how many podcasts were excluded. Clicking the count opens a modal listing the affected feeds (episode count, diarized count, first/last diarized date), with a link to the podcast page so the user can rename speakers. Fixing a host triggers `setMetaAnalysisStale` via the speaker-merge route, and the dashboard shows `Refresh pending` until the next recompute.
 
-**Tokenization.** `cl100k_base` (via `tiktoken`) is used for the `Tokens per episode` panel. If `tiktoken` is unavailable at import time, the service logs a warning and token counts fall back to zero so the dashboard still renders. Not user-configurable.
+**Tokenization.** `cl100k_base` (via `tiktoken`) is used for the per-episode token counts in the snapshot (no chart shows them since the PRD-06 rewrite). If `tiktoken` is unavailable at import time, the service logs a warning and token counts fall back to zero so the dashboard still renders. Not user-configurable.
 
 ---
 
