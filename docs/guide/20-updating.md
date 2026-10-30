@@ -22,10 +22,13 @@ it into `docker-compose.override.yml`: Compose reads that file automatically,
 it is gitignored, and updates leave it alone.
 
 **2. It drains the queue.** Podlog processes one episode at a time and a
-transcription runs for minutes. Restarting mid-job loses that work — the
-episode comes back as a `SYSTEM_ERROR` when the zombie sweep notices. If jobs
-are running, the update stops the worker gracefully, gives it up to 60
-seconds, and then checks that nothing is still marked running before going on.
+transcription runs for minutes. Restarting mid-job loses that work — nothing
+resumes a stopped job, and the episode comes back as a `SYSTEM_ERROR` when the
+zombie sweep notices. So if a job is in progress, the update **refuses to
+start** and names the job; re-run it when the Queue page shows nothing
+processing. Jobs that are only waiting are fine: the update stops the worker
+between jobs, and they resume afterwards. If it finds a job that a stopped
+worker already interrupted, it says which episode to retry and carries on.
 
 **3. It takes a database backup, and refuses to continue without one.**
 Migrations run automatically when the pipeline starts, so the update *is* the

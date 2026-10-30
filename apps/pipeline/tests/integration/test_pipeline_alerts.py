@@ -165,6 +165,22 @@ def test_waiting_work_with_no_progress_alerts_once_then_recovers(
     assert messages[1].kind == "stall" and messages[1].recovered
 
 
+def test_a_hung_job_with_nothing_behind_it_is_a_stall(db_session, sample_episode, sent):
+    """An in-flight job is status 'picked'. The query once looked for 'running',
+    a status job_queue never uses, so a queue holding only a hung job read as empty."""
+    two_days = NOW - timedelta(days=2)
+    _add_job(db_session, sample_episode.id, "download", "done",
+             created_at=two_days, picked_at=two_days)
+    _add_job(db_session, sample_episode.id, "diarize", "picked",
+             created_at=two_days, picked_at=two_days)
+    db_session.commit()
+
+    messages = sent()
+    assert len(messages) == 1
+    assert messages[0].kind == "stall" and not messages[0].recovered
+    assert ("Jobs waiting", "1") in messages[0].details
+
+
 def test_busy_queue_with_recent_progress_is_not_a_stall(db_session, sample_episode, sent):
     """A long backlog is fine as long as jobs keep finishing."""
     _add_job(db_session, sample_episode.id, "transcribe", "pending",

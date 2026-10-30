@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.10
+**Version:** 1.11
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.11 — §5.9 stall check counts in-progress jobs by their real status, `picked`; it looked for a `running` status `job_queue` never uses, so a queue holding only a hung job never alerted.
 - v1.10 — §5.4 word timestamps for every language (#1093). Transcription now calls faster-whisper's batched pipeline directly with `word_timestamps=True`. Where WhisperX has a wav2vec2 alignment model for the detected language, the words are re-aligned with it as before; elsewhere (Serbian, and any language missing from WhisperX's lists) the native word times are kept and the VAD chunks are split into sentences. The source is stored per episode in `episodes.word_timestamps` (migration 023) and shown on the episode page. Before this, a language without an aligner silently fell back to segment-level speaker assignment.
 - v1.9 — §5.9 adds pipeline alerts (#1099): a worker periodic task sends one notification when a stage fails `PIPELINE_ALERT_FAILURE_STREAK` jobs in a row (default 5, retries counted) or when jobs wait longer than `PIPELINE_ALERT_STALL_HOURS` (default 24) with no job finishing, and one more on recovery. Added both variables to §14.
 - v1.8 — Remote inference removed (#1092); Podlog is fully self-hosted. §5.4 and §5.5 now describe local WhisperX and local pyannote only: the Fireworks transcription mode, the pyannote.ai `precision-2` diarization mode, `DIARIZATION_PROVIDER` / `INFERENCE_PROVIDER` routing and the per-episode cost estimates are gone. The Fireworks Ask/RAG provider added in v1.7 is gone too; Ask runs on Ollama only. Stored remote settings and provider API keys are deleted at startup by `app/services/remote_retirement.py`. Migration 022 drops the Fireworks usage/cost columns and `pyannote_cloud_cost_usd` from `episodes`; `inference_provider_used` stays so episodes transcribed remotely before the removal keep their "Transcribed remotely" tag.
@@ -176,7 +177,7 @@ The flat file is always written on successful transcription, regardless of diari
 - Failed jobs retain their full error traceback in the database.
 - **Pipeline alerts (#1099).** Per-episode failure notices cannot show that a whole stage is failing: from 2026-10-20 to 2026-10-28 every transcription failed as a retried `TRANSIENT_NETWORK` error and nobody noticed for a week. `app/services/pipeline_alerts.py` runs as a worker periodic task every 15 minutes and sends one notification (Telegram/email, immediately even in digest mode) when either holds, then one *recovered* notice when it clears:
   - **Failure streak:** a stage has `PIPELINE_ALERT_FAILURE_STREAK` (default 5) failed `job_queue` rows since its last `done` row. Each retry is its own row, so retries count.
-  - **Stall:** pending or running jobs older than `PIPELINE_ALERT_STALL_HOURS` (default 24) and no `done` job picked in that window. An empty queue never stalls. `job_queue` has no finish timestamp, so "last progress" is the `picked_at` of the newest done job.
+  - **Stall:** pending or in-progress (`picked`) jobs older than `PIPELINE_ALERT_STALL_HOURS` (default 24) and no `done` job picked in that window. An empty queue never stalls. `job_queue` has no finish timestamp, so "last progress" is the `picked_at` of the newest done job.
   - What was already sent is kept under the `pipeline_alerts` key in `system_state`. `0` disables either check. A stopped worker cannot run the check; the host health check (`scripts/healthcheck.py`) covers that case.
 
 ### 5.10 Scheduler
