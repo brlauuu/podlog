@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-03 — Infrastructure & DevOps  
-**Version:** 1.6
+**Version:** 1.7
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.7 — Worker image sets `TORCH_HOME` under the `model_cache` volume, so WhisperX's wav2vec2 alignment models survive a container recreate like every other model.
 - v1.6 — Remote inference removed (#1092); Podlog is fully self-hosted. `docker-compose.remote.yml` and the `up-remote` / `down-remote` / `logs-remote` Makefile targets are gone, as is the optional inference-provider block in `.env.example` (`INFERENCE_PROVIDER`, `FIREWORKS_*`). Those env vars, if still set, are ignored and named in a startup warning by `app/services/remote_retirement.py`.
 - v1.5 — Repo tree counts refreshed (12 Alembic migrations, 13 shadcn/ui components). Removed stale references to `api/wizard/` (retired in #361). Test-stack snippet now uses `pgvector/pgvector:pg15` to match the actual compose file. Removed the "web_test disabled" note — `web_test` and `pipeline_test` are both live in `docker-compose.test.yml`. Makefile section extended with `up-remote`, `down-remote`, `logs-remote`, `backfill`, `version`, `env-check`, `deps-outdated`, `test-healthcheck`. CI/CD section replaced with the current three-workflow split (`ci.yml`, `ci-full-unit.yml`, `ci-slow.yml`). Added `Dockerfile.test` to the web repo tree. `.env.example` retry comment corrected to `30s → 60s → 120s`.
 - v1.4 — Added optional Fireworks inference provider configuration (env + DB-backed Settings UI overrides). Updated `.env.example` with inference-provider variables. Updated web navigation from Notifications page to broader Settings page.
@@ -541,6 +542,7 @@ COPY pyproject.toml poetry.lock .
 RUN pip install --no-cache-dir poetry && poetry config virtualenvs.create false && poetry install --no-interaction
 COPY . .
 ENV HF_HOME=/root/.cache/huggingface
+ENV TORCH_HOME=/root/.cache/huggingface/torch
 CMD ["python", "-m", "app.worker"]
 ```
 
