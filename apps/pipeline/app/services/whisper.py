@@ -145,13 +145,23 @@ def transcribe(audio_path: str, model_name: str = "large-v3-turbo") -> tuple[lis
 
 
 def _native_segment(seg) -> dict:
-    """faster-whisper Segment -> the WhisperX dict shape diarization reads."""
+    """faster-whisper Segment -> the WhisperX dict shape diarization reads.
+
+    The batched pipeline returns numpy floats, which psycopg2 writes into SQL
+    as the literal ``np.float64(28.26)``; the segment insert then fails with
+    'schema "np" does not exist'. Hence the float() casts.
+    """
     return {
-        "start": seg.start,
-        "end": seg.end,
+        "start": float(seg.start),
+        "end": float(seg.end),
         "text": seg.text,
         "words": [
-            {"word": w.word.strip(), "start": w.start, "end": w.end, "score": w.probability}
+            {
+                "word": w.word.strip(),
+                "start": float(w.start),
+                "end": float(w.end),
+                "score": float(w.probability),
+            }
             for w in (seg.words or [])
             if w.word.strip()
         ],

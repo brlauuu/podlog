@@ -154,6 +154,26 @@ class TestTranscribe:
             {"word": "world.", "start": 0.5, "end": 1.0, "score": 0.9},
         ]
 
+    def test_native_times_are_python_floats(self, run):
+        """Batched faster-whisper returns numpy floats; psycopg2 writes those into SQL
+        as ``np.float64(...)`` and the segment insert fails (schema "np")."""
+        np = pytest.importorskip("numpy")
+        f = np.float64
+        chunk = _segment(f(0.0), f(6.0), " Hello world. How are you?", [
+            _word(" Hello", f(0.0), f(0.5), f(0.9)),
+            _word(" world.", f(0.5), f(1.0), f(0.9)),
+            _word(" How", f(3.0), f(3.4), f(0.9)),
+            _word(" you?", f(3.4), f(4.2), f(0.9)),
+        ])
+        (segments, _, result), _, _, _ = run(
+            [chunk], language="sr", align_model={"side_effect": ValueError("no model")},
+        )
+        values = [v for s in segments for v in (s["start"], s["end"])]
+        for seg in result["segments"]:
+            values += [seg["start"], seg["end"]]
+            values += [w[k] for w in seg["words"] for k in ("start", "end", "score")]
+        assert values and all(type(v) is float for v in values)
+
     def test_alignment_failure_falls_back_to_native(self, run):
         """An aligner that exists but breaks still leaves the native words."""
         (_, _, result), _, _, _ = run(
