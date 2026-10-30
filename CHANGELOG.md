@@ -20,6 +20,8 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+## 1.6.2 — 2026-10-30
+
 ### Fixes
 
 - The worker keeps the word-alignment models it downloads (360 MB for English) in the model cache volume, instead of fetching them again every time the worker container is recreated.
