@@ -96,7 +96,7 @@ To drop the audio column entirely, set `ARCHIVE_AUDIO=false`. Transcripts stay f
 | shared layers (counted once) | 0.9 GB |
 | **Total images** | **~19 GB** |
 
-Plus the `podlog_model_cache` volume — Whisper, pyannote, spaCy and the embedding model — at **~5.7 GB** once everything has been downloaded.
+Plus the `podlog_model_cache` volume — Whisper, the wav2vec2 alignment models (one per aligned language; 360 MB for English), pyannote, spaCy and the embedding model — at **~5.7 GB** once everything has been downloaded.
 
 Ask AI models are pulled separately and on top: `qwen2.5:3b` is 1.9 GB and `phi3:mini` is 2.2 GB; `gemma3n:e4b` is larger again. `make ollama-pull` fetches all three.
 
