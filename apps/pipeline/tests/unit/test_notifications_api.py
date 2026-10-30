@@ -170,17 +170,38 @@ class TestPostTest:
         assert "smtp down" in resp.json()["error"]
 
 
-@patch("app.api.notifications.httpx.post")
+@patch("app.api.notifications.post_telegram_message")
 def test_send_test_telegram_calls_api(mock_post):
     from app.api.notifications import send_test_telegram
-
-    mock_resp = MagicMock()
-    mock_post.return_value = mock_resp
 
     send_test_telegram("token", "chat-id")
 
     mock_post.assert_called_once()
-    mock_resp.raise_for_status.assert_called_once()
+    assert mock_post.call_args[0][:2] == ("token", "chat-id")
+
+
+@patch("app.api.notifications.get_notification_settings")
+@patch("app.services.notifications.httpx.post")
+def test_telegram_test_failure_response_has_no_token(mock_post, mock_get, mock_db):
+    """The 502 body goes to the browser: it must not carry the token in the URL."""
+    import httpx
+
+    token = "123456:SECRET-token-value"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    mock_post.return_value = httpx.Response(
+        401, json={"ok": False, "description": "Unauthorized"},
+        request=httpx.Request("POST", url),
+    )
+    mock_get.return_value = {
+        "telegram_bot_token": token,
+        "telegram_chat_id": "123",
+        "telegram_configured": True,
+        "email_configured": False,
+    }
+    resp = client.post("/api/notifications/test", json={"channel": "telegram"})
+    assert resp.status_code == 502
+    assert "Unauthorized" in resp.json()["error"]
+    assert token not in resp.text
 
 
 @patch("app.api.notifications.smtplib.SMTP")

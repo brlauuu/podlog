@@ -314,7 +314,7 @@ def format_failed_telegram(event: EpisodeFailedEvent) -> str:
         f"*Duration:* {_fmt_duration(event.duration_secs)}\n\n"
         f"*Error*\n"
         f"`Class:    {event.error_class}`\n"
-        f"`Details:  {event.error_message}`\n"
+        f"`Details:  {_clip(event.error_message, TELEGRAM_ERROR_CHARS)}`\n"
         f"`Retries:  {event.retry_count}/{event.retry_max}`\n"
         f"{avg_section}\n"
         f"*Queue:* {event.queue_remaining} remaining · Est. {_fmt_estimate_with_provider(event.queue_estimated_secs, getattr(event, 'queue_estimate_provider', None))}"
@@ -408,6 +408,60 @@ def send_email(
     logger.info('"action": "email_sent", "to": "%s", "subject": "%s"', to_addr, subject)
 
 
+# Telegram rejects a sendMessage text over 4096 characters with a 400. An
+# error message can be far longer: a failed SQL insert carries the whole
+# statement (~150k characters on d6ed249f), so the alert never arrived.
+TELEGRAM_MAX_CHARS = 4096
+TELEGRAM_ERROR_CHARS = 1000
+
+
+def _clip(text: str | None, limit: int) -> str:
+    text = text or ""
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+class TelegramSendError(Exception):
+    """sendMessage failed. Carries the status and Telegram's description only.
+
+    Deliberately not an ``httpx.HTTPStatusError``: that one's message embeds
+    the request URL, and the URL embeds the bot token, so ``logger.exception``
+    wrote the token into the worker log. Same rule as ``TelegramApiError`` in
+    telegram_bot.py.
+    """
+
+    def __init__(self, status: int | None, description: str) -> None:
+        super().__init__(f"Telegram sendMessage -> {status}: {description}")
+        self.status = status
+        self.description = description
+
+
+def post_telegram_message(
+    bot_token: str, chat_id: str, text: str, parse_mode: str | None = "Markdown"
+) -> None:
+    """Send one message. Every sendMessage outside telegram_bot.py goes through here."""
+    payload: dict = {"chat_id": chat_id, "text": _clip(text, TELEGRAM_MAX_CHARS)}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    try:
+        resp = httpx.post(url, json=payload)
+    except httpx.HTTPError as exc:
+        # `from None`: the original's traceback and message may carry the URL.
+        raise TelegramSendError(None, type(exc).__name__) from None
+    if resp.status_code == 200:
+        return
+    try:
+        description = str(resp.json().get("description") or "no description")
+    except ValueError:
+        description = "no description"
+    description = description.replace(bot_token, "<token>") if bot_token else description
+    if parse_mode and resp.status_code == 400 and "parse" in description.lower():
+        # Markdown Telegram cannot parse (an error text full of _ or *): send it plain.
+        post_telegram_message(bot_token, chat_id, text, parse_mode=None)
+        return
+    raise TelegramSendError(resp.status_code, description)
+
+
 def send_telegram(
     event: Event,
     bot_token: str,
@@ -424,12 +478,6 @@ def send_telegram(
         logger.warning('"action": "telegram_unknown_event", "type": "%s"', type(event).__name__)
         return
 
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    resp = httpx.post(url, json={
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "Markdown",
-    })
-    resp.raise_for_status()
+    post_telegram_message(bot_token, chat_id, text)
 
     logger.info('"action": "telegram_sent", "chat_id": "%s"', chat_id)

@@ -21,6 +21,7 @@ from app.services.notification_runtime import (
     estimate_queue_status,
 )
 from app.services.notifications import (
+    post_telegram_message,
     send_email,
     send_telegram,
 )
@@ -305,15 +306,9 @@ def _send_digest(digest: DigestData, ns: dict) -> None:
             server.send_message(msg)
 
     if ns.get("telegram_configured"):
-        import httpx
-        text = format_digest_telegram(digest)
-        url = f"https://api.telegram.org/bot{ns['telegram_bot_token']}/sendMessage"
-        resp = httpx.post(url, json={
-            "chat_id": ns["telegram_chat_id"],
-            "text": text,
-            "parse_mode": "Markdown",
-        })
-        resp.raise_for_status()
+        post_telegram_message(
+            ns["telegram_bot_token"], ns["telegram_chat_id"], format_digest_telegram(digest)
+        )
 
 
 def register_notification_handlers(bus: EventBus) -> None:
