@@ -22,6 +22,8 @@ fresh empty `Unreleased` is left at the top.
 
 ### Fixes
 
+- A failed Telegram notification no longer writes the bot token to the worker log, and a failed **Send test message** no longer shows it in the browser. If your worker log contains a `telegram_send_failed` line, rotate the token in @BotFather and save the new one in Settings.
+- Failure alerts with a very long error (a failed database write carries the whole statement) now arrive: the error is shortened, and a message Telegram cannot parse as Markdown is resent as plain text.
 - `make update` no longer stops the worker in the middle of a job. It looked for a job status that does not exist, so it took a busy worker for idle and stopped it, losing the episode in progress (it came back hours later as a system error). It now refuses to start while a job runs and tells you to re-run it when the queue is idle.
 - The "queue stalled" alert (1.5.0) now also fires when the only thing in the queue is a job that hung, which it missed for the same reason.
 
