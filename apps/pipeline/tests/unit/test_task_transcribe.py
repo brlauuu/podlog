@@ -1,6 +1,6 @@
 """Unit tests for app.tasks.transcribe — transcription task."""
 import gc
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import ANY, MagicMock, patch, call
 from pathlib import Path
 
 import pytest
@@ -28,7 +28,7 @@ class TestTranscribeEpisode:
         mock_session_cls.return_value = db
 
         segments_data = [{"start": 0.0, "end": 5.0, "text": " hello "}]
-        aligned_result = {"segments": []}
+        aligned_result = {"segments": [], "word_timestamps": "native"}
 
         with (
             patch("app.services.whisper.transcribe", return_value=(segments_data, "en", aligned_result)),
@@ -50,6 +50,10 @@ class TestTranscribeEpisode:
         # #1092: every episode is transcribed locally, whatever is stored.
         mock_update.assert_any_call(db, "ep1", inference_provider_used="local")
         mock_update.assert_any_call(db, "ep1", language="en", status="diarizing")
+        # #1093: the word-time source is recorded per episode.
+        mock_update.assert_any_call(
+            db, "ep1", transcribe_duration_secs=ANY, word_timestamps="native",
+        )
         db.add.assert_called_once()
         mock_jq.enqueue.assert_called_once_with(db, "ep1", "diarize")
 

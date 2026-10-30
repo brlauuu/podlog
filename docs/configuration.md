@@ -19,7 +19,7 @@ cp .env.example .env
 |---|---|---|
 | `WHISPER_MODEL` | `large-v3-turbo` | Whisper model size. Options: `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`. Smaller models use less RAM but produce lower quality transcripts. |
 | `WHISPER_COMPUTE_TYPE` | `int8` | Quantization type. `int8` is recommended for CPU (faster, lower RAM). Use `float32` for maximum accuracy. |
-| `WHISPER_BATCH_SIZE` | `16` | WhisperX batched inference batch size. Reduce if you encounter OOM errors. |
+| `WHISPER_BATCH_SIZE` | `16` | faster-whisper batched inference batch size. Reduce if you encounter OOM errors. |
 | `PYANNOTE_MODEL` | `pyannote/speaker-diarization-community-1` | HuggingFace ID of the pyannote diarization model. Override to pin to `pyannote/speaker-diarization-3.1` or a newer release. Users must accept the license for whichever model is selected. |
 | `ARCHIVE_AUDIO` | `true` | When `true`, audio is re-encoded to compressed MP3 after transcription and the raw download is deleted. Set `false` to delete audio entirely after processing (saves disk). |
 | `AUDIO_ARCHIVE_BITRATE` | `64k` | MP3 bitrate for archived audio. `64k` is fine for speech; `128k` for higher quality. |
@@ -30,7 +30,7 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |---|---|---|
-| `WHISPER_CPU_THREADS` | `0` | CPU threads for the WhisperX transcription pass. `0` auto-detects available cores. WhisperX otherwise defaults to 4, which pins transcription to 4 cores regardless of machine size. On hyperthreaded CPUs, set this to the physical-core count. |
+| `WHISPER_CPU_THREADS` | `0` | CPU threads for the faster-whisper transcription pass. `0` auto-detects available cores. CTranslate2 otherwise defaults to 4, which pins transcription to 4 cores regardless of machine size. On hyperthreaded CPUs, set this to the physical-core count. |
 
 ## Retry and Error Handling
 

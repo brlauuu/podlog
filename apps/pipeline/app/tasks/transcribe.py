@@ -63,7 +63,7 @@ def transcribe_episode(episode_id: str) -> str:
         wav_path = audio_path.with_suffix(".wav")
         _convert_to_wav(audio_path, wav_path)
 
-        # Step 2: transcribe (local WhisperX). MemoryError → OOM
+        # Step 2: transcribe (local faster-whisper, #1093). MemoryError → OOM
         # is classified by the worker. Whisper is ALWAYS unloaded
         # afterwards via the finally clause (PRD-01 S5.4).
         try:
@@ -74,7 +74,12 @@ def transcribe_episode(episode_id: str) -> str:
                 str(wav_path), model_name=settings.whisper_model
             )
             transcribe_secs = round(time.monotonic() - t0, 1)
-            update_episode(db, episode_id, transcribe_duration_secs=transcribe_secs)
+            update_episode(
+                db,
+                episode_id,
+                transcribe_duration_secs=transcribe_secs,
+                word_timestamps=(aligned_result or {}).get("word_timestamps"),
+            )
         finally:
             # MANDATORY: unload Whisper before pyannote can be loaded (PRD-01 S5.4)
             _unload_whisper()

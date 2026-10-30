@@ -173,4 +173,26 @@ describe("EpisodeMetaTags", () => {
     );
     expect(screen.queryByText(/No labels/)).toBeNull();
   });
+  // #1093: the word-time source is shown, so a language that lost its
+  // word times is visible on the page instead of only in a log.
+  it("labels wav2vec2-aligned word timing", () => {
+    render(<EpisodeMetaTags {...baseProps} wordTimestamps="wav2vec2" />);
+    expect(screen.getByText("Word timing: aligned")).toBeInTheDocument();
+  });
+
+  it("labels native Whisper word timing with an explanation", () => {
+    render(<EpisodeMetaTags {...baseProps} wordTimestamps="native" />);
+    const tag = screen.getByText("Word timing: Whisper");
+    expect(tag).toHaveAttribute("title", expect.stringMatching(/No alignment model/));
+  });
+
+  it("warns when no word timing was available", () => {
+    render(<EpisodeMetaTags {...baseProps} wordTimestamps="none" />);
+    expect(screen.getByText("No word timing")).toBeInTheDocument();
+  });
+
+  it("claims nothing for episodes transcribed before the source was recorded", () => {
+    render(<EpisodeMetaTags {...baseProps} wordTimestamps={null} />);
+    expect(screen.queryByText(/word timing/i)).not.toBeInTheDocument();
+  });
 });

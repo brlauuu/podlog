@@ -17,6 +17,7 @@ export interface Episode {
   error_message: string | null;
   has_diarization: boolean;
   diarization_error: string | null;
+  word_timestamps: string | null;
   inference_error: string | null;
   transcribe_duration_secs: number | null;
   diarize_duration_secs: number | null;

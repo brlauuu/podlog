@@ -57,6 +57,7 @@ This deletes the existing transcript and segments, then re-downloads, re-transcr
 
 You may see banners at the top of an episode page:
 
+- **Word timing tag** — next to the language: **Word timing: aligned** means word times came from a wav2vec2 alignment model for that language; **Word timing: Whisper** means the language has no alignment model (Serbian, for example) and Whisper's own word times were used, slightly less precise but still per word. An amber **No word timing** tag means neither worked, so each transcript segment has one speaker and a speaker change inside a segment is missed. Episodes transcribed before 1.6 show no tag; re-process one to get it.
 - **"Speaker labels unavailable — diarization failed"** — pyannote couldn't label speakers (noisy audio, etc.), but the transcript is still usable. The reason is appended when pyannote reported one. Episode cards show the same condition as a **No labels** tag.
 - **"Speaker name inference was unavailable for this episode."** — spaCy NER couldn't extract any speaker names. You can still rename speakers manually. This banner is suppressed if inference managed to name at least one speaker.
 - **"Processing failed"** — shown for a failed episode, with the error class in brackets and the error message underneath. See [Queue Dashboard](08-queue.md) for what each class means.

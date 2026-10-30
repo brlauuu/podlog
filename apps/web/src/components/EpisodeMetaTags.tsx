@@ -25,6 +25,7 @@ interface EpisodeMetaTagsProps {
   diarizeStepDurations: Record<string, number> | null;
   inferenceProviderUsed: string | null;
   audioFileSizeBytes: number | null;
+  wordTimestamps?: string | null;
   episodeId: string;
 }
 
@@ -55,12 +56,55 @@ function formatDiarizeStepLabel(key: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function Tag({ children, className }: { children: React.ReactNode; className?: string }) {
+function Tag({
+  children,
+  className,
+  title,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  title?: string;
+}) {
   return (
-    <span className={`${CHIP_BASE_CLASS} ${className ?? "bg-muted text-muted-foreground"}`}>
+    <span
+      className={`${CHIP_BASE_CLASS} ${className ?? "bg-muted text-muted-foreground"}`}
+      title={title}
+    >
       {children}
     </span>
   );
+}
+
+// #1093: where the word times came from, which decides whether diarization
+// could place a speaker change inside a segment. NULL means the episode was
+// transcribed before the source was recorded, so nothing is claimed.
+function WordTimingTag({ source }: { source: string | null | undefined }) {
+  if (source === "wav2vec2") {
+    return (
+      <Tag title="Word times from a wav2vec2 alignment model for this language">
+        Word timing: aligned
+      </Tag>
+    );
+  }
+  if (source === "native") {
+    return (
+      <Tag title="No alignment model for this language, so word times come from Whisper itself. Slightly less precise, still per word.">
+        Word timing: Whisper
+      </Tag>
+    );
+  }
+  if (source === "none") {
+    return (
+      <Tag
+        className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+        title="No word times, so each segment has one speaker and a speaker change inside a segment is missed"
+      >
+        <AlertTriangle size={10} />
+        No word timing
+      </Tag>
+    );
+  }
+  return null;
 }
 
 // Episodes transcribed through Fireworks before #1092 keep a small marker;
@@ -118,6 +162,7 @@ export default function EpisodeMetaTags({
   diarizeStepDurations,
   inferenceProviderUsed,
   audioFileSizeBytes,
+  wordTimestamps,
   episodeId,
 }: EpisodeMetaTagsProps) {
   const [stepsExpanded, setStepsExpanded] = useState(false);
@@ -161,6 +206,8 @@ export default function EpisodeMetaTags({
         )}
 
         <RemoteProvenanceTag provider={inferenceProviderUsed} />
+
+        <WordTimingTag source={wordTimestamps} />
 
         {transcribeDurationSecs != null && (
           <Tag>Transcribed: {formatTimestamp(transcribeDurationSecs)}</Tag>

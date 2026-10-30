@@ -36,7 +36,8 @@ pending → download → transcribe → diarize → chunk → embed → infer �
 - Converts audio to 16kHz mono WAV via ffmpeg
 - Runs Whisper `large-v3-turbo` (the `WHISPER_MODEL` default, or the configured model)
 - Writes segments to database
-- Saves word-level alignment data to `{episode_id}.whisperx.json` if available
+- Gets word timestamps for every language (#1093): from a wav2vec2 alignment model where WhisperX has one for the language, otherwise from Whisper itself. The source is stored in `episodes.word_timestamps` (`wav2vec2`, `native` or `none`)
+- Saves the word-level data to `{episode_id}.whisperx.json` for diarization
 - **Explicitly unloads Whisper from memory** (mandatory — Whisper + pyannote must never coexist)
 
 **Data produced:**
