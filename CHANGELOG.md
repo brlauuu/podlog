@@ -20,6 +20,11 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- A failed Telegram notification no longer writes the bot token to the worker log, and a failed **Send test message** no longer shows it in the browser. If your worker log contains a `telegram_send_failed` line, rotate the token in @BotFather and save the new one in Settings.
+- Failure alerts with a very long error (a failed database write carries the whole statement) now arrive: the error is shortened, and a message Telegram cannot parse as Markdown is resent as plain text.
+
 ## 1.6.3 — 2026-10-30
 
 ### Fixes

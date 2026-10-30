@@ -6,13 +6,13 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Literal
 
-import httpx
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.services.notifications import post_telegram_message
 from app.services.notification_settings import (
     get_notification_settings,
     mask_sensitive,
@@ -79,9 +79,7 @@ def send_test_telegram(bot_token: str, chat_id: str) -> None:
     """Send a test message via Telegram Bot API."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     text = f"*✅ Podlog Test*\n\nThis is a test notification from Podlog.\nSent at {now}"
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    resp = httpx.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
-    resp.raise_for_status()
+    post_telegram_message(bot_token, chat_id, text)
 
 
 def send_test_email(s: dict) -> None:
