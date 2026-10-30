@@ -29,23 +29,17 @@ def _stored_after(db) -> dict:
     return json.loads(db.query.return_value.filter.return_value.first.return_value.value)
 
 
-def _fields_set(fields: set[str]):
+def _from_env(*fields: str) -> None:
     """Pretend exactly ``fields`` came from env or .env.
 
-    Pydantic adds a field to model_fields_set whenever it is assigned, and
-    patch.object assigns -- so other test modules leave it polluted.
+    The autouse fixture in conftest.py restores the real set afterwards (#1100).
     """
-    return patch.object(
-        type(remote_retirement.settings),
-        "model_fields_set",
-        new_callable=lambda: property(lambda self: fields),
-    )
+    object.__setattr__(remote_retirement.settings, "__pydantic_fields_set__", set(fields))
 
 
 @pytest.fixture(autouse=True)
 def _nothing_from_env():
-    with _fields_set(set()):
-        yield
+    _from_env()
 
 
 @pytest.fixture(autouse=True)
@@ -159,8 +153,8 @@ class TestEmbeddingModelPin:
         _no_provenance.return_value = {"model": "BAAI/bge-small-en-v1.5", "dim": 384}
         db = _mock_db({})
 
-        with _fields_set({"embedding_model"}):
-            assert remote_retirement.retire_remote_settings(db) == []
+        _from_env("embedding_model")
+        assert remote_retirement.retire_remote_settings(db) == []
 
     def test_ignores_a_recorded_model_outside_the_allowlist(self, _no_provenance):
         # The value goes to SentenceTransformer(), which downloads whatever
