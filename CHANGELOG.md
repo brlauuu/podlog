@@ -20,6 +20,11 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- `make update` no longer stops the worker in the middle of a job. It looked for a job status that does not exist, so it took a busy worker for idle and stopped it, losing the episode in progress (it came back hours later as a system error). It now refuses to start while a job runs and tells you to re-run it when the queue is idle.
+- The "queue stalled" alert (1.5.0) now also fires when the only thing in the queue is a job that hung, which it missed for the same reason.
+
 ## 1.6.3 — 2026-10-30
 
 ### Fixes

@@ -58,30 +58,49 @@ fi
 # mid-job loses the work and the episode comes back as SYSTEM_ERROR via the
 # zombie sweep.
 say "Draining the queue"
-BUSY=$(docker compose exec -T db psql -U postgres podlog -tAc \
-  "SELECT count(*) FROM job_queue WHERE status IN ('pending','running');" 2>/dev/null | tr -d ' ')
+# An in-flight job is 'picked' (apps/pipeline/app/job_queue.py); job_queue has
+# no 'running' status. Until 2026-10-30 this step looked for 'running', so it
+# read a busy worker as idle and stopped it mid-job. Nothing resumes a stopped
+# job: the zombie sweep fails the episode with SYSTEM_ERROR hours later. And a
+# transcription runs far longer than the 60 s stop grace, so stopping the
+# worker during one always loses it. Hence: never stop it while a job runs.
+q() { docker compose exec -T db psql -U postgres podlog -tAc "$1" 2>/dev/null | tr -d ' '; }
 
-if [ -z "${BUSY:-}" ]; then
+PENDING=$(q "SELECT count(*) FROM job_queue WHERE status = 'pending';")
+if [ -z "${PENDING:-}" ]; then
   fail "could not reach the database to check the queue."
   echo "  Is the stack running? Start it with 'make up', or stop everything"
   echo "  first if you are updating a stopped install."
   exit 1
 fi
+ACTIVE=$(q "SELECT task || ':' || episode_id FROM job_queue WHERE status = 'picked' ORDER BY picked_at LIMIT 1;")
+WORKER_UP=$(docker compose ps -q --status running worker 2>/dev/null)
 
-if [ "$BUSY" != "0" ]; then
-  echo "$BUSY job(s) pending or running."
-  echo "Stopping the worker gracefully (up to 60s for the current job)..."
+interrupted() {
+  echo "  $1 job for episode ${2} was interrupted by a stopped worker; that work is"
+  echo "  already lost. The zombie sweep will mark the episode failed; retry it"
+  echo "  from its episode page once the update is done."
+}
+
+if [ -n "$ACTIVE" ] && [ -n "$WORKER_UP" ]; then
+  fail "a ${ACTIVE%%:*} job is in progress (episode ${ACTIVE#*:})."
+  echo "  Stopping the worker now would lose it. Re-run 'make update' when the"
+  echo "  queue page shows nothing processing."
+  exit 1
+elif [ -n "$ACTIVE" ]; then
+  echo "warning:"
+  interrupted "${ACTIVE%%:*}" "${ACTIVE#*:}"
+elif [ "$PENDING" != "0" ] && [ -n "$WORKER_UP" ]; then
+  echo "$PENDING job(s) waiting, none in progress."
+  echo "Stopping the worker between jobs; they resume after the update..."
   docker compose stop -t 60 worker
-  STILL=$(docker compose exec -T db psql -U postgres podlog -tAc \
-    "SELECT count(*) FROM job_queue WHERE status = 'running';" 2>/dev/null | tr -d ' ')
-  if [ "${STILL:-0}" != "0" ]; then
-    fail "a job is still marked running after the grace period."
-    echo "  It will be picked up again after the update, but if it was mid-"
-    echo "  transcription that work is lost. Re-run when the queue is idle,"
-    echo "  or accept it and re-run this command."
-    exit 1
+  ACTIVE=$(q "SELECT task || ':' || episode_id FROM job_queue WHERE status = 'picked' ORDER BY picked_at LIMIT 1;")
+  if [ -n "$ACTIVE" ]; then
+    echo "warning: the worker picked up a job before it stopped."
+    interrupted "${ACTIVE%%:*}" "${ACTIVE#*:}"
+  else
+    echo "worker stopped, nothing in progress"
   fi
-  echo "worker stopped, nothing running"
 else
   echo "queue idle"
 fi

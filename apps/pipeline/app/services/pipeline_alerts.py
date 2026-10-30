@@ -58,11 +58,12 @@ _STREAKS_SQL = text("""
     GROUP BY j.task
 """)
 
+# An in-flight job is 'picked' (job_queue.py); there is no 'running' status.
 _QUEUE_SQL = text("""
     SELECT
-        (SELECT count(*) FROM job_queue WHERE status IN ('pending', 'running')) AS waiting,
+        (SELECT count(*) FROM job_queue WHERE status IN ('pending', 'picked')) AS waiting,
         (SELECT min(created_at) FROM job_queue
-          WHERE status IN ('pending', 'running')) AS oldest_waiting,
+          WHERE status IN ('pending', 'picked')) AS oldest_waiting,
         (SELECT max(picked_at) FROM job_queue WHERE status = 'done') AS last_progress
 """)
 
