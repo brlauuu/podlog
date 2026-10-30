@@ -117,7 +117,7 @@ def _diarize_wordlevel(
     # Check if word-level data actually exists
     has_words = any(seg.get("words") for seg in aligned_segments)
     if not has_words:
-        logger.info(
+        logger.warning(
             '"action": "diarize_wordlevel_no_words", "episode_id": "%s", '
             '"reason": "alignment data has no word timestamps, falling back to segment-level"',
             episode_id,

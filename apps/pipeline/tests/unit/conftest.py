@@ -12,3 +12,5 @@ os.environ.setdefault("HF_TOKEN", "test-token")
 # Provide a mock module so that patch("whisperx.load_model") etc. can resolve.
 if "whisperx" not in sys.modules:
     sys.modules["whisperx"] = MagicMock()
+if "faster_whisper" not in sys.modules:
+    sys.modules["faster_whisper"] = MagicMock()

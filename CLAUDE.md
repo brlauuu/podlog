@@ -62,7 +62,7 @@ podlog/
 │   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis, backups, explore, prompts)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
 │   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, embed_provenance, speaker_turns, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, pipeline_commands, timing_labels, prompts, backup_files, backup_settings, queue_snapshot, telegram_bot, preflight, remote_retirement, pipeline_alerts)
-│   │   ├── alembic/                # Database migrations (23 versions)
+│   │   ├── alembic/                # Database migrations (24 versions)
 │   │   └── tests/                  # unit, integration, e2e
 │   ├── web/                        # Next.js 16 (App Router)
 │   │   ├── Dockerfile              # Production image (standalone output)
@@ -87,7 +87,7 @@ Agent-tool metadata (`.agents/`, `.superpowers/`, `.omx/`, `.claude/`, `.worktre
 |---|---|---|
 | Pipeline API | FastAPI (Python 3.11–3.13) | Internal API consumed by web app |
 | Task queue | PostgreSQL-backed job queue | Sequential processing (concurrency=1) to avoid OOM |
-| Transcription | WhisperX (CTranslate2 backend), default `large-v3-turbo` | Explicit unload before diarization — mandatory |
+| Transcription | faster-whisper (CTranslate2) batched, default `large-v3-turbo`; WhisperX wav2vec2 alignment where the language has a model, native word timestamps otherwise (#1093) | Explicit unload before diarization — mandatory |
 | Diarization | `pyannote/speaker-diarization-community-1`, local (override via `PYANNOTE_MODEL`) | Requires HF_TOKEN; graceful failure path |
 | LLM inference | Ollama (local) | RAG-based Ask AI feature; model selected in Ask UI per request, defaulting to `rag_local_model` |
 | Database | PostgreSQL 15 (pgvector/pgvector:pg15) | FTS via `to_tsvector` + GIN index, vector HNSW index |

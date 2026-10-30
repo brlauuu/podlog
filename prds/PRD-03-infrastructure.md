@@ -70,7 +70,7 @@ podlog/
 │   │   │   │   └── prewarm.py      # Model pre-warm on worker startup
 │   │   │   └── services/
 │   │   │       ├── rss.py
-│   │   │       ├── whisper.py      # WhisperX (CTranslate2 backend)
+│   │   │       ├── whisper.py      # faster-whisper (CTranslate2) + WhisperX alignment
 │   │   │       ├── pyannote.py
 │   │   │       ├── alignment.py    # Majority-overlap timestamp merging
 │   │   │       ├── chunking.py
@@ -373,7 +373,7 @@ HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxx
 # ── Pipeline tuning ───────────────────────────────────────
 WHISPER_MODEL=large-v3-turbo       # tiny|base|small|medium|large-v3|large-v3-turbo
 WHISPER_COMPUTE_TYPE=int8          # int8 (fast, recommended for CPU) | float32 (accurate)
-WHISPER_BATCH_SIZE=16              # WhisperX batched inference batch size
+WHISPER_BATCH_SIZE=16              # faster-whisper batched inference batch size
 DATA_DIR=/data
 ARCHIVE_AUDIO=true
 AUDIO_ARCHIVE_BITRATE=64k

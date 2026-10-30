@@ -115,6 +115,9 @@ class Episode(Base):
     has_diarization: Mapped[bool] = mapped_column(Boolean, default=False)
     diarization_error: Mapped[str | None] = mapped_column(Text)
 
+    # Word-time source (#1093): wav2vec2 | native | none; NULL = before #1093
+    word_timestamps: Mapped[str | None] = mapped_column(Text)
+
     # Inference result (PRD-04 §5.2)
     inference_skipped: Mapped[bool] = mapped_column(Boolean, default=False)
     inference_error: Mapped[str | None] = mapped_column(Text)

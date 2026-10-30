@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.9
+**Version:** 1.10
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.10 — §5.4 word timestamps for every language (#1093). Transcription now calls faster-whisper's batched pipeline directly with `word_timestamps=True`. Where WhisperX has a wav2vec2 alignment model for the detected language, the words are re-aligned with it as before; elsewhere (Serbian, and any language missing from WhisperX's lists) the native word times are kept and the VAD chunks are split into sentences. The source is stored per episode in `episodes.word_timestamps` (migration 023) and shown on the episode page. Before this, a language without an aligner silently fell back to segment-level speaker assignment.
 - v1.9 — §5.9 adds pipeline alerts (#1099): a worker periodic task sends one notification when a stage fails `PIPELINE_ALERT_FAILURE_STREAK` jobs in a row (default 5, retries counted) or when jobs wait longer than `PIPELINE_ALERT_STALL_HOURS` (default 24) with no job finishing, and one more on recovery. Added both variables to §14.
 - v1.8 — Remote inference removed (#1092); Podlog is fully self-hosted. §5.4 and §5.5 now describe local WhisperX and local pyannote only: the Fireworks transcription mode, the pyannote.ai `precision-2` diarization mode, `DIARIZATION_PROVIDER` / `INFERENCE_PROVIDER` routing and the per-episode cost estimates are gone. The Fireworks Ask/RAG provider added in v1.7 is gone too; Ask runs on Ollama only. Stored remote settings and provider API keys are deleted at startup by `app/services/remote_retirement.py`. Migration 022 drops the Fireworks usage/cost columns and `pyannote_cloud_cost_usd` from `episodes`; `inference_provider_used` stays so episodes transcribed remotely before the removal keep their "Transcribed remotely" tag.
 - v1.7 — §5.10 RAG inference is no longer Ollama-only: the Fireworks AI provider was added in #608 with a curated chat-model list (Qwen2.5 7B Instruct, Llama 3.1 70B Instruct, Qwen2.5 72B Instruct). Provider selection is per-environment via the `inference_provider` setting; local Ollama remains the default for both new installs and existing upgrades.
@@ -93,12 +94,17 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 
 ### 5.4 Transcription (Speech-to-Text)
 
-- Engine: WhisperX with CTranslate2 backend + wav2vec2 word-level alignment, optimized for CPU inference. The optional Fireworks transcription mode was removed in #1092; episodes it transcribed keep their transcripts.
+- Engine: faster-whisper (CTranslate2) batched pipeline with native word timestamps, plus WhisperX's wav2vec2 alignment where a model exists for the language (#1093), optimized for CPU inference. The optional Fireworks transcription mode was removed in #1092; episodes it transcribed keep their transcripts.
 - Default model: `large-v3-turbo` (configurable via `WHISPER_MODEL` env var: tiny|base|small|medium|large-v3|large-v3-turbo).
 - The model is downloaded once and cached in a persistent Docker volume.
 - **Memory management:** Whisper is loaded into memory for transcription and **explicitly unloaded** (removed from memory and `gc.collect()` called) before pyannote is loaded for diarization. The two models must never be resident in memory simultaneously. This is mandatory on CPU-only machines to avoid OOM.
 - Transcription produces: text segments, each with `start_time` (seconds), `end_time` (seconds), and `text`.
-- Word-level timestamps are produced via WhisperX's wav2vec2 alignment step.
+- Word-level timestamps exist for every language (#1093). Their source is stored in `episodes.word_timestamps`:
+  - `wav2vec2`: WhisperX has an alignment model for the language (English, Croatian, ...); the native words are re-aligned with it.
+  - `native`: no alignment model (Serbian, ...) or alignment failed; faster-whisper's own word times are kept, and its ~30 s VAD chunks are split into sentences at sentence-ending punctuation.
+  - `none`: no word times at all; diarization falls back to one speaker per segment and logs `diarize_wordlevel_no_words` at WARNING.
+  - NULL: transcribed before #1093.
+  Spike numbers (#1093): native word starts land a median 75–100 ms from wav2vec2's on the same text.
 - Language detection is automatic; detected language is stored per episode.
 - Transcription progress (segment count / estimated total) is surfaced to the queue.
 
@@ -281,7 +287,7 @@ CREATE TABLE speaker_names (
 | Component        | Choice                                       | Rationale                                    |
 | ---------------- | -------------------------------------------- | -------------------------------------------- |
 | Language         | Python 3.11                                  | Best ecosystem for ML/audio tooling          |
-| STT              | WhisperX (CTranslate2 + wav2vec2 alignment)  | Faster CPU inference; word-level timestamps  |
+| STT              | faster-whisper (CTranslate2) + WhisperX wav2vec2 alignment where available | Faster CPU inference; word-level timestamps for every language |
 | Diarization      | `pyannote/speaker-diarization-community-1`   | Industry standard; HuggingFace native        |
 | Audio processing | `ffmpeg` (via `ffmpeg-python`)               | Universal format support                     |
 | Task queue       | PostgreSQL-backed job queue                   | No external broker needed; jobs in episodes table |
@@ -488,7 +494,7 @@ HF_TOKEN=hf_xxxxxxxxxxxx
 # Optional
 WHISPER_MODEL=large-v3-turbo       # tiny|base|small|medium|large-v3|large-v3-turbo
 WHISPER_COMPUTE_TYPE=int8          # int8 (fast, recommended for CPU) | float32 (accurate)
-WHISPER_BATCH_SIZE=16              # WhisperX batched inference batch size
+WHISPER_BATCH_SIZE=16              # faster-whisper batched inference batch size
 DATA_DIR=/data
 ARCHIVE_AUDIO=true
 AUDIO_ARCHIVE_BITRATE=64k

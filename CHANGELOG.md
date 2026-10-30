@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- Serbian episodes, and any language without a wav2vec2 alignment model, now get word-level timestamps, so a speaker change in the middle of a sentence lands on the right speaker instead of whoever talked most in that 25-second stretch. Languages that have an alignment model, English among them, keep using it. The episode page shows which source each episode's word timing came from. Episodes transcribed earlier keep their old speaker assignment until you re-process them (#1093).
+
 ## 1.5.0 — 2026-10-29
 
 ### Minor changes

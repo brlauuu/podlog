@@ -25,7 +25,7 @@
 ## Features
 
 - **Audio ingestion** — pull episodes from RSS feeds (full, selective, or test mode) or upload audio files (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.opus`, `.aac`, `.wma`, `.webm`, `.mp4`) directly from the web UI.
-- **Speech-to-text** — WhisperX with `large-v3-turbo` by default, tunable down to `tiny` for low-RAM machines.
+- **Speech-to-text** — faster-whisper with `large-v3-turbo` by default and word timestamps in every language, tunable down to `tiny` for low-RAM machines.
 - **Speaker diarization** — pyannote `speaker-diarization-community-1` assigns `SPEAKER_NN` labels locally (free); spaCy NER proposes real names from episode metadata, and you can rename or merge speakers in the UI.
 - **Hybrid search** — full-text keyword search (`"exact phrase"`, `OR`, `-exclude`) combined with pgvector semantic similarity, merged via Reciprocal Rank Fusion.
 - **Persistent audio player** — click any timestamp to play; the player keeps going while you navigate other pages.
@@ -182,8 +182,8 @@ make help            # List all available commands
 
 | Layer | Technology | Role |
 |---|---|---|
-| [WhisperX](https://github.com/m-bain/whisperX) | Whisper large-v3-turbo + CTranslate2 | Speech-to-text transcription |
-| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | CTranslate2 backend | Fast CPU inference for Whisper |
+| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Whisper large-v3-turbo + CTranslate2 | Speech-to-text transcription with word timestamps |
+| [WhisperX](https://github.com/m-bain/whisperX) | wav2vec2 alignment models | More precise word timestamps for languages that have a model |
 | [pyannote](https://github.com/pyannote/pyannote-audio) | `speaker-diarization-community-1` | Speaker labeling and separation |
 | [sentence-transformers](https://www.sbert.net/) | all-MiniLM-L6-v2 | Semantic search embeddings (384-dim) |
 | [pgvector](https://github.com/pgvector/pgvector) | PostgreSQL vector extension | Approximate nearest neighbor search |

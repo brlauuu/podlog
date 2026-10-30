@@ -110,6 +110,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
             diarizeStepDurations={episode.diarize_step_durations}
             inferenceProviderUsed={episode.inference_provider_used}
             audioFileSizeBytes={episode.audio_file_size_bytes}
+            wordTimestamps={episode.word_timestamps}
             episodeId={episode.id}
           />
         </div>
