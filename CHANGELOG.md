@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- The Telegram bot token no longer appears in `docker compose logs pipeline`. While the bot was enabled, every poll wrote a request line containing the token, twice a minute; those lines now read `bot<redacted>`. The old lines disappear when the pipeline container is recreated by this update. If you have copied those logs anywhere, rotate the token in @BotFather.
+
 ### Minor changes
 
 - **Settings → Access from another device** now shows a QR code of the address next to it. Point your phone's camera at it to open Podlog without typing the address.

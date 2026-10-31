@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 
 from app.database import SessionLocal
-from app import job_queue
+from app import job_queue, log_redaction
 from app.config import settings
 from app.models import Episode
 from app.services.meta_analysis import is_stale, recompute_and_store
@@ -236,6 +236,7 @@ def main() -> None:
         level=logging.INFO,
         format='{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": %(message)s}',
     )
+    log_redaction.install()
 
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)

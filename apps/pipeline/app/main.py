@@ -11,12 +11,14 @@ from app.api import ask, backfill, backups, feeds, episodes, queue, health, embe
 from app.services.events import bus
 from app.services.digest import register_notification_handlers
 from app.database import SessionLocal
+from app import log_redaction
 from app.services import remote_retirement, telegram_bot
 
 logging.basicConfig(
     level=logging.INFO,
     format='{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": %(message)s}',
 )
+log_redaction.install()
 
 logger = logging.getLogger(__name__)
 
