@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- **Fewer phantom speakers.** Single words that diarization gave to a speaker heard nowhere else, in the middle of another person's sentence, now stay with that person. On a test episode this removed 39 of the 42 stray fragments; a sponsor jingle still gets its own Other card. Applies to episodes processed from now on.
+
 ## 1.6.5 — 2026-10-31
 
 ### Minor changes

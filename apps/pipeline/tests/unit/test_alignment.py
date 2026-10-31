@@ -249,3 +249,54 @@ class TestAssignSpeakersWordlevel:
         assert result[1]["text"] == "Second sentence."
         assert result[1]["start"] == 3.0
         assert result[0]["speaker"] == result[1]["speaker"] == "SPEAKER_00"
+
+
+def _turn(speaker, start, end):
+    return {"speaker": speaker, "start": start, "end": end}
+
+
+def _sentence(start, words, step=1.0):
+    """One aligned segment of one-second words starting at `start`."""
+    ws = [{"word": f" {w}", "start": start + i * step, "end": start + (i + 1) * step - 0.1}
+          for i, w in enumerate(words)]
+    return {"start": ws[0]["start"], "end": ws[-1]["end"], "text": " ".join(words), "words": ws}
+
+
+class TestMinorSpeakers:
+    """#1093: diarization slivers (a label holding one word) are absorbed."""
+
+    def test_one_word_sliver_inside_a_turn_is_absorbed(self):
+        # 400 s of host, with pyannote giving one word mid-sentence to a third label.
+        aligned = [_sentence(i * 10.0, [f"w{i}_{j}" for j in range(10)]) for i in range(40)]
+        diar = [_turn("SPEAKER_00", 0.0, 123.0), _turn("SPEAKER_07", 123.0, 123.95),
+                _turn("SPEAKER_00", 123.95, 200.0), _turn("SPEAKER_01", 200.0, 400.0)]
+        result = assign_speakers_wordlevel(aligned, diar)
+
+        assert {r["speaker"] for r in result} == {"SPEAKER_00", "SPEAKER_01"}
+        # The sentence the sliver sat in comes back whole, not split around it.
+        assert any(r["text"].startswith("w12_0") and "w12_3" in r["text"] and "w12_9" in r["text"]
+                   for r in result)
+
+    def test_a_sliver_with_a_sentence_of_its_own_is_kept(self):
+        """A pre-roll or jingle voice: left for slot assignment's Other card (PRD-04)."""
+        aligned = [_sentence(0.0, ["Plazma.", "Ljubav", "u", "svakom", "kadru."])] + [
+            _sentence(10.0 + i * 10.0, [f"w{i}_{j}" for j in range(10)]) for i in range(30)
+        ]
+        diar = [_turn("SPEAKER_04", 0.0, 5.0), _turn("SPEAKER_00", 5.0, 400.0)]
+        result = assign_speakers_wordlevel(aligned, diar)
+        assert result[0]["text"].startswith("Plazma.") and result[0]["speaker"] == "SPEAKER_04"
+
+    def test_a_brief_guest_in_a_long_episode_is_kept(self):
+        """20 s is above the absolute floor, however small its share."""
+        aligned = [_sentence(i * 10.0, [f"w{i}_{j}" for j in range(10)]) for i in range(100)]
+        diar = [_turn("SPEAKER_00", 0.0, 500.0), _turn("SPEAKER_02", 500.0, 520.0),
+                _turn("SPEAKER_00", 520.0, 1000.0)]
+        result = assign_speakers_wordlevel(aligned, diar)
+        assert "SPEAKER_02" in {r["speaker"] for r in result}
+
+    def test_a_short_speaker_in_a_short_recording_is_kept(self):
+        """Under 15 s, but a real share of a 60 s clip."""
+        aligned = [_sentence(i * 10.0, [f"w{i}_{j}" for j in range(10)]) for i in range(6)]
+        diar = [_turn("SPEAKER_00", 0.0, 50.0), _turn("SPEAKER_01", 50.0, 60.0)]
+        result = assign_speakers_wordlevel(aligned, diar)
+        assert {r["speaker"] for r in result} == {"SPEAKER_00", "SPEAKER_01"}

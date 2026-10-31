@@ -12,7 +12,16 @@ Two strategies:
 
 This is the testable core logic — no database or model dependencies.
 """
+from collections import Counter
 from typing import Optional
+
+# A "speaker" with less speech than both of these is a sliver (#1093).
+# Re-processing with word timestamps gave 4a3387d6 seven extra labels and
+# b6474bcc nine, each holding 0-14 s ("u", "well,", a sponsor jingle) against
+# 870 s and more for every real speaker. The share keeps a short episode, or
+# a test, from counting a real speaker as a sliver.
+MIN_SPEAKER_SECS = 15.0
+MIN_SPEAKER_SHARE = 0.05
 
 
 def assign_speakers_wordlevel(
@@ -54,6 +63,8 @@ def assign_speakers_wordlevel(
     if not tagged_words:
         return []
 
+    _absorb_minor_speakers(tagged_words)
+
     # Rebuild segments: break on speaker change OR original segment boundary
     rebuilt = []
     cur = tagged_words[0]
@@ -88,6 +99,35 @@ def assign_speakers_wordlevel(
     })
 
     return rebuilt
+
+
+def _absorb_minor_speakers(tagged_words: list[dict]) -> None:
+    """Give a sliver speaker's words inside someone else's sentence to that someone.
+
+    One word in the middle of another person's sentence is a diarization slip,
+    not a second voice. A sliver that owns a whole sentence is left alone: it
+    may well be a real other voice (a pre-roll, a sponsor jingle), which slot
+    assignment turns into an "Other" card for the user to merge (PRD-04).
+    """
+    talk: Counter[str] = Counter()
+    for w in tagged_words:
+        talk[w["speaker"]] += w["end"] - w["start"]
+    total = sum(talk.values())
+    minor = {
+        spk for spk, secs in talk.items()
+        if secs < MIN_SPEAKER_SECS and secs < MIN_SPEAKER_SHARE * total
+    }
+    if not minor:
+        return
+
+    by_sentence: dict[int, Counter[str]] = {}
+    for w in tagged_words:
+        by_sentence.setdefault(w["seg_idx"], Counter())[w["speaker"]] += w["end"] - w["start"]
+    for w in tagged_words:
+        if w["speaker"] in minor:
+            owner = by_sentence[w["seg_idx"]].most_common(1)[0][0]
+            if owner not in minor:
+                w["speaker"] = owner
 
 
 def _best_speaker_for_interval(
