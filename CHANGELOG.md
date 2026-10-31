@@ -20,6 +20,8 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+## 1.6.7 — 2026-10-31
+
 ### Fixes
 
 - **Episodes whose intro is in another language are transcribed in the right one.** The language used to be judged from the first 30 seconds alone, so an English interview opening with a Serbian ad was transcribed as Serbian or Croatian, and much of it came out as gibberish or went missing. Podlog now listens at five points across the episode. Re-process an affected episode to fix it.
