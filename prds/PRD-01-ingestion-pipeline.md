@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.13
+**Version:** 1.14
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.14 — §5.4 the episode language is judged from five 30 s windows spread across the audio, by summed probability, instead of faster-whisper's first 30 s (#1093). 4a3387d6 opens with a Serbian sponsor spot before an English interview and was decoded entirely as Serbian or Croatian.
 - v1.13 — §5.5 word-level alignment absorbs sliver speakers (#1093): a label with under 15 s and under 5% of the episode's speech has its words inside another speaker's sentence reassigned to that speaker. A sliver owning a whole sentence is kept, so a pre-roll or sponsor jingle still becomes an Other card (PRD-04).
 - v1.12 — §5.4 repetition loops (#1093 follow-up). faster-whisper's batched pipeline keeps only the first decoding temperature, so a chunk that loops (gzip compression ratio > 2.4) is never retried. Such chunks are now decoded again on their own, greedily; a result that still fails Whisper's thresholds (compression ratio > 2.4 or average log-probability < −1.0) is dropped as music or noise rather than kept as a hallucination.
 - v1.11 — §5.9 stall check counts in-progress jobs by their real status, `picked`; it looked for a `running` status `job_queue` never uses, so a queue holding only a hung job never alerted.
@@ -109,7 +110,7 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
   - `none`: no word times at all; diarization falls back to one speaker per segment and logs `diarize_wordlevel_no_words` at WARNING.
   - NULL: transcribed before #1093.
   Spike numbers (#1093): native word starts land a median 75–100 ms from wav2vec2's on the same text.
-- Language detection is automatic; detected language is stored per episode.
+- Language detection is automatic; detected language is stored per episode. It is judged from five 30 s windows spread evenly across the audio, summing each language's probability (`whisper.py::_detect_language`), because faster-whisper on its own judges from the first 30 s, which is often a jingle or an ad in another language. If detection fails, faster-whisper decides as before. The whole episode is still decoded in that one language (RISKS-AND-GAPS GAP-07).
 - Transcription progress (segment count / estimated total) is surfaced to the queue.
 
 ### 5.5 Speaker Diarization
