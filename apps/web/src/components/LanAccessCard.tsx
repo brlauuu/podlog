@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Smartphone } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
 /**
  * #1012: the LAN address, somewhere it survives.
@@ -42,13 +43,31 @@ export default function LanAccessCard() {
         <h2 className="text-base font-medium">Access from another device</h2>
       </div>
 
-      <p className="text-sm text-muted-foreground mb-3">
-        Open this address on a phone or another computer on the same network:
-      </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-muted-foreground mb-3">
+            Open this address on a phone or another computer on the same
+            network, or scan the code with your phone&apos;s camera:
+          </p>
 
-      <code className="block rounded-md bg-muted px-3 py-2 text-sm break-all">
-        {url}
-      </code>
+          <code className="block rounded-md bg-muted px-3 py-2 text-sm break-all">
+            {url}
+          </code>
+        </div>
+
+        {/* Black on white in both themes: phone scanners are unreliable on
+            inverted (light-on-dark) codes. The white tile is the quiet zone. */}
+        <div className="self-start rounded-md bg-white p-2 sm:self-center">
+          <QRCodeSVG
+            value={url}
+            size={128}
+            bgColor="#ffffff"
+            fgColor="#000000"
+            role="img"
+            aria-label={`QR code for ${url}`}
+          />
+        </div>
+      </div>
 
       {/* The warning from #988, kept with the address rather than left in a
           terminal. Showing the address more prominently without it would be

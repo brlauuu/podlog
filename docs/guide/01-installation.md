@@ -127,7 +127,7 @@ The "same network" address is the one to use from a phone or another computer. R
 
 The address comes from DHCP and can change when your router or machine restarts. Reserve it in your router if you want it stable.
 
-If you missed it scrolling past, the same address is shown under **Settings → Access from another device**, with the same warning. The Telegram bot gives it too: send `/address` from an account on the allowed list (see [Notifications](09-notifications.md#telegram-bot-commands)). That panel is empty when Podlog is reachable from this machine only.
+If you missed it scrolling past, the same address is shown under **Settings → Access from another device**, with the same warning and a QR code you can scan with your phone's camera instead of typing the address. The Telegram bot gives it too: send `/address` from an account on the allowed list (see [Notifications](09-notifications.md#telegram-bot-commands)). That panel is empty when Podlog is reachable from this machine only.
 
 ## What's Running
 
