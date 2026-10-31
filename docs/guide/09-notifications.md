@@ -20,7 +20,7 @@ The Notifications tab holds three sections: **Telegram**, **Email** and **Genera
 
 4. **Test:** Click **Send test message**. You should receive a message from your bot in Telegram.
 
-   If it fails, the error shown is Telegram's own reason (for example `401: Unauthorized` for a wrong token). Failed notifications are logged as `telegram_send_failed` in `docker compose logs worker`; neither ever contains the bot token. Messages longer than Telegram's 4096-character limit are shortened, and a long error in a failure alert is cut to its first 1000 characters.
+   If it fails, the error shown is Telegram's own reason (for example `401: Unauthorized` for a wrong token). Failed notifications are logged as `telegram_send_failed` in `docker compose logs worker`; neither ever contains the bot token. Every log line from the pipeline and worker also has the token pattern replaced with `bot<redacted>`, so request lines such as `POST https://api.telegram.org/bot<redacted>/getUpdates` are safe to share. Messages longer than Telegram's 4096-character limit are shortened, and a long error in a failure alert is cut to its first 1000 characters.
 
 These four steps set up notifications only. The bot does not answer anyone yet, you included: accounts have to be put on the allowed list first, which is the next section.
 

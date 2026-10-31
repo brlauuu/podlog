@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.12
+**Version:** 1.13
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
-- v1.12 — §5.5 word-level alignment absorbs sliver speakers (#1093): a label with under 15 s and under 5% of the episode's speech has its words inside another speaker's sentence reassigned to that speaker. A sliver owning a whole sentence is kept, so a pre-roll or sponsor jingle still becomes an Other card (PRD-04).
+- v1.13 — §5.5 word-level alignment absorbs sliver speakers (#1093): a label with under 15 s and under 5% of the episode's speech has its words inside another speaker's sentence reassigned to that speaker. A sliver owning a whole sentence is kept, so a pre-roll or sponsor jingle still becomes an Other card (PRD-04).
+- v1.12 — §5.4 repetition loops (#1093 follow-up). faster-whisper's batched pipeline keeps only the first decoding temperature, so a chunk that loops (gzip compression ratio > 2.4) is never retried. Such chunks are now decoded again on their own, greedily; a result that still fails Whisper's thresholds (compression ratio > 2.4 or average log-probability < −1.0) is dropped as music or noise rather than kept as a hallucination.
 - v1.11 — §5.9 stall check counts in-progress jobs by their real status, `picked`; it looked for a `running` status `job_queue` never uses, so a queue holding only a hung job never alerted.
 - v1.10 — §5.4 word timestamps for every language (#1093). Transcription now calls faster-whisper's batched pipeline directly with `word_timestamps=True`. Where WhisperX has a wav2vec2 alignment model for the detected language, the words are re-aligned with it as before; elsewhere (Serbian, and any language missing from WhisperX's lists) the native word times are kept and the VAD chunks are split into sentences. The source is stored per episode in `episodes.word_timestamps` (migration 023) and shown on the episode page. Before this, a language without an aligner silently fell back to segment-level speaker assignment.
 - v1.9 — §5.9 adds pipeline alerts (#1099): a worker periodic task sends one notification when a stage fails `PIPELINE_ALERT_FAILURE_STREAK` jobs in a row (default 5, retries counted) or when jobs wait longer than `PIPELINE_ALERT_STALL_HOURS` (default 24) with no job finishing, and one more on recovery. Added both variables to §14.
@@ -101,6 +102,7 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 - The model is downloaded once and cached in a persistent Docker volume.
 - **Memory management:** Whisper is loaded into memory for transcription and **explicitly unloaded** (removed from memory and `gc.collect()` called) before pyannote is loaded for diarization. The two models must never be resident in memory simultaneously. This is mandatory on CPU-only machines to avoid OOM.
 - Transcription produces: text segments, each with `start_time` (seconds), `end_time` (seconds), and `text`.
+- **Repetition loops.** The batched pipeline has no temperature fallback, so a chunk whose output loops (gzip compression ratio above 2.4, e.g. "Ja, da je..." ×44 over English speech) is decoded again on its own, greedily, without the batch. A result that still fails Whisper's own thresholds (compression ratio > 2.4 or average log-probability < −1.0) is dropped: it is music or noise, and sampled fallbacks turn it into a different hallucination ("Hvala što pratite.") on every run. Logged as `whisper_repetition_redo` with the chunk and dropped-segment counts.
 - Word-level timestamps exist for every language (#1093). Their source is stored in `episodes.word_timestamps`:
   - `wav2vec2`: WhisperX has an alignment model for the language (English, Croatian, ...); the native words are re-aligned with it.
   - `native`: no alignment model (Serbian, ...) or alignment failed; faster-whisper's own word times are kept, and its ~30 s VAD chunks are split into sentences at sentence-ending punctuation.

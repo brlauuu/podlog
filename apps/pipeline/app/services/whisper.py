@@ -33,6 +33,11 @@ _model = None
 _SENTENCE_END = (".", "?", "!", "…")
 _CLOSING = "\"'”’)]}»"
 
+# Whisper's own "this decode failed" thresholds (the faster-whisper defaults).
+_MAX_COMPRESSION_RATIO = 2.4
+_MIN_LOG_PROB = -1.0
+_SAMPLE_RATE = 16000  # decode_audio's default
+
 
 def _resolve_cpu_threads(configured: int) -> int:
     """Resolve the CTranslate2 CPU thread count for the ASR pass.
@@ -120,8 +125,8 @@ def transcribe(audio_path: str, model_name: str = "large-v3-turbo") -> tuple[lis
     raw_segments, info = pipeline.transcribe(
         audio, batch_size=settings.whisper_batch_size, word_timestamps=True,
     )
-    native = [_native_segment(seg) for seg in raw_segments]
     language = info.language or "unknown"
+    native = _redo_repetitive(list(raw_segments), audio, info.language)
 
     # Stage 2: wav2vec2 alignment where the language has a model
     aligned_segments, method = _word_timestamps(native, language, audio, device)
@@ -144,22 +149,65 @@ def transcribe(audio_path: str, model_name: str = "large-v3-turbo") -> tuple[lis
     return segments, language, result
 
 
-def _native_segment(seg) -> dict:
+def _redo_repetitive(raw_segments: list, audio, language: str | None) -> list[dict]:
+    """Re-decode the chunks batched decoding got stuck in a loop on.
+
+    Whisper normally retries a decode at rising temperatures when the output
+    is too repetitive (gzip compression ratio above 2.4) or too unlikely
+    (average log-probability below -1.0). faster-whisper's batched pipeline
+    keeps only the first temperature, so a chunk that loops stays looped:
+    "Ja, da je..." 44 times over English speech in a mixed-language interview
+    (#1093).
+
+    Here each such chunk is decoded again on its own, greedily. On 4a3387d6
+    that alone recovered every looping chunk of real speech, at temperature
+    0. The temperature fallback is deliberately not used: the one chunk that
+    needed it was music, and sampling turned it into a different
+    "Hvala što pratite..." on every run, sometimes one that passed both
+    thresholds. A greedy result that still fails them is dropped instead.
+    """
+    out: list[dict] = []
+    redone = dropped = 0
+    for seg in raw_segments:
+        if seg.compression_ratio <= _MAX_COMPRESSION_RATIO:
+            out.append(_native_segment(seg))
+            continue
+        redone += 1
+        clip = audio[int(seg.start * _SAMPLE_RATE):int(seg.end * _SAMPLE_RATE)]
+        retry, _ = _model.transcribe(
+            clip, language=language, word_timestamps=True, temperature=0.0,
+            condition_on_previous_text=False, vad_filter=False,
+        )
+        for r in retry:
+            if r.compression_ratio > _MAX_COMPRESSION_RATIO or r.avg_logprob < _MIN_LOG_PROB:
+                dropped += 1
+                continue
+            out.append(_native_segment(r, offset=float(seg.start)))
+    if redone:
+        logger.info(
+            '"action": "whisper_repetition_redo", "chunks": %d, "dropped_segments": %d',
+            redone, dropped,
+        )
+    return out
+
+
+def _native_segment(seg, offset: float = 0.0) -> dict:
     """faster-whisper Segment -> the WhisperX dict shape diarization reads.
 
     The batched pipeline returns numpy floats, which psycopg2 writes into SQL
     as the literal ``np.float64(28.26)``; the segment insert then fails with
-    'schema "np" does not exist'. Hence the float() casts.
+    'schema "np" does not exist'. Hence the float() casts. ``offset`` places a
+    segment decoded from a clip back on the episode's timeline.
     """
     return {
-        "start": float(seg.start),
-        "end": float(seg.end),
+        "start": offset + float(seg.start),
+        "end": offset + float(seg.end),
         "text": seg.text,
         "words": [
             {
                 "word": w.word.strip(),
-                "start": float(w.start),
-                "end": float(w.end),
+                "start": offset + float(w.start),
+                "end": offset + float(w.end),
                 "score": float(w.probability),
             }
             for w in (seg.words or [])
