@@ -20,6 +20,8 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+## 1.6.5 — 2026-10-31
+
 ### Minor changes
 
 - **Settings → Access from another device** now shows a QR code of the address next to it. Point your phone's camera at it to open Podlog without typing the address.
