@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- The Telegram bot token no longer appears in `docker compose logs pipeline`. While the bot was enabled, every poll wrote a request line containing the token, twice a minute; those lines now read `bot<redacted>`. The old lines disappear when the pipeline container is recreated by this update. If you have copied those logs anywhere, rotate the token in @BotFather.
+
 ## 1.6.5 — 2026-10-31
 
 ### Minor changes
