@@ -9,8 +9,11 @@ def _word(word, start, end, probability=0.9):
     return SimpleNamespace(word=word, start=start, end=end, probability=probability)
 
 
-def _segment(start, end, text, words=()):
-    return SimpleNamespace(start=start, end=end, text=text, words=list(words))
+def _segment(start, end, text, words=(), compression_ratio=1.5, avg_logprob=-0.3):
+    return SimpleNamespace(
+        start=start, end=end, text=text, words=list(words),
+        compression_ratio=compression_ratio, avg_logprob=avg_logprob,
+    )
 
 
 # One 6 s VAD chunk holding two sentences, as batched faster-whisper returns it.
@@ -78,26 +81,30 @@ class TestUnloadModel:
         ws.unload_model()
         assert ws._model is None
 
+# Stands in for decoded audio: sample index i holds i, so a clip shows its bounds.
+AUDIO = list(range(16000 * 60))
+
 
 @pytest.fixture
 def run(monkeypatch):
     """Call transcribe() with faster-whisper returning `segments` in `language`."""
     import app.services.whisper as ws
 
-    def _run(segments, language="en", align_model=None, align=None, batch_size=16):
+    def _run(segments, language="en", align_model=None, align=None, batch_size=16, retry=()):
         pipeline = MagicMock()
         pipeline.transcribe.return_value = (iter(segments), SimpleNamespace(language=language))
         ws._model = MagicMock()
+        ws._model.transcribe.return_value = (iter(retry), SimpleNamespace(language=language))
         with patch("app.services.whisper.load_model"), \
              patch("app.services.whisper._cuda_available", return_value=False), \
-             patch("faster_whisper.decode_audio", return_value="audio"), \
+             patch("faster_whisper.decode_audio", return_value=AUDIO), \
              patch("faster_whisper.BatchedInferencePipeline", return_value=pipeline), \
              patch("whisperx.load_align_model", **(align_model or {})) as load_align, \
              patch("whisperx.align", **(align or {})) as do_align, \
              patch("app.config.settings") as mock_settings:
             mock_settings.whisper_batch_size = batch_size
             out = ws.transcribe("/tmp/test.wav")
-        return out, pipeline, load_align, do_align
+        return out, pipeline, load_align, do_align, ws._model
 
     return _run
 
@@ -105,7 +112,7 @@ def run(monkeypatch):
 class TestTranscribe:
     def test_word_timestamps_always_requested(self, run):
         """Native word times are asked for on every run, with the configured batch size."""
-        _, pipeline, _, _ = run([], batch_size=8)
+        _, pipeline, _, _, _ = run([], batch_size=8)
         kwargs = pipeline.transcribe.call_args.kwargs
         assert kwargs["word_timestamps"] is True
         assert kwargs["batch_size"] == 8
@@ -119,7 +126,7 @@ class TestTranscribe:
             {"start": 3.0, "end": 4.2, "text": " How are you?",
              "words": [{"word": "How", "start": 3.0, "end": 3.4, "score": 0.8}]},
         ]
-        (segments, language, result), _, load_align, do_align = run(
+        (segments, language, result), _, load_align, do_align, _ = run(
             [CHUNK],
             align_model={"return_value": ("model_a", "meta")},
             align={"return_value": {"segments": aligned}},
@@ -137,7 +144,7 @@ class TestTranscribe:
 
     def test_language_without_aligner_keeps_native_words(self, run):
         """Serbian: no aligner, so native words are kept and the chunk is split."""
-        (segments, language, result), _, _, do_align = run(
+        (segments, language, result), _, _, do_align, _ = run(
             [CHUNK], language="sr",
             align_model={"side_effect": ValueError("No default align-model for language: sr")},
         )
@@ -165,7 +172,7 @@ class TestTranscribe:
             _word(" How", f(3.0), f(3.4), f(0.9)),
             _word(" you?", f(3.4), f(4.2), f(0.9)),
         ])
-        (segments, _, result), _, _, _ = run(
+        (segments, _, result), _, _, _, _ = run(
             [chunk], language="sr", align_model={"side_effect": ValueError("no model")},
         )
         values = [v for s in segments for v in (s["start"], s["end"])]
@@ -176,7 +183,7 @@ class TestTranscribe:
 
     def test_alignment_failure_falls_back_to_native(self, run):
         """An aligner that exists but breaks still leaves the native words."""
-        (_, _, result), _, _, _ = run(
+        (_, _, result), _, _, _, _ = run(
             [CHUNK],
             align_model={"return_value": ("model_a", "meta")},
             align={"side_effect": RuntimeError("boom")},
@@ -186,14 +193,14 @@ class TestTranscribe:
 
     def test_aligner_load_failure_falls_back_to_native(self, run):
         """A download error loading the aligner is not fatal either."""
-        (_, _, result), _, _, _ = run(
+        (_, _, result), _, _, _, _ = run(
             [CHUNK], align_model={"side_effect": OSError("connection reset")},
         )
         assert result["word_timestamps"] == "native"
 
     def test_alignment_without_words_falls_back_to_native(self, run):
         """wav2vec2 returning no word times is not taken as success."""
-        (_, _, result), _, _, _ = run(
+        (_, _, result), _, _, _, _ = run(
             [CHUNK],
             align_model={"return_value": ("model_a", "meta")},
             align={"return_value": {"segments": [{"start": 0.0, "end": 6.0, "text": "x"}]}},
@@ -203,7 +210,7 @@ class TestTranscribe:
     def test_no_words_anywhere_is_recorded_as_none(self, run):
         """Nothing produced word times: recorded as none, segments kept as they are."""
         bare = _segment(0.0, 6.0, " Hello world.")
-        (segments, _, result), _, _, _ = run(
+        (segments, _, result), _, _, _, _ = run(
             [bare], language="sr", align_model={"side_effect": ValueError("no model")},
         )
         assert result["word_timestamps"] == "none"
@@ -211,7 +218,7 @@ class TestTranscribe:
 
     def test_no_speech_returns_empty(self, run):
         """#955: no segments means an empty result, and no aligner is loaded."""
-        (segments, language, result), _, load_align, _ = run([], language=None)
+        (segments, language, result), _, load_align, _, _ = run([], language=None)
         assert segments == []
         assert language == "unknown"
         assert result["word_timestamps"] == "none"
@@ -240,3 +247,50 @@ class TestSplitSentences:
     def test_not_sentence_end(self, word):
         import app.services.whisper as ws
         assert not ws._ends_sentence(word)
+
+
+class TestRepetitionRedo:
+    """Batched faster-whisper has no temperature fallback, so a chunk that loops
+    stays looped. Such chunks are decoded again on their own (#1093)."""
+
+    LOOP = _segment(10.0, 20.0, " Ja, da je..." * 44, [_word(" Ja,", 10.0, 10.2)],
+                    compression_ratio=11.3)
+
+    def _run_sr(self, run, segments, retry):
+        return run(segments, language="sr",
+                   align_model={"side_effect": ValueError("no model")}, retry=retry)
+
+    def test_ordinary_chunks_are_not_redone(self, run):
+        _, _, _, _, model = self._run_sr(run, [CHUNK], retry=())
+        model.transcribe.assert_not_called()
+
+    def test_looping_chunk_is_redone_greedily_and_placed_on_the_timeline(self, run):
+        fixed = _segment(0.5, 2.0, " It takes two hours.", [
+            _word(" It", 0.5, 0.7), _word(" takes", 0.7, 1.0),
+            _word(" two", 1.0, 1.3), _word(" hours.", 1.3, 2.0),
+        ])
+        (segments, _, result), _, _, _, model = self._run_sr(run, [CHUNK, self.LOOP], [fixed])
+
+        clip = model.transcribe.call_args.args[0]
+        assert (clip[0], len(clip)) == (10 * 16000, 10 * 16000)  # exactly 10.0-20.0 s
+        kwargs = model.transcribe.call_args.kwargs
+        assert kwargs["language"] == "sr"
+        assert kwargs["word_timestamps"] is True
+        # Greedy only: sampled fallbacks turned music into a fresh hallucination.
+        assert kwargs["temperature"] == 0.0
+        assert kwargs["condition_on_previous_text"] is False
+
+        assert all("Ja, da je" not in s["text"] for s in segments)
+        assert segments[-1] == {"start": 10.5, "end": 12.0, "text": "It takes two hours."}
+        assert result["segments"][-1]["words"][0] == {
+            "word": "It", "start": 10.5, "end": 10.7, "score": 0.9,
+        }
+
+    @pytest.mark.parametrize("bad", [
+        {"compression_ratio": 3.1, "avg_logprob": -0.2},   # still a loop
+        {"compression_ratio": 0.7, "avg_logprob": -1.06},  # below Whisper's log-prob floor
+    ])
+    def test_a_redo_that_still_fails_is_dropped(self, run, bad):
+        junk = _segment(0.0, 2.8, " Hvala što pratite.", [_word(" Hvala", 0.0, 0.5)], **bad)
+        (segments, _, _), _, _, _, _ = self._run_sr(run, [CHUNK, self.LOOP], [junk])
+        assert [s["text"] for s in segments] == ["Hello world.", "How are you?"]

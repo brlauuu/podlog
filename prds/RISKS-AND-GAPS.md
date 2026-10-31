@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** RISKS-AND-GAPS
-**Version:** 1.9
+**Version:** 1.10
 **Status:** Living document — update as risks are resolved or new ones are identified  
 **How to use:** When a risk is mitigated or a gap is closed, move it to the Resolved section at the bottom with a note on how it was addressed. Add new entries as they are discovered during development.
 
 **Changelog:**
+- v1.10 — Added GAP-07: batched transcription detects one language per episode, and the detection is not stable between runs (4a3387d6 came out `hr` once and `sr` the next time). Repetition loops it caused are now re-decoded (PRD-01 §5.4); mixed-language episodes are still decoded in a single language.
 - v1.9 — Added a resolved gap: languages without a WhisperX alignment model (51 Serbian episodes) silently lost word timestamps and fell back to segment-level speaker assignment. #1093 closes it with native faster-whisper word timestamps as the fallback, recorded per episode.
 - v1.8 — Added a resolved gap: no alert when a stage keeps failing or the queue stops moving. Pipeline alerts (#1099) close it.
 - v1.7 — Remote inference removed (#1092); Podlog is fully self-hosted. RISK-08 (remote provider availability / rate limits) and RISK-11 (audio egress to pyannote.ai, and the stored `pyannote_api_key`) moved to Resolved: no stage calls a third-party inference service, and stored provider settings and API keys are deleted at startup by `app/services/remote_retirement.py`.
@@ -280,6 +281,15 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 **Description:** Some podcasts publish chapters or part 1/2 splits. The current model treats each RSS enclosure as a single episode with one flat segment list. There is no chapter detection or grouping.  
 **Proposed fix:** Out of scope for V1. Noted as a future capability (chapter detection is listed in PRD-01 Future roadmap). No action needed until that phase.  
 **Target phase:** Future
+
+---
+
+### GAP-07: One Language per Episode, Detected Unstably
+
+**Component:** PRD-01 §5.4  
+**Description:** The batched pipeline detects the language once per episode and decodes every chunk in it (`multilingual=False`). A mixed English/Serbian interview is decoded entirely as one language, and the detection itself is not stable: 4a3387d6 came out `hr` in one run and `sr` in the next, which also decides whether wav2vec2 or native word times are used. The worst symptom, repetition loops over the other language's speech, is mitigated by re-decoding looping chunks (PRD-01 v1.12).  
+**Proposed fix:** Measure `multilingual=True` (per-chunk detection) on mixed-language episodes, and consider pinning a feed's language once known. Not done yet because per-chunk languages would also need per-chunk alignment models.  
+**Target phase:** Next
 
 ---
 

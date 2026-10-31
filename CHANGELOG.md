@@ -22,6 +22,7 @@ fresh empty `Unreleased` is left at the top.
 
 ### Fixes
 
+- Transcripts no longer keep stretches where Whisper got stuck repeating itself ("Ja, da je... Ja, da je..." dozens of times over speech it should have transcribed). Such a stretch is now transcribed again on its own, which recovers the real speech; if it is music or noise and still cannot be transcribed, it is left out rather than filled with a made-up phrase. Applies to newly transcribed and re-processed episodes.
 - The Telegram bot token no longer appears in `docker compose logs pipeline`. While the bot was enabled, every poll wrote a request line containing the token, twice a minute; those lines now read `bot<redacted>`. The old lines disappear when the pipeline container is recreated by this update. If you have copied those logs anywhere, rotate the token in @BotFather.
 
 ## 1.6.5 — 2026-10-31
