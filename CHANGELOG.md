@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- Transcripts no longer keep stretches where Whisper got stuck repeating itself ("Ja, da je... Ja, da je..." dozens of times over speech it should have transcribed). Such a stretch is now transcribed again on its own, which recovers the real speech; if it is music or noise and still cannot be transcribed, it is left out rather than filled with a made-up phrase. Applies to newly transcribed and re-processed episodes.
+
 ## 1.6.5 — 2026-10-31
 
 ### Minor changes
