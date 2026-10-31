@@ -22,6 +22,7 @@ fresh empty `Unreleased` is left at the top.
 
 ### Fixes
 
+- **Fewer phantom speakers.** Single words that diarization gave to a speaker heard nowhere else, in the middle of another person's sentence, now stay with that person. On a test episode this removed 39 of the 42 stray fragments; a sponsor jingle still gets its own Other card. Applies to episodes processed from now on.
 - Transcripts no longer keep stretches where Whisper got stuck repeating itself ("Ja, da je... Ja, da je..." dozens of times over speech it should have transcribed). Such a stretch is now transcribed again on its own, which recovers the real speech; if it is music or noise and still cannot be transcribed, it is left out rather than filled with a made-up phrase. Applies to newly transcribed and re-processed episodes.
 - The Telegram bot token no longer appears in `docker compose logs pipeline`. While the bot was enabled, every poll wrote a request line containing the token, twice a minute; those lines now read `bot<redacted>`. The old lines disappear when the pipeline container is recreated by this update. If you have copied those logs anywhere, rotate the token in @BotFather.
 

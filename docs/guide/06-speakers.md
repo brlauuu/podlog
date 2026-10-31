@@ -6,6 +6,8 @@ Podlog automatically labels speakers in each episode and offers tools to rename,
 
 After transcription, pyannote analyzes the audio to detect different speakers. Each speaker is assigned a label: `SPEAKER_00`, `SPEAKER_01`, etc. These labels are consistent within an episode but not across episodes (the same person may be SPEAKER_00 in one episode and SPEAKER_01 in another).
 
+Diarization occasionally hands a single word in the middle of someone's sentence to a speaker who is heard nowhere else. Podlog folds such a word back into the sentence's speaker when that extra label has under 15 seconds of speech and under 5% of the episode. A short voice that says a whole sentence of its own, such as a sponsor jingle, is kept and shows up as an Other card you can merge or rename.
+
 A speaker's slot number is meaningful: `SPEAKER_00` is the first real speaker to appear (the host on most podcasts). Subsequent slots are guests / cohosts / others in their order of first appearance.
 
 ## AI-Inferred Names

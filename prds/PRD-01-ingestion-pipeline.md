@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.12
+**Version:** 1.13
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.13 — §5.5 word-level alignment absorbs sliver speakers (#1093): a label with under 15 s and under 5% of the episode's speech has its words inside another speaker's sentence reassigned to that speaker. A sliver owning a whole sentence is kept, so a pre-roll or sponsor jingle still becomes an Other card (PRD-04).
 - v1.12 — §5.4 repetition loops (#1093 follow-up). faster-whisper's batched pipeline keeps only the first decoding temperature, so a chunk that loops (gzip compression ratio > 2.4) is never retried. Such chunks are now decoded again on their own, greedily; a result that still fails Whisper's thresholds (compression ratio > 2.4 or average log-probability < −1.0) is dropped as music or noise rather than kept as a hallucination.
 - v1.11 — §5.9 stall check counts in-progress jobs by their real status, `picked`; it looked for a `running` status `job_queue` never uses, so a queue holding only a hung job never alerted.
 - v1.10 — §5.4 word timestamps for every language (#1093). Transcription now calls faster-whisper's batched pipeline directly with `word_timestamps=True`. Where WhisperX has a wav2vec2 alignment model for the detected language, the words are re-aligned with it as before; elsewhere (Serbian, and any language missing from WhisperX's lists) the native word times are kept and the VAD chunks are split into sentences. The source is stored per episode in `episodes.word_timestamps` (migration 023) and shown on the episode page. Before this, a language without an aligner silently fell back to segment-level speaker assignment.
@@ -118,6 +119,7 @@ Podcast listeners who want to search, reference, or revisit specific moments in 
 - The remote diarization options (Fireworks transcription metadata, pyannote.ai `precision-2`) were removed in #1092.
 - Diarization produces speaker-labeled time segments: `{ speaker: "SPEAKER_00", start: 12.4, end: 18.1 }`.
 - **Alignment strategy:** Transcript segments and diarization segments are aligned by majority overlap. For each transcript segment, the speaker whose time range overlaps the most with that segment's duration is assigned as the speaker label. In the event of an exact tie, the speaker label from the earlier-starting segment is used.
+- **Sliver speakers (#1093):** With word timestamps, diarization sometimes gives single words in the middle of one person's sentence to a speaker heard nowhere else ("u", "well,"). A label with less than `MIN_SPEAKER_SECS` (15 s) **and** less than `MIN_SPEAKER_SHARE` (5%) of the episode's word time is a sliver; its words inside a sentence that a non-sliver speaker mostly owns are reassigned to that speaker (`alignment.py::_absorb_minor_speakers`). A sliver that owns a sentence keeps it: a short real voice such as a sponsor jingle stays its own label, and slot assignment turns it into an Other card (PRD-04).
 - Speaker labels are stored as `SPEAKER_00`, `SPEAKER_01`, etc. Renaming to human names is handled in the web UI (PRD-02).
 - **Diarization failure handling:** If diarization fails for any reason, the transcript segments are still written to the database with `speaker_label = NULL`. The episode is marked `done` but with `has_diarization = false` and a `diarization_error` field populated with the failure reason. This state is visible in the database and surfaced in the UI at three locations: the episode list badge, the episode transcript page header, and inline on search result cards (see PRD-02 §5.4, §5.1).
 
