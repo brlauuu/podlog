@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** RISKS-AND-GAPS
-**Version:** 1.10
+**Version:** 1.11
 **Status:** Living document — update as risks are resolved or new ones are identified  
 **How to use:** When a risk is mitigated or a gap is closed, move it to the Resolved section at the bottom with a note on how it was addressed. Add new entries as they are discovered during development.
 
 **Changelog:**
+- v1.11 — GAP-07: the episode language is now judged across the whole episode rather than its first 30 s (PRD-01 v1.14), which fixes an episode whose intro is in another language. Mixed-language episodes are still decoded in one language.
 - v1.10 — Added GAP-07: batched transcription detects one language per episode, and the detection is not stable between runs (4a3387d6 came out `hr` once and `sr` the next time). Repetition loops it caused are now re-decoded (PRD-01 §5.4); mixed-language episodes are still decoded in a single language.
 - v1.9 — Added a resolved gap: languages without a WhisperX alignment model (51 Serbian episodes) silently lost word timestamps and fell back to segment-level speaker assignment. #1093 closes it with native faster-whisper word timestamps as the fallback, recorded per episode.
 - v1.8 — Added a resolved gap: no alert when a stage keeps failing or the queue stops moving. Pipeline alerts (#1099) close it.
@@ -287,7 +288,7 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 ### GAP-07: One Language per Episode, Detected Unstably
 
 **Component:** PRD-01 §5.4  
-**Description:** The batched pipeline detects the language once per episode and decodes every chunk in it (`multilingual=False`). A mixed English/Serbian interview is decoded entirely as one language, and the detection itself is not stable: 4a3387d6 came out `hr` in one run and `sr` in the next, which also decides whether wav2vec2 or native word times are used. The worst symptom, repetition loops over the other language's speech, is mitigated by re-decoding looping chunks (PRD-01 v1.12).  
+**Description:** The batched pipeline detects the language once per episode and decodes every chunk in it (`multilingual=False`). A mixed English/Serbian interview is decoded entirely as one language, and the detection itself is not stable: 4a3387d6 came out `hr` in one run and `sr` in the next, which also decides whether wav2vec2 or native word times are used. The worst symptom, repetition loops over the other language's speech, is mitigated by re-decoding looping chunks (PRD-01 v1.12). Detection used to look only at the first 30 s, so a Serbian sponsor spot made 4a3387d6's English interview Serbian or Croatian; it now sums probabilities over five windows across the episode (PRD-01 v1.14), so the intro no longer decides, but an episode that switches language halfway is still decoded in its majority language.  
 **Proposed fix:** Measure `multilingual=True` (per-chunk detection) on mixed-language episodes, and consider pinning a feed's language once known. Not done yet because per-chunk languages would also need per-chunk alignment models.  
 **Target phase:** Next
 

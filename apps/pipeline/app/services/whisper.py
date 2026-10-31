@@ -37,6 +37,8 @@ _CLOSING = "\"'”’)]}»"
 _MAX_COMPRESSION_RATIO = 2.4
 _MIN_LOG_PROB = -1.0
 _SAMPLE_RATE = 16000  # decode_audio's default
+_LANGUAGE_WINDOWS = 5
+_LANGUAGE_WINDOW_SECS = 30
 
 
 def _resolve_cpu_threads(configured: int) -> int:
@@ -124,6 +126,7 @@ def transcribe(audio_path: str, model_name: str = "large-v3-turbo") -> tuple[lis
     pipeline = BatchedInferencePipeline(_model)
     raw_segments, info = pipeline.transcribe(
         audio, batch_size=settings.whisper_batch_size, word_timestamps=True,
+        language=_detect_language(audio),
     )
     language = info.language or "unknown"
     native = _redo_repetitive(list(raw_segments), audio, info.language)
@@ -147,6 +150,40 @@ def transcribe(audio_path: str, model_name: str = "large-v3-turbo") -> tuple[lis
         len(segments), language, method,
     )
     return segments, language, result
+
+
+def _detect_language(audio) -> str | None:
+    """The episode's language, judged from windows spread across all of it.
+
+    faster-whisper judges from the first 30 s, and stops there once it is
+    confident. A podcast's first 30 s is often a jingle or an ad: 4a3387d6
+    opens with a Serbian sponsor spot (sr, 0.92) before a 40-minute English
+    interview (en, 1.00 in every later window), so the whole interview was
+    decoded as Serbian or Croatian (#1093). Summing each language's
+    probability over the windows lets the bulk of the episode decide.
+
+    None leaves the decision to faster-whisper, as before.
+    """
+    window = _LANGUAGE_WINDOW_SECS * _SAMPLE_RATE
+    last = max(len(audio) - window, 0)
+    starts = sorted({last * i // (_LANGUAGE_WINDOWS - 1) for i in range(_LANGUAGE_WINDOWS)})
+    totals: dict[str, float] = {}
+    try:
+        for start in starts:
+            _, _, probs = _model.detect_language(audio[start:start + window])
+            for lang, prob in probs:
+                totals[lang] = totals.get(lang, 0.0) + prob
+    except Exception as exc:
+        logger.warning('"action": "whisper_language_detect_failed", "error": "%s"', exc)
+        return None
+    if not totals:
+        return None
+    language = max(totals, key=totals.get)
+    logger.info(
+        '"action": "whisper_language_detected", "language": "%s", "share": %.2f, "windows": %d',
+        language, totals[language] / len(starts), len(starts),
+    )
+    return language
 
 
 def _redo_repetitive(raw_segments: list, audio, language: str | None) -> list[dict]:

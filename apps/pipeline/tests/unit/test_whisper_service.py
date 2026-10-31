@@ -90,14 +90,18 @@ def run(monkeypatch):
     """Call transcribe() with faster-whisper returning `segments` in `language`."""
     import app.services.whisper as ws
 
-    def _run(segments, language="en", align_model=None, align=None, batch_size=16, retry=()):
+    def _run(segments, language="en", align_model=None, align=None, batch_size=16, retry=(),
+             audio=AUDIO, detect=None):
         pipeline = MagicMock()
         pipeline.transcribe.return_value = (iter(segments), SimpleNamespace(language=language))
         ws._model = MagicMock()
         ws._model.transcribe.return_value = (iter(retry), SimpleNamespace(language=language))
+        ws._model.detect_language.configure_mock(
+            **(detect or {"return_value": (language, 1.0, [(language, 1.0)])})
+        )
         with patch("app.services.whisper.load_model"), \
              patch("app.services.whisper._cuda_available", return_value=False), \
-             patch("faster_whisper.decode_audio", return_value=AUDIO), \
+             patch("faster_whisper.decode_audio", return_value=audio), \
              patch("faster_whisper.BatchedInferencePipeline", return_value=pipeline), \
              patch("whisperx.load_align_model", **(align_model or {})) as load_align, \
              patch("whisperx.align", **(align or {})) as do_align, \
@@ -294,3 +298,39 @@ class TestRepetitionRedo:
         junk = _segment(0.0, 2.8, " Hvala što pratite.", [_word(" Hvala", 0.0, 0.5)], **bad)
         (segments, _, _), _, _, _, _ = self._run_sr(run, [CHUNK, self.LOOP], [junk])
         assert [s["text"] for s in segments] == ["Hello world.", "How are you?"]
+
+
+class TestLanguageDetection:
+    """The language is judged across the whole episode, not its first 30 s,
+    which is often a jingle or an ad in another language (#1093)."""
+
+    TEN_MINUTES = list(range(16000 * 600))
+
+    def test_an_intro_in_another_language_does_not_decide(self, run):
+        # 4a3387d6: a Serbian sponsor spot, then an English interview.
+        windows = [("sr", 0.92, [("sr", 0.92), ("hr", 0.05), ("en", 0.03)])] + \
+                  [("en", 1.0, [("en", 1.0)])] * 4
+        _, pipeline, _, _, model = run(
+            [CHUNK], audio=self.TEN_MINUTES, detect={"side_effect": windows},
+        )
+        assert pipeline.transcribe.call_args.kwargs["language"] == "en"
+        starts = [c.args[0][0] for c in model.detect_language.call_args_list]
+        assert starts == [int(t * 16000) for t in (0, 142.5, 285, 427.5, 570)]  # 600 s, last at 570
+        assert all(len(c.args[0]) == 30 * 16000 for c in model.detect_language.call_args_list)
+
+    def test_an_ad_in_another_language_does_not_outvote_the_episode(self, run):
+        windows = [("sr", 0.95, [("sr", 0.95)])] * 3 + [("en", 1.0, [("en", 1.0)])] + \
+                  [("sr", 0.9, [("sr", 0.9), ("hr", 0.1)])]
+        _, pipeline, _, _, _ = run(
+            [CHUNK], audio=self.TEN_MINUTES, detect={"side_effect": windows},
+        )
+        assert pipeline.transcribe.call_args.kwargs["language"] == "sr"
+
+    def test_audio_shorter_than_a_window_is_judged_once(self, run):
+        _, pipeline, _, _, model = run([CHUNK], language="hr", audio=list(range(16000 * 20)))
+        assert model.detect_language.call_count == 1
+        assert pipeline.transcribe.call_args.kwargs["language"] == "hr"
+
+    def test_a_failed_detection_leaves_it_to_faster_whisper(self, run):
+        _, pipeline, _, _, _ = run([CHUNK], detect={"side_effect": RuntimeError("boom")})
+        assert pipeline.transcribe.call_args.kwargs["language"] is None
