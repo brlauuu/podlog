@@ -9,6 +9,7 @@ Usage:
 """
 import logging
 
+from app import log_redaction
 from app.database import SessionLocal
 from app.models import Chunk, Episode, Segment
 from app.services.chunking import merge_segments_into_chunks
@@ -161,5 +162,6 @@ if __name__ == "__main__":
         level=logging.INFO,
         format='{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": %(message)s}',
     )
+    log_redaction.install()
     result = backfill_chunks(embed=True)
     print(f"Backfill complete: {result}")
