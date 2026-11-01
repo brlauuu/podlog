@@ -56,7 +56,7 @@ const VIEWPORTS = [
 ];
 
 // Public pages that render without seeded data.
-const PAGES = ["/", "/search", "/ask", "/queue", "/feeds", "/podcasts", "/settings", "/docs", "/about", "/meta-analysis"];
+const PAGES = ["/", "/search", "/ask", "/queue", "/feeds", "/podcasts", "/settings", "/docs", "/about"];
 
 /**
  * Share of a 844px-tall viewport the sticky nav may occupy. The current
@@ -130,18 +130,15 @@ for (const vp of VIEWPORTS) {
     }
 
     test("our own controls are big enough to tap", async ({ page }) => {
-      // #989: the site-wide sweep, with two categories excluded on purpose.
+      // #989: the site-wide sweep, with one category excluded on purpose.
       //
       //  - Prose and inline links. /about renders the changelog and /docs the
       //    guide body: ~525 inline links between them. A 44px rule on body
       //    text is not what the guideline means, and a check that fails
       //    forever gets silenced.
-      //  - Plotly's modebar. ~27 buttons at 22px, injected by the library, not
-      //    ours to restyle. They are hidden below md: instead -- see
-      //    PlotlyChart.tsx.
       //
       // What remains is the controls Podlog itself renders as chrome.
-      const PAGES_WITH_CONTROLS = ["/", "/search", "/ask", "/queue", "/feeds", "/podcasts", "/settings", "/meta-analysis"];
+      const PAGES_WITH_CONTROLS = ["/", "/search", "/ask", "/queue", "/feeds", "/podcasts", "/settings"];
       const offenders: string[] = [];
       let measured = 0;
 
@@ -158,7 +155,6 @@ for (const vp of VIEWPORTS) {
             const r = el.getBoundingClientRect();
             if (r.width === 0 || r.height === 0) return;
             if (el.closest("article, .prose, p, li, aside")) return;   // prose
-            if (el.closest(".js-plotly-plot, .modebar")) return;        // third-party
             seen += 1;
             // A checkbox wrapped in a <label> is tapped via the label -- that
             // is the target, and a 44px checkbox would look absurd. Measure
@@ -237,11 +233,11 @@ for (const vp of VIEWPORTS) {
       // content can overflow must sit inside something scrollable. That way
       // it holds for data we have not seen, which is the case that matters --
       // a long episode title on someone else's install.
-      // Every page holding a <table>: two on /queue, one on /meta-analysis.
+      // Every page holding a <table>: two on /queue.
       const clipped: string[] = [];
       let tablesSeen = 0;
 
-      for (const path of ["/queue", "/meta-analysis"]) {
+      for (const path of ["/queue"]) {
       await page.goto(path);
       await page.locator("nav").first().waitFor();
       await page.waitForLoadState("networkidle");

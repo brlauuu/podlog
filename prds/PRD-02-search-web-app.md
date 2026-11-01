@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-02 — Search Web Application  
-**Version:** 1.9
+**Version:** 1.10
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.10 — Meta-Analysis page removed (#1134). §5.11 is now a short record of the removal; the nav no longer lists it. Analytics are deferred until the speaker labels and metadata they would read from are clean.
 - v1.9 — §5.11 rewritten to describe the page as it is: three Plotly speaker charts (PRD-06), not nine Recharts panels; colours are host/guest palettes, not a per-feed hash; the tokens panel is gone.
 - v1.8 — Remote inference removed (#1092). §5.11 no longer lists a remote-inference cost panel; the provider processing-speed chart and every cost figure are gone from the web app. Ask runs on Ollama only.
 - v1.7 — `/podcasts/{id}` carries the feed's own management actions (§5.3, #1090).
@@ -206,7 +207,6 @@ Top navigation bar (fixed):
 - **Ask** (RAG)
 - **Sources** (`/podcasts`)
 - **Queue** (with a badge showing active + pending count)
-- **Meta-analysis** (`/meta-analysis`)
 - **Settings** (placeholder in V1, expanded in V2)
 - **Docs**, **About**
 - **Dark mode toggle** (sun/moon icon, right-aligned)
@@ -248,21 +248,9 @@ Configured context (`num_ctx`) is kept well below each model's maximum to keep p
 
 **Error handling:** If Ollama fails (model OOM, connection error, timeout), the SSE stream sends a descriptive error event. The UI shows the specific error message rather than a generic connection failure.
 
-### 5.11 Meta-Analysis Dashboard
+### 5.11 Meta-Analysis Dashboard (removed)
 
-The `/meta-analysis` page offers cross-feed speaker analytics, specified in PRD-06: per-speaker minutes per episode, per-speaker word count per episode, and host-vs-guest talking time per episode. Above the charts sit a coverage strip (feeds, episodes, queued or failed, podcasts missing a confirmed host), a per-feed filter bar, and a Confirmed / Inferred — HIGH source toggle; a stale indicator shows when the snapshot lags the data.
-
-**Snapshot cache.** The charts are backed by a single JSONB `MetaAnalysisSnapshot` row (`id = 1`) holding `per_feed`, `per_episode`, `per_speaker`, `timeline_monthly`, `coverage`, `per_episode_speaker`, and `episode_speaker_diff` aggregates. Computing it requires scanning every `Segment` and `Chunk`, so the dashboard never recomputes on page load — it reads the cached snapshot and reports its `computed_at` timestamp to the user.
-
-**Stale flag and recomputation.** A `system_state.meta_analysis_stale` row gates recomputation. Writers that change snapshot inputs (speaker renames, merges, and pipeline stages: ingest, transcribe, diarize, chunk, infer, archive, cleanup) call `set_stale`, which writes a fresh UUID token. The pipeline worker's idle hook (fires when the job queue drains) checks `is_stale` and, if set, invokes `recompute_and_store`. The user can also force a refresh via the `Refresh` button, which hits `/api/meta-analysis/refresh` and re-runs the recompute path under a PostgreSQL advisory lock (`pg_advisory_xact_lock('meta_analysis_refresh')`) to serialize concurrent refreshes.
-
-**Race-safe clear.** `recompute_and_store` captures the stale token before `compute_snapshot` and only clears the flag if the token is unchanged when compute finishes. If a concurrent writer called `set_stale` during compute, the token rotated, the conditional clear skips, and the flag stays stale so the next idle tick recomputes against the newer data. Prevents silent signal drop when a speaker rename lands mid-computation. Both the Python helpers (`apps/pipeline/app/services/meta_analysis.py`) and the TS counterpart (`apps/web/src/lib/metaAnalysisStale.ts`) write UUID tokens — they must stay in lockstep.
-
-**Charts.** The three charts are Plotly figures (`charts/PlotlyChart.tsx`, themed by `usePlotlyTheme`). A pure module under `charts/transforms/` turns the snapshot fragment into display rows, and a Jest unit test covers it. Hosts are drawn as solid lines from a host palette and guests as dashed lines; clicking a point opens that episode. Each chart renders inside a `ChartCard` with an expand-to-modal button.
-
-**Missing-speaker drill-down.** Host-vs-guest figures exclude feeds that lack any confirmed host, and the coverage strip shows how many podcasts were excluded. Clicking the count opens a modal listing the affected feeds (episode count, diarized count, first/last diarized date), with a link to the podcast page so the user can rename speakers. Fixing a host triggers `setMetaAnalysisStale` via the speaker-merge route, and the dashboard shows `Refresh pending` until the next recompute.
-
-**Tokenization.** `cl100k_base` (via `tiktoken`) is used for the per-episode token counts in the snapshot (no chart shows them since the PRD-06 rewrite). If `tiktoken` is unavailable at import time, the service logs a warning and token counts fall back to zero so the dashboard still renders. Not user-configurable.
+Removed in #1134. The `/meta-analysis` page, its API routes and the Plotly charts specified in PRD-06 are gone, and `/meta-analysis` now returns 404. The page analysed speaker labels and metadata that still have known gaps, so its numbers could not be trusted. Analytics will come back, if at all, only once that data is clean, and they will read from it rather than from raw pipeline output.
 
 ---
 
@@ -554,7 +542,6 @@ const { playEpisode } = useAudioPlayer();
 - Keyboard navigation of search results
 - Export transcript as `.txt` from episode page (`.srt` is **not** implemented — exports are Markdown/plain text only)
 - "Copy timestamp link" button
-- Meta-Analysis dashboard (`/meta-analysis`) aggregating cross-feed metrics — coverage, episode length, WPM, turn density, host/guest share, tokens, and processing time per feed (Issue #521; see §5.11). The cost-per-feed aggregate was removed in #1092
 
 ### V2 (Phase 3)
 - **Authentication:** NextAuth.js + JWT, invite-only

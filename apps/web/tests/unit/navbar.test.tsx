@@ -70,7 +70,7 @@ describe("Navbar — mobile menu (#989)", () => {
 
     const panel = document.getElementById("mobile-nav");
     expect(panel).not.toBeNull();
-    for (const label of ["Search", "Ask", "Sources", "Queue", "Meta-analysis", "Settings", "Docs", "About"]) {
+    for (const label of ["Search", "Ask", "Sources", "Queue", "Settings", "Docs", "About"]) {
       expect(within(panel as HTMLElement).getByRole("link", { name: label })).toBeInTheDocument();
     }
     expect(screen.getByRole("button", { name: /close menu/i })).toHaveAttribute(

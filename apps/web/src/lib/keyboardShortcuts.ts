@@ -32,7 +32,6 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "G F", description: "Feeds" },
       { keys: "G P", description: "Podcasts" },
       { keys: "G A", description: "Ask" },
-      { keys: "G M", description: "Meta-analysis" },
       { keys: "G S", description: "Search" },
       { keys: "G T", description: "Settings" },
       { keys: "G D", description: "Docs" },

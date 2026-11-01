@@ -17,11 +17,6 @@ jest.mock("@/lib/db", () => ({
   default: { connect: mockConnect },
 }));
 
-const mockSetStale = jest.fn();
-jest.mock("@/lib/metaAnalysisStale", () => ({
-  setMetaAnalysisStale: (...args: unknown[]) => mockSetStale(...args),
-}));
-
 import { NextRequest } from "next/server";
 import { validateMergeRequest } from "@/lib/validateMergeRequest";
 
@@ -39,7 +34,6 @@ beforeEach(() => {
   mockClientQuery.mockReset();
   mockClientRelease.mockReset();
   mockConnect.mockReset();
-  mockSetStale.mockReset();
   mockConnect.mockResolvedValue({
     query: mockClientQuery,
     release: mockClientRelease,
@@ -149,7 +143,6 @@ describe("POST /api/episodes/[id]/speakers/merge", () => {
     );
     expect(sqlStatements[sqlStatements.length - 1]).toBe("COMMIT");
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
-    expect(mockSetStale).toHaveBeenCalledTimes(1);
   });
 
   // #942: merging changes segments.speaker_label, which moves turn
@@ -241,7 +234,6 @@ describe("POST /api/episodes/[id]/speakers/merge", () => {
     expect(sqlStatements).toContain("ROLLBACK");
     expect(sqlStatements).not.toContain("COMMIT");
     expect(mockClientRelease).toHaveBeenCalledTimes(1);
-    expect(mockSetStale).not.toHaveBeenCalled();
   });
 
   it("rolls back and returns 500 when an inner query throws", async () => {

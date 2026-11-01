@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { validateMergeRequest } from "@/lib/validateMergeRequest";
-import { setMetaAnalysisStale } from "@/lib/metaAnalysisStale";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let body: unknown;
@@ -79,8 +78,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     client.release();
   }
 
-  // Issue #521: invalidate meta-analysis cache so the worker recomputes.
-  await setMetaAnalysisStale();
 
   return NextResponse.json({ ok: true, merged_segments: mergedSegments });
 }

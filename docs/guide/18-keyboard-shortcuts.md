@@ -15,7 +15,6 @@ Two-key chords jump to top-level pages from anywhere. Press <kbd>G</kbd>, then w
 | <kbd>G</kbd> <kbd>F</kbd> | Feeds (`/feeds`) |
 | <kbd>G</kbd> <kbd>P</kbd> | Podcasts (`/podcasts`) |
 | <kbd>G</kbd> <kbd>A</kbd> | Ask (`/ask`) |
-| <kbd>G</kbd> <kbd>M</kbd> | Meta-analysis (`/meta-analysis`) |
 | <kbd>G</kbd> <kbd>S</kbd> | Search (`/search`) |
 | <kbd>G</kbd> <kbd>T</kbd> | Settings (`/settings`) |
 | <kbd>G</kbd> <kbd>D</kbd> | Docs (`/docs`) |

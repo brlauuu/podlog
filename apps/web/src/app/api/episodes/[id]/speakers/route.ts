@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { normalizeName } from "@/lib/normalizeName";
-import { setMetaAnalysisStale } from "@/lib/metaAnalysisStale";
 
 const VALID_ROLES = new Set(["host", "guest", "other"]);
 
@@ -92,8 +91,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       client.release();
     }
 
-    // Issue #521: invalidate meta-analysis cache so the worker recomputes.
-    await setMetaAnalysisStale();
 
     return NextResponse.json({ ok: true });
   } catch (err) {

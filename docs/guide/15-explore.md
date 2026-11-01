@@ -62,7 +62,7 @@ After running through it once, copy/adapt the cells into your own notebook (anyw
 
 ## Web UI integration
 
-A small status panel on the **Meta-Analysis** page indicates whether the explore container is running and links to the Jupyter URL. When the container is **not** running, it links here. The web UI does not start or stop the container — that's intentional, this is an advanced feature and the CLI is the right surface for it.
+The web UI does not show or control the explore container; use `make explore` and `make explore-logs`. (Its status panel lived on the Meta-Analysis page, removed in #1134. The explore service itself is being removed too.)
 
 ## Operational notes
 
@@ -80,4 +80,4 @@ A small status panel on the **Meta-Analysis** page indicates whether the explore
 
 ---
 
-**Next:** [Backups](16-backups.md) | **Back:** [Meta-Analysis Dashboard](14-meta-analysis.md) | **Home:** [Guide](README.md)
+**Next:** [Backups](16-backups.md) | **Back:** [RAG Search](12-rag-search.md) | **Home:** [Guide](README.md)

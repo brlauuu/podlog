@@ -32,7 +32,6 @@
 - **Ask AI (RAG)** — ask natural-language questions and get streamed, citation-backed answers drawn from your transcript library (a local Ollama model).
 - **Export** — download search results or full transcripts as Markdown or plain text, or open a print-friendly view (`/search/print`) for the browser's print-to-PDF flow.
 - **Queue dashboard** — per-stage status, error classification, auto-retry for transient failures, manual retry for the rest.
-- **Meta-Analysis dashboard** — speaker analytics across every feed at `/meta-analysis`: per-speaker minutes and word counts episode by episode, and a host-vs-guest talking-time delta, drawn from either confirmed names or high-confidence inferred ones.
 - **Notifications** — Telegram and email alerts when episodes finish or fail, with optional daily/weekly digest.
 - **Telegram bot** — search, ask, fetch a transcript, check the queue or add a source from a chat, from anywhere, with no port opened. Off by default; it answers only the Telegram accounts you put on its allowed list.
 - **Fully self-hosted** — no accounts, no cloud, no telemetry; every model runs on your own machine.
@@ -82,7 +81,7 @@ make ollama-pull   # local models for Ask AI, once (~12 GB)
 built locally. It only builds an image that does not exist yet, though: after
 changing code, run `make build` before `make up`, or it starts the old image.
 
-Open **http://localhost:3000**. From the navbar you can reach Search (`/search`), Ask (`/ask`), Sources (`/podcasts`, where you add feeds or upload audio), Queue (`/queue`), Meta-Analysis (`/meta-analysis`), Settings (`/settings`), Docs (`/docs`) and About (`/about`).
+Open **http://localhost:3000**. From the navbar you can reach Search (`/search`), Ask (`/ask`), Sources (`/podcasts`, where you add feeds or upload audio), Queue (`/queue`), Settings (`/settings`), Docs (`/docs`) and About (`/about`).
 
 > **First run:** The worker downloads Whisper and pyannote model weights (~3 GB). Jobs are queued during this phase and start processing once models are cached.
 

@@ -26,7 +26,6 @@ export default function GlobalChordShortcuts() {
       f: go("/feeds"),
       p: go("/podcasts"),
       a: go("/ask"),
-      m: go("/meta-analysis"),
       s: go("/search"),
       t: go("/settings"),
       d: go("/docs"),
