@@ -26,4 +26,14 @@ describe("EpisodeChat trigger icon", () => {
     expect(container.querySelector(".lucide-brain-circuit")).toBeInTheDocument();
     expect(container.querySelector(".lucide-message-square")).not.toBeInTheDocument();
   });
+
+  test("is icon-only on a phone and reserves space below the page (#1131)", () => {
+    render(<EpisodeChat episodeId="ep-1" episodeTitle="Example Episode" />);
+
+    const button = screen.getByRole("button", { name: /ask about this episode/i });
+    // The label stays for screen readers and returns from the sm breakpoint.
+    expect(screen.getByText("Ask")).toHaveClass("sr-only", "sm:not-sr-only");
+    expect(button).toHaveClass("right-4", "bottom-4", "sm:right-6", "sm:bottom-6");
+    expect(screen.getByTestId("ask-spacer")).toHaveAttribute("aria-hidden", "true");
+  });
 });

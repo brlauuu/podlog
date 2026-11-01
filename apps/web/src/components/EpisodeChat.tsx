@@ -240,19 +240,24 @@ export default function EpisodeChat({
     [feedTitle, episodeTitle, episodeDescription, messages]
   );
 
-  // Floating trigger button
+  // Floating trigger button. #1131: on a phone it is icon-only, so it covers
+  // less of the transcript, and the spacer lets the page's last lines scroll
+  // clear of it.
   if (!isOpen) {
     return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className={`fixed right-6 z-[60] flex items-center gap-2 rounded-full bg-action px-4 py-3 text-action-foreground shadow-lg hover:bg-action/90 transition-all ${
-          playerVisible ? "bottom-40" : "bottom-6"
-        }`}
-        aria-label="Ask about this episode"
-      >
-        <BrainCircuit size={18} />
-        <span className="text-sm font-medium">Ask</span>
-      </button>
+      <>
+        <div aria-hidden="true" data-testid="ask-spacer" className="h-16" />
+        <button
+          onClick={() => setIsOpen(true)}
+          className={`fixed right-4 sm:right-6 z-[60] flex items-center gap-2 rounded-full bg-action p-3 sm:px-4 text-action-foreground shadow-lg hover:bg-action/90 transition-all ${
+            playerVisible ? "bottom-40" : "bottom-4 sm:bottom-6"
+          }`}
+          aria-label="Ask about this episode"
+        >
+          <BrainCircuit size={18} />
+          <span className="sr-only sm:not-sr-only text-sm font-medium">Ask</span>
+        </button>
+      </>
     );
   }
 

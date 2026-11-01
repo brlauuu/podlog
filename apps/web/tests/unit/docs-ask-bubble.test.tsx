@@ -88,6 +88,14 @@ describe("DocsAskBubble (#990)", () => {
     expect(screen.queryByPlaceholderText(/ask a question/i)).toBeNull();
   });
 
+  it("is icon-only on a phone and reserves space below the page (#1131)", () => {
+    render(<DocsAskBubble />);
+    const button = screen.getByRole("button", { name: /ask about the docs/i });
+    expect(button.querySelector("span")).toHaveClass("sr-only", "sm:not-sr-only");
+    expect(button).toHaveClass("right-4", "bottom-4", "sm:right-6", "sm:bottom-6");
+    expect(screen.getByTestId("ask-spacer")).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("streams an answer and shows it", async () => {
     mockAsk(
       `event: token\ndata: {"content":"Whisper "}\n\n` +
