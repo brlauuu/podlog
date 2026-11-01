@@ -45,6 +45,7 @@ class TestDiarizeEpisode:
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.unlink"),
             patch("builtins.open", mock_open(read_data=json.dumps(aligned_data))),
+            patch("app.tasks.diarize.reset_speaker_names_for_new_segments") as mock_reset,
         ):
             mock_settings.transcript_dir = "/data/transcripts"
 
@@ -53,6 +54,8 @@ class TestDiarizeEpisode:
             result = diarize_episode("ep1")
 
         assert result == "ep1"
+        # #1133: labels are reassigned, so names keyed by them are reset first.
+        mock_reset.assert_called_once_with(db, "ep1")
         matching = [
             call for call in mock_update.call_args_list
             if call.args[:2] == (db, "ep1")
@@ -118,6 +121,7 @@ class TestDiarizeEpisode:
             patch("app.services.pyannote.unload_pipeline"),
             patch("app.tasks.diarize.settings") as mock_settings,
             patch("pathlib.Path.exists", return_value=False),
+            patch("app.tasks.diarize.reset_speaker_names_for_new_segments") as mock_reset,
         ):
             mock_settings.transcript_dir = "/data/transcripts"
 
@@ -126,6 +130,8 @@ class TestDiarizeEpisode:
             result = diarize_episode("ep1")
 
         assert result == "ep1"
+        # No labels were assigned, so names are left as transcribe left them.
+        mock_reset.assert_not_called()
         # Should mark diarization as failed but continue
         matching = [
             call for call in mock_update.call_args_list

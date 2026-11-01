@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.15
+**Version:** 1.16
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.16 — Transcribe and diarize reset the episode's speaker names before rebuilding segments: inferred rows deleted, confirmed rows flagged `needs_review` (migration 025, #1133; see PRD-04 §5.1).
 - v1.15 — Meta-analysis and explore endpoints removed from the API list (#1134). Migration 024 drops `meta_analysis_snapshot` and the `meta_analysis_stale` flag; infer and archive no longer set it, and the worker has no idle hook.
 - v1.14 — §5.4 the episode language is judged from five 30 s windows spread across the audio, by summed probability, instead of faster-whisper's first 30 s (#1093). 4a3387d6 opens with a Serbian sponsor spot before an English interview and was decoded entirely as Serbian or Croatian.
 - v1.13 — §5.5 word-level alignment absorbs sliver speakers (#1093): a label with under 15 s and under 5% of the episode's speech has its words inside another speaker's sentence reassigned to that speaker. A sliver owning a whole sentence is kept, so a pre-roll or sponsor jingle still becomes an Other card (PRD-04).

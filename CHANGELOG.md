@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Minor changes
+
+- **Re-processing no longer leaves old speaker names behind.** A re-process numbers the speakers afresh, but every name from before used to stay: names for speakers that no longer existed lingered in speaker search and Ask, and a name you had confirmed stayed on its speaker number even if that was now someone else. Now inferred names are worked out again, and names you confirmed are kept but marked **Check name** until you confirm or edit them. Confirmed names whose speaker is gone are listed above the speaker cards, so you can give the name to the right speaker or dismiss it. This adds a database column (migration 025); restoring the previous backup undoes it.
+
 ## 1.7.0 — 2026-11-01
 
 ### Major changes

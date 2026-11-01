@@ -244,6 +244,12 @@ class SpeakerName(Base):
     # Issue #698: user-assigned speaker role within this episode.
     # Values: host | guest | other | NULL (unassigned).
     role: Mapped[str | None] = mapped_column(Text)
+    # Issue #1133: a confirmed name kept across a re-process. Speaker labels
+    # are renumbered when segments are rebuilt, so the name may now sit on a
+    # different voice; the user re-checks it. Cleared by any user edit.
+    needs_review: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     episode: Mapped["Episode"] = relationship("Episode", back_populates="speaker_names")
 

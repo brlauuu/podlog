@@ -35,6 +35,7 @@ class TestTranscribeEpisode:
             patch("app.tasks.transcribe.settings") as mock_settings,
             patch("builtins.open", MagicMock()),
             patch("app.tasks.transcribe_helpers.json"),
+            patch("app.tasks.transcribe.reset_speaker_names_for_new_segments") as mock_reset,
         ):
             mock_settings.whisper_model = "large-v3-turbo"
             mock_settings.transcript_dir = "/data/transcripts"
@@ -44,6 +45,8 @@ class TestTranscribeEpisode:
             result = transcribe_episode("ep1")
 
         assert result == "ep1"
+        # #1133: the old segments' speaker labels are void once they are replaced.
+        mock_reset.assert_called_once_with(db, "ep1")
         mock_convert.assert_called_once()
         mock_unload.assert_called_once()
         mock_update.assert_any_call(db, "ep1", status="transcribing")

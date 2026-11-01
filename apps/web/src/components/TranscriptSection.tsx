@@ -6,7 +6,7 @@ import SpeakerPanel from "@/components/SpeakerPanel";
 import TranscriptView from "@/components/TranscriptView";
 import TranscriptExportButton from "@/components/TranscriptExportButton";
 import { useAudioPlayer } from "@/components/AudioPlayerContext";
-import type { Segment, SpeakerRole } from "@/lib/types";
+import type { Segment, SpeakerRole, UnmatchedSpeakerName } from "@/lib/types";
 
 interface Props {
   episodeId: string;
@@ -24,6 +24,8 @@ interface Props {
   feedDescription: string | null;
   audioUrl: string | null;
   guid: string | null;
+  /** #1133: confirmed names no speaker uses after a re-process. */
+  unmatchedNames?: UnmatchedSpeakerName[];
 }
 
 export default function TranscriptSection({
@@ -42,8 +44,10 @@ export default function TranscriptSection({
   feedDescription,
   audioUrl,
   guid,
+  unmatchedNames: initialUnmatched = [],
 }: Props) {
   const [segments, setSegments] = useState(initial);
+  const [unmatchedNames, setUnmatchedNames] = useState(initialUnmatched);
   const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const { state: playerState } = useAudioPlayer();
@@ -61,7 +65,7 @@ export default function TranscriptSection({
     setSegments((prev) =>
       prev.map((seg) =>
         seg.speaker_label === speakerLabel
-          ? { ...seg, display_name: newName, inferred: false, confirmed_by_user: true }
+          ? { ...seg, display_name: newName, inferred: false, confirmed_by_user: true, needs_review: false }
           : seg
       )
     );
@@ -70,7 +74,8 @@ export default function TranscriptSection({
   function handleRoleChanged(speakerLabel: string, role: SpeakerRole | null) {
     setSegments((prev) =>
       prev.map((seg) =>
-        seg.speaker_label === speakerLabel ? { ...seg, role } : seg,
+        // #1133: the PUT behind a role change also clears needs_review.
+        seg.speaker_label === speakerLabel ? { ...seg, role, needs_review: false } : seg,
       ),
     );
   }
@@ -88,6 +93,7 @@ export default function TranscriptSection({
       const targetDisplayName = targetSeg?.display_name ?? null;
       const targetInferred = targetSeg?.inferred ?? false;
       const targetConfirmed = targetSeg?.confirmed_by_user ?? false;
+      const targetNeedsReview = targetSeg?.needs_review ?? false;
 
       return prev.map((seg) =>
         seg.speaker_label && sourceLabels.includes(seg.speaker_label)
@@ -97,6 +103,7 @@ export default function TranscriptSection({
               display_name: targetDisplayName,
               inferred: targetInferred,
               confirmed_by_user: targetConfirmed,
+              needs_review: targetNeedsReview,
             }
           : seg
       );
@@ -131,6 +138,10 @@ export default function TranscriptSection({
           onRenamed={handleRenamed}
           onMerged={handleMerged}
           onRoleChanged={handleRoleChanged}
+          unmatchedNames={unmatchedNames}
+          onUnmatchedDismissed={(label) =>
+            setUnmatchedNames((prev) => prev.filter((n) => n.speaker_label !== label))
+          }
           activeSpeaker={activeSpeaker}
           onFilterSpeaker={setActiveSpeaker}
         />

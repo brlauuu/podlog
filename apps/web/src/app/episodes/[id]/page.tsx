@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, ChevronLeft, ChevronRight, Info, XCircle } from "lucide-react";
 import pool from "@/lib/db";
-import { getEpisode, getSegments, type Episode } from "@/lib/episodeData";
+import { getEpisode, getSegments, getUnmatchedSpeakerNames, type Episode } from "@/lib/episodeData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import EpisodeDescription from "@/components/EpisodeDescription";
@@ -71,7 +71,11 @@ async function getAdjacentEpisodes(
 
 export default async function EpisodePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [episode, segments] = await Promise.all([getEpisode(id), getSegments(id)]);
+  const [episode, segments, unmatchedNames] = await Promise.all([
+    getEpisode(id),
+    getSegments(id),
+    getUnmatchedSpeakerNames(id),
+  ]);
 
   if (!episode) notFound();
 
@@ -254,6 +258,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         feedDescription={episode.feed_description}
         audioUrl={episode.audio_url}
         guid={episode.guid}
+        unmatchedNames={unmatchedNames}
       />
 
       {episode.status === "done" && (

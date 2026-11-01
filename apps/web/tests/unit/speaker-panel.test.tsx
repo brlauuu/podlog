@@ -430,3 +430,71 @@ describe("speakerGridColumns (#1121)", () => {
     );
   });
 });
+
+describe("SpeakerPanel — names kept across a re-process (#1133)", () => {
+  const noop = () => {};
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+  });
+
+  function renderPanel(segments: Segment[], extra: Partial<React.ComponentProps<typeof SpeakerPanel>> = {}) {
+    return render(
+      <SpeakerPanel
+        episodeId="ep-1"
+        segments={segments}
+        onRenamed={jest.fn()}
+        onMerged={noop}
+        activeSpeaker={null}
+        onFilterSpeaker={noop}
+        {...extra}
+      />,
+    );
+  }
+
+  test("a confirmed name flagged for review asks to be checked, not shown as confirmed", () => {
+    renderPanel([
+      makeSegment({ speaker_label: "SPEAKER_00", display_name: "Galeb", needs_review: true }),
+      makeSegment({ id: 2, speaker_label: "SPEAKER_01", display_name: "Bob" }),
+    ]);
+    expect(screen.getByText("Check name")).toBeInTheDocument();
+    // Only Bob still reads as confirmed.
+    expect(screen.getAllByText(/Confirmed/)).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Confirm Galeb" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm Bob" })).not.toBeInTheDocument();
+  });
+
+  test("confirming a flagged name re-saves it, which clears the flag", async () => {
+    const onRenamed = jest.fn();
+    renderPanel(
+      [makeSegment({ speaker_label: "SPEAKER_00", display_name: "Galeb", needs_review: true })],
+      { onRenamed },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Galeb" }));
+    await waitFor(() => expect(onRenamed).toHaveBeenCalledWith("SPEAKER_00", "Galeb"));
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toBe("/api/episodes/ep-1/speakers");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body)).toEqual({ speaker_label: "SPEAKER_00", display_name: "Galeb" });
+  });
+
+  test("lists confirmed names whose speaker is gone, and dismisses one", async () => {
+    const onUnmatchedDismissed = jest.fn();
+    renderPanel([makeSegment()], {
+      unmatchedNames: [{ speaker_label: "SPEAKER_09", display_name: "Stellan" }],
+      onUnmatchedDismissed,
+    });
+    expect(screen.getByRole("note")).toHaveTextContent("Stellan");
+    expect(screen.getByRole("note")).toHaveTextContent("was SPEAKER_09");
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss Stellan" }));
+    await waitFor(() => expect(onUnmatchedDismissed).toHaveBeenCalledWith("SPEAKER_09"));
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(init.method).toBe("DELETE");
+    expect(JSON.parse(init.body)).toEqual({ speaker_label: "SPEAKER_09" });
+  });
+
+  test("shows no notice when every confirmed name still has a speaker", () => {
+    renderPanel([makeSegment()]);
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+});

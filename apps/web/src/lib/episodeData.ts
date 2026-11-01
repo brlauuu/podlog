@@ -3,7 +3,7 @@
  * export route (#1037). Moved out of app/episodes/[id]/page.tsx unchanged.
  */
 import pool from "@/lib/db";
-import type { Segment } from "@/lib/types";
+import type { Segment, UnmatchedSpeakerName } from "@/lib/types";
 
 export interface Episode {
   id: string;
@@ -57,12 +57,34 @@ export async function getSegments(episodeId: string): Promise<Segment[]> {
             sn.display_name,
             COALESCE(sn.inferred, false) AS inferred,
             COALESCE(sn.confirmed_by_user, false) AS confirmed_by_user,
-            sn.role
+            sn.role,
+            COALESCE(sn.needs_review, false) AS needs_review
      FROM segments s
      LEFT JOIN speaker_names sn ON sn.episode_id = s.episode_id
        AND sn.speaker_label = s.speaker_label
      WHERE s.episode_id = $1
      ORDER BY s.start_time`,
+    [episodeId]
+  );
+  return result.rows;
+}
+
+/**
+ * #1133: confirmed names whose speaker label no segment uses any more. A
+ * re-process can renumber or drop speakers; the confirmed names are kept so
+ * the user can put them back on the right voice, or dismiss them.
+ */
+export async function getUnmatchedSpeakerNames(episodeId: string): Promise<UnmatchedSpeakerName[]> {
+  const result = await pool.query(
+    `SELECT sn.speaker_label, sn.display_name
+     FROM speaker_names sn
+     WHERE sn.episode_id = $1
+       AND sn.confirmed_by_user
+       AND NOT EXISTS (
+         SELECT 1 FROM segments s
+         WHERE s.episode_id = sn.episode_id AND s.speaker_label = sn.speaker_label
+       )
+     ORDER BY sn.speaker_label`,
     [episodeId]
   );
   return result.rows;

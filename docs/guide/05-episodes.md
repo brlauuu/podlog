@@ -51,7 +51,7 @@ If you change your Whisper model, compute type, or other processing settings, ex
 2. Click **Reprocess**
 3. The episode is re-queued through the full pipeline
 
-This deletes the existing transcript and segments, then re-downloads, re-transcribes, and re-diarizes from scratch.
+This deletes the existing transcript and segments, then re-downloads, re-transcribes, and re-diarizes from scratch. Speaker names Podlog inferred are inferred again; names you confirmed are kept and marked for you to check, since the speakers are renumbered (see [Speaker Management](06-speakers.md#known-tradeoffs)).
 
 ## Status Banners
 
