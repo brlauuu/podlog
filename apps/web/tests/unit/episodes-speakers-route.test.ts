@@ -4,26 +4,30 @@
 const mockClientQuery = jest.fn();
 const mockClientRelease = jest.fn();
 const mockConnect = jest.fn();
+const mockPoolQuery = jest.fn();
 
 jest.mock("@/lib/db", () => ({
   __esModule: true,
-  default: { connect: mockConnect },
+  default: { connect: mockConnect, query: mockPoolQuery },
 }));
 
 import { NextRequest } from "next/server";
 
 type RouteModule = typeof import("@/app/api/episodes/[id]/speakers/route");
 let PUT: RouteModule["PUT"];
+let DELETE: RouteModule["DELETE"];
 
 beforeAll(async () => {
   const mod: RouteModule = await import("@/app/api/episodes/[id]/speakers/route");
   PUT = mod.PUT;
+  DELETE = mod.DELETE;
 });
 
 beforeEach(() => {
   mockClientQuery.mockReset();
   mockClientRelease.mockReset();
   mockConnect.mockReset();
+  mockPoolQuery.mockReset();
   mockConnect.mockResolvedValue({
     query: mockClientQuery,
     release: mockClientRelease,
@@ -272,5 +276,57 @@ describe("PUT /api/episodes/[id]/speakers", () => {
     expect(insertCall).toBeDefined();
     const params = insertCall![1] as unknown[];
     expect(params[3]).toBe(false);
+  });
+});
+
+// #1133: any edit is the user's review of the name, so it clears the flag a
+// re-process set.
+describe("PUT clears needs_review", () => {
+  it("writes needs_review = false on insert and on update", async () => {
+    await call("ep-1", { speaker_label: "SPEAKER_00", display_name: "Alice" });
+    const sql = mockClientQuery.mock.calls.find((c) => /INSERT INTO speaker_names/.test(c[0]))![0];
+    expect(sql).toMatch(/\(episode_id, speaker_label, display_name, inferred, confirmed_by_user, role, needs_review\)/);
+    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, false, true, \$5, false\)/);
+    expect(sql).toMatch(/needs_review = false/);
+  });
+});
+
+describe("DELETE /api/episodes/[id]/speakers (#1133)", () => {
+  function del(id: string, body: unknown) {
+    const req = new NextRequest(`http://localhost/api/episodes/${id}/speakers`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return DELETE(req, { params: Promise.resolve({ id }) });
+  }
+
+  it("removes a name only when no segment uses its label", async () => {
+    mockPoolQuery.mockResolvedValue({ rowCount: 1 });
+    const resp = await del("ep-1", { speaker_label: "SPEAKER_09" });
+    expect(resp.status).toBe(200);
+    const [sql, args] = mockPoolQuery.mock.calls[0];
+    expect(sql).toMatch(/DELETE FROM speaker_names/);
+    expect(sql).toMatch(/NOT EXISTS \(\s*SELECT 1 FROM segments/);
+    expect(args).toEqual(["ep-1", "SPEAKER_09"]);
+  });
+
+  it("refuses with 409 when the label is still a live speaker", async () => {
+    mockPoolQuery.mockResolvedValue({ rowCount: 0 });
+    const resp = await del("ep-1", { speaker_label: "SPEAKER_00" });
+    expect(resp.status).toBe(409);
+  });
+
+  it("returns 400 without a speaker_label", async () => {
+    const resp = await del("ep-1", {});
+    expect(resp.status).toBe(400);
+    expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 when the query throws", async () => {
+    mockPoolQuery.mockRejectedValue(new Error("db down"));
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    const resp = await del("ep-1", { speaker_label: "SPEAKER_09" });
+    expect(resp.status).toBe(500);
   });
 });

@@ -17,6 +17,7 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
+from app.services.inference_db import reset_speaker_names_for_new_segments
 from app.tasks.helpers import update_episode
 from app.tasks.transcribe_helpers import (
     persist_transcription_artifacts,
@@ -107,6 +108,9 @@ def transcribe_episode(episode_id: str) -> str:
         # here rather than letting it surface at archival means the message names
         # the stage that actually determined it, and no downstream stage runs on
         # an episode that has nothing to process.
+        # #1133: the old segments' speaker labels mean nothing after this.
+        reset_speaker_names_for_new_segments(db, episode_id)
+
         if not segments_data:
             from app.tasks.helpers import mark_no_speech
 

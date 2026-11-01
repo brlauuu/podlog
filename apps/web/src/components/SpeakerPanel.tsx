@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Check, X } from "lucide-react";
 import { getSpeakerColor, getSpeakerInitials, getSpeakerSlot } from "@/lib/speakerColors";
-import type { Segment, SpeakerRole } from "@/lib/types";
+import type { Segment, SpeakerRole, UnmatchedSpeakerName } from "@/lib/types";
 import MergeBar from "@/components/MergeBar";
 
 interface SpeakerInfo {
@@ -14,6 +14,8 @@ interface SpeakerInfo {
   confirmedByUser: boolean;
   /** #698: user-assigned role for this speaker on this episode. */
   role: SpeakerRole | null;
+  /** #1133: confirmed before a re-process renumbered the speakers. */
+  needsReview: boolean;
 }
 
 // #698: sort key per role. Hosts first, then guests, then others, then
@@ -39,6 +41,10 @@ interface Props {
   /** #698: called after a role change is persisted, so the parent can
    *  update its segment cache without a full refetch. */
   onRoleChanged?: (speakerLabel: string, role: SpeakerRole | null) => void;
+  /** #1133: confirmed names no speaker uses any more after a re-process. */
+  unmatchedNames?: UnmatchedSpeakerName[];
+  /** #1133: called after an unmatched name is dismissed on the server. */
+  onUnmatchedDismissed?: (speakerLabel: string) => void;
 }
 
 function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
@@ -58,6 +64,7 @@ function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
       // shares the same role row, so this is just a "use whichever segment
       // brought the data" guard).
       if (seg.role && !existing.role) existing.role = seg.role;
+      if (seg.needs_review) existing.needsReview = true;
     } else {
       map.set(seg.speaker_label, {
         speakerLabel: seg.speaker_label,
@@ -66,6 +73,7 @@ function deriveSpeakers(segments: Segment[]): SpeakerInfo[] {
         inferred: seg.inferred,
         confirmedByUser: seg.confirmed_by_user,
         role: seg.role ?? null,
+        needsReview: !!seg.needs_review,
       });
     }
   }
@@ -109,6 +117,8 @@ function SpeakerCard({
   const color = getSpeakerColor(speaker.speakerLabel);
   const initials = getSpeakerInitials(speaker.displayName, speaker.speakerLabel);
   const isInferredUnconfirmed = speaker.inferred && !speaker.confirmedByUser;
+  // #1133: both are a name the user has not checked against this voice yet.
+  const awaitsConfirmation = isInferredUnconfirmed || speaker.needsReview;
 
   async function persistDisplayName(trimmed: string) {
     setSaving(true);
@@ -142,7 +152,7 @@ function SpeakerCard({
     }
 
     // Allow explicit confirmation without forcing users to edit unchanged inferred names.
-    if (trimmed === speaker.displayName && !isInferredUnconfirmed) {
+    if (trimmed === speaker.displayName && !awaitsConfirmation) {
       setEditing(false);
       return;
     }
@@ -243,9 +253,17 @@ function SpeakerCard({
                 Inferred
               </span>
             )}
-            {speaker.confirmedByUser && (
+            {speaker.confirmedByUser && !speaker.needsReview && (
               <span className="text-[10px] px-1.5 py-0 rounded bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
                 &#10003; Confirmed
+              </span>
+            )}
+            {speaker.needsReview && (
+              <span
+                className="text-[10px] px-1.5 py-0 rounded bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-300"
+                title="You confirmed this name before the episode was re-processed, which renumbered the speakers. Check it is still this voice."
+              >
+                Check name
               </span>
             )}
             <span className="text-[10px] text-muted-foreground">
@@ -297,7 +315,7 @@ function SpeakerCard({
               >
                 {active ? "Hide segments" : "Show segments"}
               </button>
-              {isInferredUnconfirmed && (
+              {awaitsConfirmation && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -318,7 +336,7 @@ function SpeakerCard({
   );
 }
 
-export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged, activeSpeaker, onFilterSpeaker, onRoleChanged }: Props) {
+export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged, activeSpeaker, onFilterSpeaker, onRoleChanged, unmatchedNames = [], onUnmatchedDismissed }: Props) {
   const speakers = deriveSpeakers(segments);
   const [mergeMode, setMergeMode] = useState(false);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
@@ -400,6 +418,13 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged,
           )}
         </div>
       </div>
+      {unmatchedNames.length > 0 && (
+        <UnmatchedNames
+          episodeId={episodeId}
+          names={unmatchedNames}
+          onDismissed={onUnmatchedDismissed}
+        />
+      )}
       {/* Up to four cards a row, but never narrower than 10rem: a fixed
           column count squeezed four cards into a phone's width and made the
           whole page scroll sideways (#1121). */}
@@ -441,4 +466,67 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged,
 export function speakerGridColumns(max: number): string {
   const share = `(100% - ${max - 1} * 0.5rem) / ${max}`;
   return `repeat(auto-fit, minmax(max(10rem, calc(${share})), 1fr))`;
+}
+
+/**
+ * #1133: names the user confirmed whose speaker a re-process removed. They
+ * are kept rather than silently dropped; the user renames the right speaker
+ * to reuse one, or dismisses it.
+ */
+function UnmatchedNames({
+  episodeId,
+  names,
+  onDismissed,
+}: {
+  episodeId: string;
+  names: UnmatchedSpeakerName[];
+  onDismissed?: (speakerLabel: string) => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function dismiss(label: string) {
+    setBusy(label);
+    try {
+      const resp = await fetch(`/api/episodes/${episodeId}/speakers`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ speaker_label: label }),
+      });
+      if (resp.ok) onDismissed?.(label);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div
+      role="note"
+      className="mb-2 rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-2 text-xs"
+    >
+      <p className="text-amber-900 dark:text-amber-200">
+        Re-processing renumbered the speakers, and these names you confirmed no longer match
+        one. To keep a name, rename the right speaker to it.
+      </p>
+      <ul className="mt-1.5 flex flex-wrap gap-1.5">
+        {names.map((n) => (
+          <li
+            key={n.speaker_label}
+            className="inline-flex items-center gap-1.5 rounded border border-amber-300 dark:border-amber-800 bg-background px-2 py-0.5"
+          >
+            <span className="font-medium">{n.display_name}</span>
+            <span className="text-muted-foreground">was {n.speaker_label}</span>
+            <button
+              type="button"
+              onClick={() => void dismiss(n.speaker_label)}
+              disabled={busy === n.speaker_label}
+              aria-label={`Dismiss ${n.display_name}`}
+              className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              <X size={12} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }

@@ -17,6 +17,7 @@ from pathlib import Path
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Episode, Segment
+from app.services.inference_db import reset_speaker_names_for_new_segments
 from app.tasks.helpers import update_episode
 from app import job_queue
 
@@ -47,6 +48,10 @@ def diarize_episode(episode_id: str) -> str:
             t_provider = time.monotonic()
             diarization_segments = diarize(audio_path)
             step_durations["provider_diarization_secs"] = _elapsed_seconds(t_provider)
+
+            # #1133: speaker labels are about to be reassigned. A no-op after
+            # transcribe already did it; matters when diarize is retried alone.
+            reset_speaker_names_for_new_segments(db, episode_id)
 
             # Try word-level alignment first (preferred)
             if alignment_path.exists():

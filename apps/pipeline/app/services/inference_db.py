@@ -305,3 +305,42 @@ def write_speaker_names(
                     confirmed_by_user=False,
                 )
             )
+
+
+def reset_speaker_names_for_new_segments(db, episode_id: str) -> None:
+    """Prepare an episode's speaker names for segments being rebuilt (#1133).
+
+    Speaker labels are just slot numbers: when transcription or diarization
+    rewrites the segments, SPEAKER_01 may become a different voice, or
+    disappear. Before this, every old row survived, so a re-processed
+    episode kept names for labels nobody spoke under, and a confirmed name
+    stayed on its number whoever that now was.
+
+    Inferred rows are deleted; inference writes fresh ones from the new
+    segments. Confirmed rows are kept but flagged `needs_review`, so the
+    user re-checks them instead of losing their work. Idempotent: running
+    it again in the same re-process (transcribe, then diarize) changes
+    nothing more.
+    """
+    from app.models import SpeakerName
+
+    deleted = (
+        db.query(SpeakerName)
+        .filter(SpeakerName.episode_id == episode_id, SpeakerName.confirmed_by_user.is_(False))
+        .delete(synchronize_session=False)
+    )
+    flagged = (
+        db.query(SpeakerName)
+        .filter(
+            SpeakerName.episode_id == episode_id,
+            SpeakerName.confirmed_by_user.is_(True),
+            SpeakerName.needs_review.is_(False),
+        )
+        .update({SpeakerName.needs_review: True}, synchronize_session=False)
+    )
+    if deleted or flagged:
+        logger.info(
+            '"action": "speaker_names_reset", "episode_id": "%s", '
+            '"inferred_deleted": %d, "confirmed_flagged": %d',
+            episode_id, deleted, flagged,
+        )

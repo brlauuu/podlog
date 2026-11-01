@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-02 — Search Web Application  
-**Version:** 1.10
+**Version:** 1.11
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.11 — §5.4: after a re-process, a confirmed speaker name is marked **Check name** until the user confirms or edits it, and confirmed names whose speaker no longer exists are listed above the speaker cards with a dismiss action (`DELETE /api/episodes/{id}/speakers`, refused while the label is in use) (#1133).
 - v1.10 — Meta-Analysis page removed (#1134). §5.11 is now a short record of the removal; the nav no longer lists it. Analytics are deferred until the speaker labels and metadata they would read from are clean.
 - v1.9 — §5.11 rewritten to describe the page as it is: three Plotly speaker charts (PRD-06), not nine Recharts panels; colours are host/guest palettes, not a per-feed hash; the tokens panel is gone.
 - v1.8 — Remote inference removed (#1092). §5.11 no longer lists a remote-inference cost panel; the provider processing-speed chart and every cost figure are gone from the web app. Ask runs on Ollama only.
@@ -129,6 +130,7 @@ The backend serves archived audio files via a Next.js API route: `GET /api/audio
 - The rename is episode-scoped (renaming "SPEAKER_00" on Episode A does not affect Episode B).
 - The search results and transcript views use display names wherever available, falling back to `SPEAKER_N`.
 - If `has_diarization = false`, speaker labels are absent. The edit icon is hidden and the banner (§5.3) explains why.
+- After a re-process renumbers the speakers (#1133, PRD-04 §5.1 `needs_review`), a confirmed name shows **Check name** instead of **Confirmed** until the user confirms or edits it. Confirmed names whose label no segment uses any more are listed above the speaker cards ("was SPEAKER_09"); the user renames the right speaker to reuse one, or dismisses it, which deletes the row (`DELETE /api/episodes/{id}/speakers`, 409 while the label is in use).
 
 ### 5.5 Feed Management
 

@@ -33,16 +33,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       await client.query("BEGIN");
 
       // PRD-04 §5.1: when user edits, mark confirmed and clear inferred flag.
+      // #1133: any edit is the user's review, so it also clears needs_review.
       // #698: persist role alongside the rename. Sending an undefined role
       // (existing callers) preserves any previously-set role; sending null
       // explicitly clears it.
       await client.query(
-        `INSERT INTO speaker_names (episode_id, speaker_label, display_name, inferred, confirmed_by_user, role)
-         VALUES ($1, $2, $3, false, true, $5)
+        `INSERT INTO speaker_names (episode_id, speaker_label, display_name, inferred, confirmed_by_user, role, needs_review)
+         VALUES ($1, $2, $3, false, true, $5, false)
          ON CONFLICT (episode_id, speaker_label)
          DO UPDATE SET display_name = EXCLUDED.display_name,
                        inferred = false,
                        confirmed_by_user = true,
+                       needs_review = false,
                        role = CASE
                          WHEN $4 THEN EXCLUDED.role
                          ELSE speaker_names.role
@@ -96,5 +98,40 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch (err) {
     console.error("Speaker rename error:", err);
     return NextResponse.json({ error: "Failed to update speaker name" }, { status: 500 });
+  }
+}
+
+/**
+ * #1133: DELETE /api/episodes/{id}/speakers — dismiss a confirmed name whose
+ * speaker no longer exists after a re-process. Body: { speaker_label }.
+ * Refuses (409) while any segment still uses the label: a live speaker's
+ * name is changed with PUT, not removed here.
+ */
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const { speaker_label } = await req.json();
+    if (!speaker_label) {
+      return NextResponse.json({ error: "speaker_label is required" }, { status: 400 });
+    }
+    const result = await pool.query(
+      `DELETE FROM speaker_names sn
+       WHERE sn.episode_id = $1 AND sn.speaker_label = $2
+         AND NOT EXISTS (
+           SELECT 1 FROM segments s
+           WHERE s.episode_id = sn.episode_id AND s.speaker_label = sn.speaker_label
+         )`,
+      [id, speaker_label]
+    );
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        { error: "No unmatched name for that speaker on this episode" },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("Speaker name dismiss error:", err);
+    return NextResponse.json({ error: "Failed to remove speaker name" }, { status: 500 });
   }
 }

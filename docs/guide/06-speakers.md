@@ -157,7 +157,9 @@ The run-analysis defaults (`DEFAULT_SHORT_RUN_SECONDS`, `DEFAULT_SHORT_RUN_SEGME
 - **Cohost shows where one cohost only sometimes shows up.** The "sometimes" cohost will land as SPEAKER_01 in episodes they appear in and not be inferred in episodes they don't. The cache helps on later episodes once they've been renamed.
 - **Episodes where the host doesn't self-introduce and isn't named anywhere in metadata.** Rare but possible — these will get a host-less inference result and you'll have to label SPEAKER_00 manually.
 - **Whisper transcription errors in the first 5 minutes.** Self-introductions are the highest-value text the new transcript-intro NER source consumes; if Whisper hears "Welcome to the Jeff Shapiro Podcast" instead of "Jacob Shapiro", inference will follow the mistake. The metadata path usually rescues this on shows with good RSS data.
-- **Re-running inference on an already-renamed episode.** A reprocess of an episode where you've already confirmed names will preserve the confirmed `speaker_names` rows (the `confirmed_by_user` guard) but may change *which* SPEAKER_NN label each segment carries if the run analysis settles differently. After a reprocess, double-check the speaker panel.
+- **Re-processing an episode you have already named.** Re-processing rebuilds the segments, and speakers are numbered afresh, so SPEAKER_01 may now be a different voice or no voice at all (#1133). Names Podlog inferred are thrown away and inferred again. Names you confirmed are kept, but:
+  - a confirmed name whose speaker still exists shows **Check name** instead of **Confirmed**. If it is still the right voice, click **Confirm**; otherwise rename the speaker. Any edit clears the mark.
+  - a confirmed name whose speaker no longer exists is listed above the speaker cards ("was SPEAKER_09"). Rename the right speaker to that name to keep it, or dismiss it with the **×** next to it.
 
 ---
 

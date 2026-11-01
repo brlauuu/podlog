@@ -10,7 +10,14 @@ const mockQuery = jest.fn();
 
 jest.mock("@/lib/db", () => ({
   __esModule: true,
-  default: { query: (...args: unknown[]) => mockQuery(...args) },
+  // #1133's unmatched-names lookup is answered here, so the queued results
+  // below keep their order: episode, segments, previous, next.
+  default: {
+    query: (...args: unknown[]) =>
+      /AND sn\.confirmed_by_user/.test(String(args[0]))
+        ? Promise.resolve({ rows: [] })
+        : mockQuery(...args),
+  },
 }));
 
 jest.mock("next/link", () => {
