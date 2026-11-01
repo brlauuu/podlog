@@ -20,6 +20,8 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+## 1.8.1 — 2026-11-01
+
 ### Fixes
 
 - On a phone, the floating **Ask** buttons on episode and docs pages are now icon-only and sit closer to the corner, so they cover less of the transcript and the Export button. The end of each page also leaves room below its last lines, so nothing stays hidden behind the button (#1131).
