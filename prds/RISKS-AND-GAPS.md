@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** RISKS-AND-GAPS
-**Version:** 1.11
+**Version:** 1.12
 **Status:** Living document — update as risks are resolved or new ones are identified  
 **How to use:** When a risk is mitigated or a gap is closed, move it to the Resolved section at the bottom with a note on how it was addressed. Add new entries as they are discovered during development.
 
 **Changelog:**
+- v1.12 — RISK-09 (meta-analysis recompute cost) and RISK-10 (`tiktoken` image size) closed: the Meta-Analysis feature and its snapshot were removed (#1134).
 - v1.11 — GAP-07: the episode language is now judged across the whole episode rather than its first 30 s (PRD-01 v1.14), which fixes an episode whose intro is in another language. Mixed-language episodes are still decoded in one language.
 - v1.10 — Added GAP-07: batched transcription detects one language per episode, and the detection is not stable between runs (4a3387d6 came out `hr` once and `sr` the next time). Repetition loops it caused are now re-decoded (PRD-01 §5.4); mixed-language episodes are still decoded in a single language.
 - v1.9 — Added a resolved gap: languages without a WhisperX alignment model (51 Serbian episodes) silently lost word timestamps and fell back to segment-level speaker assignment. #1093 closes it with native faster-whisper word timestamps as the fallback, recorded per episode.
@@ -197,31 +198,11 @@ For a typical podcast library of 1,000 episodes (1 hour average, audio archived)
 
 ### RISK-09: Meta-Analysis Recompute Cost Scales with Corpus
 
-**Severity:** Low  
-**Component:** PRD-02 §5.11 — `apps/pipeline/app/services/meta_analysis.py`  
-**Description:** `compute_snapshot` scans every row in `segments` and `chunks` (per-episode word/token counts, per-speaker WPM aggregates). On the current corpus (~100 episodes) it completes in well under a second and runs opportunistically on worker idle. As the archive grows into the thousands of episodes, the recompute will start to dominate idle windows and could thrash CPU/disk if the stale flag is hit repeatedly (every speaker rename and every pipeline stage transition sets it).  
-**Mitigation:**
-1. The idle hook already guards with `is_stale` so the scan only runs when data changed.
-2. `recompute_and_store` uses a race-safe conditional clear, so we never recompute needlessly after a concurrent writer.
-3. Manual `/api/meta-analysis/refresh` is serialized with `pg_advisory_xact_lock` to prevent double-work.
-4. If compute time becomes painful, the next step is incremental aggregation (touch only the feed/episode that changed) rather than full-corpus scans. Not needed today.
-
-**Status:** Active risk accepted in v0.2.0; monitor as corpus grows.
-
----
+**Status:** Closed (#1134). The Meta-Analysis feature, its snapshot and the worker idle hook that recomputed it were removed.
 
 ### RISK-10: `tiktoken` Adds ~8 MB to the Pipeline Image
 
-**Severity:** Low  
-**Component:** PRD-02 §5.11, PRD-03 — Pipeline Docker image  
-**Description:** The `Tokens per episode` chart uses OpenAI's `tiktoken` library to count `cl100k_base` tokens per segment and chunk. `tiktoken` ships a precompiled Rust extension (~8 MB on disk) and pulls `regex` as a transitive dep. The pipeline image grew accordingly. No runtime cost beyond the import.  
-**Mitigation:**
-1. Import is defensive: if `tiktoken` fails to import (wheel unavailable for the platform), the dashboard falls back to zero token counts and the service logs a warning — the pipeline keeps running.
-2. No action planned. Image size is still well within acceptable bounds for the self-hosted target.
-
-**Status:** Active (accepted trade-off) in v0.2.0.
-
----
+**Status:** Closed (#1134). `tiktoken` was used only for the Meta-Analysis token counts and is no longer a dependency.
 
 ### ~~RISK-11: Audio Egress to Third Party via pyannote Cloud~~ → Resolved in v1.7
 

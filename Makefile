@@ -1,4 +1,4 @@
-.PHONY: up up-release update env-diff image-digests down build logs test test-unit test-healthcheck test-e2e ci-local migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated explore explore-down explore-logs backup-now backup-list restore-db restore-audio
+.PHONY: up up-release update env-diff image-digests down build logs test test-unit test-healthcheck test-e2e ci-local migrate shell-db shell-pipeline web ollama-pull version backfill env-check deps-outdated backup-now backup-list restore-db restore-audio
 
 up:             ## Start full stack from local images (builds only missing ones; `make build` first after code changes)
 	@# compose builds an image only when none exists locally. An existing image
@@ -92,20 +92,6 @@ ollama-pull:    ## Pull Ollama models used by the Ask feature
 	docker compose exec ollama ollama pull qwen2.5:3b
 	docker compose exec ollama ollama pull phi3:mini
 	docker compose exec ollama ollama pull gemma3n:e4b
-
-explore:        ## Start the Jupyter DB-exploration service (#607). URL+token printed in logs.
-	docker compose --profile explore up -d explore
-	@echo ""
-	@echo "Jupyter is starting on http://localhost:8888"
-	@echo "Get the access token from the logs:"
-	@echo "  make explore-logs"
-	@echo "Look for the line that ends with /lab?token=<...>"
-
-explore-down:   ## Stop the explore service
-	docker compose --profile explore down explore
-
-explore-logs:   ## Follow the explore service logs (look for the token URL)
-	docker compose --profile explore logs -f explore
 
 backup-now:     ## Force a backup run right now (bypasses the daily flag).
 	docker compose exec backup rm -f /backups/.last_run

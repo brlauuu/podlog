@@ -68,3 +68,6 @@ apps/pipeline/coverage.json
 
 # Enola
 .enola/
+
+# The explore notebooks were removed in #1134; anything left here is local.
+notebooks/

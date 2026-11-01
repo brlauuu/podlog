@@ -2,10 +2,11 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search  
 **Document:** PRD-01 — Ingestion Pipeline  
-**Version:** 1.14
+**Version:** 1.15
 **Status:** Active
 **Author:** Claude (generated from user specification)
 **Changelog:**
+- v1.15 — Meta-analysis and explore endpoints removed from the API list (#1134). Migration 024 drops `meta_analysis_snapshot` and the `meta_analysis_stale` flag; infer and archive no longer set it, and the worker has no idle hook.
 - v1.14 — §5.4 the episode language is judged from five 30 s windows spread across the audio, by summed probability, instead of faster-whisper's first 30 s (#1093). 4a3387d6 opens with a Serbian sponsor spot before an English interview and was decoded entirely as Serbian or Croatian.
 - v1.13 — §5.5 word-level alignment absorbs sliver speakers (#1093): a label with under 15 s and under 5% of the episode's speech has its words inside another speaker's sentence reassigned to that speaker. A sliver owning a whole sentence is kept, so a pre-roll or sponsor jingle still becomes an Other card (PRD-04).
 - v1.12 — §5.4 repetition loops (#1093 follow-up). faster-whisper's batched pipeline keeps only the first decoding temperature, so a chunk that loops (gzip compression ratio > 2.4) is never retried. Such chunks are now decoded again on their own, greedily; a result that still fails Whisper's thresholds (compression ratio > 2.4 or average log-probability < −1.0) is dropped as music or noise rather than kept as a hallucination.
@@ -395,12 +396,6 @@ GET    /api/notifications/settings         Read notification settings
 PUT    /api/notifications/settings         Update notification settings
 POST   /api/notifications/test             Send a test notification
 
-Meta-analysis
-GET    /api/meta-analysis/snapshot         Cached cross-feed metrics
-POST   /api/meta-analysis/refresh          Recompute the snapshot
-GET    /api/meta-analysis/coverage/missing-speakers
-                                           Episodes still missing speaker names
-
 Backups
 GET    /api/backups                        List DB dumps and audio snapshots
 GET    /api/backups/retention              Read retention policy
@@ -408,8 +403,6 @@ PUT    /api/backups/retention              Update retention policy
 DELETE /api/backups/db/{tier}/{filename}   Delete a specific DB dump
 DELETE /api/backups/audio/{date}           Delete an audio snapshot
 
-Explore
-GET    /api/explore/status                 Jupyter explore container status (opt-in profile)
 ```
 
 ---

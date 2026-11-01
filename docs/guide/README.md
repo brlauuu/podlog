@@ -18,7 +18,6 @@ Everything runs in Docker on your own machine. **Nothing leaves it** except RSS 
 10. [Configuration](10-configuration.md) — Model selection and resource tuning
 11. [Hardware & Performance](11-hardware.md) — Processing times, storage estimates
 12. [Ask AI (RAG Search)](12-rag-search.md) — AI-powered Q&A over transcripts
-15. [Database Exploration with Jupyter](15-explore.md) — Optional advanced: pandas + Plotly notebooks against the Podlog DB
 16. [Backups](16-backups.md) — Daily DB + audio backups, retention, restore
 17. [Troubleshooting](17-troubleshooting.md) — Common issues and fixes
 18. [Keyboard Shortcuts](18-keyboard-shortcuts.md) — `J`/`K` episode nav, `/` focus search, `Space` / arrows for playback, `?` help overlay

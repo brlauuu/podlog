@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search
 **Document:** PRD-05 — Exploratory Plots (cross-feed analytics in the explore notebook)
-**Version:** 1.1
-**Status:** Active
+**Version:** 1.2
+**Status:** Retired (#1134). The explore notebook, its plotting helpers and the `explore` service were removed. Kept for history.
 **Depends on:** PRD-01 v1.1 (data model), PRD-04 v1.8 (host/guest inference notion of "recurring host")
 
 **Changelog:**
+- v1.2 — Retired (#1134) together with PRD-06: the explore notebook (`notebooks/examples/01_explore_db.ipynb`, `notebooks/lib/podlog_plots.py`) and the Jupyter service are gone. Analytics are deferred until speaker labels and metadata are clean.
 - v1.1 — Marked §6 as superseded by PRD-06 §4 (now implemented in the Meta-Analysis web page + notebook bonus).
 - v1.0 — Initial draft. Documents three custom Plotly visualizations added to `notebooks/examples/01_explore_db.ipynb` for ad-hoc exploration of the Podlog DB: (a) episode duration over time, (b) episode word count over time, (c) per-speaker minutes per episode with host vs. guest classification. Branch `698-speaker-roles`.
 

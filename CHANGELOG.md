@@ -22,7 +22,12 @@ fresh empty `Unreleased` is left at the top.
 
 ### Major changes
 
-- **The Meta-Analysis page is gone.** Its speaker charts were built on speaker labels and metadata that still have gaps, so their numbers could not be trusted; the effort goes into getting that data right first. `/meta-analysis` now shows a not-found page and the `G M` shortcut is gone. Nothing else in Podlog changes.
+- **The Meta-Analysis page is gone.** Its speaker charts were built on speaker labels and metadata that still have gaps, so their numbers could not be trusted; the effort goes into getting that data right first. `/meta-analysis` now shows a not-found page and the `G M` shortcut is gone.
+- **The Explore (Jupyter) service is gone**, with `make explore`, `make explore-down`, `make explore-logs` and the example notebook. Notebooks of your own in `notebooks/` are left where they are. If you ever started it, remove the old container with `docker rm -f podlog-explore-1`.
+
+### Internal
+
+- Migration 024 drops the Meta-Analysis cache table. It held only numbers recomputed from transcripts, so nothing is lost, and restoring the previous backup undoes it. The `tiktoken` dependency, used only for its token counts, is removed.
 
 ## 1.6.8 — 2026-11-01
 

@@ -16,7 +16,7 @@ Detailed specifications live in `prds/`:
 | `prds/PRD-02-search-web-app.md` | Web app: search UI, audio player, queue dashboard, dark mode, speaker renaming |
 | `prds/PRD-03-infrastructure.md` | Docker Compose, repo structure, Dockerfiles, CI/CD, Makefile, env vars |
 | `prds/PRD-04-host-guest-inference.md` | Host/guest speaker name inference via NER |
-| `prds/PRD-05-exploratory-plots.md` | Exploratory speaker plots in the Jupyter notebook (superseded in part by PRD-06) |
+| `prds/PRD-05-exploratory-plots.md` | Retired: exploratory speaker plots in the former Jupyter explore notebook (removed in #1134) |
 | `prds/PRD-06-speaker-analytics-plots.md` | Retired: Plotly speaker analytics on the former Meta-Analysis page (removed in #1134) |
 | `prds/PRD-07-telegram-bot.md` | Telegram bot: inbound long-poll loop, user allowlist, read-only commands |
 | `prds/RISKS-AND-GAPS.md` | Active risks, known gaps, hardware requirements, resolved items |
@@ -27,7 +27,7 @@ When making decisions, reference PRD sections (e.g. "per PRD-01 §5.4") rather t
 
 ```
 podlog/
-├── docker-compose.yml              # Production-like local stack (7 services; explore is opt-in via profile)
+├── docker-compose.yml              # Production-like local stack (6 services)
 ├── docker-compose.test.yml         # Test stack (db_test, mock_rss, pipeline_test, web_test, test runner)
 ├── .env.example                    # All config vars documented
 ├── Makefile                        # make up / down / build / test / etc.
@@ -42,7 +42,6 @@ podlog/
 ├── site/                           # Landing page (plain HTML/CSS) published to GitHub Pages by pages.yml (#1056, #1063)
 ├── issues/                         # Local issue drafts / notes
 ├── backups/                        # Daily DB dumps + rsync audio snapshots (gitignored)
-├── notebooks/                      # Jupyter exploration notebooks (gitignored bind mount)
 ├── apps/
 │   ├── pipeline/                   # Python 3.11–3.13 — FastAPI + DB-backed job queue
 │   │   ├── README.md               # Package guide (layout, running, tests)
@@ -59,9 +58,9 @@ podlog/
 │   │   │   ├── job_queue.py        # PostgreSQL-backed job queue (enqueue, claim, complete)
 │   │   │   ├── task_registry.py    # Maps pipeline stages to task functions + next-stage routing
 │   │   │   ├── worker.py           # Background job worker + feed polling loop
-│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis, backups, explore, prompts)
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, backups, prompts)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
-│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, embed_provenance, speaker_turns, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, pipeline_commands, timing_labels, prompts, backup_files, backup_settings, queue_snapshot, telegram_bot, preflight, remote_retirement, pipeline_alerts)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, embed_provenance, speaker_turns, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, pipeline_commands, timing_labels, prompts, backup_files, backup_settings, queue_snapshot, telegram_bot, preflight, remote_retirement, pipeline_alerts)
 │   │   ├── alembic/                # Database migrations (24 versions)
 │   │   └── tests/                  # unit, integration, e2e
 │   ├── web/                        # Next.js 16 (App Router)
@@ -71,8 +70,7 @@ podlog/
 │   │   ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, [id], [id]/poll, [id]/episodes, [id]/episodes/guids, preview), queue, audio, ask/coverage, episodes ([id], [id]/retry, [id]/speakers, [id]/speakers/merge, [id]/transcript, ingest, upload), docs ([slug], ask), hardware, notifications (settings, test), pipeline (ask, embed, embed-model-state, health, queue/[episodeId]/retry), backups ([tier]/[filename], audio/[date], retention), prompts ([key], [key]/reset), version
 │   │   ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, etc.
 │   │   └── src/lib/                # db.ts, search.ts, search/ (allHandled, coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, filename.ts, dateFormat.ts, episodeData.ts, transcriptExport.ts, rehypeStripHead.ts, docs-index.ts, docs-retrieval.ts, docs-search.ts, docs-slug.ts, formatFileSize.ts, settings-schema.ts, normalizeName.ts, page-state.ts, queueStatus.ts, rag-models.ts, semver.ts, keyboardShortcuts.ts, useKeyboardShortcut.ts, useChordShortcut.ts, useFeedActions.ts, leaveGuard.ts
-│   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
-│   └── explore/                    # Jupyter DB-exploration container (Dockerfile + requirements.txt; opt-in via `make explore`)
+│   └── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
 ├── docs/                           # User-facing documentation and guides
 ├── scripts/                        # Operational scripts (health check, docs-sync + npm/node CI gates, release-notes extractor, workflow-injection check, third-party image digest report)
 └── prds/                           # Specifications and risk register
@@ -109,14 +107,14 @@ Agent-tool metadata (`.agents/`, `.superpowers/`, `.omx/`, `.claude/`, `.worktre
 ```bash
 cp .env.example .env   # Edit: set POSTGRES_PASSWORD and HF_TOKEN
 make build             # Build Docker images
-make up                # Start the stack (6 services; explore is opt-in, see `make explore`)
+make up                # Start the stack (6 services)
 make logs              # Follow logs
 make test-unit         # Run pipeline unit tests + host healthcheck test (no web unit tests)
 make ci-local          # Run every blocking CI check locally, using CI's own commands
 make shell-db          # Open psql shell
 ```
 
-`make up` starts db, pipeline, worker, ollama, web, and backup (6 services) from local images. It builds an image only when none exists locally — an existing image is started as-is even if the source changed since, so run `make build` (or `docker compose build <service>`) after code changes. `make up-release` starts the published GHCR images instead, without building (#937); `make update` moves an install to a new version, draining the queue and forcing a backup first. `make up` passes `--pull never` on purpose — the services carry an `image:` pointing at GHCR, so without it a plain `up` would pull the released image rather than starting your local build; `explore` is opt-in via the `explore` compose profile (`make explore`). Exposed ports: web on `0.0.0.0:3000` (reachable from the LAN, deliberately); db (:5432), pipeline API (:8000) and ollama (:11434) are bound to `127.0.0.1` only (#952), as `explore` (:8888) already was. Host tooling keeps working — `scripts/healthcheck.py`, `make backfill` and the guides all use `localhost` — and containers reach each other by service name over the compose network, not through these mappings.
+`make up` starts db, pipeline, worker, ollama, web, and backup (6 services) from local images. It builds an image only when none exists locally — an existing image is started as-is even if the source changed since, so run `make build` (or `docker compose build <service>`) after code changes. `make up-release` starts the published GHCR images instead, without building (#937); `make update` moves an install to a new version, draining the queue and forcing a backup first. `make up` passes `--pull never` on purpose — the services carry an `image:` pointing at GHCR, so without it a plain `up` would pull the released image rather than starting your local build. Exposed ports: web on `0.0.0.0:3000` (reachable from the LAN, deliberately); db (:5432), pipeline API (:8000) and ollama (:11434) are bound to `127.0.0.1` only (#952). Host tooling keeps working — `scripts/healthcheck.py`, `make backfill` and the guides all use `localhost` — and containers reach each other by service name over the compose network, not through these mappings.
 
 ## Conventions
 
@@ -150,7 +148,6 @@ make shell-db          # Open psql shell
   | Timings, image sizes, storage figures | `docs/guide/11-hardware.md`, `docs/hardware.md` |
   | `apps/pipeline/app/services/rag.py`, `apps/web/src/lib/rag-models.ts` | `docs/guide/12-rag-search.md` |
   | `apps/pipeline/app/services/remote_retirement.py`, remote-provider leftovers (#1092) | `docs/configuration.md` (the "Removed: remote inference" section) |
-  | `apps/explore`, notebooks | `docs/guide/15-explore.md` |
   | `apps/backup`, `apps/pipeline/app/services/backup_files.py` | `docs/guide/16-backups.md` |
   | `apps/web/src/lib/keyboardShortcuts.ts` | `docs/guide/18-keyboard-shortcuts.md` |
 
@@ -211,7 +208,7 @@ If the resolved version is still ≤ 7.37.x, the block stands and the audit find
 
 **Done:**
 - Full pipeline: ingest, download, transcribe, diarize, chunk, embed, infer, archive
-- All FastAPI endpoints (feeds, episodes, queue, health, ask, notifications, backfill, meta-analysis)
+- All FastAPI endpoints (feeds, episodes, queue, health, ask, notifications, backfill)
 - All Next.js pages, API routes, and components (search, ask, queue, feeds, episodes, notifications)
 - Automated test suites for pipeline and web are maintained in-repo
 - Alembic migration history is maintained under `apps/pipeline/alembic/versions/`
