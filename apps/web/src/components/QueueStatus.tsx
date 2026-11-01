@@ -137,7 +137,9 @@ function EpisodeRow({
         }`}
         onClick={isFailed || isStuck ? () => setExpanded(!expanded) : undefined}
       >
-        <td className="px-3 py-2 text-sm">
+        {/* A title with no break opportunity ("Process!!!!!...") would
+            otherwise set the column's width and push Stage off a phone (#1121). */}
+        <td className="px-3 py-2 text-sm [overflow-wrap:anywhere]">
           <Link
             href={`/episodes/${job.episode_id}`}
             className="hover:text-link hover:underline transition-colors"

@@ -35,7 +35,7 @@ jest.mock("next/dynamic", () => ({
   },
 }));
 
-import PlotlyChart from "@/app/meta-analysis/charts/PlotlyChart";
+import PlotlyChart, { wrapPlotlyTitle } from "@/app/meta-analysis/charts/PlotlyChart";
 
 beforeEach(() => {
   captured.props = null;
@@ -154,9 +154,60 @@ describe("PlotlyChart — modebar on phones (#989)", () => {
     expect((captured.props?.config as Record<string, unknown>).displayModeBar).toBeUndefined();
   });
 
+  // #1121: Plotly never wraps a title, so a long one was cut off at both
+  // ends on a phone, subtitle included.
+  it("wraps a long title on a narrow viewport and makes room for it", () => {
+    mockWidth(true);
+    render(
+      <PlotlyChart
+        data={[]}
+        layout={{
+          title: {
+            text:
+              "Per-speaker minutes per episode — All podcasts <i>(Confirmed)</i>" +
+              "<br><sub>Detected hosts: David Senra, Dwarkesh Patel, Marko Papic</sub>",
+          },
+          margin: { l: 60, r: 20, t: 70, b: 160 },
+        }}
+      />,
+    );
+    const layout = captured.props!.layout as {
+      title?: { text?: string };
+      margin?: Record<string, number>;
+    };
+    expect(layout.title?.text).toBe(
+      "Per-speaker minutes per episode —<br>All podcasts <i>(Confirmed)</i><br>" +
+        "<sub>Detected hosts: David Senra,</sub><br><sub>Dwarkesh Patel, Marko Papic</sub>",
+    );
+    expect(layout.margin).toEqual({ l: 60, r: 20, t: 16 + 4 * 26, b: 160 });
+    // The chart grows by what the title took beyond the original 70px, so
+    // the plot area keeps its height.
+    expect(screen.getByTestId("plot-stub").parentElement).toHaveStyle({ height: `${360 + 120 - 70}px` });
+  });
+
+  it("leaves the title alone on a wide viewport", () => {
+    mockWidth(false);
+    const text = "Per-speaker minutes per episode — All podcasts <i>(Confirmed)</i>";
+    render(<PlotlyChart data={[]} layout={{ title: { text } }} />);
+    expect((captured.props!.layout as { title?: { text?: string } }).title?.text).toBe(text);
+  });
+
   it("still lets a caller ask for it explicitly", () => {
     mockWidth(true);
     render(<PlotlyChart data={[]} layout={{}} config={{ displayModeBar: true }} />);
     expect((captured.props?.config as Record<string, unknown>).displayModeBar).toBe(true);
+  });
+});
+
+describe("wrapPlotlyTitle (#1121)", () => {
+  it("keeps a short title on one line", () => {
+    expect(wrapPlotlyTitle("Speaker minutes", 36)).toEqual({ text: "Speaker minutes", lines: 1 });
+  });
+
+  it("never splits a word longer than the line", () => {
+    expect(wrapPlotlyTitle("a Supercalifragilistic b", 10)).toEqual({
+      text: "a<br>Supercalifragilistic<br>b",
+      lines: 3,
+    });
   });
 });

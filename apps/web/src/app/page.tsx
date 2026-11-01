@@ -44,21 +44,21 @@ export default function HomePage() {
               href="/search"
               className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors"
             >
-              <Search size={16} />
+              <Search size={16} className="shrink-0" />
               Search
             </Link>
             <Link
               href="/ask"
               className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors"
             >
-              <BrainCircuit size={16} />
+              <BrainCircuit size={16} className="shrink-0" />
               Ask
             </Link>
             <Link
               href="/podcasts"
               className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-lg border border-input bg-background text-foreground font-medium text-sm hover:bg-accent transition-colors"
             >
-              <Book size={16} />
+              <Book size={16} className="shrink-0" />
               Explore
             </Link>
           </div>

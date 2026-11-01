@@ -87,8 +87,10 @@ export default function PlotlyChart({ data, layout, config, onPointClick, height
         },
       };
 
+  const narrow = isNarrow ? narrowTitle(layout) : null;
+
   return (
-    <div style={{ width: "100%", height }}>
+    <div style={{ width: "100%", height: height + (narrow?.extraHeight ?? 0) }}>
       <Plot
         data={data}
         layout={{
@@ -102,6 +104,7 @@ export default function PlotlyChart({ data, layout, config, onPointClick, height
           font: { ...themeLayout.font, ...layout?.font },
           legend: { ...themeLayout.legend, ...layout?.legend },
           hoverlabel: { ...themeLayout.hoverlabel, ...layout?.hoverlabel },
+          ...narrow?.layout,
         }}
         // #989: the modebar is nine 22px buttons per chart -- 27 unhittable
         // targets on a phone, for interactions (box select, lasso) that need a
@@ -128,4 +131,73 @@ export default function PlotlyChart({ data, layout, config, onPointClick, height
       />
     </div>
   );
+}
+
+/** Characters per title line that fit a phone-width chart. */
+const NARROW_TITLE_CHARS = 36;
+const NARROW_TITLE_LINE_PX = 26;
+
+/**
+ * Plotly never wraps a title: it breaks lines only at `<br>`. On a phone a
+ * long one was cut off at both ends ("r minutes per episode — All podcasts (")
+ * along with its subtitle, which on the diff chart is the only place the
+ * per-feed summary appears (#1121). Wrap it here, and give the extra lines
+ * room in the top margin.
+ */
+function narrowTitle(
+  layout: Partial<Layout> | undefined,
+): { layout: Partial<Layout>; extraHeight: number } | null {
+  const title = layout?.title;
+  const text = typeof title === "string" ? title : title?.text;
+  if (!text) return null;
+  const wrapped = wrapPlotlyTitle(text, NARROW_TITLE_CHARS);
+  const base = typeof title === "string" ? {} : title;
+  const top = 16 + wrapped.lines * NARROW_TITLE_LINE_PX;
+  return {
+    layout: {
+      // Pinned to the top so extra lines grow down into the margin made for
+      // them, rather than out from its middle into the plot.
+      title: { ...base, text: wrapped.text, y: 1, yref: "container", yanchor: "top", pad: { t: 12 } },
+      margin: { l: 60, r: 20, b: 110, ...layout?.margin, t: top },
+    },
+    // The chart grows by what the title took, so the plot keeps its height.
+    extraHeight: Math.max(0, top - (layout?.margin?.t ?? 70)),
+  };
+}
+
+/**
+ * Word-wrap Plotly's pseudo-HTML at `maxChars` visible characters a line.
+ * Existing `<br>`s are kept; an `<i>` or `<sub>` open across a new break is
+ * closed before it and reopened after, so each line stands on its own.
+ */
+export function wrapPlotlyTitle(text: string, maxChars: number): { text: string; lines: number } {
+  const out: string[] = [];
+  for (const source of text.split(/<br\s*\/?>/i)) {
+    const open: string[] = [];
+    let line = "";
+    let width = 0;
+    for (const token of source.match(/<\/?[a-z]+>|[^<\s]+|\s+/gi) ?? []) {
+      const tag = token.match(/^<(\/?)([a-z]+)>$/i);
+      if (tag) {
+        if (tag[1]) open.pop();
+        else open.push(tag[2]);
+        line += token;
+      } else if (/^\s+$/.test(token)) {
+        if (width > 0) {
+          line += " ";
+          width += 1;
+        }
+      } else {
+        if (width > 0 && width + token.length > maxChars) {
+          out.push(line.trimEnd() + [...open].reverse().map((t) => `</${t}>`).join(""));
+          line = open.map((t) => `<${t}>`).join("");
+          width = 0;
+        }
+        line += token;
+        width += token.length;
+      }
+    }
+    out.push(line.trimEnd());
+  }
+  return { text: out.join("<br>"), lines: out.length };
 }

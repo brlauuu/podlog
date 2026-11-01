@@ -400,7 +400,13 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged,
           )}
         </div>
       </div>
-      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(speakers.length, 4)}, 1fr)` }}>
+      {/* Up to four cards a row, but never narrower than 10rem: a fixed
+          column count squeezed four cards into a phone's width and made the
+          whole page scroll sideways (#1121). */}
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: speakerGridColumns(Math.min(speakers.length, 4)) }}
+      >
         {speakers.map((speaker) => (
           <SpeakerCard
             key={speaker.speakerLabel}
@@ -429,4 +435,10 @@ export default function SpeakerPanel({ episodeId, segments, onRenamed, onMerged,
       )}
     </div>
   );
+}
+
+/** auto-fit columns of at least 10rem, capped at `max` per row (gap-2 = 0.5rem). */
+export function speakerGridColumns(max: number): string {
+  const share = `(100% - ${max - 1} * 0.5rem) / ${max}`;
+  return `repeat(auto-fit, minmax(max(10rem, calc(${share})), 1fr))`;
 }

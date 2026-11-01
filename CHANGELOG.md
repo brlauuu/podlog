@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Fixes
+
+- **Podlog fits a phone screen.** On a phone, the episode page no longer scrolls sideways: speaker cards now wrap two to a row, and a long podcast link is shortened. Search results put the page-size, export and view controls on their own line instead of squeezing the result count to one word per line. A queue entry with an unbreakable title no longer pushes the Stage column off screen. Meta-Analysis chart titles wrap rather than being cut off at both ends. The Search and Explore icons on the home page are full size again.
+
 ## 1.6.7 — 2026-10-31
 
 ### Fixes

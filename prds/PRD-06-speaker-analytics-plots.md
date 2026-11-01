@@ -2,11 +2,12 @@
 
 **Project:** Podlog — Self-hosted Podcast Transcription & Search
 **Document:** PRD-06 — Speaker analytics plots (per-speaker minutes, per-speaker words, host-vs-guest diff)
-**Version:** 1.1
+**Version:** 1.2
 **Status:** Shipped (PR [#745](https://github.com/brlauuu/podlog/pull/745))
 **Depends on:** PRD-01 v1.1 (data model), PRD-04 v1.8 (host/guest inference, `speaker_names.role` + `confidence`), PRD-05 v1.0 (explore-notebook plot framework — Shared Conventions §3 are inherited)
 
 **Changelog:**
+- v1.2 — On a narrow screen (below 768px) the web page word-wraps each figure title at about 36 characters and grows the chart by the height the extra lines take (#1121). Plotly never wraps a title itself, so on a phone the title and the detected-hosts / summary subtitle were cut off at both ends.
 - v1.1 — Realignment: PRD reframed as a **web-page rewrite** (Meta-Analysis page) with the notebook as a bonus. Web app shows both Confirmed + Inferred-HIGH variants side by side (no toggle); notebook keeps the ipywidgets toggle. Click-to-open is in-app via Next.js router on the web page, and via `PODLOG_WEB_URL` env in the notebook.
 - v1.0 — Initial draft. Specifies three new plot families (six rendered cells), each with a Confirmed-source variant and an Inferred-HIGH-confidence variant: (a) per-speaker minutes per episode (refines PRD-05 §6), (b) per-speaker words per episode (new), (c) host-vs-guest talking-time diff per episode (new). Plus three cross-cutting requirements: a global Confirmed/Inferred source toggle, a per-plot click-to-open-episode option, and dark/light theme support. Iterated as prototypes against the live podlog DB before authoring; see the prototyping log in `~/repos/playground/2026-05-15-podlog-meta-prototyping/`.
 

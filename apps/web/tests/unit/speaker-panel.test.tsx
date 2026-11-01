@@ -4,7 +4,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import SpeakerPanel from "@/components/SpeakerPanel";
+import SpeakerPanel, { speakerGridColumns } from "@/components/SpeakerPanel";
 import type { Segment } from "@/lib/types";
 
 function makeSegment(overrides: Partial<Segment> = {}): Segment {
@@ -411,5 +411,22 @@ describe("SpeakerPanel — additional branches", () => {
     fireEvent.click(screen.getByRole("button", { name: /^merge$/i }));
 
     expect(await screen.findByText(/Merge failed — check your connection/i)).toBeInTheDocument();
+  });
+});
+
+describe("speakerGridColumns (#1121)", () => {
+  // A fixed `repeat(4, 1fr)` squeezed four cards into a phone's width and
+  // made the episode page scroll sideways. Columns now fit the space, never
+  // narrower than 10rem, and never more than four to a row.
+  it("fits as many columns as there is room for, each at least 10rem", () => {
+    expect(speakerGridColumns(4)).toBe(
+      "repeat(auto-fit, minmax(max(10rem, calc((100% - 3 * 0.5rem) / 4)), 1fr))",
+    );
+  });
+
+  it("gives a single speaker the whole row", () => {
+    expect(speakerGridColumns(1)).toBe(
+      "repeat(auto-fit, minmax(max(10rem, calc((100% - 0 * 0.5rem) / 1)), 1fr))",
+    );
   });
 });
