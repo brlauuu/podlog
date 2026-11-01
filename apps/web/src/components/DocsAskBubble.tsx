@@ -168,16 +168,21 @@ export default function DocsAskBubble() {
     [input, messages],
   );
 
+  // #1131: icon-only on a phone, with a spacer so the page's last lines can
+  // scroll clear of the button. Same shape as EpisodeChat's trigger.
   if (!isOpen) {
     return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-[60] flex items-center gap-2 rounded-full border bg-background px-4 py-3 shadow-lg transition-colors hover:bg-accent"
-        aria-label="Ask about the docs"
-      >
-        <BookOpen size={18} />
-        <span className="text-sm font-medium">Ask about the docs</span>
-      </button>
+      <>
+        <div aria-hidden="true" data-testid="ask-spacer" className="h-16" />
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[60] flex items-center gap-2 rounded-full border bg-background p-3 sm:px-4 shadow-lg transition-colors hover:bg-accent"
+          aria-label="Ask about the docs"
+        >
+          <BookOpen size={18} />
+          <span className="sr-only sm:not-sr-only text-sm font-medium">Ask about the docs</span>
+        </button>
+      </>
     );
   }
 
