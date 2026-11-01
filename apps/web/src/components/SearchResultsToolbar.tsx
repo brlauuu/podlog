@@ -30,12 +30,14 @@ export default function SearchResultsToolbar({
   groupedData: GroupedSearchResult | undefined;
 }) {
   return (
-    <div className="flex items-center justify-between">
+    // Stacked on a phone: side by side, the controls squeezed the summary
+    // down to one word per line and pushed the view toggle off screen (#1121).
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div className="text-sm text-muted-foreground">
         {summaryText}
         {coverageText}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs text-muted-foreground flex items-center gap-1.5">
           <span>Per page</span>
           <select

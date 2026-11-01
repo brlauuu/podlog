@@ -151,7 +151,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
                 className="w-12 h-12 rounded-lg object-cover shrink-0"
               />
             )}
-            <div className="text-sm">
+            <div className="text-sm min-w-0">
               <Link
                 href={`/podcasts/${episode.feed_id}`}
                 className="font-medium hover:underline"
@@ -163,7 +163,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
                   href={episode.feed_website_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="block truncate text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {episode.feed_website_url}
                 </a>
