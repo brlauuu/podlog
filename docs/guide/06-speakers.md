@@ -16,7 +16,7 @@ If `INFERENCE_ENABLED=true` (the default), Podlog reads the episode's RSS metada
 
 Each inferred name has a **Confirm** button next to it. Click it to accept the name as-is without retyping; the badge flips to a green **✓ Confirmed**. That is the fastest path when inference got it right, which on shows with good RSS metadata is most of the time.
 
-A speaker can also be tagged with one of three roles using the buttons on each speaker card: **host**, **guest**, or **other**. Click a role to set it, click the same role again to clear it. Roles drive how the speaker is sorted in the panel (hosts first, then guests, then others, then unassigned) and how their text is treated by the Meta-Analysis host-vs-guest chart.
+A speaker can also be tagged with one of three roles using the buttons on each speaker card: **host**, **guest**, or **other**. Click a role to set it, click the same role again to clear it. Roles drive how the speaker is sorted in the panel (hosts first, then guests, then others, then unassigned).
 
 ## Renaming a Speaker
 

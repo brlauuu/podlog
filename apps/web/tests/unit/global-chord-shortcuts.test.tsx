@@ -22,7 +22,6 @@ describe("<GlobalChordShortcuts>", () => {
     ["f", "/feeds"],
     ["p", "/podcasts"],
     ["a", "/ask"],
-    ["m", "/meta-analysis"],
     ["s", "/search"],
     ["t", "/settings"],
     ["d", "/docs"],

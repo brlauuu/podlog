@@ -17,7 +17,7 @@ Detailed specifications live in `prds/`:
 | `prds/PRD-03-infrastructure.md` | Docker Compose, repo structure, Dockerfiles, CI/CD, Makefile, env vars |
 | `prds/PRD-04-host-guest-inference.md` | Host/guest speaker name inference via NER |
 | `prds/PRD-05-exploratory-plots.md` | Exploratory speaker plots in the Jupyter notebook (superseded in part by PRD-06) |
-| `prds/PRD-06-speaker-analytics-plots.md` | Plotly speaker analytics on the Meta-Analysis web page |
+| `prds/PRD-06-speaker-analytics-plots.md` | Retired: Plotly speaker analytics on the former Meta-Analysis page (removed in #1134) |
 | `prds/PRD-07-telegram-bot.md` | Telegram bot: inbound long-poll loop, user allowlist, read-only commands |
 | `prds/RISKS-AND-GAPS.md` | Active risks, known gaps, hardware requirements, resolved items |
 
@@ -67,11 +67,10 @@ podlog/
 │   ├── web/                        # Next.js 16 (App Router)
 │   │   ├── Dockerfile              # Production image (standalone output)
 │   │   ├── Dockerfile.test         # Test image used by docker-compose.test.yml
-│   │   ├── src/app/                # Pages: /, /about, /podcasts, /podcasts/[id], /episodes/[id], /queue, /feeds, /ask, /search, /search/print, /settings, /docs, /meta-analysis (and /notifications redirects to /settings); DocsClient lives in app/docs/
-│   │   ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, [id], [id]/poll, [id]/episodes, [id]/episodes/guids, preview), queue, audio, ask/coverage, episodes ([id], [id]/retry, [id]/speakers, [id]/speakers/merge, [id]/transcript, ingest, upload), docs ([slug], ask), hardware, notifications (settings, test), meta-analysis (snapshot, refresh, coverage/missing-speakers), pipeline (ask, embed, embed-model-state, explore/status, health, queue/[episodeId]/retry), backups ([tier]/[filename], audio/[date], retention), prompts ([key], [key]/reset), version
+│   │   ├── src/app/                # Pages: /, /about, /podcasts, /podcasts/[id], /episodes/[id], /queue, /feeds, /ask, /search, /search/print, /settings, /docs (and /notifications redirects to /settings); DocsClient lives in app/docs/
+│   │   ├── src/app/api/            # API routes: search (search, grouped, mentions, speakers), feeds (CRUD, [id], [id]/poll, [id]/episodes, [id]/episodes/guids, preview), queue, audio, ask/coverage, episodes ([id], [id]/retry, [id]/speakers, [id]/speakers/merge, [id]/transcript, ingest, upload), docs ([slug], ask), hardware, notifications (settings, test), pipeline (ask, embed, embed-model-state, health, queue/[episodeId]/retry), backups ([tier]/[filename], audio/[date], retention), prompts ([key], [key]/reset), version
 │   │   ├── src/components/         # Navbar, AudioPlayer, SearchResult, QueueStatus, etc.
-│   │   ├── src/lib/                # db.ts, search.ts, search/ (allHandled, coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, filename.ts, dateFormat.ts, episodeData.ts, transcriptExport.ts, rehypeStripHead.ts, docs-index.ts, docs-retrieval.ts, docs-search.ts, docs-slug.ts, formatFileSize.ts, settings-schema.ts, metaAnalysisStale.ts, metaAnalysisTypes.ts, normalizeName.ts, page-state.ts, queueStatus.ts, rag-models.ts, semver.ts, keyboardShortcuts.ts, useKeyboardShortcut.ts, useChordShortcut.ts, useFeedActions.ts, leaveGuard.ts
-│   │   └── src/types/              # Ambient module shims (plotly-cartesian.d.ts, #746)
+│   │   └── src/lib/                # db.ts, search.ts, search/ (allHandled, coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, types), searchHybrid.ts, timestamp.ts, pipeline.ts, types.ts, utils.ts, speakerColors.ts, validateMergeRequest.ts, citations.tsx, episode-link.ts, filename.ts, dateFormat.ts, episodeData.ts, transcriptExport.ts, rehypeStripHead.ts, docs-index.ts, docs-retrieval.ts, docs-search.ts, docs-slug.ts, formatFileSize.ts, settings-schema.ts, normalizeName.ts, page-state.ts, queueStatus.ts, rag-models.ts, semver.ts, keyboardShortcuts.ts, useKeyboardShortcut.ts, useChordShortcut.ts, useFeedActions.ts, leaveGuard.ts
 │   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
 │   └── explore/                    # Jupyter DB-exploration container (Dockerfile + requirements.txt; opt-in via `make explore`)
 ├── docs/                           # User-facing documentation and guides
@@ -151,7 +150,6 @@ make shell-db          # Open psql shell
   | Timings, image sizes, storage figures | `docs/guide/11-hardware.md`, `docs/hardware.md` |
   | `apps/pipeline/app/services/rag.py`, `apps/web/src/lib/rag-models.ts` | `docs/guide/12-rag-search.md` |
   | `apps/pipeline/app/services/remote_retirement.py`, remote-provider leftovers (#1092) | `docs/configuration.md` (the "Removed: remote inference" section) |
-  | `apps/web/src/app/meta-analysis` | `docs/guide/14-meta-analysis.md` |
   | `apps/explore`, notebooks | `docs/guide/15-explore.md` |
   | `apps/backup`, `apps/pipeline/app/services/backup_files.py` | `docs/guide/16-backups.md` |
   | `apps/web/src/lib/keyboardShortcuts.ts` | `docs/guide/18-keyboard-shortcuts.md` |
@@ -214,7 +212,7 @@ If the resolved version is still ≤ 7.37.x, the block stands and the audit find
 **Done:**
 - Full pipeline: ingest, download, transcribe, diarize, chunk, embed, infer, archive
 - All FastAPI endpoints (feeds, episodes, queue, health, ask, notifications, backfill, meta-analysis)
-- All Next.js pages, API routes, and components (search, ask, queue, feeds, episodes, notifications, meta-analysis)
+- All Next.js pages, API routes, and components (search, ask, queue, feeds, episodes, notifications)
 - Automated test suites for pipeline and web are maintained in-repo
 - Alembic migration history is maintained under `apps/pipeline/alembic/versions/`
 - shadcn/ui component set is installed and used in the web app
@@ -223,7 +221,6 @@ If the resolved version is still ≤ 7.37.x, the block stands and the audit find
 - Speaker merge/rename UI
 - Notification settings
 - Remote inference (Fireworks, pyannote.ai) removed; Podlog is fully self-hosted (#1092)
-- Meta-Analysis dashboard aggregating cross-feed metrics (Issue #521)
 - CI enforces coverage thresholds: pipeline `--cov-fail-under=82` in `ci-full-unit.yml`, web `coverageThreshold` in `jest.config.js`
 
 **Not yet done:**

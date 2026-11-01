@@ -2,19 +2,14 @@
  * @jest-environment jsdom
  */
 /**
- * Smoke tests for the /meta-analysis and /docs page entry components
- * (#672). Both are thin wrappers that delegate to client components;
+ * Smoke tests for the /docs page entry component (#672). It is a thin
+ * wrapper that delegates to a client component;
  * the goal here is to exercise the entry surface (props passed, dir
  * read fallback) so the lines aren't 0%.
  */
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
-
-jest.mock("@/app/meta-analysis/MetaAnalysisClient", () => ({
-  __esModule: true,
-  default: () => <div data-testid="meta-analysis-client" />,
-}));
 
 const mockBuildDocsIndex = jest.fn();
 jest.mock("@/lib/docs-index", () => ({
@@ -47,19 +42,11 @@ jest.mock("fs/promises", () => ({
   readdir: (...args: unknown[]) => mockReaddir(...args),
 }));
 
-import MetaAnalysisPage from "@/app/meta-analysis/page";
 import DocsPage from "@/app/docs/page";
 
 beforeEach(() => {
   mockReaddir.mockReset();
   mockBuildDocsIndex.mockReset();
-});
-
-describe("/meta-analysis entry", () => {
-  it("renders the MetaAnalysisClient child", () => {
-    render(<MetaAnalysisPage />);
-    expect(screen.getByTestId("meta-analysis-client")).toBeInTheDocument();
-  });
 });
 
 describe("/docs entry", () => {

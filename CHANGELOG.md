@@ -20,6 +20,10 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
+### Major changes
+
+- **The Meta-Analysis page is gone.** Its speaker charts were built on speaker labels and metadata that still have gaps, so their numbers could not be trusted; the effort goes into getting that data right first. `/meta-analysis` now shows a not-found page and the `G M` shortcut is gone. Nothing else in Podlog changes.
+
 ## 1.6.8 — 2026-11-01
 
 ### Fixes

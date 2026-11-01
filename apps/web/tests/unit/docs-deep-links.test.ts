@@ -68,7 +68,7 @@ describe("in-app docs deep links", () => {
     expect(guideSlugs().size).toBeGreaterThan(0);
   });
 
-  test("at least one deep link exists to check (guards a vacuous pass)", () => {
-    expect(collectDeepLinks().length).toBeGreaterThan(0);
-  });
+  // There is no "at least one link exists" guard: the only literal deep links
+  // were on the Meta-Analysis page, removed in #1134. The check above still
+  // covers any added later.
 });
