@@ -71,3 +71,6 @@ apps/pipeline/coverage.json
 
 # The explore notebooks were removed in #1134; anything left here is local.
 notebooks/
+
+# Playwright MCP browser-tool output (screenshots, page snapshots)
+.playwright-mcp/
