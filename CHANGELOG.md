@@ -20,11 +20,13 @@ fresh empty `Unreleased` is left at the top.
 
 ## Unreleased
 
-## 1.8.1 — 2026-11-01
+## 1.8.2 — 2026-11-01
 
 ### Fixes
 
 - The footer links and the **Podlog** home link in the navigation bar are easier to tap on a phone: their tap area is taller (footer links went from 15 px to 32 px), with no change to how they look (#1130).
+
+## 1.8.1 — 2026-11-01
 
 ### Fixes
 
