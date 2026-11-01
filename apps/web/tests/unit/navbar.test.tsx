@@ -46,6 +46,10 @@ describe("Navbar", () => {
     const homeLink = screen.getByRole("link", { name: "Podlog" });
     expect(homeLink).toHaveAttribute("href", "/");
   });
+
+  test("home link is a 44 px tap target (#1130)", () => {
+    expect(screen.getByRole("link", { name: "Podlog" })).toHaveClass("min-h-11");
+  });
 });
 
 describe("Navbar — mobile menu (#989)", () => {
