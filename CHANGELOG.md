@@ -24,6 +24,10 @@ fresh empty `Unreleased` is left at the top.
 
 ### Fixes
 
+- The footer links and the **Podlog** home link in the navigation bar are easier to tap on a phone: their tap area is taller (footer links went from 15 px to 32 px), with no change to how they look (#1130).
+
+### Fixes
+
 - On a phone, the floating **Ask** buttons on episode and docs pages are now icon-only and sit closer to the corner, so they cover less of the transcript and the Export button. The end of each page also leaves room below its last lines, so nothing stays hidden behind the button (#1131).
 
 ## 1.8.0 — 2026-11-01

@@ -69,12 +69,15 @@ export default function Footer() {
 
   return (
     <footer className="border-t border-border bg-background text-xs text-muted-foreground mt-auto">
-      <div className="max-w-5xl mx-auto px-4 py-4 flex flex-col items-center gap-1">
+      {/* #1130: the links grow their hit area with py-2 -my-2 (about 31 px
+          tall, same layout), and the rows sit further apart on a phone so
+          the enlarged areas of the two rows don't overlap. */}
+      <div className="max-w-5xl mx-auto px-4 py-4 flex flex-col items-center gap-4 sm:gap-1">
         <p>
           &copy; 2026{" "}
           <a
             href="https://brlauuu.github.io"
-            className="underline hover:text-foreground"
+            className="inline-block py-2 -my-2 underline hover:text-foreground"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -83,7 +86,7 @@ export default function Footer() {
           .{" "}
           <a
             href="https://osaasy.dev"
-            className="underline hover:text-foreground"
+            className="inline-block py-2 -my-2 underline hover:text-foreground"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -105,7 +108,7 @@ export default function Footer() {
               href="https://github.com/brlauuu/podlog/releases/latest"
               target="_blank"
               rel="noopener noreferrer"
-              className="ml-2 text-link underline hover:text-foreground"
+              className="ml-2 inline-block py-2 -my-2 text-link underline hover:text-foreground"
               title={`Podlog ${latest} has been released. Update with: make update`}
             >
               {latest} available

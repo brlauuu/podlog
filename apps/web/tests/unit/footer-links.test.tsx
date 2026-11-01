@@ -32,6 +32,12 @@ describe("Footer brlauuu links", () => {
     expect(licenseLink).toHaveAttribute("href", "https://osaasy.dev");
   });
 
+  test("links have a tap target taller than the text (#1130)", () => {
+    for (const name of ["brlauuu", "O'Saasy License"]) {
+      expect(screen.getByRole("link", { name })).toHaveClass("inline-block", "py-2", "-my-2");
+    }
+  });
+
   test("About link was moved to Navbar", () => {
     const aboutLink = screen.queryByRole("link", { name: "About" });
     expect(aboutLink).toBeNull();
