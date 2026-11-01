@@ -57,9 +57,6 @@ ffmpeg-python = "^0.2.0"
 # flowing without needing a manifest edit each time.
 python-multipart = ">=0.0.31,<0.1"
 
-# Token counting for meta-analysis dashboard (#521)
-tiktoken = "^0.13.0"
-
 # ML group (#915). Optional and not installed by default -- the worker needs
 # all of it, the control plane needs sentence-transformers for /api/embed.
 # Since 2026-08-09 the CI dependency audit covers this group by exporting the

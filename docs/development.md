@@ -16,9 +16,9 @@ podlog/
 │   │   │   ├── models.py           # SQLAlchemy ORM (feeds, episodes, segments)
 │   │   │   ├── database.py         # Engine + session factory
 │   │   │   ├── job_queue.py        # DB-backed job queue (FOR UPDATE SKIP LOCKED)
-│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, meta_analysis, backups, explore, prompts)
+│   │   │   ├── api/                # FastAPI routers (feeds, episodes, queue, health, ask, embed, backfill, notifications, hardware, backups, prompts)
 │   │   │   ├── tasks/              # Pipeline tasks (ingest, download, transcribe, transcribe_helpers, diarize, chunk, embed, infer, archive, cleanup, prewarm, backfill_chunks, helpers)
-│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, meta_analysis, meta_analysis_aggregations, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, pipeline_commands, timing_labels, prompts, backup_files, backup_settings)
+│   │   │   └── services/           # Business logic (rss, whisper, pyannote, alignment, chunking, embed, rag, inference, inference_helpers, inference_classify, inference_db, inference_ner, inference_types, notifications, notification_events, notification_runtime, notification_settings, digest, digest_formatters, events, hardware, pipeline_commands, timing_labels, prompts, backup_files, backup_settings)
 │   │   ├── alembic/                # Database migrations
 │   │   └── tests/                  # Unit, integration, e2e tests
 │   ├── web/                        # Next.js 16.2.4 (App Router)
@@ -27,10 +27,8 @@ podlog/
 │   │   ├── src/components/         # React components (Navbar, AudioPlayer, SearchResult, QueueStatus, …)
 │   │   └── src/lib/                # Utilities (db, search, search/* (coverage, embedding, feedFilter, filters, filterOpts, grouped, grouping, mentions, queryParser, segments, speakerTurns, types), searchHybrid, timestamp, pipeline, types, utils, speakerColors, validateMergeRequest, citations, normalizeName, filename, dateFormat, episodeData, transcriptExport, rehypeStripHead, docs-index, docs-retrieval, docs-search, docs-slug, formatFileSize, settings-schema, page-state, queueStatus, rag-models, semver, episode-link, keyboardShortcuts, useKeyboardShortcut, useChordShortcut, useFeedActions, leaveGuard)
 │   ├── backup/                     # Nightly backup service (Dockerfile + backup.sh + restore scripts)
-│   └── explore/                    # Jupyter DB-exploration container (opt-in via `make explore`)
 ├── scripts/                        # Operational scripts (health check, docs-sync + npm/node CI gates)
 ├── backups/                        # Daily DB dumps + audio snapshots (gitignored)
-├── notebooks/                      # Jupyter notebooks (gitignored bind mount for the explore service)
 ├── docs/                           # User-facing documentation
 └── prds/                           # Internal design specs and risk register
 ```
@@ -184,10 +182,6 @@ make web                Open the web app in a browser
 # Models
 make ollama-pull        Pull Ollama models used by the Ask feature
 
-# Jupyter exploration (#607)
-make explore            Start the Jupyter DB-exploration service (URL+token in logs)
-make explore-down       Stop the explore service
-make explore-logs       Follow the explore service logs
 
 # Backups
 make backup-now         Force a backup run right now (bypasses the daily flag)

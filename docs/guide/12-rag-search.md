@@ -59,4 +59,4 @@ The Ask AI feature requires:
 
 ---
 
-**Next:** [Database Exploration with Jupyter](15-explore.md) | **Back:** [Hardware & Performance](11-hardware.md) | **Home:** [Guide](README.md)
+**Next:** [Backups](16-backups.md) | **Back:** [Hardware & Performance](11-hardware.md) | **Home:** [Guide](README.md)

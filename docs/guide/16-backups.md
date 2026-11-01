@@ -122,4 +122,4 @@ For a steady-state Podlog with ~1,000 transcribed episodes:
 
 ---
 
-**Next:** [Troubleshooting](17-troubleshooting.md) | **Back:** [Database Exploration with Jupyter](15-explore.md) | **Home:** [Guide](README.md)
+**Next:** [Troubleshooting](17-troubleshooting.md) | **Back:** [RAG Search](12-rag-search.md) | **Home:** [Guide](README.md)

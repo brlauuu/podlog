@@ -136,7 +136,6 @@ Podlog starts these containers:
 | Profile | Services |
 |---|---|
 | **Default (`make up` / `make up-release`)** | `web`, `pipeline`, `worker`, `db`, `ollama`, `backup` |
-| **Explore (opt-in, `make explore`)** | adds `explore` (Jupyter) |
 
 Service details:
 

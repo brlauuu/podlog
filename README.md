@@ -135,7 +135,7 @@ Open **http://localhost:3000**. From the navbar you can reach Search (`/search`)
                         └──────────────────────────────────────────────┘
 ```
 
-Default profile: 6 containers (`db`, `pipeline`, `worker`, `ollama`, `web`, `backup`). A seventh service, `explore` (Jupyter), is opt-in via `make explore`. No Redis, no Celery — the job queue is PostgreSQL-backed using `FOR UPDATE SKIP LOCKED`.
+Six containers: `db`, `pipeline`, `worker`, `ollama`, `web`, `backup`. No Redis, no Celery — the job queue is PostgreSQL-backed using `FOR UPDATE SKIP LOCKED`.
 
 ## Configuration
 
